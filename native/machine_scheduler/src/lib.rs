@@ -32,10 +32,24 @@ pub struct ClockAdvance {
     pub phase: u128,
 }
 
+/// Integer-timestamp event exposed by the compatibility dispatch API.
+///
+/// The queue stores exact rational timestamps. Until clock domains and the
+/// scheduler's current time are migrated, dispatch accepts integral instants
+/// only and exposes the exact integral value here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MachineDispatchEvent<T> {
+    pub timestamp: MachineTime,
+    pub hardware_phase: HardwarePhase,
+    pub priority: PlatformPriority,
+    pub sequence: u64,
+    pub payload: T,
+}
+
 /// An event together with all device-clock advances up to its timestamp.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MachineDispatch<T> {
-    pub event: ScheduledEvent<T>,
+    pub event: MachineDispatchEvent<T>,
     pub clock_advances: Vec<ClockAdvance>,
 }
 
@@ -465,10 +479,20 @@ impl<T> MachineScheduler<T> {
 
         let advances = self.calculate_advances(timestamp)?;
         self.apply_advances(timestamp, &advances)?;
-        let event = self
+        let queued_event = self
             .events
             .pop_next()
             .expect("next_timestamp guarantees a queued event");
+        let event = MachineDispatchEvent {
+            timestamp: queued_event
+                .timestamp
+                .as_machine_time()
+                .expect("dispatch timestamp was checked before clock advancement"),
+            hardware_phase: queued_event.hardware_phase,
+            priority: queued_event.priority,
+            sequence: queued_event.sequence,
+            payload: queued_event.payload,
+        };
         self.last_dispatch_timestamp = Some(timestamp);
         self.dispatched_at_timestamp = next_dispatch_count;
         Ok(Some(MachineDispatch {
@@ -650,7 +674,7 @@ mod tests {
 
         let dispatch = scheduler.dispatch_next().unwrap().unwrap();
         assert_eq!(dispatch.event.payload, "vdp-edge");
-        assert_eq!(dispatch.event.timestamp, MachineInstant::from_ticks(2));
+        assert_eq!(dispatch.event.timestamp, MachineTime::from_ticks(2));
         assert_eq!(dispatch.clock_advances[0].domain, ClockDomainId(1));
         assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 4);
         assert_eq!(dispatch.clock_advances[1].domain, ClockDomainId(2));
@@ -814,9 +838,9 @@ mod tests {
         assert_eq!(first.event.payload, "early-a");
         assert_eq!(second.event.payload, "early-b");
         assert_eq!(third.event.payload, "late");
-        assert_eq!(first.event.timestamp, MachineInstant::from(timestamp));
-        assert_eq!(second.event.timestamp, MachineInstant::from(timestamp));
-        assert_eq!(third.event.timestamp, MachineInstant::from(timestamp));
+        assert_eq!(first.event.timestamp, timestamp);
+        assert_eq!(second.event.timestamp, timestamp);
+        assert_eq!(third.event.timestamp, timestamp);
         assert_eq!(scheduler.now(), timestamp);
         assert_eq!(scheduler.pending_events(), 0);
     }
