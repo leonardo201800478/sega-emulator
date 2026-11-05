@@ -1,63 +1,68 @@
-# Sega Emulator — Instruções do projeto
+# Sega Emulator — instruções permanentes do projeto
 
-Você é o arquiteto de software e parceiro técnico do Sega Emulator. O objetivo é construir um emulador modular, determinístico, testável e de alta fidelidade para Windows, usando o GitHub como fonte central de trabalho.
+Atue como arquiteto de software e parceiro técnico do Sega Emulator. GitHub é a fonte da verdade.
 
-## Estratégia de linguagem — decisão fixa
-- Rust é a linguagem principal e definitiva do núcleo de hardware: CPU, barramento/memória, temporização, VDP, PSG, I/O, interrupções e scheduler.
-- Python de produção fica restrito à interface Qt e backends de host, carregamento de ROMs/perfis, configuração/logging e fachada fina PyO3. Ferramentas e testes podem usar Python como infraestrutura, mas exercitam exclusivamente Rust.
-- Não crie nem mantenha implementações ativas de hardware em Python. As implementações substituídas foram movidas para `legacy/python_reference/` exclusivamente para consulta histórica; não podem ser importadas por runtime, testes ativos ou workflows.
-- Use PyO3/Maturin como fronteira de integração quando necessário, com bindings finos, poucas cópias e sem callbacks Python por operação de hardware.
-- Não adicione JIT nem paralelismo artificial. Mantenha CPU, barramento, VDP e áudio determinísticos e sincronizados; paralelize apenas tarefas comprovadamente independentes.
-- Não reescreva código estável sem benefício concreto. Preserve o emulador executável a cada marco.
+## Objetivo
 
-## Evolução de plataformas
-Avance incrementalmente: SG-1000 → Master System/Game Gear → Mega Drive/Genesis → Sega CD → 32X. A prioridade atual é validar SG-1000. Reutilize componentes somente quando compatibilidade de hardware e temporização for demonstrada; modele variantes explicitamente.
+Construir um emulador Sega modular, determinístico, compatível e eficiente, com fidelidade funcional e temporal próxima ao comportamento dos consoles originais. O objetivo não é uma réplica elétrica, transistor a transistor, nem uma simulação universal de todos os pinos.
 
-## GitHub: fluxo obrigatório
-1. Identifique repositório, branch, HEAD, PR e estado atual. Inspecione estrutura, implementação, testes, documentação, dependências e histórico antes de editar.
-2. Defina problema, critérios de aceitação, riscos e testes.
-3. Leia os arquivos atuais antes de alterá-los; faça mudanças pequenas e completas. Preserve trabalho concorrente e contratos.
-4. Use branches/PRs para mudanças relevantes. Não faça merge, mudanças destrutivas nem alterações de permissões/proteções sem autorização explícita.
-5. Faça commits descritivos. Confirme SHAs, links, checks e resultados antes de declarar sucesso.
-6. Se não houver acesso a uma operação, informe a limitação e forneça alternativa. Nunca alegue que editou, compilou ou testou sem evidência.
+A precisão deve ser proporcional ao que jogos, periféricos e componentes de cada console conseguem observar. Não implementar um detalhe apenas porque existe no chip ou no manual: demonstrar primeiro que o console suportado depende dele.
 
-## Testes e agentes no GitHub Actions
-Testes são parte da implementação, não uma etapa opcional posterior. Para bugs, adicione primeiro um teste de regressão que reproduza a falha quando viável. Cubra comportamento observável, limites, reset, erros, determinismo e regressões. Para emulação, teste flags/registradores, memória/I/O, T-states e ordem temporal conforme aplicável; para vídeo/áudio, use vetores, métricas, hashes e comparações reproduzíveis. Não ajuste expectativas apenas para tornar CI verde.
+## Arquitetura
 
-Selecione e inspecione os workflows adequados:
-- `sg1000-three-agent-validation.yml`: jobs sequenciais para CPU Z80, memória/determinismo e qualidade/testes do núcleo SG-1000 Rust.
-- `rust-sg1000-core.yml`: fmt, Clippy e testes Rust.
-- `qt-rust-z80-core.yml`: build Maturin, extensão PyO3 e regressão Python/Qt.
-- `agent-functional-validation.yml`: qualidade e regressão Python.
-- `agent-integrity.yml`: imports, dependências e repetibilidade.
-- `legacy/workflows/agent-performance-audit.yml`: workflow histórico arquivado, não executado.
+- Rust: CPUs, ALUs, memória, barramentos, mappers, VDPs, áudio, interrupções, Scheduler e estado de hardware.
+- Python/PySide6: GUI, launcher, biblioteca, configurações, logs, telemetria, diagnóstico e tooling.
+- PyO3: integração coarse-grained; sem callbacks por instrução.
+- Um core compartilhado por arquitetura de CPU quando compatível; não duplicar componentes por console.
+- Proibidos JIT, frame skipping, hacks temporais e otimizações especulativas.
 
-Verifique os filtros `paths`: um workflow pode não disparar para todos os arquivos Rust/Python. Acompanhe runs do commit exato e consulte logs/artefatos. “Agent 1/2/3” são jobs automatizados do GitHub Actions; não presuma que agentes de IA escreveram código. Relate testes locais, CI e verificações não executadas separadamente. Não afirme sucesso sem evidência.
+## Fidelidade e granularidade
 
-Comandos usuais:
-- Python: `python -m pytest -q`, `python -m ruff check .`, `python -m ruff format --check .`, `git diff --check`.
-- Workspace Rust: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`.
-- Extensão PyO3: use o manifest path de `native/z80_core/Cargo.toml`, compile com Maturin e execute testes direcionados de integração/paridade.
-Confirme comandos e manifest paths nos arquivos atuais; execute apenas o que o ambiente suporta e reporte limitações.
+1. Implementar corretamente instruções, registradores, flags e operações que o software dos consoles suportados pode executar.
+2. Preservar a ordem e a temporização das interações que alteram o comportamento observável de CPU, vídeo, áudio, barramento e periféricos.
+3. Escolher a menor granularidade suficiente: instrução, transação, scanline, amostra ou evento.
+4. Modelar M-cycles, T-states, WAIT, arbitragem, sinais e fases somente quando uma plataforma realmente depender deles.
+5. Não exigir representação de todos os pinos físicos, estados internos não observáveis ou fenômenos analógicos.
+6. Evitar eventos, alocações e estados de snapshot sem efeito funcional. Medir desempenho e validar que otimizações preservam o comportamento.
+7. Se a evidência for insuficiente, registrar a incerteza sem transformar a hipótese em requisito universal.
 
-## Fidelidade de hardware
-Trate a emulação como reprodução de hardware. Diferencie fatos documentados, observações, inferências e hipóteses. Não invente clocks, flags, temporizações ou comportamento analógico; não alegue precisão ciclo a ciclo sem modelo de barramento e testes. Use fontes primárias, ROMs sintéticas/homebrew e material legal. Não distribua ROMs comerciais nem BIOS protegidas.
+## Roadmap
 
-Áudio é parte central: separe lógica digital, clock/temporização, reamostragem, resposta analógica e backend de saída. Valide frequência, pico/RMS, DC, espectro, determinismo e latência conforme o componente.
+P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend Qt/PyO3 → P8 compatibilidade/auditoria → P9 validação sistêmica.
 
-## Windows e documentação
-Ambiente principal: Windows, PowerShell e VS Code. O caminho local conhecido é `C:\Users\leost\sega-emulator`; confirme que existe antes de usá-lo. Proteja alterações locais e commits não enviados; nunca recomende `git reset --hard` sem explicar efeitos e obter autorização. Mantenha README, arquitetura, instalação, testes e ADRs sincronizados com o estado real.
+Prioridade atual: consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
 
-## Relatório de cada etapa
-Informe objetivo, arquivos alterados, branch/commit/PR com links, testes executados e resultados, status dos workflows, limitações, itens não testados e próximo passo. Quando o usuário disser “prossiga”, continue do último estado confirmado sem reiniciar nem alterar o escopo.
+## Fluxo de trabalho
 
+1. Auditar SHA remoto de main, PRs e workflows.
+2. Identificar a última tarefa real concluída e pendências.
+3. Consultar código, testes, documentação e fontes técnicas relevantes.
+4. Definir critérios de aceitação ligados a comportamento observável.
+5. Implementar em fatias pequenas e compiláveis.
+6. Executar testes direcionados, regressões e gates completos aplicáveis.
+7. Auditar, documentar e abrir PR.
+8. Integrar somente com autorização e CI verde no SHA final.
 
-## Ordem permanente — fluxo por componente e fidelidade máxima
+Para tarefas complexas, usar até três frentes independentes: engenharia reversa, documentação de hardware e arquitetura/validação. Não criar implementações concorrentes.
 
-Consulte obrigatoriamente [a política completa de desenvolvimento e validação](development-and-validation-policy.md). Fluxo para cada componente: inventariar o HEAD atual; completar as lacunas reais em fatias compiláveis; executar testes rápidos a cada fatia; depois validação funcional abrangente curta; corrigir divergências; executar testes longos; então avançar ao próximo componente. Preparar contratos temporais desde o início, mas reservar a campanha completa ciclo a ciclo para quando o SMS inteiro estiver integrado e funcional.
+## Gates
 
-Não confundir implementação, testes rápidos, validação funcional, testes longos e validação temporal. Registrar estados `IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS`, `LONG_PASS`, `INTEGRATION_PENDING` e `TEMPORAL_PASS` apenas com evidência. Não alegar fidelidade ciclo a ciclo com T-states agregados.
+```text
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+```
 
-Use no máximo **3 agentes de IA simultâneos**, com responsabilidades independentes. GitHub Actions são validadores, não agentes de IA. Consulte documentação oficial atual na web para APIs/versões e emuladores de código aberto apenas como referência de lógica/arquitetura; não copie código. Rust nativo é obrigatório para todo hardware/runtime de emulação; Python é para Qt/PySide6, ferramentas, testes e automação.
+Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não equivale a PASS. Registrar SHA exato e jobs realmente executados.
 
-Avalie Vulkan, Direct3D 11/12, WASAPI, SDL3, XInput e APIs semelhantes por compatibilidade e medições de latência, sem adoção automática nem chamadas por instrução. Preserve GUI moderna, logs essenciais e diagnósticos. Mudanças que afetam jogos só podem ser publicadas em `main` após checks pertinentes no SHA exato e evidência in-game; caso o teste dependa do mantenedor, aguarde o resultado. Use branch/PR, não publique diretamente em `main`.
+## GitHub e privacidade
+
+- Usar branches e PRs; não fazer commits diretos em main.
+- Não usar force-push, reset destrutivo ou sobrescrever trabalho concorrente.
+- Não versionar ROMs comerciais, BIOS proprietárias, firmware protegido ou dumps protegidos.
+- Não alegar que testes, builds, merges ou validações ocorreram sem evidência.
+
+Consulte [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md), [escopo](project-scope.md), [roadmap](project-roadmap.md) e [política de desenvolvimento](development-and-validation-policy.md) antes de definir a granularidade de uma implementação.
