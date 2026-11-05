@@ -59,6 +59,6 @@ The presentation worker attempts one host recreation for each failed frame only 
 
 ## Merged implementation status — 2026-11-05
 
-The following implementation slices are merged into `main`: lossless bounded `FrameQueue` (#546), Rust-owned `D3d12Session` (#547), minimize/restore preservation (#550), per-monitor DPI handling (#553), responsive device-loss waits (#555), one-shot removed/reset recovery (#558), and independent SMS1 VDP port-contract tests (#560). The detailed merge/CI record is [the 2026-11-05 integration audit](../docs/audits/video-runtime-d3d12-session-merge-audit-2026-11-05.md).
+The following implementation slices are merged into `main`: lossless bounded `FrameQueue` (#546), Rust-owned `D3d12Session` (#547), minimize/restore preservation (#550), per-monitor DPI handling (#553), responsive device-loss waits (#555), one-shot removed/reset recovery (#558), and independent SMS1 VDP port-contract tests (#560). The detailed merge/CI record is [the 2026-11-05 integration audit](../../docs/audits/video-runtime-d3d12-session-merge-audit-2026-11-05.md).
 
 Automated CI passed for the merged PR heads. Physical GPU execution, forced device-loss/recovery, mixed-DPI monitor movement, and SMS machine-to-session wiring remain `NOT RUN` / pending. In particular, these merges do not imply that `SmsMachine → MachineScheduler → Sms1Vdp → VideoFrame → D3d12Session` is integrated; the SMS1 temporal gate remains blocked by the T0 evidence gaps documented in the audit.
