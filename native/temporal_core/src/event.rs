@@ -49,7 +49,7 @@ pub type EventPriority = PlatformPriority;
 /// One event removed from an EventQueue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledEvent<T> {
-    /// Absolute timestamp in the machine profile's time unit.
+    /// Exact absolute rational timestamp on the machine timeline.
     pub timestamp: super::MachineInstant,
     /// Profile-defined ordering stratum at this timestamp.
     pub hardware_phase: HardwarePhase,
@@ -130,9 +130,9 @@ impl fmt::Display for EventQueueError {
 }
 impl std::error::Error for EventQueueError {}
 
-/// Min-priority queue ordered by timestamp, hardware phase, platform priority,
-/// then stable insertion sequence. The queue does not accept rational sub-tick
-/// timestamps; HardwarePhase is not a substitute for one.
+/// Min-priority queue ordered by exact rational timestamp, hardware phase,
+/// platform priority, then stable insertion sequence. HardwarePhase remains
+/// an ordinal tie-break and never substitutes for physical elapsed time.
 #[derive(Debug, Clone)]
 pub struct EventQueue<T> {
     heap: BinaryHeap<QueueEntry<T>>,
@@ -357,6 +357,43 @@ mod tests {
         assert_eq!(
             events,
             vec!["earlier-time", "first", "second", "priority2", "phase2"]
+        );
+    }
+
+    #[test]
+    fn rational_subtick_instants_precede_phase_and_priority_ordering() {
+        let mut queue = EventQueue::new();
+        let one_third =
+            MachineInstant::from_parts(MachineTime::ZERO, 1, 3).unwrap();
+        let one_half =
+            MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
+
+        queue
+            .schedule_with_phase(
+                one_half,
+                HardwarePhase::new(0),
+                PlatformPriority::new(0),
+                "one-half",
+            )
+            .unwrap();
+        queue
+            .schedule_with_phase(
+                one_third,
+                HardwarePhase::new(9),
+                PlatformPriority::new(9),
+                "one-third",
+            )
+            .unwrap();
+
+        assert_eq!(queue.pop_next().unwrap().payload, "one-third");
+        assert_eq!(
+            queue.schedule(one_third, PlatformPriority::new(0), "same-instant"),
+            Ok(2)
+        );
+        let earlier = MachineInstant::from_parts(MachineTime::ZERO, 1, 4).unwrap();
+        assert_eq!(
+            queue.schedule(earlier, PlatformPriority::new(0), "causal-regression"),
+            Err(EventQueueError::EventInPast)
         );
     }
 
