@@ -536,3 +536,66 @@ Esta seção prevalece sobre fotografias históricas anteriores. Baseline remota
 - **Infraestrutura:** PR #516 integrou o gerenciador centralizado de toolchains (merge SHA `d06d4d203412d103a327a57604471074ef15faf6`); PR #517 integrou lockfiles independentes e correção Clippy (merge SHA `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`). Validação local da #517: 20 PASS, 0 FAIL, 0 BLOCKED; quatro manifests fora dos workspaces ativos continuam NOT RUN. CI da #517 no HEAD `fc5f710f8c56698cb82dd4e49e881cea15e4639b`, workflow `41908119554`: 4/4 jobs PASS.
 
 **Classificação global:** E7 permanece `INTEGRATION_PENDING`; C1 é o próximo bloqueio arquitetural. Esta fotografia documental não altera nem aprova código de hardware.
+
+
+
+---
+
+## Retomada E7 — auditoria independente de três agentes (2026-11-04)
+
+Esta seção prevalece sobre fotografias operacionais anteriores deste scorecard.
+
+### Baseline remota reconciliada
+
+- **main atual:** `249d7a3da613dec456f22aa6a7ceaccb2418ee0b`.
+- **PR #526:** aberta; branch `feat/temporal-core-machine-instant-c1-clippy`; HEAD verificado `1e5c0c23f959fb99f5cb1d8382b6c1d3dfdd3410`.
+- **Workflow #41944516006** no HEAD #526:
+  - Change impact classification: PASS.
+  - Rust quality/regression: PASS.
+  - Scheduler deterministic stress: PASS.
+  - Windows Python 3.15 PyO3 extension build/import: PASS.
+  - Refresh Cargo lockfiles (manual artifact): NOT RUN (job SKIPPED).
+  - Windows PowerShell tooling syntax: NOT RUN (job SKIPPED).
+  - Windows x64 D3D12 compile: NOT RUN (job SKIPPED).
+  - Windows Python 3.15 Qt smoke test: NOT RUN (job SKIPPED).
+  - Python lint and regression: NOT RUN (job SKIPPED).
+- **PR #512:** aberta, não integrada; contrato M-cycle candidato.
+- **PR #514:** aberta, não integrada; progressão T-state no SMS candidata.
+- **PR #515:** encerrada; sua auditoria documental C1 continua disponível em `docs/audits/z80-e7-4-1c-rational-timeline-2026-11-04.md`.
+- Nenhum resultado SKIPPED foi contado como PASS. O run #41944516006 não prova gates Python, Qt, D3D12, PowerShell ou refresh de lockfiles.
+
+### Resultado dos três agentes
+
+1. [Agente 1 — pesquisa comparativa de emuladores](audits/z80-e7-agent1-emulator-research.md): MAME fornece evidência de estados WAIT/BUSREQ/BUSACK e integração daisy-chain; chips/Z80 fornece arquitetura tick/pin; SingleStepTests e Fuse são corpora temporais diferenciais; raxoft/z80test fornece resultados de hardware real para comportamento arquitetural. ares e a implementação interna Gearsystem permanecem parcialmente NOT VERIFIED nesta execução.
+2. [Agente 2 — conformidade documental](audits/z80-e7-agent2-documentation-conformance.md): confirma WAIT na falling edge de T2 e TW subsequentes, TW automático de I/O, dois TW do INT acknowledge, HALT T4, BUSREQ/BUSACK, EI delay, RETI/RETN e fonte IRQ/NMI do SMS.
+3. [Agente 3 — projeto semântico](audits/z80-e7-agent3-semantic-design.md): mantém C1 como bloqueio; especifica a migração racional integral, fases elétricas, waits tipados, snapshots e critérios de aceitação.
+
+### Bloqueio matemático novo identificado em C1
+
+A implementação candidata da PR #526 pode retornar overflow intermediário ao construir o denominador comum em `u128`, mesmo quando a fração final reduzida cabe em `u128`. Contraexemplo reproduzível está no relatório do Agente 3: `1/(2g) + ((g-3)/2)/(3g) = 1/6`, com denominadores de entrada representáveis e LCM intermediário maior que `u128::MAX`.
+
+**Ação exigida antes de aprovar C1:** implementar soma/subtração com intermediário suficientemente largo (ou algoritmo equivalente demonstravelmente exato), reduzir a fração antes de estreitar para os campos canônicos e adicionar o contraexemplo como teste de regressão.
+
+### Lacunas de integração ainda abertas em PR #526
+
+A leitura do HEAD candidato confirma que:
+- `MachineScheduler.now` permanece `MachineTime`;
+- `ClockDomain` e `ClockDomainSnapshot` ainda usam tempo inteiro;
+- `ClockDomainState.current_time/registration_start` continuam inteiros;
+- dispatch ainda expõe timestamp integral e contém `SubTickEventUnsupported`;
+- os consumidores SMS/SG-1000 e os codecs de estado completo ainda não foram migrados integralmente para instante racional;
+- falling/rising edges não estão representadas como eventos persistíveis.
+
+Portanto, a PR #526 continua **C1 INCOMPLETE / NOT READY TO MERGE**, apesar dos três jobs de qualidade/stress e do build PyO3 terem passado no HEAD indicado.
+
+### Próxima sequência autorizada tecnicamente
+
+1. Completar a aritmética racional e o contraexemplo de redução.
+2. Migrar ClockDomain, Scheduler.now, dispatch, watermarks, snapshots e codec para `MachineInstant`.
+3. Migrar SMS e SG-1000 sem clocks paralelos ou truncamento.
+4. Remover `SubTickEventUnsupported` somente após prova de avanço/dispatch racional ponta a ponta.
+5. Fechar C1 com chunk invariance e restore.
+6. Executar C2 (falling/rising) e C3 (WAIT/TW) antes de integrar o Z80/SMS.
+7. Só após C1–C6 retomar BUSREQ/BUSACK; depois RETI/daisy-chain, IRQ VDP e auditoria semântica E7.7.
+
+**Estado global:** E7 permanece `INTEGRATION_PENDING`; E8 permanece bloqueada. Não atribuir `LONG_PASS`, `DIFFERENTIAL_PASS` ou `TEMPORAL_PASS` com base nesta auditoria documental ou na CI convencional.
