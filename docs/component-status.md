@@ -1,10 +1,10 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Baseline documental:** main em c8da934d051f69f0fad01d133a923c26248a7250 (2026-11-05).  
+**Baseline histórica:** main em `c8da934d051f69f0fad01d133a923c26248a7250` (2026-11-05); não representa necessariamente o estado atual.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
 
-Este documento é a fotografia resumida do estado conhecido na baseline acima. Antes de implementar, atualizar a auditoria para o SHA corrente e verificar código, testes, PRs e workflows.
+Este documento registra uma fotografia histórica do estado conhecido na baseline indicada. Não o trate como status corrente sem reconciliá-lo. Antes de implementar, audite o SHA mais recente da `main`, o código, os testes, as PRs e os workflows. PR aberta ou Draft não significa código integrado.
 
 ## 1. Plataformas
 
