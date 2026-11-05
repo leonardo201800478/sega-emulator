@@ -46,13 +46,7 @@ impl RegisterImage {
         }
     }
 
-    fn write_register(
-        &mut self,
-        prefix: u8,
-        code: u8,
-        memory_operand: bool,
-        value: u8,
-    ) {
+    fn write_register(&mut self, prefix: u8, code: u8, memory_operand: bool, value: u8) {
         match code {
             0 => self.b = value,
             1 => self.c = value,
