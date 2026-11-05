@@ -72,6 +72,14 @@ impl From<FrameQueueError> for D3d12SessionError {
     }
 }
 
+struct RunningFlagGuard(Arc<AtomicBool>);
+
+impl Drop for RunningFlagGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// A Rust-owned D3D12 window, presentation worker, and lossless frame queue.
 ///
 /// The HWND and all D3D12 objects are created and destroyed on the worker
@@ -132,12 +140,13 @@ impl D3d12Session {
                 };
 
                 worker_running.store(true, Ordering::Release);
+                let _running_guard = RunningFlagGuard(Arc::clone(&worker_running));
                 if startup_sender.send(Ok(())).is_err() {
-                    worker_running.store(false, Ordering::Release);
                     let _ = worker_queue.close();
                     return Err(D3d12SessionError::StartupChannelClosed);
                 }
 
+                let mut in_flight_cancelled = 0_u64;
                 let result = (|| {
                     loop {
                         if !host.pump_messages() {
@@ -146,9 +155,13 @@ impl D3d12Session {
 
                         match worker_queue.pop_timeout(Duration::from_millis(8))? {
                             Some(frame) => {
-                                host.present_frame(&frame).map_err(|error| {
-                                    D3d12SessionError::Presentation(error.to_string())
-                                })?;
+                                if let Err(error) = host.present_frame(&frame) {
+                                    in_flight_cancelled =
+                                        in_flight_cancelled.saturating_add(1);
+                                    return Err(D3d12SessionError::Presentation(
+                                        error.to_string(),
+                                    ));
+                                }
                                 worker_last_presented
                                     .store(frame.sequence(), Ordering::Release);
                             }
@@ -168,9 +181,9 @@ impl D3d12Session {
                     while let Ok(Some(_frame)) = worker_queue.pop_timeout(Duration::ZERO) {
                         cancelled = cancelled.saturating_add(1);
                     }
+                    cancelled = cancelled.saturating_add(in_flight_cancelled);
                     worker_cancelled_frames.store(cancelled, Ordering::Release);
                 }
-                worker_running.store(false, Ordering::Release);
                 result
             })
             .map_err(D3d12SessionError::WorkerStart)?;
