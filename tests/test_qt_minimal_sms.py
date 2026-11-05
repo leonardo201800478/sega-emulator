@@ -27,21 +27,18 @@ class FakeTemporalSMSMachine:
     def configure_audio_output(self, backend: str) -> None:
         self.calls.append(("configure_audio_output", backend))
 
-    def start(self) -> None:
-        self.calls.append(("start",))
-        self.is_running = True
-
-    def pause(self) -> None:
-        self.calls.append(("pause",))
-        self.is_running = False
-
     def stop(self) -> None:
         self.calls.append(("stop",))
         self.is_running = False
 
     def reset(self) -> None:
         self.calls.append(("reset",))
-        self.is_running = False
+        self.frame_number = 0
+
+    def step_frame(self) -> int:
+        self.calls.append(("step_frame",))
+        self.frame_number += 1
+        return 100
 
     def set_controller(self, player: int, **buttons: bool) -> None:
         self.calls.append(("set_controller", player, buttons))
@@ -79,19 +76,20 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert window.close_rom_action.isEnabled()
     assert not hasattr(window, "_frame_timer")
     assert window.status_label.text().find("Vídeo desabilitado") >= 0
+    assert window.step_action.isEnabled()
 
-    window._toggle_running()
-    assert machine.is_running
-    window._toggle_running()
-    assert not machine.is_running
+    window._step_one_frame()
+    assert machine.frame_number == 1
+    assert "Quadros executados: 1" in window.status_label.text()
 
     window._reset()
+    assert machine.frame_number == 0
     window._close_rom()
     assert window._machine is None
     assert not window.reset_action.isEnabled()
     assert ("stop",) in machine.calls
     assert ("close_audio_output",) in machine.calls
-    assert not any(call[0] == "step_frame" for call in machine.calls)
+    assert ("step_frame",) in machine.calls
     window.close()
 
 
