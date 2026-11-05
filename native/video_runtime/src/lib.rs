@@ -644,6 +644,88 @@ mod tests {
     }
 
     #[test]
+    fn rejects_active_rectangle_outside_frame_bounds() {
+        let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
+        metadata.active_rect = super::VideoRect {
+            x: 15,
+            y: 0,
+            width: 2,
+            height: 16,
+        };
+        assert_eq!(
+            VideoFrame::new_with_metadata(
+                1,
+                16,
+                16,
+                PixelFormat::Rgba8888,
+                64,
+                vec![0; 16 * 16 * 4],
+                metadata,
+            ),
+            Err(VideoFrameError::InvalidActiveRect)
+        );
+    }
+
+    #[test]
+    fn rejects_visible_rectangle_outside_frame_bounds() {
+        let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
+        metadata.visible_rect = super::VideoRect {
+            x: 15,
+            y: 0,
+            width: 2,
+            height: 16,
+        };
+        assert_eq!(
+            VideoFrame::new_with_metadata(
+                1,
+                16,
+                16,
+                PixelFormat::Rgba8888,
+                64,
+                vec![0; 16 * 16 * 4],
+                metadata,
+            ),
+            Err(VideoFrameError::InvalidVisibleRect)
+        );
+    }
+
+    #[test]
+    fn rejects_zero_display_aspect_ratio() {
+        let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
+        metadata.display_aspect_ratio.denominator = 0;
+        assert_eq!(
+            VideoFrame::new_with_metadata(
+                1,
+                16,
+                16,
+                PixelFormat::Rgba8888,
+                64,
+                vec![0; 16 * 16 * 4],
+                metadata,
+            ),
+            Err(VideoFrameError::InvalidAspectRatio)
+        );
+    }
+
+    #[test]
+    fn rejects_timestamp_without_timebase() {
+        let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
+        metadata.timestamp_ticks = 1;
+        assert_eq!(
+            VideoFrame::new_with_metadata(
+                1,
+                16,
+                16,
+                PixelFormat::Rgba8888,
+                64,
+                vec![0; 16 * 16 * 4],
+                metadata,
+            ),
+            Err(VideoFrameError::InvalidTimestamp)
+        );
+    }
+
+    #[test]
     fn rejects_active_area_outside_visible_rectangle() {
         let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
         metadata.visible_rect = super::VideoRect {
