@@ -381,6 +381,23 @@ mod tests {
     }
 
     #[test]
+    fn restore_rejects_divergent_vdp_clock_domain_history() {
+        let machine = SmsTemporalCoordinator::new(3).unwrap();
+        let mut state = machine.export_state();
+        let vdp = state
+            .scheduler
+            .clock_domains
+            .iter_mut()
+            .find(|domain| domain.id == SMS_VDP_CLOCK_DOMAIN_ID)
+            .unwrap();
+        vdp.total_cycles = 1;
+        assert_eq!(
+            SmsTemporalCoordinator::restore_state(state).err(),
+            Some(SmsTemporalCoordinatorError::InvalidState)
+        );
+    }
+
+    #[test]
     fn m1_tstate_events_advance_the_shared_clock_one_cycle_at_a_time() {
         let mut machine = SmsTemporalCoordinator::new(3).unwrap();
         for continuation_id in 0..4 {
@@ -409,6 +426,15 @@ mod tests {
                     .clock_advances
                     .iter()
                     .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
+                    .unwrap()
+                    .elapsed_cycles,
+                1
+            );
+            assert_eq!(
+                dispatch
+                    .clock_advances
+                    .iter()
+                    .find(|advance| advance.domain == SMS_VDP_CLOCK_DOMAIN_ID)
                     .unwrap()
                     .elapsed_cycles,
                 1
