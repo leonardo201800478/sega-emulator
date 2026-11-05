@@ -994,6 +994,56 @@ mod tests {
     }
 
     #[test]
+    fn machine_instant_fraction_order_and_arithmetic_match_small_integer_oracles() {
+        for left_denominator in 1_u128..=12 {
+            for left_numerator in 0..left_denominator {
+                let left = super::MachineInstant::from_parts(
+                    MachineTime::ZERO,
+                    left_numerator,
+                    left_denominator,
+                )
+                .unwrap();
+                for right_denominator in 1_u128..=12 {
+                    for right_numerator in 0..right_denominator {
+                        let right = super::MachineInstant::from_parts(
+                            MachineTime::ZERO,
+                            right_numerator,
+                            right_denominator,
+                        )
+                        .unwrap();
+                        let expected = (left_numerator * right_denominator)
+                            .cmp(&(right_numerator * left_denominator));
+                        assert_eq!(left.cmp(&right), expected);
+
+                        let sum = left.checked_add(right).unwrap();
+                        let expected_sum = super::MachineInstant::from_parts(
+                            MachineTime::ZERO,
+                            left_numerator * right_denominator
+                                + right_numerator * left_denominator,
+                            left_denominator * right_denominator,
+                        )
+                        .unwrap();
+                        assert_eq!(sum, expected_sum);
+
+                        if left >= right {
+                            let difference = left.checked_sub(right).unwrap();
+                            let expected_difference = super::MachineInstant::from_parts(
+                                MachineTime::ZERO,
+                                left_numerator * right_denominator
+                                    + left_denominator * right_denominator
+                                    - right_numerator * left_denominator,
+                                left_denominator * right_denominator,
+                            )
+                            .unwrap();
+                            assert_eq!(difference, expected_difference);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn machine_instant_rejects_unrepresentable_denominators_and_tick_overflow() {
         assert_eq!(
             super::MachineInstant::from_parts(MachineTime::ZERO, 0, 0),
