@@ -12,8 +12,8 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory, SmsVdp,
-    Territory,
+    CartridgeImage, ControllerButtons, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo,
+    SmsIoError, SmsMemory, SmsVdp, Territory,
     SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
     SmsTemporalEvent,
 };
@@ -124,6 +124,7 @@ pub enum SmsTemporalBusError {
     Psg(PsgError),
     PsgClock(PsgClockError),
     Coordinator(SmsTemporalCoordinatorError),
+    Io(SmsIoError),
     Busy,
     NoPendingRequest,
     WrongRequestId { expected: u64, received: u64 },
@@ -138,6 +139,7 @@ impl fmt::Display for SmsTemporalBusError {
             Self::Psg(error) => write!(f, "SMS temporal PSG initialization failed: {error}"),
             Self::PsgClock(error) => write!(f, "SMS temporal PSG clock advance failed: {error}"),
             Self::Coordinator(error) => write!(f, "SMS temporal coordinator failed: {error}"),
+            Self::Io(error) => write!(f, "SMS temporal controller input failed: {error}"),
             Self::Busy => {
                 f.write_str("SMS temporal bus already owns an unacknowledged transaction")
             }
@@ -177,6 +179,12 @@ impl From<PsgError> for SmsTemporalBusError {
 impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
     fn from(error: SmsTemporalCoordinatorError) -> Self {
         Self::Coordinator(error)
+    }
+}
+
+impl From<SmsIoError> for SmsTemporalBusError {
+    fn from(error: SmsIoError) -> Self {
+        Self::Io(error)
     }
 }
 
@@ -522,6 +530,16 @@ impl SmsTemporalBus {
 
     pub fn io_mut(&mut self) -> &mut SmsIo {
         &mut self.io
+    }
+
+    /// Update controller levels without advancing scheduler time.
+    pub fn set_controller(
+        &mut self,
+        player: u8,
+        buttons: ControllerButtons,
+    ) -> Result<(), SmsTemporalBusError> {
+        self.io.set_controller(player, buttons)?;
+        Ok(())
     }
 
     /// Set the byte driven by the external interrupting device during acknowledge.
