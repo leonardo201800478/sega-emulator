@@ -730,7 +730,7 @@ mod tests {
 
         let mut malformed_payload = encoded;
         let payload_length_offset =
-            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 48 + 2 + 2 + 8;
         malformed_payload[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&3_u32.to_be_bytes());
         refresh_checksum(&mut malformed_payload);
@@ -744,7 +744,7 @@ mod tests {
     fn codec_rejects_payload_lengths_beyond_frame_boundary() {
         let mut encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
         let payload_length_offset =
-            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 48 + 2 + 2 + 8;
         encoded[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&u32::MAX.to_be_bytes());
         refresh_checksum(&mut encoded);
