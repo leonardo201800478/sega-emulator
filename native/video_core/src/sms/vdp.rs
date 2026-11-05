@@ -2,7 +2,7 @@
 //! Deterministic scanline model: Mode 4, VRAM/CRAM, scroll, sprites, IRQ, light-gun
 //! click injection and standard-monitor SegaScope output. Not dot-cycle exact.
 
-use super::profile::{SpriteLimitMode, VideoStandard};
+use super::profile::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
 
 pub const SMS_VDP_WIDTH: usize = 256;
 pub const SMS_VDP_MAX_HEIGHT: usize = 240;
@@ -74,8 +74,7 @@ pub struct SmsVdp {
     framebuffer: Vec<u8>,
     working_framebuffer: Vec<u8>,
     frame_ready: bool,
-    video_standard: VideoStandard,
-    sprite_limit: SpriteLimitMode,
+    profile: SmsVdpProfile,
     line_counter: u8,
     line_irq_pending: bool,
     light_x: u16,
@@ -90,7 +89,17 @@ pub struct SmsVdp {
 }
 
 impl SmsVdp {
+    /// Preserve the Legacy SMS2 constructor and its existing behavior.
     pub fn new(video_standard: VideoStandard, sprite_limit: SpriteLimitMode) -> Self {
+        Self::new_with_profile(SmsVdpProfile::new(
+            SmsVdpRevision::Sega3155246,
+            video_standard,
+            sprite_limit,
+        ))
+    }
+
+    /// Construct the VDP with an explicit ASIC and regional profile.
+    pub fn new_with_profile(profile: SmsVdpProfile) -> Self {
         Self {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
@@ -108,8 +117,7 @@ impl SmsVdp {
             framebuffer: vec![0; FRAME_SIZE],
             working_framebuffer: vec![0; FRAME_SIZE],
             frame_ready: false,
-            video_standard,
-            sprite_limit,
+            profile,
             line_counter: 0,
             line_irq_pending: false,
             light_x: 0,
@@ -124,26 +132,42 @@ impl SmsVdp {
         }
     }
 
+    /// Return the immutable hardware profile currently selected.
+    pub const fn profile(&self) -> SmsVdpProfile {
+        self.profile
+    }
+
     pub fn video_standard(&self) -> VideoStandard {
-        self.video_standard
+        self.profile.video_standard
     }
     pub fn system_clock_hz(&self) -> u64 {
-        match self.video_standard {
+        match self.profile.video_standard {
             VideoStandard::Pal => 3_546_895,
             VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown => 3_579_545,
         }
     }
     pub fn total_lines(&self) -> u16 {
-        match self.video_standard {
+        match self.profile.video_standard {
             VideoStandard::Pal => 313,
             _ => 262,
         }
     }
     pub fn visible_height(&self) -> u16 {
-        if self.registers[1] & 0x08 != 0 {
+        let requested_height = if self.registers[1] & 0x08 != 0 {
             240
         } else if self.registers[1] & 0x10 != 0 {
             224
+        } else {
+            192
+        };
+
+        if self
+            .profile
+            .capabilities()
+            .active_height_modes
+            .contains(&requested_height)
+        {
+            requested_height
         } else {
             192
         }
@@ -181,10 +205,10 @@ impl SmsVdp {
         self.tstates_into_line
     }
     pub fn sprite_limit_mode(&self) -> SpriteLimitMode {
-        self.sprite_limit
+        self.profile.sprite_limit
     }
     pub fn set_sprite_limit_mode(&mut self, mode: SpriteLimitMode) {
-        self.sprite_limit = mode;
+        self.profile.sprite_limit = mode;
     }
     pub fn set_stereo_eye(&mut self, eye: SmsVdpEye) {
         self.stereo_eye = eye;
@@ -310,7 +334,7 @@ impl SmsVdp {
 
     pub fn read_v_counter(&self) -> u8 {
         let line = self.scanline;
-        match (self.video_standard, self.visible_height()) {
+        match (self.profile.video_standard, self.visible_height()) {
             (VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown, 192)
                 if line >= 219 =>
             {
@@ -361,7 +385,7 @@ impl SmsVdp {
                 &mut self.status,
                 &mut self.working_framebuffer,
                 usize::from(line),
-                self.sprite_limit == SpriteLimitMode::HardwareLimit,
+                self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
