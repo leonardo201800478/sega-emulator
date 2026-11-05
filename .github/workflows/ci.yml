@@ -406,6 +406,10 @@ jobs:
         run: |
           .\.venv\Scripts\python.exe -c "from sega_z80_core import NativeSMSTemporalMachine; machine = NativeSMSTemporalMachine(bytes(0x4000), region='brazil'); assert machine.region == 'brazil'; assert machine.frame_number == 0; assert machine.step_frame() > 0; assert machine.frame_number == 1; assert not hasattr(machine, 'framebuffer'); machine.set_controller(1, True, False, False, False, True, False); machine.pause(); machine.reset(); assert machine.frame_number == 0"
 
+      - name: Run native SMS and SG-1000 Python integration tests
+        run: |
+          .\.venv\Scripts\python.exe -m pytest -q tests/test_rust_runtime_selection.py tests/test_sms_native_audio.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py
+
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
