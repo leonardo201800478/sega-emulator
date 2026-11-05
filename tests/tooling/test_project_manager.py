@@ -80,3 +80,28 @@ def test_tool_versions_uses_the_current_python_interpreter(monkeypatch) -> None:
 
     assert [sys.executable, "--version"] in commands
     assert [sys.executable, "-m", "ruff", "--version"] in commands
+
+
+def test_streaming_run_forwards_live_output_and_keeps_a_result_tail(capsys) -> None:
+    result = project_manager.run(
+        [sys.executable, "-c", "print('pytest progress visible')"],
+        project_manager.ROOT,
+        stream=True,
+    )
+
+    assert result.status == "PASS"
+    assert "pytest progress visible" in result.output
+    assert "pytest progress visible" in capsys.readouterr().out
+
+
+def test_streaming_run_terminates_a_command_after_its_timeout() -> None:
+    result = project_manager.run(
+        [sys.executable, "-c", "import time; time.sleep(5)"],
+        project_manager.ROOT,
+        timeout=0.1,
+        stream=True,
+    )
+
+    assert result.status == "FAIL"
+    assert result.returncode == 124
+    assert "Timed out after 0.1 seconds" in result.output
