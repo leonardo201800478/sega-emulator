@@ -24,9 +24,7 @@ def test_entry_point_without_rom_opens_minimal_sms_control_window(
     def fake_run(rom: object, *, region: str) -> None:
         calls.append((rom, region))
 
-    frontend = ModuleType(
-        "sega_emulator.frontend.qt.minimal_sms_window"
-    )
+    frontend = ModuleType("sega_emulator.frontend.qt.minimal_sms_window")
     frontend.run_minimal_sms = fake_run
     monkeypatch.setitem(
         sys.modules,
