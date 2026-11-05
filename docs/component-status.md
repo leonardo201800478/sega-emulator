@@ -1,283 +1,59 @@
-# Estado dos componentes — SG-1000 + Master System
+# Estado atual dos componentes — Sega Emulator
 
-**Base de referência:** `main` em `f89a52346e91e88e82ab37a4afcfffff2d793407` (2026-11-04, após PR #475 / E4C).
-**Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
+**Baseline consultada:** main em f4e428ad31c0d2e214e8ed15aab8fa705b1c795e (2026-11-05).  
+**Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
+**Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
 
-Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
+Este documento é a fotografia resumida do estado conhecido na baseline acima. Antes de implementar, atualizar a auditoria para o SHA corrente e verificar código, testes, PRs e workflows.
 
 ## 1. Plataformas
 
-| Componente | Estado observado | O que permanece / pendência |
+| Plataforma | Estado | Diretriz |
 |---|---|---|
-| SG-1000 | Runtime Rust ativo em `native/sg1000_core`, integrado à extensão e ao frontend | Preservar como baseline; ampliar regressões e validação independente |
-| Master System | Runtime Rust ativo em `native/sms_core`, composto pela camada nativa `native/z80_core` e fachada Python | Fechar cobertura funcional, mappers, diferenças de revisão e integração temporal |
-| Game Gear | Não implementado como máquina independente | Fora do escopo ativo até M4 |
-| Mega Drive/Genesis, Sega CD, 32X e sistemas integrados | Não implementados como runtimes neste marco | Fora do escopo ativo até revisão pós-M4 |
+| SG-1000 | Runtime Rust integrado | Preservar funcionalidades e jogos já validados |
+| Master System | Runtime Rust integrado | Prioridade atual; ampliar compatibilidade funcional e corrigir divergências observáveis |
+| Game Gear | Não concluído como plataforma independente | Fase futura, reutilizar SMS quando compatível |
+| Mega Drive / Genesis | Não concluído | Fase futura, CPU 68000 e Z80 auxiliar |
+| Sega CD / 32X | Não concluídos | Dependem das plataformas anteriores |
 
-## 2. Componentes de hardware
+## 2. Componentes
 
-| Componente | Implementação / localização observada | Estado e trabalho restante |
+| Componente | Estado conhecido | Prioridade / limite |
 |---|---|---|
-| Z80 — execução | `native/z80_cpu` mantém o executor atômico e o microsequenciador retomável compartilhados; SMS consome a fatia temporal atual e SG-1000 ainda preserva seu runtime legado | Microsequenciador implementa E3A1/E3A2, E4A, E4B e E4C (INC/DEC indexed-memory); E5 DDCB/FDCB, E6 fallback geral, E7 auditoria semântica, E8 diferencial e E9 integração sistêmica permanecem pendentes. Não declarar Z80 completo nem TEMPORAL_PASS |
-| Z80 — ALU | `native/z80_alu` | Biblioteca compartilhada existente; continuar auditoria de flags/opcodes e cobertura independente |
-| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; T5a expõe índices M-cycle/T-state no subconjunto retomável e mapeia transações para `BusTransaction`; conclusão de barramento e ciclo interno ficam latched até commit/acknowledgement; WAIT continua sendo fixture |
-| Memória e barramentos SG-1000 | `native/sg1000_core` | Funcionais no runtime; ampliar testes de mapa, espelhamento, RAM e cartuchos |
-| Memória e barramentos SMS | `native/sms_core/src/memory.rs`, `temporal_bus.rs`, `temporal_machine.rs` | Caminho temporal CPU→Scheduler→memória SMS para fetch/read/write está implementado e `SHORT_PASS`; WAIT é fixture, I/O temporal, arbitragem e integração completa permanecem pendentes |
-| TMS9918A | `native/sg1000_core` | VDP ativo do SG-1000; preservar regressões e validar efeitos de hardware com cenas/oráculos |
-| SMS VDP / Mode 4 | `native/sms_core/src/vdp.rs` e `vdp_sms1.rs` | Caminho legado permanece funcional e fora de `SmsTemporalMachine`; pipeline temporal por dot/fetch/IRQ ainda não integrado |
-| SMS1 VDP 315-5124 | `native/sms_core/src/vdp_sms1.rs` | Componente SMS1 e estado de H Counter latch presentes; integração completa com máquina, pipeline raster/fetch, IRQ e Scheduler permanece pendente |
-| PSG SN76489 | `native/sg1000_core`, `native/sms_core`, `native/audio_runtime` | Núcleo/geração digital e runtime de áudio existentes; perfis por máquina e validação de ruído/atenuação/timing ainda precisam de fechamento |
-| YM2413 | Não há runtime funcional integrado identificado no baseline | Permanece como componente futuro específico do SMS, não requisito para declarar o PSG implementado |
-| Mappers SMS | `native/sms_core` | Implementações existentes permanecem; cobertura e registry explícito sem fallback precisam ser auditados por perfil |
-| I/O, input e IRQ | Cores de máquina e `native/input_runtime` | Caminhos atuais existem; integração temporal, transições elétricas e IRQ do VDP ainda não estão fechadas |
-| Save states | `native/z80_cpu/src/snapshot.rs` e DTOs em `native/sms_core/src/temporal*.rs` | Codec binário versionado + CRC32 cobre o estado do microsequenciador suportado; estado integrado da máquina é DTO in-memory. Codec persistente e restore de todos os dispositivos seguem pendentes |
-
-## 3. Componentes de infraestrutura e aplicação
-
-| Componente | Implementação / localização observada | Estado e trabalho restante |
-|---|---|---|
-| Temporal Core | `native/temporal_core` | Contratos e tipos temporais existem; contrato não significa execução temporal integrada |
-| Machine Scheduler | `native/machine_scheduler`, `SmsTemporalCoordinator` e `SmsTemporalMachine` | SMS consome o Scheduler para a fatia CPU/memória T4; não é ainda autoridade temporal de VDP/PSG/I/O/IRQ da máquina completa |
-| Video Runtime | `native/video_runtime` | Runtime de apresentação e backend Windows/D3D12 existem; falta ligação de frames do SMS1 VDP e sincronização com o Scheduler |
-| Audio Runtime | `native/audio_runtime` | Sessão DSP/PCM Rust existe; o pump ainda depende do fluxo `run_frame()`/Qt, portanto produção/pacing autônomos permanecem pendentes |
-| Input Runtime | `native/input_runtime` | Crate de runtime existe; autonomia completa do host Rust e integração final ao engine permanecem pendentes |
-| Engine standalone | Não há binário/engine autônomo equivalente ao desenho proposto confirmado no workspace atual | P4: sessão, thread, comandos, pacer, host ports e executável Rust |
-| Host-null / testkit de golden masters | Não identificados como implementação completa no workspace atual | P0/P1: captura repetível, comparação de framebuffer/PCM/estado e oráculos |
-| PyO3/Maturin | `native/z80_core` | Extensão ativa que compõe os cores e runtimes; fronteira ainda expõe ciclo de execução por frame, não apenas controle/telemetria |
-| Frontend Qt/PySide6 | `src/sega_emulator` | Aplicação ativa, carregamento, configuração, apresentação e diagnóstico; deve evoluir para launcher/painel sem avanço temporal |
-| Workspace Cargo | `Cargo.toml` | Inclui SG-1000, SMS, ALU, bus, áudio, input, temporal, scheduler e vídeo; `native/z80_core`, `native/sega_emu_core` e `native/audio_output` estão excluídos do workspace root |
-
-## 4. PRs e integração temporal registrada em 2026-11-02
-
-- **PR #411 — ADR-0015/roadmap T0–T4:** integrada à main em `bf09712659a102d6e4c02f2ff5d97a99487ac166`.
-- **PR #416 — T1–T4 runtime SMS:** integrada à main em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS nos quatro jobs.
-- **PR #412:** head é ancestral do merge #416 e foi reconhecida como merged pelo GitHub.
-- **PR #413/#414:** fechadas como supersedidas; seus entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416, mas os heads divergentes não são ancestrais de main.
-- **PR #415:** fechada como supersedida; seu head é ancestral do merge #416, portanto o histórico desse head está contido em main.
-- **PR #396 — contratos temporais SMS1:** encerrada sem merge, supersedida pela PR #418. Os contratos temporais canônicos foram absorvidos pela #418; não reabrir nem duplicar essa proposta.
-- **PR #421 — P6/T6a, Sega mapper no SmsTemporalBus:** integrada à main no merge SHA `b2c8e6533d8ffb698e14a213b324de5c9cbab108`; HEAD validado `9bffc3015ecb55893808519cdaf9b8aef468b976`; CI da PR `41545972767` 4/4 PASS. CI pós-merge `41546391641`: Rust/Python/Windows PASS; Scheduler stress SKIPPED no evento push. Auditoria técnica do Agente 2 limitada à issue #420 aprovada no comentário `5744939391`.
-- **PR #423 — P6/T6b, barramento de memória temporal SG-1000:** aberta em Draft na branch `feat/sg1000-temporal-memory-bus`; código SHA `b4330713e329dbb44149d9589f9d5053afdd3db9`; CI `41548085870` 4/4 PASS. É candidata de branch, não parte da main; não implementa ainda `Sg1000TemporalMachine` nem liga o Z80 retomável ao SG-1000.
-
-## 5. Componentes que permanecem no projeto
-
-Permanecem válidos e não devem ser removidos por esta consolidação:
-
-- cores SG-1000 e SMS e suas implementações de CPU, ALU, memória, bus, I/O e interrupções;
-- VDP TMS9918A e VDP SMS, incluindo SMS1 VDP e registradores/latches já implementados;
-- PSG SN76489 e perfis específicos;
-- mappers e perfis de cartucho já implementados;
-- bibliotecas Z80 ALU/bus e testes/vetores;
-- Temporal Core e Machine Scheduler;
-- Audio Runtime, Input Runtime e Video Runtime;
-- extensão PyO3/Maturin e frontend Qt/PySide6;
-- ADRs, especificações de hardware, auditorias, testes e evidências que descrevem comportamento real.
-
-A consolidação remove somente documentos que funcionavam como roadmaps/cronogramas concorrentes. Não remove componentes, código de hardware, testes, contratos ou evidências técnicas.
-
-## 6. Critérios para atualizar este inventário
-
-Toda PR que alterar um componente deve atualizar sua linha e indicar:
-1. caminho/camada de implementação;
-2. estado formal (`IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS`, `LONG_PASS`, `INTEGRATION_PENDING`, `TEMPORAL_PASS`);
-3. testes e comandos executados;
-4. SHA candidato e links de workflow;
-5. limitações conhecidas e o que não foi testado.
-
-Não elevar um estado com base apenas em documentação, compilação isolada, boot ou teste ignorado. O estado de uma PR aberta não deve ser descrito como parte da main.
-
-
-## 7. Estado formal após P6/T6a — main `b2c8e6533d8ffb698e14a213b324de5c9cbab108`
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| Z80 microsequencer retomável (subconjunto) | IMPLEMENTED / QUICK_PASS | Codec versionado, CRC32, WAIT/T-states checked, diferencial contra executor atômico; não é CPU completa |
-| SMS temporal coordinator | IMPLEMENTED / QUICK_PASS | `MachineScheduler`, `MachineTime` e escala master-ticks/T-state explícita |
-| SMS temporal bus | IMPLEMENTED / SHORT_PASS | Fetch/read/write memória; Sega mapper `$FFFD/$FFFE/$FFFF` no deadline; janela fixa 1 KiB, RAM mirror, WAIT fixture, exactly-once, snapshot/restore/replay; PR #421 |
-| SMS temporal vertical slice T4 | IMPLEMENTED / SHORT_PASS | PR #416, CI #41499228458; trace, snapshot/restore in-memory, replay e diferencial |
-| SG-1000 legado | IMPLEMENTED / QUICK_PASS | Runtime legado preservado; sem golden master/homebrew smoke nesta execução |
-| SG-1000 temporal memory bus | INTEGRATION_PENDING | PR #423 candidata em branch, HEAD de código `b4330713e329dbb44149d9589f9d5053afdd3db9`, CI 4/4 PASS; ainda não integrada à main e sem Z80TemporalMachine |
-| SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
-| TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
-
-**T5a — PR #418 integrada:** índices M-cycle/T-state para o subconjunto retomável; restore valida fase/opcode, endereço efetivo `(HL)`, payload e progresso temporal da instrução; codec binário Z80 versão 3; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`; conclusão latched até commit/ack da CPU. HEAD da PR `6e73c0655521941c9e4ab7384f4508954306561a`, CI da PR `41538464875`: 4/4 jobs PASS. Merge em `main`: `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`. CI pós-merge `41540515497`: Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED (não contar como PASS). Auditoria técnica pós-merge no SHA integrado: APROVADA TECNICAMENTE para o escopo limitado T5a, registrada no comentário 6590621514 da PR #418; não representa aprovação arquitetural da ADR-001 nem `TEMPORAL_PASS`. Limites preservados; não declarar `TEMPORAL_PASS`.
-## 5. T5a — PR #418 integrada
-
-- Fonte canônica dos contratos temporais: a linha T5a (#418), que incorpora `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na PR #396. A #396 é supersedida e não deve ser integrada em paralelo.
-- Código funcional validado no SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`, run `41536695747` 4/4 PASS, incluindo restore de endereço `(HL)`, CRC válido e coerência `instruction_tstates`/Scheduler. HEAD final da PR `6e73c0655521941c9e4ab7384f4508954306561a`, run `41538464875` 4/4 PASS. Merge SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`; CI pós-merge `41540515497` com Scheduler deterministic stress SKIPPED. Execução local: NOT RUN.
-- Restore do sequenciador valida fase/opcode/request, destino, endereço efetivo `(HL)`, duração nominal e payload esperado; `MemoryWrite` persiste endereço/valor e o codec Z80 é versão 3. `SmsTemporalMachineState` versão 6 preserva o início da instrução e valida `instruction_tstates` contra o tempo decorrido no Scheduler, inclusive completion latched. Restore do barramento valida deadline, escala de T-state e watermark de dispatch; restore da máquina exige exatamente 1 T-state para o ciclo interno. Conclusões permanecem latched até commit/ack.
-- `BusTransaction.timestamp` conserva o início da requisição em Setup e Complete; `BusOperationResult::Completed.completed_at` expõe a conclusão separadamente. O descriptor de ciclo interno conserva seu timestamp de início mesmo quando a conclusão está latched.
-- P2 de payload de escrita tratado na branch: a fase `MemoryWrite` preserva endereço/valor esperados, o restore compara a requisição exata e o codec versão 3 inclui esses campos. Testes negativos DTO para `LD (HL),n` e `INC (HL)`, round-trip do codec e teste de rejeição binária com CRC recalculado cobrem o payload adulterado. Também há regressão para o timestamp inicial de ciclo interno durante conclusão latched.
-- Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
-- A integração está concluída. A auditoria técnica pós-merge do Agente 2 para o SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` foi aprovada tecnicamente no escopo limitado de T5a (comentário 6590621514); a revisão arquitetural independente da ADR-001 permanece pendente; o CI da PR passou 4/4 no HEAD `6e73c0655521941c9e4ab7384f4508954306561a`. O CI pós-merge teve Scheduler deterministic stress SKIPPED; não classificar esse job como PASS. Execução local: NOT RUN.
-
-
-## 8. Evidência P6 — T6a integrada e T6b em validação
-
-### T6a — issue #420 / PR #421 (main)
-
-- Merge SHA: `b2c8e6533d8ffb698e14a213b324de5c9cbab108`; HEAD validado da PR: `9bffc3015ecb55893808519cdaf9b8aef468b976`.
-- CI da PR `41545972767`: Rust fmt/Clippy, SMS core focado, workspace, Ruff, pytest, Windows x64 e Scheduler deterministic stress short PASS (4/4 jobs).
-- Testes SMS core focados: 171; Scheduler short: 2 PASS, 1 teste de perfil longo filtrado. Pytest: 214 PASS, 21 SKIPPED por ausência de PySide6, extensão PyO3 e NumPy; SKIPPED não é PASS.
-- CI pós-merge `41546391641`: Rust/Python/Windows PASS; Scheduler deterministic stress SKIPPED no evento push. Não contar como PASS pós-merge.
-- Auditoria técnica do Agente 2 limitada à issue #420: APROVADA TECNICAMENTE no comentário #5744939391 (COMMENTED, não review formal APPROVE). Sem TEMPORAL_PASS.
-
-### T6b — issue #422 / PR #423 (branch candidata)
-
-- Branch: `feat/sg1000-temporal-memory-bus`; código validado no SHA `b4330713e329dbb44149d9589f9d5053afdd3db9`; base `main` em `b2c8e6533d8ffb698e14a213b324de5c9cbab108`.
-- CI `41548085870`: 4/4 jobs PASS. Rust fmt e Clippy PASS; `cargo test -p sega-sms-core --locked` PASS; `cargo test -p sega-sg1000-core --locked` PASS (57 testes); workspace PASS; Ruff PASS; pytest 214 PASS / 21 SKIPPED; Windows D3D12/video/WASAPI/XAudio2 PASS; Scheduler stress short 2 PASS, 1 teste longo filtrado.
-- Escopo validado: transações de memória, ROM mirror, RAM interna 1 KiB/8 KiB, cartridge RAM 1/2/8 KiB, deadline, WAIT fixture, exactly-once, snapshot/restore e rejeição explícita de PortRead/PortWrite.
-- Limite: PR #423 continua aberta; o barramento ainda não compõe o Z80MicroSequencer. Não contar como implementação da main até merge. Execução local: NOT RUN.
-
-
-## 10. P7 — expansão do Z80 retomável: ALU com fonte em registrador, PR #425
-
-**Branch candidata:** `feat/z80-sms-alu-register-matrix`  
-**SHA validado:** `6ed6cc3b42942f791d04f4366db2b35e3cafa985`  
-**PR:** https://github.com/leonardo201800478/sega-emulator/pull/425  
-**CI:** run `41562585658` — Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED.
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| ALU BASE com fonte em registrador no microsequenciador | IMPLEMENTED / QUICK_PASS | 56 encodings: ADD/ADC/SUB/SBC/AND/XOR/OR/CP com B,C,D,E,H,L,A; vetores fixos de resultado/flags, teste estrutural e diferencial no SmsTemporalMachine/Scheduler |
-| ALU com fonte `(HL)` | INTEGRATION_PENDING | Requer fase de leitura de memória e validação do snapshot codec |
-| ALU imediata | INTEGRATION_PENDING | Requer fase de leitura do operando imediato, avanço de PC e validação temporal |
-| Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
-| TEMPORAL_PASS | NOT DECLARED | A cobertura desta PR é uma fatia CPU isolada; não prova execução completa de jogos nem integração temporal sistêmica |
-
-A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o executor atômico como referência. O teste CP confirma preservação de A e flags incluindo X/Y. Não se declara cobertura de operandos imediatos/memória, comparação diferencial abrangente, ZEXDOC/ZEXALL ou boot de jogos. A PR #425 permanece Draft e não faz parte da main.
-
-## 11. P7 — Z80 ALU com operando imediato e indireto (HL), PR #426
-
-**Branch candidata:** feat/z80-sms-alu-immediate-memory  
-**SHA de código validado:** 35372cdd6705cbae57992fbc770b03982b4f10eb  
-**PR:** https://github.com/leonardo201800478/sega-emulator/pull/426  
-**Base:** feat/z80-sms-alu-register-matrix (PR #425; empilhada, não integrada à main).  
-**CI:** run 41564679857 falhou somente no step Formatting; Windows x64 e Python PASS; Scheduler deterministic stress SKIPPED. A correção de formatação foi aplicada no SHA candidato atual, mas a execução CI desse SHA ainda não foi localizada/confirmada.
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| ALU imediata A,n | IMPLEMENTED / QUICK_PASS | 8 opcodes C6/CE/D6/DE/E6/EE/F6/FE; leitura de operando agendada, PC avança na conclusão; CI PASS |
-| ALU com fonte (HL) | IMPLEMENTED / QUICK_PASS | 8 opcodes 86/8E/96/9E/A6/AE/B6/BE; leitura de memória agendada; CI PASS |
-| Continuação retomável e snapshot | IMPLEMENTED / QUICK_PASS | Fases ImmediateReadAlu/MemoryReadAlu, codec com tags próprias e testes de round-trip pendente; CI PASS |
-| SMS temporal state | IMPLEMENTED / QUICK_PASS | Versão do estado SMS temporal incrementada; comparação diferencial via Scheduler PASS |
-| WAIT e timing nominal | IMPLEMENTED / QUICK_PASS | Testes de 7 T nominais e WAIT PASS |
-| Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
-| TEMPORAL_PASS | NOT DECLARED | Sem CI verde e sem execução in-game; não inferir fidelidade sistêmica total |
-
-**Critérios implementados no código:** M1 4 T + leitura 3 T; leitura imediata usa PC e incrementa PC somente ao concluir; (HL) solicita o byte pelo barramento temporal; WAIT entra no contador da instrução; snapshot preserva fase/request/WAIT. A suíte diferencial compara os oito grupos de operação com o executor atômico em registradores, refresh e tempo do Scheduler.
-
-**Validação:** no SHA de código 35372cdd6705cbae57992fbc770b03982b4f10eb, cargo fmt, Clippy, testes direcionados SMS/SG-1000 e testes do workspace: PASS; Ruff formatação/lint e regressão Python: PASS; Windows x64 D3D12, testes de vídeo, WASAPI/XAudio2 e testes de áudio: PASS. Scheduler deterministic stress: SKIPPED. Execução local NOT RUN. A fatia recebe QUICK_PASS de validação automatizada; manter INTEGRATION_PENDING quanto à integração sistêmica/in-game.
-
-A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
-
-
-## 12. P7 — Q-latch e SCF/CCF no Z80 retomável, PR #427
-
-**Branch candidata:** `feat/z80-sms-accumulator-flags`  
-**SHA candidato validado:** `cb040c50bfec9867a0c97068ad4de4bd9e866de9`  
-**PR:** https://github.com/leonardo201800478/sega-emulator/pull/427  
-**CI:** run `41569544969` — Rust, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED.
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
-| Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
-| SCF/CCF | IMPLEMENTED / QUICK_PASS atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
-| Snapshot Z80 | IMPLEMENTED / QUICK_PASS atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
-| SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80; CI `41569544969` PASS |
-| Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
-| TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
-
-O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. CI `41569544969`: Rust Formatting, Clippy, testes direcionados SMS/SG-1000, workspace, Ruff, pytest e Windows x64 vídeo/áudio PASS; Scheduler deterministic stress SKIPPED. Execução local NOT RUN. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
-
-## 13. P7 — Z80 BASE: LD rr,nn no microsequenciador retomável
-
-**Branch candidata:** `feat/z80-sms-ld-register-pairs-immediate`  
-**SHA de código candidato:** `f416efef960cdd20816fd46c5e4a8509bff36ee5`  
-**PR:** https://github.com/leonardo201800478/sega-emulator/pull/428  
-**Dependência:** PR #427 (empilhada; ainda não integrada à main).  
-**CI:** run `41571174250` no SHA documental `0afb96a8302b77cf4068ecf5eb8f069d6fb6fb06` — Rust Formatting, Clippy, SMS, SG-1000, workspace, Ruff, pytest, Windows x64 D3D12/vídeo/WASAPI/XAudio2 e Scheduler deterministic stress short PASS.
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| LD BC,nn / LD DE,nn / LD HL,nn / LD SP,nn | IMPLEMENTED / QUICK_PASS pendente de CI | Quatro opcodes BASE (01/11/21/31); leitura little-endian em dois M-cycles de memória agendados após M1 |
-| Suspensão/retomada e snapshot | IMPLEMENTED / QUICK_PASS pendente de CI | Fases distintas para byte baixo e alto; validação de opcode, par, endereço, M-cycle e duração; codec Z80 versão 6 |
-| Integração temporal SMS | IMPLEMENTED / QUICK_PASS pendente de CI | Testes diferenciais no SmsTemporalMachine/Scheduler contra o executor atômico; estado temporal SMS versão 9 |
-| Z80 retomável completo | INTEGRATION_PENDING | Cobertura ainda parcial; instruções BASE restantes, prefixos CB/ED/DD/FD, HALT, interrupções, I/O e estados/pinos completos pendentes |
-| TEMPORAL_PASS | NOT DECLARED | Sem comprovação elétrica independente ou integração sistêmica completa |
-
-**Critérios da fatia:** M1 4 T + leitura do byte baixo 3 T + leitura do byte alto 3 T = 10 T nominais. PC avança apenas quando cada leitura conclui; o par de registradores só é atualizado após a leitura do byte alto. WAIT de cada transação deve ser contabilizado no Scheduler. O executor atômico legado permanece como oráculo diferencial e não é removido.
-
-**Validação:** CI `41571174250` PASS em todos os jobs, incluindo Scheduler deterministic stress short. Execução local NOT RUN. O resultado cobre o SHA candidato desta branch; não comprova integração sistêmica completa nem TEMPORAL_PASS.
-
-## 14. P7 — Z80 BASE: JP (HL) e EX DE,HL no microsequenciador retomável
-
-**Branch candidata:** `feat/z80-sms-jp-hl-ex-de-hl`  
-**SHA de código candidato:** `21cf592322057a8ec59dba0b368062d5b6b97491`  
-**PR:** pendente de abertura  
-**Dependência:** PR #428 (empilhada; ainda não integrada à main).  
-**CI:** run `41571700032` no SHA documental `eaded3e77edbd5768bf967dc57f72f0a9e99b341` — Rust Formatting, Clippy, testes SMS/SG-1000, workspace, Ruff, pytest e Windows x64 D3D12/vídeo/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
-
-| Componente | Estado formal | Evidência / limite |
-|---|---|---|
-| JP (HL) — E9 | IMPLEMENTED / QUICK_PASS pendente de CI | PC recebe HL na conclusão de M1; 4 T nominais, sem leitura adicional |
-| EX DE,HL — EB | IMPLEMENTED / QUICK_PASS pendente de CI | Troca DE/HL na conclusão de M1; 4 T nominais, sem transação adicional |
-| Diferencial temporal | IMPLEMENTED / QUICK_PASS pendente de CI | Teste compara todos os Z80Registers, refresh, Q e tempo do Scheduler contra o executor atômico |
-| Z80 retomável completo | INTEGRATION_PENDING | Prefixos, HALT, interrupções, I/O, famílias BASE restantes e estado/pinos completos continuam pendentes |
-| TEMPORAL_PASS | NOT DECLARED | A fatia não comprova execução sistêmica nem precisão elétrica completa |
-
-**Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN. Scheduler deterministic stress SKIPPED não foi contabilizado como PASS.
-
-
-## 8. Atualização do núcleo Z80 — PR #475 / E4C (2026-11-04)
-
-**Baseline main:** `f89a52346e91e88e82ab37a4afcfffff2d793407`  
-**HEAD validado da PR:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`  
-**Merge:** PR [#475](https://github.com/leonardo201800478/sega-emulator/pull/475), merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**CI:** [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), quatro jobs PASS.
-
-| Escopo | Estado formal | Evidência / limite |
-|---|---|---|
-| E4C — INC/DEC (IX/IY+d) | IMPLEMENTED / QUICK_PASS / SHORT_PASS | 5 testes dirigidos; IX/IY, flags S/Z/H/PV/N, C preservado, displacement, wrap, WAIT, snapshots, prefixos e 23T/6M. Não é validação diferencial externa nem TEMPORAL_PASS. |
-| E4 global (E4A/E4B/E4C) | IMPLEMENTED nos escopos registrados | As três fatias indexadas de displacement estão integradas. Não declarar LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS. |
-| Próxima tarefa | E5 — DDCB/FDCB | Separar BIT read-only de RMW, opcode final non-M1, R/flags, WAIT, snapshots e timing. |
-
-A suíte Python do CI reportou 214 passed e 21 skipped por dependências/extensões ausentes no runner. Os skips não foram contabilizados como PASS.
-
-
----
-
-## Atualização de estado dos componentes — 2026-11-04
-
-**Main:** `644b2c22879d63447f63b730ed9415db11e81fab`; CI #41831738966 SUCCESS.
-
-| Componente | Estado atual | Evidência / limite |
-|---|---|---|
-| Z80 — implementação | E3A1/E3A2, E4A–E4C, E5, E6, E7.1 e E7.2A–D integradas | E7.2E ainda em andamento; E7.3–E7.7 pendentes |
-| Z80 — snapshots | PRs #504 e #505 integradas | Restore/continuação por fases alcançadas pelo corpus; não cobre todas as combinações possíveis |
-| Z80 — estados inválidos/WAIT | PR #506 aberta, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` | CI #41861829094 QUEUED; não tratar como PASS |
-| SMS temporal machine save state | DTO in-memory | Não confundir com codec binário persistente completo de toda a máquina SMS |
-| IRQ/HALT/arbitragem | INTEGRATION_PENDING | HALT T4, BUSREQ, RETI/daisy-chain e IRQ real do VDP pendentes |
-| Z80 formal/diferencial | NOT RUN como gate global | E8 bloqueada até E7 fechado |
-| Integração temporal sistêmica | INTEGRATION_PENDING | E9 ainda não aprovada |
-
-PRs abertas #487/#447/#424 têm bases históricas divergentes; seus CI SUCCESS são históricos e não autorizam merge na main atual. #338 permanece Draft com CI FAILURE. Não considerar trabalho de PR aberta como componente integrado.
-
-
----
-
-## Atualização operacional dos componentes — 2026-11-04
-
-**Baseline remota:** `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1` (após PR #517). Esta seção prevalece sobre fotografias de componentes anteriores.
-
-| Componente | Estado atual | Evidência / limite |
-|---|---|---|
-| CPU Z80 compartilhada | IMPLEMENTED estruturalmente em `native/z80_cpu`; uso compartilhado SMS/SG-1000 | E6 integrada pela #486; E7.3 HALT T4 integrada pela #509. Não declarar fechamento semântico/diferencial global. |
-| Microsequenciador Z80 / E7 | INTEGRATION_PENDING | E7.1–E7.3 integradas; E7.4.1A (#512) e E7.4.1B (#514) candidatas abertas; E7.5–E7.7 pendentes. |
-| WAIT/TW do Z80 | INCOMPLETE / BLOCKED | Necessários falling/rising edges, TW automático de I/O, dois TWs automáticos de INT acknowledge e amostragem WAIT externo durante TW obrigatório. |
-| BUSREQ/BUSACK | NOT IMPLEMENTED no runtime | PR #511 é auditoria documental, não implementação de arbitragem. Só avançar após C1–C6. |
-| Timeline racional comum | NOT IMPLEMENTED | `ClockEdgeTime` ainda não integra `MachineScheduler`, EventQueue, watermarks, clock domains e codec. C1 é a próxima implementação. |
-| Scheduler determinístico | IMPLEMENTED no escopo atual; validação sistêmica pendente | PR #517 CI no HEAD `fc5f710f8c56698cb82dd4e49e881cea15e4639b`, run `41908119554`: 4/4 jobs PASS. Isso não comprova TEMPORAL_PASS do Z80/SMS. |
-| E8 diferencial/formal | BLOCKED | Não iniciar ZEXDOC/ZEXALL até o fechamento integral de E7. |
-
-**Próxima tarefa técnica:** C1 no `sega-temporal-core` e `machine-scheduler`, conforme [auditoria da timeline racional](audits/z80-e7-4-1c-rational-timeline-2026-11-04.md). Não declarar `LONG_PASS`, `DIFFERENTIAL_PASS` ou `TEMPORAL_PASS` global com base em CI convencional.
+| Z80 compartilhado | Implementado em Rust e consumido pelos perfis SG-1000/SMS | Corrigir semântica e regressões; não duplicar o core |
+| Z80 E5 / E6 | Consta como integrado na main nas auditorias recentes | Confirmar testes no SHA candidato antes de novas alterações |
+| Z80 E7 | Parcial; E7.3/HALT T4 consta como integrada | Revisar somente comportamentos relevantes aos consoles suportados |
+| Z80 M-cycle/T-state | Há contratos e fatias temporais no runtime | Não exigir microsequenciamento integral de todas as instruções |
+| WAIT / arbitragem | Dependem do circuito e dos consumidores de cada plataforma | Implementar somente quando houver ligação e efeito demonstrados |
+| Memória / mappers SMS | Implementações Rust presentes | Corrigir compatibilidade de cartuchos e mapas reais |
+| VDP SMS | Implementação Rust com Mode 4 e modos legados | Refinar raster/registradores quando jogos demonstrarem divergências |
+| VDP TMS9918A | Runtime SG-1000 em Rust | Preservar compatibilidade e particularidades próprias |
+| PSG / áudio | Runtime de áudio Rust integrado | Validar comportamento audível e temporização necessária |
+| Machine Scheduler | Infraestrutura Rust presente | Coordenar eventos relevantes sem impor eventos por pino/tick |
+| PyO3 / Qt | Extensão nativa e frontend ativos | Manter interface coarse-grained; sem lógica de hardware em Python |
+
+## 3. Modelagem temporal em pausa
+
+Na consulta de 2026-11-05, as PRs #512, #514 e #526 estavam abertas/Draft e não integradas na main. A PR #527 também estava aberta/Draft e não integrada.
+
+Essas propostas não são trabalho ativo. Não avançar em timeline racional, microsequenciamento universal, WAIT/TW genérico, BUSREQ/BUSACK ou representação de pinos sem primeiro identificar uma dependência observável de SMS ou SG-1000 e demonstrar que a menor solução funcional exige esse detalhe.
+
+## 4. Validação
+
+- Executar os gates Rust e Python no SHA candidato.
+- Testar a funcionalidade afetada e executar regressões SMS/SG-1000.
+- Usar ROMs de diagnóstico e referências independentes quando agregarem evidência.
+- Medir desempenho quando houver alteração no caminho crítico.
+- Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN; SKIPPED não é PASS.
+
+Nenhuma validação global de cycle-accuracy ou pin-accuracy é requisito universal.
+
+## 5. Fontes de autoridade
+
+- [Roadmap mestre](project-roadmap.md)
+- [Escopo do projeto](project-scope.md)
+- [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
+- [Scorecard funcional do Z80](z80-completion-scorecard.md)
+- [Matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md)
+
+Auditorias datadas preservam evidências históricas; não devem ser usadas como status corrente sem reconciliação com a main.
