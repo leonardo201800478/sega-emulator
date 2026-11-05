@@ -31,8 +31,8 @@ pub use bus::{
 };
 pub use cartridge::CartridgeImage;
 pub use config::{
-    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
-    VideoStandard,
+    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpProfile, SmsVdpRevision,
+    SpriteLimitMode, Territory, VideoStandard,
 };
 pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;
