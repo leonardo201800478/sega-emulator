@@ -440,6 +440,7 @@ mod tests {
     #[test]
     fn vblank_irq_reaches_z80_and_status_read_acknowledges_vdp() {
         let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0x18, 0xFE]); // JR -2: stay away from the IM 1 vector.
         rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
         let mut machine = SmsMachine::new(rom).unwrap();
         machine.cpu.registers.sp = 0xC100;
@@ -450,7 +451,7 @@ mod tests {
         write_vdp_register(&mut machine, 1, 0xA0); // Enable display and VBlank IRQ.
         // Advance through the real machine path to the documented VBlank
         // boundary at the end of the 192-line active display.
-        for _ in 0..(228 * 192 / 4) {
+        for _ in 0..(228 * 192 / 12) {
             if machine.vdp().interrupt_pending() {
                 break;
             }
@@ -477,6 +478,7 @@ mod tests {
     #[test]
     fn line_irq_reaches_z80_and_status_read_distinguishes_its_source() {
         let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0x18, 0xFE]); // JR -2: stay away from the IM 1 vector.
         rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
         let mut machine = SmsMachine::new(rom).unwrap();
         machine.cpu.registers.sp = 0xC100;
@@ -489,7 +491,7 @@ mod tests {
         write_vdp_register(&mut machine, 10, 1); // R10=1 requests line 2, 4, 6, ...
         // The line counter is reloaded from R10 during VBlank. Reach the next
         // frame through normal machine stepping before enabling line IRQ.
-        for _ in 0..(228 * 262 / 4) {
+        for _ in 0..(228 * 262 / 12) {
             if machine.vdp().frame_number() != 0 {
                 break;
             }
@@ -498,7 +500,7 @@ mod tests {
         assert_eq!(machine.vdp().frame_number(), 1, "first frame must complete");
         let _ = machine.vdp_mut().read_port(0xBF); // Clear prior frame/status flags.
         write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
-        for _ in 0..(228 * 2 / 4) {
+        for _ in 0..(228 * 2 / 12) {
             if machine.vdp().interrupt_pending() {
                 break;
             }
