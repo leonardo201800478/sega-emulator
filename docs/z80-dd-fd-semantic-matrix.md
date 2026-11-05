@@ -258,3 +258,42 @@ Este aditivo supersede os estados históricos anteriores que ainda listavam E7.6
 A PR #531 integrou a entrega de VBlank/Line IRQ do VDP SMS ao Z80 e a PR #536 integrou semântica funcional de RESET Z80. Esses incrementos atualizam os itens E7.6 e cobertura de RESET, mas não fecham E7.7 nem autorizam iniciar E8. A auditoria das PRs ainda abertas identificou branches fortemente divergentes da main, propostas temporais incompatíveis com o escopo proporcional da ADR-0016 e gates incompletos; ver [relatório de integração](audits/open-pr-integration-audit-2026-11-05.md).
 
 O baseline corrente para novas decisões é 1da784f556b9524f5a6f43ce8a7c525e68354f9e. As seções anteriores permanecem como histórico, não como estado atual.
+
+
+---
+
+## Aditivo de reconciliação — baseline main 1da784f (2026-11-05)
+
+Este aditivo preserva as fotografias históricas acima e atualiza o estado operacional após os merges #531 e #536. A baseline corrente consultada é `1da784f556b9524f5a6f43ce8a7c525e68354f9e`.
+
+### E7 — estado reconciliado
+
+| Item | Estado na baseline | Evidência |
+|---|---|---|
+| E7.1 — HALT/M1 | Integrado | PR #490 |
+| E7.2A — NMI retomável | Integrado | PR #495 |
+| E7.2B — INT acknowledge | Integrado | PR #496 |
+| E7.2C — IM0/IM1/IM2 | Integrado | PR #498 |
+| E7.2D — EI/DI | Integrado | PR #500/#501 |
+| E7.2E — snapshot/restore e WAIT | Integrado no escopo declarado | PR #506 |
+| E7.3 — HALT T4 | Integrado | PR #509 |
+| E7.4 — BUSREQ/BUSACK | Adiado | ADR-0016: sem consumidor concreto em P1 |
+| E7.5 — RETI/daisy-chain externo | Adiado | ADR-0016: sem periférico suportado que consuma o evento |
+| E7.6 — IRQ VDP SMS | Integrado no caminho coberto | PR #531: VBlank/Line IRQ, INT, IM1 e reconhecimento pelo status |
+| RESET funcional | Integrado | PR #536 |
+| E7.7 — auditoria semântica integral | IN_PROGRESS | Não declarar E7 concluída |
+
+### E7.7 — novas evidências e candidatos não integrados
+
+- **PR #538:** adiciona matriz de 48.000 casos para as oito instruções ED de I/O em bloco e documenta a semântica empiricamente caracterizada para Zilog NMOS. No HEAD consultado, Rust/Python/Windows PyO3/Windows D3D12/change-impact PASS; Scheduler stress, PowerShell, Qt smoke e refresh de lockfiles SKIPPED. Não altera runtime e permanece aberta.
+- **PR #539:** corrige a divergência do latch `p` de LD A,I/R no microsequenciador. O executor atômico já aplicava a exceção P/V ao aceitar INT na fronteira imediatamente seguinte. A branch candidata adiciona testes de INT, NMI, instrução intermediária e snapshot/restore; CI está pendente. Não integrada.
+- A semântica de `OUT (C),0` permanece específica de variante; o perfil Zilog NMOS documentado para o SMS escreve zero, conforme o handler e os testes atuais. CMOS/clones não são generalizados.
+- LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR foram comparados com MAME/redcode para flags e WZ; não foi identificada divergência de runtime nesta inspeção. Isso não substitui validação física/diferencial independente.
+
+### ADR-0016 e propostas temporais históricas
+
+O texto histórico que apontava C1 — timeline racional comum — como próxima etapa está supersedido pela ADR-0016. Não iniciar timeline racional genérica, microsequenciamento universal, BUSREQ/BUSACK sem consumidor ou fases sub-T-state sem dependência observável de gameplay. A granularidade mínima suficiente deve prevalecer.
+
+### Gate
+
+E7.7 continua IN_PROGRESS; E8 permanece BLOCKED. A matriz DD/FD por família permanece válida como inventário, mas as classificações de validação diferencial/temporal não são promovidas por estes aditivos.
