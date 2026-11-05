@@ -180,6 +180,19 @@ mod tests {
     }
 
     #[test]
+    fn sms1_profile_exposes_documented_core_capacities() {
+        let capabilities = SmsVdpCapabilities::for_revision(SmsVdpRevision::Sega3155124);
+
+        assert_eq!(capabilities.vram_bytes, 16 * 1024);
+        assert_eq!(capabilities.cram_entries, 32);
+        assert_eq!(capabilities.cram_bits, 6);
+        assert_eq!(capabilities.sprite_entries, 64);
+        assert_eq!(capabilities.sprites_per_line, 8);
+        assert_eq!(capabilities.left_column_mask_pixels, 8);
+        assert_eq!(capabilities.sprite_shift_pixels, -8);
+    }
+
+    #[test]
     fn unverified_overscan_and_subline_timing_are_not_advertised() {
         for revision in [SmsVdpRevision::Sega3155124, SmsVdpRevision::Sega3155246] {
             let capabilities = SmsVdpCapabilities::for_revision(revision);
