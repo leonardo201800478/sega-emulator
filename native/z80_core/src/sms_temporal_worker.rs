@@ -20,7 +20,7 @@ const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 
-fn sms_temporal_region_profile(
+pub(super) fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
     let sms1 = SmsVdpRevision::Sega3155124;
@@ -355,16 +355,23 @@ fn execute_frame(
     telemetry.set_frame_number(machine.frame_number());
 
     let samples = machine.drain_audio_samples(None);
-    if let Some(session) = audio_session.as_mut()
-        && let Err(error) = session.process_samples(&samples)
-    {
-        if let Some(mut failed_session) = audio_session.take() {
-            failed_session.close();
+    let audio_result = audio_session
+        .as_mut()
+        .map(|session| session.process_samples(&samples));
+    match audio_result {
+        Some(Ok(())) => {
+            if let Some(session) = audio_session.as_ref() {
+                telemetry.set_audio_metrics(session.metrics());
+            }
         }
-        telemetry.set_audio_error(Some(error));
-        telemetry.set_audio_metrics((0, 0));
-    } else if let Some(session) = audio_session.as_ref() {
-        telemetry.set_audio_metrics(session.metrics());
+        Some(Err(error)) => {
+            if let Some(mut failed_session) = audio_session.take() {
+                failed_session.close();
+            }
+            telemetry.set_audio_error(Some(error));
+            telemetry.set_audio_metrics((0, 0));
+        }
+        None => {}
     }
 
     let sample_count = samples.len().max(1) as f64;
