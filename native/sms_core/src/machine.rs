@@ -801,4 +801,5 @@ mod tests {
         }
 
         assert_eq!(machine.vdp.latched_scroll_y_for_test(), 0x5A);
-    }}
+     }
+}
