@@ -81,7 +81,7 @@ fn register_write_accepts_r0_through_r10_and_ignores_r11() {
 
     vdp.write_control(0xC3);
     vdp.write_control(0x8B); // Register write, R11 is outside SMS1 R0-R10.
-    assert_eq!(vdp.state.registers.get(11), None);
+    assert_eq!(vdp.state.registers.get(11), Some(0));
 }
 
 #[test]
