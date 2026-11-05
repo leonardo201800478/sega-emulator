@@ -23,6 +23,19 @@
 
 **Importante:** a presença de um handler, um retorno sem erro, ou igualdade entre o executor atômico e outro caminho do mesmo projeto não é prova suficiente de correção. O executor atômico é referência de comparação, não oráculo independente.
 
+## 1.1 Interpretação normativa: semântica atômica versus precisão temporal
+
+Esta matriz é um inventário de famílias e de caminhos de execução; não transforma o microsequenciador em requisito universal.
+
+- O executor atômico deve executar corretamente a semântica de toda instrução suportada: registradores, flags, PC, SP, R, WZ/MEMPTR quando aplicável, memória e efeitos colaterais.
+- Para instruções sem interação externa intermediária observável, `IMPLEMENTED_ATOMIC` é o nível de implementação suficiente. O tempo nominal documentado deve ser preservado quando conhecido, mas não se exigem fases internas artificiais.
+- Priorizar precisão temporal nas instruções/processos que jogos usam para interagir com hardware em instantes sensíveis: I/O, VDP/PSG, raster, mapper, IRQ/NMI, HALT/acknowledge, WAIT ou contenção demonstrados.
+- `NOT_IMPLEMENTED` na coluna do microsequenciador significa somente que não há sequência retomável naquele caminho; não significa que o opcode esteja ausente do executor atômico.
+- `TEMPORAL_UNVERIFIED` não é falha funcional automática. É uma lacuna de evidência temporal que só bloqueia quando existir dependência observável concreta.
+- Não é objetivo reproduzir todos os M-cycles/T-states, sinais M1/RFSH ou pinos do Z80 sem consumidor real. Não declarar precisão elétrica.
+
+A matriz semântica e os resultados funcionais permanecem independentes da necessidade de um modelo temporal detalhado. A política superior é a [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
+
 ## 2. Baseline E0 confirmada
 
 | Item | Evidência |
