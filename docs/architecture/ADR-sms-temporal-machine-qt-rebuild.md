@@ -66,7 +66,7 @@ O PSG é integrado ao VDP/ASIC SMS e ao mapa real de I/O. A escrita de porta dev
 
 ### D4 — VDP SMS de alta fidelidade com revisão explícita
 
-Modelar separadamente a identidade do VDP (315-5124 SMS1, 315-5246 SMS2 e revisões adicionais somente com evidência) da região/standard de vídeo. Não inferir a revisão do VDP apenas do nome do console.
+Modelar separadamente a identidade do VDP (315-5124 SMS1, 315-5246 SMS2 e revisões adicionais somente com evidência) da região/standard de vídeo. Não inferir a revisão do VDP apenas do nome do console.\n\n**Local arquitetural obrigatório:** o engine de hardware será o crate compartilhado `native/video_core`, pacote Rust `sega-video`, com módulo `sega_video::sms`. Ele não será implementado dentro de `sms_core` e não será colocado em `native/video_runtime`: este último continua sendo o contrato/transportador de frames e a camada host de apresentação. Os tipos `SmsVdpRevision`, `VideoStandard` e `SpriteLimitMode` passam a pertencer ao perfil SMS de `sega-video`; `sms_core::config` poderá reexportá-los para compatibilidade.\n\nO `sms_core/src/vdp.rs` é uma referência funcional scanline-level com máscara R0 bit 5, sprite shift R0 bit 3 e limite de sprites; `vdp_sms1.rs` é uma fundação parcial. Não manter dois VDPs paralelos: consolidar comportamento comprovado numa única implementação compartilhada e evoluí-la temporalmente.
 
 Requisitos funcionais e temporais:
 - 16 KiB VRAM, CRAM de 32 bytes com formato e máscaras por revisão, 16 registradores e portas espelhadas;
@@ -74,7 +74,7 @@ Requisitos funcionais e temporais:
 - Mode 4 com tilemap 32 colunas, paletas de background/sprites, prioridade por pixel, transparência e scroll horizontal/vertical;
 - compatibilidade com modos TMS9918 herdados quando suportados pelo perfil de máquina;
 - modos de 192 linhas e modos estendidos 224/240 somente nos perfis/revisões que os suportam;
-- tabela de atributos de sprites, 64 sprites, 8 sprites por scanline no perfil com limite físico, overflow e collision flags, prioridade, transparência, tamanho 8x8/8x16, deslocamento horizontal e padrões;
+- tabela de atributos de sprites, 64 sprites, 8 sprites por scanline no perfil com limite físico, overflow e collision flags, prioridade, transparência, tamanho 8x8/8x16, deslocamento horizontal e padrões; `SpriteLimitMode::HardwareLimit` é o padrão, e `UnlockedCompatibility` só pode ser opção explícita de diagnóstico/compatibilidade;\n- diferenças SMS1/SMS2 para DAC/paleta, máscaras de endereço da tabela de atributos e seleção de tile de sprite devem ser parametrizadas por revisão;\n- avaliação de sprites deve respeitar a janela temporal anterior à linha de exibição e o fetch dos dados deve refletir o momento real de leitura, não uma cópia integral da SAT no início do frame;\n- a máscara da coluna esquerda precisa afetar também colisões na região mascarada conforme perfil; o comportamento de fine-scroll nos primeiros pixels deve ter vetor diferencial próprio;
 - R0 bit 7/6 scroll locks, bit 5 left-column blank, bit 4 line IRQ enable, bit 3 sprite shift-left e bits de modo;
 - R1 screen enable, VBlank IRQ, seleção de altura/modo e tamanho de sprite;
 - R7 backdrop/overscan color, R8 horizontal scroll, R9 vertical scroll e R10 line counter;
@@ -82,7 +82,7 @@ Requisitos funcionais e temporais:
 - H/V counters, TH latch para lightgun, frame/scanline/dot e efeitos de escrita em registradores/VRAM/CRAM no instante em que o barramento conclui a operação;
 - snapshots completos de VRAM, CRAM, registradores, status, latches, fetch pipeline, sprite evaluation, beam/raster, interrupções, framebuffer parcial e eventos pendentes.
 
-A granularidade temporal será a menor que reproduza os efeitos observáveis: scanline/frame não substituem dot/fetch quando uma escrita raster, scroll latch, sprite evaluation, counter ou IRQ puder ser observada dentro da linha. Não simular transistor/pino sem requisito demonstrável.
+A granularidade temporal será a menor que reproduza os efeitos observáveis: scanline/frame não substituem dot/fetch quando uma escrita raster, scroll latch, sprite evaluation, counter ou IRQ puder ser observada dentro da linha. O engine compartilhado consumirá avanços do Scheduler e manterá pipeline/fase internos; não criar um scheduler independente por VDP. Não simular transistor/pino sem requisito demonstrável.
 
 ### D5 — Representação da tela, overscan e coluna esquerda
 
@@ -93,13 +93,13 @@ Não aplicar correção cosmética ao framebuffer do hardware. Separar:
 4. **Deslocamento de sprites:** R0 bit 3 desloca os sprites 8 pixels à esquerda; não é a mesma coisa que mascarar a coluna.
 5. **Viewport do frontend:** escolha de enquadramento/crop e proporção sem alterar pixels, registradores, clocks ou raster emulado.
 
-A Qt deve oferecer as opções **Não**, **Auto** e **Sempre** para ocultar a barra esquerda de 8 pixels. O padrão será **Auto**: corta os 8 pixels somente quando o jogo habilitar R0 bit 5 e quando o modo de apresentação não estiver exibindo overscan completo. Esse comportamento segue o modelo de opção de apresentação usado pelo Gearsystem, mas o corte ocorrerá exclusivamente no viewport. Os presets de overscan serão **Desativado**, **Superior/Inferior**, **Completo 284 px** e **Completo 320 px**; as alturas e regiões efetivas devem vir dos metadados do raster e do standard (não de padding inventado). Os presets 284/320 e 240/288 são compatibilidade de apresentação a validar contra o raster de cada revisão, não uma afirmação de que toda placa gera a mesma área visível. Em overscan completo, não aplicar o crop automático da barra esquerda. Deve ser possível visualizar o frame ativo sem corte e inspecionar o raster/overscan completo quando disponível. O frame bruto e seus metadados permanecem disponíveis para testes, capturas e diagnóstico. A preferência visual jamais altera o estado do VDP.
+A Qt deve oferecer as opções **Não**, **Auto** e **Sempre** para ocultar a barra esquerda de 8 pixels. O padrão será **Auto**: corta os 8 pixels somente quando o jogo habilitar R0 bit 5 e quando o modo de apresentação não estiver exibindo overscan completo. Esse comportamento segue o modelo de opção de apresentação usado pelo Gearsystem, mas o corte ocorrerá exclusivamente no viewport. Os presets de overscan serão **Desativado**, **Superior/Inferior**, **Completo 284 px** e **Completo 320 px**; as alturas e regiões efetivas devem vir dos metadados do raster e do standard (não de padding inventado). Os presets 284/320 e 240/288 são compatibilidade de apresentação a validar contra o raster de cada revisão, não uma afirmação de que toda placa gera a mesma área visível. Em overscan completo, não aplicar o crop automático da barra esquerda. Deve ser possível visualizar o frame ativo sem corte e inspecionar o raster/overscan completo quando disponível. O frame bruto e seus metadados permanecem disponíveis para testes, capturas e diagnóstico. O contrato de frame deve transportar ao menos `active_rect`, `visible_rect`, proporção de exibição, timestamp da máquina e base de tempo; a dica de máscara da coluna esquerda só permite `Auto` quando os 8 pixels estiverem mascarados durante toda a altura ativa. A preferência visual jamais altera o estado do VDP.
 
 A divisão exata dos 342 dots horizontais, os offsets do H counter, a cor de cada intervalo de blanking/borda e as particularidades por revisão serão tratados como matriz de evidências. Valores publicados em pesquisas que alertam para diferenças entre SMS e Genesis não serão promovidos a verdade de silício sem confirmação.
 
 ### D6 — Base temporal e clocks
 
-O scheduler é o único proprietário do tempo. A máquina deve declarar domínios de clock explícitos e relações racionais, evitando frequências arredondadas como fonte de deriva. O perfil NTSC de serviço identifica 10.738635 MHz no clock de vídeo e 3.579545 MHz na CPU. A documentação técnica consultada reporta 3.546893 MHz para CPU PAL; o código legado atual contém 3.546895 MHz, divergência de 2 Hz que deve ser investigada e corrigida por evidência antes de reutilização.
+O scheduler é o único proprietário do tempo. A base de `MachineTime` SMS será o ciclo do clock mestre de entrada do VDP. CPU Z80 e PSG usam domínios racionais derivados desse clock (perfil SMS nominal: 1/3); o VDP consome o domínio mestre 1/1 e mantém internamente a fase do divisor de pixel/H-counter. A hipótese de 342 posições horizontais por linha e 228 T-states Z80 por linha implica 684 ciclos mestre por linha; a relação exata do divisor deve ser validada por revisão/standard, sem converter H-count em CPU cycles. A máquina deve declarar domínios de clock explícitos e relações racionais, evitando frequências arredondadas como fonte de deriva. O perfil NTSC de serviço identifica 10.738635 MHz no clock de vídeo e 3.579545 MHz na CPU. A documentação técnica consultada reporta 3.546893 MHz para CPU PAL; o código legado atual contém 3.546895 MHz, divergência de 2 Hz que deve ser investigada e corrigida por evidência antes de reutilização.
 
 A máquina deverá preservar causalidade e equivalência entre:
 - execução contínua;
@@ -108,13 +108,17 @@ A máquina deverá preservar causalidade e equivalência entre:
 - save/restore em safe points;
 - replay determinístico.
 
-O áudio produzido e os frames de vídeo devem carregar timestamps derivados da timeline da máquina.
+O áudio produzido e os frames de vídeo devem carregar timestamps derivados da timeline da máquina. O clock PAL deve ser reconciliado por oscilador/divisor e revisão de placa; a divergência 3.546893/3.546895 MHz continua sendo questão aberta, não bug confirmado.
 
 ### D7 — Contrato PyO3 e novo frontend
 
 A API Python será coarse-grained. O frontend não recebe callbacks por instrução, M-cycle, T-state, dot, pixel ou amostra. Os contratos de sessão e capacidades devem distinguir backend selecionado, backend efetivo e estado real da máquina. Não expor comandos de VDP/PSG como API de jogador; diagnósticos podem consultar snapshots imutáveis.
 
 O novo frontend poderá começar como shell de sessão, biblioteca, preferências, monitor de estado, visualização de frame e saída de áudio somente quando esses dados forem fornecidos pelo runtime temporal. Recursos ainda não implementados devem permanecer indisponíveis, não simulados.
+
+### D8 — Expansão FM opcional
+
+O PSG SN76489 não substitui o FM expansion. O perfil de máquina já distingue `FmHardware`; quando `YM2413` estiver presente, a compatibilidade completa dessa variante exigirá o core YM2413 compartilhado, seu clock, estado, mixer e integração temporal. Essa expansão é um gate separado do PSG base e não pode ser anunciada como suportada até existir implementação e validação próprias.
 
 ## 3. Sequência de implementação
 
@@ -138,7 +142,7 @@ O Master System só poderá ser declarado operacional quando:
 - raster, contadores, IRQ, scroll e sprite status passarem testes temporais e diferenciais;
 - coluna esquerda mascarada, sprite shift, backdrop e overscan forem testados isoladamente e em combinações;
 - 192/224/240 e perfis SMS1/SMS2 tiverem suporte/limites documentados;
-- PSG passar vetores de latch/data, tons, volumes, ruído periódico/white, LFSR SMS, clock divider e continuidade de amostras;
+- PSG passar vetores de latch/data, tons, volumes, ruído periódico/white, LFSR SMS, clock divider e continuidade de amostras;\n- perfis FM opcionais só serem declarados suportados quando YM2413 e seu mixer temporal estiverem implementados;
 - execução em blocos e contínua forem equivalentes; save/restore/replay preservarem 100% do estado temporal;
 - saída de áudio e vídeo tiver timestamps e não controlar a timeline;
 - novo Qt executar somente pelo contrato temporal;
