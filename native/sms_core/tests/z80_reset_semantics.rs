@@ -16,15 +16,15 @@ fn cpu_reset_preserves_machine_clock_and_psg_phase() {
     assert_eq!(machine.psg().clock_divider_phase(), psg_phase_before_reset);
     assert_eq!(machine.vdp().raster_position().line, raster_before_reset.line);
     assert_eq!(
-        machine.vdp().raster_position().tstates,
-        raster_before_reset.tstates
+        machine.vdp().raster_position().tstates_into_line,
+        raster_before_reset.tstates_into_line
     );
 
     assert_eq!(machine.step(), Ok(4));
     assert_eq!(machine.cpu().total_tstates, tstates_before_reset + 4);
     assert_eq!(machine.psg().clock_divider_phase(), psg_phase_before_reset + 4);
     assert_eq!(
-        machine.vdp().raster_position().tstates,
-        raster_before_reset.tstates + 4
+        machine.vdp().raster_position().tstates_into_line,
+        raster_before_reset.tstates_into_line + 4
     );
 }
