@@ -27,7 +27,7 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 |---|---|---|---:|---|
 | `47` | LD I,A | Copia A para I | 9 | Vetor dirigido para LD I,A e LD R,A; faltam valores de fronteira adicionais |
 | `4F` | LD R,A | Copia A para R | 9 | Vetor dirigido confirma cópia dos oito bits de A; faltam casos adicionais |
-| `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; arma estado interno `p` para a borda de interrupção | 9 | Vetores dirigidos para I=0, I=0xA8, R com incremento de fetch, IFF2 e C; faltam mais combinações de interrupção |
+| `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; o latch `p` aplica o erratum NMOS quando INT é aceito na fronteira seguinte | 9 | Executor atômico e microsequenciador cobertos para INT imediato, NMI, instrução intermediária e snapshot/restore; ver auditoria complementar E7.7 |
 | `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap de endereço ainda pendente |
 | `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap de endereço ainda pendente |
 | `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; overflow, half-carry e carry de entrada têm casos específicos, mas não é varredura combinatória |
@@ -104,7 +104,7 @@ IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa f
 
 ### 4.4 Flags, WZ e estado de interrupção
 
-- `LD A,I`/`LD A,R`: PV usa IFF2 e o núcleo usa um latch interno para tratar uma borda de interrupção; testar com INT pendente e todos os estados de IFF.
+- `LD A,I`/`LD A,R`: PV usa IFF2; o manual ZiLOG determina P/V=0 quando INT é aceito durante a instrução. Executor atômico e microsequenciador devem aplicar o latch somente na fronteira imediatamente seguinte; NMI não aplica a exceção de INT. Ver `docs/audits/z80-e7-ld-a-i-r-nmos-interrupt-erratum-2026-11-05.md`.
 - `ADC/SBC HL,rr`: conferir exaustivamente carry/borrow, H, overflow, S/Z e bits X/Y do byte alto.
 - `RRD/RLD`: validar os dois nibbles, memória, A, S/Z/PV, preservação de C, WZ e ciclos.
 - `NEG`: testar A=00, 01, 7F, 80, FF e todos os aliases.
@@ -127,7 +127,7 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 | Os 178 bytes que usam fallback | `every_ed_fallback_encoding_is_an_eight_tstate_no_op`: 8 T-states, PC=2 e ausência de alterações nos registradores principais testados | **PASS** |
 | Transferência absoluta de palavras | `ed_absolute_word_loads_and_stores_cover_all_register_pairs`: BC/DE/HL/SP, little-endian e WZ | **PASS** |
 | ADC/SBC HL | `ed_adc_sbc_hl_vectors_cover_signed_overflow_half_carry_and_borrow` e `ed_adc_sbc_hl_decode_all_four_register_pairs`: todos os pares e casos aritméticos discriminantes | **PASS** |
-| Registradores especiais e flags | `ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags`, `ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry` | **PASS** |
+| Registradores especiais e flags | `ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags`, `ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry`, `ed_ld_a_i_r_interrupt_erratum` (executor atômico e microsequenciador) | **PASS** após CI do candidato; a evidência física permanece não executada nesta sessão |
 | NEG, IM e RETN/RETI | `ed_neg_aliases_produce_identical_results_and_flags`, `ed_interrupt_mode_aliases_select_the_documented_mode`, `ed_retn_reti_aliases_restore_iff1_and_pop_return_address` | **PASS** |
 | IN/OUT por BC | `ed_in_out_register_forms_use_bc_port_and_expected_data`: todos os destinos/fontes, endereço BC, flags de IN e saída zero do modelo | **PASS** |
 | RRD/RLD | `ed_rrd_rld_match_nibble_transfer_and_documented_flags`: nibbles, A, memória, flags e WZ | **PASS** |
