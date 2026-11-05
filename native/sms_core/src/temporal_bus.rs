@@ -13,9 +13,8 @@ use core::fmt;
 
 use crate::{
     CartridgeImage, ControllerButtons, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo,
-    SmsIoError, SmsMemory, SmsVdp, Territory,
-    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
-    SmsTemporalEvent,
+    SmsIoError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
+    SmsTemporalCoordinatorState, SmsTemporalEvent, SmsVdp, Territory,
 };
 use sega_audio_runtime::{PsgClockError, ScheduledPsg};
 use sega_sn76489::{PsgProfile, Sn76489Core};
@@ -1269,8 +1268,7 @@ mod temporal_vdp_tests {
         bus.begin_request(request, 0).unwrap();
         assert_eq!(bus.vdp().vram()[0], 0);
 
-        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected VDP data-port write completion");
         };
@@ -1303,8 +1301,7 @@ mod temporal_vdp_tests {
             base_tstates: 4,
         };
         bus.begin_request(request, 0).unwrap();
-        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected VDP data-port read completion");
         };
