@@ -1,11 +1,12 @@
 //! First scheduler-driven SMS Z80/memory/PSG vertical slice.
 //!
 //! This composition uses the resumable Z80 subset, mapper-backed SMS memory/I/O,
-//! the shared scheduler-driven PSG and one machine timeline. PSG writes commit
-//! at the scheduled I/O boundary and its input clock advances with the CPU.
-//! The VDP remains unconnected (open-bus reads and bounded write diagnostics).
-//! NMI is integrated and INT acknowledge is being added incrementally; DMA and
-//! physical WAIT wiring remain outside this temporal slice.
+//! the shared scheduler-driven PSG, SMS1 VDP ports, and one machine timeline.
+//! PSG and VDP writes commit at scheduled I/O boundaries; their clocks advance
+//! from Scheduler dispatches. The VDP renderer remains scanline-based, so
+//! dot/fetch arbitration and mid-scanline effects are not claimed as complete.
+//! NMI and INT acknowledge are integrated; DMA and physical WAIT wiring remain
+//! outside this temporal slice.
 
 use core::fmt;
 
