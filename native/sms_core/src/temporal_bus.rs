@@ -353,7 +353,9 @@ impl SmsTemporalBus {
             .iter()
             .find(|advance| advance.domain == crate::SMS_Z80_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalBusError::InvalidState)?;
-        self.vdp.advance(z80_advance.elapsed_cycles);
+        let vdp_tstates = u64::try_from(z80_advance.elapsed_cycles)
+            .map_err(|_| SmsTemporalBusError::InvalidState)?;
+        self.vdp.advance(vdp_tstates);
         match dispatch.event.payload {
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
