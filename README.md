@@ -69,7 +69,7 @@ py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Avançar quadro** (F5) para executar um frame de teste. A Qt não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; para manter o SG-1000 no host atual, inicie com `--system sg1000`.
+A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para enviar comandos coarse-grained à sessão. A Qt não executa stepping, não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; O caminho Qt legado do SG-1000 permanece desativado até o host D3D12 nativo em Rust ser conectado; o núcleo SG-1000 continua preservado e testável.
 
 Para iniciar diretamente uma ROM:
 
@@ -77,7 +77,7 @@ Para iniciar diretamente uma ROM:
 .\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms" --region brazil
 ```
 
-A janela SMS mínima aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção de região é explícita por `--region usa|brazil|europe|japan`; o padrão é `usa`. O fluxo ZIP e o frontend anterior permanecem no caminho SG-1000/legado até a migração ser validada.
+A janela de controle SMS aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção de região é explícita por `--region usa|brazil|europe|japan`; o padrão é `usa`. O fluxo ZIP e o frontend anterior permanecem no caminho SG-1000/legado até a migração ser validada.
 
 ## Compilar e testar
 
