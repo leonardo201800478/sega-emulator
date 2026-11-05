@@ -843,7 +843,7 @@ mod tests {
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
         TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
-    use crate::config::{SpriteLimitMode, VideoStandard};
+    use super::super::profile::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
         v.write_port(0xBF, 0x80 | i);
