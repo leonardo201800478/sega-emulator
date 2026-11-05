@@ -43,8 +43,8 @@ pub use memory::SmsMemory;
 pub use psg::{PsgError, Sn76489};
 pub use temporal::{
     SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID,
-    SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
+    SmsTemporalEvent,
 };
 pub use temporal_bus::{
     SMS_TEMPORAL_BUS_STATE_VERSION, SmsBusCompletion, SmsInternalCycleCompletion, SmsTemporalBus,
