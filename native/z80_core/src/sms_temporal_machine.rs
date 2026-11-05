@@ -164,8 +164,8 @@ impl NativeSMSTemporalMachine {
     }
 
     #[getter]
-    fn region(&self) -> &str {
-        &self.region
+    fn region(&self) -> String {
+        self.region.clone()
     }
 
     #[getter]
@@ -194,7 +194,7 @@ impl NativeSMSTemporalMachine {
     }
 
     /// Execute exactly one complete VDP frame through the Rust Scheduler.
-    #[pyo3(signature = (max_instructions=DEFAULT_MAX_FRAME_INSTRUCTIONS))]
+    #[pyo3(signature = (max_instructions=100_000))]
     fn step_frame(&mut self, max_instructions: usize) -> PyResult<usize> {
         if max_instructions == 0 {
             return Err(PyValueError::new_err("max_instructions deve ser positivo"));
