@@ -1,7 +1,7 @@
 //! PyO3 adapter for the independent SMS core and native PSG audio path.
 
 use crate::audio::{MachineAudioSession, open_audio_session};
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
@@ -154,6 +154,19 @@ impl NativeSMSMachine {
     #[getter]
     fn bios_enabled(&self) -> bool {
         self.machine.memory().bios_enabled()
+    }
+
+    /// Return the cartridge SRAM image for host-managed save persistence.
+    #[getter]
+    fn cartridge_ram<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, self.machine.cartridge_ram())
+    }
+
+    /// Restore a previously persisted 8 KiB Sega cartridge SRAM image.
+    fn load_cartridge_ram(&mut self, data: Vec<u8>) -> PyResult<()> {
+        self.machine
+            .load_cartridge_ram(&data)
+            .map_err(PyValueError::new_err)
     }
 
     #[getter]
@@ -331,6 +344,16 @@ mod tests {
         assert!(!machine.sprite_limit_enabled());
         machine.set_sprite_limit_enabled(true);
         assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
+    fn cartridge_sram_can_be_restored_and_exported_through_native_machine() {
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
+        let image = vec![0xA5; 0x2000];
+        machine.load_cartridge_ram(image.clone()).unwrap();
+        assert_eq!(machine.machine.cartridge_ram(), image.as_slice());
+        assert!(machine.load_cartridge_ram(vec![0; 0x1FFF]).is_err());
     }
 
     #[test]
