@@ -1,5 +1,7 @@
 # ADR-Z80-001 — Resumable Z80 execution and timed bus transactions
 
+> **Policy note (2026-11-05):** this proposal is subordinate to [ADR-0016](../docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md). A resumable/microsequenced execution path is conditional, not a universal requirement. Implement it only for a supported console/game/peripheral interaction whose observable result requires suspension between instruction/bus phases. The atomic executor remains the default for operations without observable intermediate effects.
+
 - Status: PROPOSED
 - Date: 2026-11-02
 - Scope: `native/z80_cpu`, `native/z80_bus`, and future SMS / SG-1000 machine adapters
@@ -12,7 +14,7 @@ The shared Z80 currently exposes `Z80::step<B: CpuBus>()`. It runs an entire ins
 
 The SMS machine therefore executes the complete instruction before advancing its devices. Its PSG write queue uses a nominal instruction-relative offset for `OUT (n),A`; that offset is diagnostic/coarse timing, not a physical bus transaction. The same architectural limitation exists in the SG-1000 machine.
 
-A cycle-accurate machine cannot use this atomic interface as its execution primitive. It must be possible to stop the CPU between bus phases, let the machine advance all devices to a common timestamp, and resume the CPU only after the bus transaction completes.
+If a supported platform/game interaction requires observing a bus operation before the instruction retires, the atomic interface alone is insufficient for that specific path. In that case the CPU must be suspendible at the minimum required bus boundary, allow the machine to advance relevant devices to the corresponding timestamp, and resume after the transaction completes. This is not a requirement to microsequence every instruction.
 
 ## Hardware timing constraints from the Zilog Z80 CPU User Manual (UM008011-0816)
 
@@ -29,7 +31,7 @@ These are CPU-family timing rules. The SMS and SG-1000 adapters must still provi
 
 ## Decision
 
-Implement a second, resumable execution interface in the shared Z80 crate. Keep the existing atomic `step()` path intact as a compatibility and differential reference until the new path has broad equivalence evidence.
+Where a demonstrated gameplay dependency requires resumable bus operations, provide a resumable execution interface in the shared Z80 crate and keep the atomic `step()` path for operations that do not require temporal suspension. Both paths must preserve one semantic implementation and be compared where they overlap. This proposal does not authorize universal microsequencing or deprecating the atomic path.
 
 The resumable path is a CPU state machine, not an instruction decoder that runs ahead and replays recorded bus accesses. It must not perform a read/write side effect before the corresponding bus phase has reached its scheduled completion point.
 
