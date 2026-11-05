@@ -700,6 +700,28 @@ fn render_legacy_sprites(
     }
 }
 
+#[cfg(test)]
+fn render_scanline(
+    vram: &[u8],
+    cram: &[u8; CRAM_SIZE],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    hardware_sprite_limit: bool,
+) {
+    render_scanline_for_revision(
+        vram,
+        cram,
+        regs,
+        status,
+        frame,
+        y,
+        hardware_sprite_limit,
+        SmsVdpRevision::Sega3155246,
+    );
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "explicit render inputs keep hardware state ownership at the VDP boundary"
