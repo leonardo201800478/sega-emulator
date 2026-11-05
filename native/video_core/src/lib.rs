@@ -1,6 +1,7 @@
 //! Shared Sega video hardware profiles and device cores.
 //!
-//! This crate owns hardware video devices. It is intentionally separate from
+//! The initial crate boundary hosts profile/capability types; hardware-device
+//! migrations are incremental. This crate is intentionally separate from
 //! sega-video-runtime, which transports completed frames to host presentation.
 
 #![forbid(unsafe_code)]
