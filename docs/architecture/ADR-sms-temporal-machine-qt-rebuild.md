@@ -66,7 +66,11 @@ O PSG é integrado ao VDP/ASIC SMS e ao mapa real de I/O. A escrita de porta dev
 
 ### D4 — VDP SMS de alta fidelidade com revisão explícita
 
-Modelar separadamente a identidade do VDP (315-5124 SMS1, 315-5246 SMS2 e revisões adicionais somente com evidência) da região/standard de vídeo. Não inferir a revisão do VDP apenas do nome do console.\n\n**Local arquitetural obrigatório:** o engine de hardware será o crate compartilhado `native/video_core`, pacote Rust `sega-video`, com módulo `sega_video::sms`. Ele não será implementado dentro de `sms_core` e não será colocado em `native/video_runtime`: este último continua sendo o contrato/transportador de frames e a camada host de apresentação. Os tipos `SmsVdpRevision`, `VideoStandard` e `SpriteLimitMode` passam a pertencer ao perfil SMS de `sega-video`; `sms_core::config` poderá reexportá-los para compatibilidade.\n\nO `sms_core/src/vdp.rs` é uma referência funcional scanline-level com máscara R0 bit 5, sprite shift R0 bit 3 e limite de sprites; `vdp_sms1.rs` é uma fundação parcial. Não manter dois VDPs paralelos: consolidar comportamento comprovado numa única implementação compartilhada e evoluí-la temporalmente.
+Modelar separadamente a identidade do VDP (315-5124 SMS1, 315-5246 SMS2 e revisões adicionais somente com evidência) da região/standard de vídeo. Não inferir a revisão do VDP apenas do nome do console.
+
+**Local arquitetural obrigatório:** o engine de hardware será o crate compartilhado `native/video_core`, pacote Rust `sega-video`, com módulo `sega_video::sms`. Ele não será implementado dentro de `sms_core` e não será colocado em `native/video_runtime`: este último continua sendo o contrato/transportador de frames e a camada host de apresentação. Os tipos `SmsVdpRevision`, `VideoStandard` e `SpriteLimitMode` passam a pertencer ao perfil SMS de `sega-video`; `sms_core::config` poderá reexportá-los para compatibilidade.
+
+O `sms_core/src/vdp.rs` é uma referência funcional scanline-level com máscara R0 bit 5, sprite shift R0 bit 3 e limite de sprites; `vdp_sms1.rs` é uma fundação parcial. Não manter dois VDPs paralelos: consolidar comportamento comprovado numa única implementação compartilhada e evoluí-la temporalmente.
 
 Requisitos funcionais e temporais:
 - 16 KiB VRAM, CRAM de 32 bytes com formato e máscaras por revisão, 16 registradores e portas espelhadas;
@@ -74,7 +78,10 @@ Requisitos funcionais e temporais:
 - Mode 4 com tilemap 32 colunas, paletas de background/sprites, prioridade por pixel, transparência e scroll horizontal/vertical;
 - compatibilidade com modos TMS9918 herdados quando suportados pelo perfil de máquina;
 - modos de 192 linhas e modos estendidos 224/240 somente nos perfis/revisões que os suportam;
-- tabela de atributos de sprites, 64 sprites, 8 sprites por scanline no perfil com limite físico, overflow e collision flags, prioridade, transparência, tamanho 8x8/8x16, deslocamento horizontal e padrões; `SpriteLimitMode::HardwareLimit` é o padrão, e `UnlockedCompatibility` só pode ser opção explícita de diagnóstico/compatibilidade;\n- diferenças SMS1/SMS2 para DAC/paleta, máscaras de endereço da tabela de atributos e seleção de tile de sprite devem ser parametrizadas por revisão;\n- avaliação de sprites deve respeitar a janela temporal anterior à linha de exibição e o fetch dos dados deve refletir o momento real de leitura, não uma cópia integral da SAT no início do frame;\n- a máscara da coluna esquerda precisa afetar também colisões na região mascarada conforme perfil; o comportamento de fine-scroll nos primeiros pixels deve ter vetor diferencial próprio;
+- tabela de atributos de sprites, 64 sprites, 8 sprites por scanline no perfil com limite físico, overflow e collision flags, prioridade, transparência, tamanho 8x8/8x16, deslocamento horizontal e padrões; `SpriteLimitMode::HardwareLimit` é o padrão, e `UnlockedCompatibility` só pode ser opção explícita de diagnóstico/compatibilidade;
+- diferenças SMS1/SMS2 para DAC/paleta, máscaras de endereço da tabela de atributos e seleção de tile de sprite devem ser parametrizadas por revisão;
+- avaliação de sprites deve respeitar a janela temporal anterior à linha de exibição e o fetch dos dados deve refletir o momento real de leitura, não uma cópia integral da SAT no início do frame;
+- a máscara da coluna esquerda precisa afetar também colisões na região mascarada conforme perfil; o comportamento de fine-scroll nos primeiros pixels deve ter vetor diferencial próprio;
 - R0 bit 7/6 scroll locks, bit 5 left-column blank, bit 4 line IRQ enable, bit 3 sprite shift-left e bits de modo;
 - R1 screen enable, VBlank IRQ, seleção de altura/modo e tamanho de sprite;
 - R7 backdrop/overscan color, R8 horizontal scroll, R9 vertical scroll e R10 line counter;
@@ -142,7 +149,8 @@ O Master System só poderá ser declarado operacional quando:
 - raster, contadores, IRQ, scroll e sprite status passarem testes temporais e diferenciais;
 - coluna esquerda mascarada, sprite shift, backdrop e overscan forem testados isoladamente e em combinações;
 - 192/224/240 e perfis SMS1/SMS2 tiverem suporte/limites documentados;
-- PSG passar vetores de latch/data, tons, volumes, ruído periódico/white, LFSR SMS, clock divider e continuidade de amostras;\n- perfis FM opcionais só serem declarados suportados quando YM2413 e seu mixer temporal estiverem implementados;
+- PSG passar vetores de latch/data, tons, volumes, ruído periódico/white, LFSR SMS, clock divider e continuidade de amostras;
+- perfis FM opcionais só serem declarados suportados quando YM2413 e seu mixer temporal estiverem implementados;
 - execução em blocos e contínua forem equivalentes; save/restore/replay preservarem 100% do estado temporal;
 - saída de áudio e vídeo tiver timestamps e não controlar a timeline;
 - novo Qt executar somente pelo contrato temporal;
