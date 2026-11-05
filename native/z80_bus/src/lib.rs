@@ -232,6 +232,12 @@ pub trait CpuBus {
 
     fn write_port(&mut self, _port: u16, _value: u8) {}
 
+    /// Advance machine-owned devices to an instruction-relative CPU bus boundary.
+    ///
+    /// The CPU calls this immediately before an externally visible port access.
+    /// The default keeps hardware-neutral buses independent of machine timing.
+    fn synchronize_tstates(&mut self, _elapsed_tstates: u32) {}
+
     /// Opt in to timing trace generation. False keeps the normal path allocation-free.
     fn timing_trace_enabled(&self) -> bool {
         false
