@@ -20,6 +20,7 @@ on:
         default: false
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
@@ -103,6 +104,11 @@ jobs:
               - 'tools/project_manager.py'
               - 'scripts/common.ps1'
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   rust:
     needs: [changes]
     if: |
@@ -136,6 +142,11 @@ jobs:
       - name: Workspace unit tests
         run: cargo test --workspace --locked
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   refresh-lockfiles:
     name: Refresh Cargo lockfiles (manual artifact)
     if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
@@ -166,6 +177,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   scheduler-stress:
     needs: [changes]
     name: Scheduler deterministic stress
@@ -204,6 +220,11 @@ jobs:
           if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
           "$test_bin" --ignored --nocapture
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   python:
     needs: [changes]
     if: |
@@ -251,6 +272,11 @@ jobs:
       - name: Python regression suite
         run: uv run --locked pytest -q
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-python-qt:
     needs: [changes]
     if: |
@@ -283,6 +309,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-tooling:
     needs: [changes]
     if: |
@@ -316,6 +347,11 @@ jobs:
             Write-Host "PASS $($file.FullName)"
           }
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-native-python-extension:
     needs: [changes]
     if: |
@@ -350,6 +386,11 @@ jobs:
       - name: Import the native extension
         run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
 
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-d3d12:
     needs: [changes]
     if: |
@@ -375,3 +416,9 @@ jobs:
         run: cargo check --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Run native audio-output unit tests
         run: cargo test --locked --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
