@@ -447,13 +447,13 @@ mod tests {
         machine.cpu.iff2 = true;
         machine.cpu.interrupt_mode = 1;
 
-        write_vdp_register(&mut machine, 1, 0x20); // Enable VBlank IRQ.
-        // Advance through the real machine path until the VDP asserts INT.
-        // SmsMachine::step synchronizes the VDP line after each instruction;
-        // the next CPU boundary must accept it without an extra NOP.
+        write_vdp_register(&mut machine, 1, 0xA0); // Enable display and VBlank IRQ.
+        // Advance through the real machine path to the documented VBlank
+        // boundary at the end of the 192-line active display.
         while !machine.vdp().interrupt_pending() {
             machine.step().unwrap();
         }
+        assert_eq!(machine.vdp().raster_position().line, 192);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
         assert_eq!(machine.cpu.registers.pc, 0x0038);
@@ -479,13 +479,20 @@ mod tests {
         machine.cpu.iff2 = true;
         machine.cpu.interrupt_mode = 1;
 
+        write_vdp_register(&mut machine, 1, 0x80); // Disable VBlank IRQ.
+        write_vdp_register(&mut machine, 0, 0x00); // Keep line IRQ disabled initially.
+        write_vdp_register(&mut machine, 10, 1); // R10=1 requests line 2, 4, 6, ...
+        // The line counter is reloaded from R10 during VBlank. Reach the next
+        // frame through normal machine stepping before enabling line IRQ.
+        while machine.vdp().frame_number() == 0 {
+            machine.step().unwrap();
+        }
+        let _ = machine.vdp_mut().read_port(0xBF); // Clear prior frame/status flags.
         write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
-        write_vdp_register(&mut machine, 10, 1); // Reload after one line.
-        // Exercise the VDP-to-CPU line through the normal machine stepping
-        // path, rather than advancing the VDP out of band.
         while !machine.vdp().interrupt_pending() {
             machine.step().unwrap();
         }
+        assert_eq!(machine.vdp().raster_position().line, 2);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
