@@ -87,7 +87,7 @@ Para uma mudança futura, executar e registrar no mesmo SHA candidato:
 ## Fontes internas e histórico
 
 - [Roadmap SMS](../architecture/master-system-roadmap.md) — decisões arquiteturais e histórico de evolução.
-- [Modelo temporal do barramento Z80](../architecture/z80-temporal-bus-model.md) — escopo e limites dos traces.
+- [Política de fidelidade observável](../architecture/adr/0016-observable-fidelity-and-proportional-timing.md) — granularidade temporal proporcional ao comportamento do console.
 - [Matriz semântica Z80](../architecture/z80-semantic-matrix.md) e [matriz CSV](../architecture/z80-sms-opcode-matrix.csv).
 - [Progresso Z80 até PR #197](../architecture/z80-progress-through-pr-197.md) — histórico vinculado aos SHAs e candidatos daquela fase.
 - [Auditoria de cobertura de opcode](../architecture/z80-opcode-space-completion-audit.md).

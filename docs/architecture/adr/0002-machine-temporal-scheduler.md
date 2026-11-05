@@ -66,5 +66,5 @@ A arquitetura temporal pode avançar antes da integração de vídeo/input host 
 
 - [F0 — inventário remoto e reconciliação das PRs](../migrations/f0-remote-inventory-2026-10-31.md)
 - [PR #315 — Temporal Core](https://github.com/leonardo201800478/sega-emulator/pull/315)
-- [Plano do Master Scheduler](../native-master-scheduler.md)
+- [Documentação normativa do Scheduler](../scheduler/README.md)
 - [Plano de reorganização Z80/runtime](../migrations/shared-z80-runtime-reorganization.md)

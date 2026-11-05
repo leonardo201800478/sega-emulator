@@ -341,7 +341,7 @@ A branch `main` foi consultada novamente e permanece no SHA `c31e4183b8d0b36d95b
 - Merge-base com main: `3cf846d688798080d35f997f6e0d34680372d7e3`.
 - Main avançou 36 commits; PR está 15 commits à frente; estado de comparação `diverged`.
 - GitHub informa `mergeable=false`.
-- Há sobreposição de caminhos com mudanças posteriores de main em `docs/architecture.md`, `docs/architecture/migrations/native-master-scheduler.md` e `docs/architecture/native-master-scheduler.md`.
+- Esta auditoria é histórica. A documentação normativa do Scheduler foi consolidada em `docs/architecture/scheduler/README.md`; os planos de migração e visões gerais anteriores foram removidos por duplicidade.
 - Workflows observados no head concluíram SUCCESS: CI, SMS Z80 Platform Validation, SG-1000 sequencial, Rust SG-1000 Workspace, Qt Rust SG-1000 integration e SMS Core Fast Validation.
 - Decisão: não tentar merge/rebase automático. Resolver primeiro as divergências documentais e verificar cuidadosamente `Cargo.toml`/lockfile; em seguida reexecutar validações. Mesmo integrada, a crate temporal não autoriza TEMPORAL_PASS sem scheduler de máquina conectado aos componentes reais.
 

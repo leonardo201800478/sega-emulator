@@ -1,101 +1,69 @@
 # Instruções para agentes de código — Sega Emulator
 
-Estas regras orientam agentes de programação e revisores que trabalhem neste repositório. A política arquitetural aprovada está em [ADR 0007](docs/adr/0007-rust-first-development-policy.md); em caso de divergência, siga o ADR e reporte documentação contraditória.
+Estas regras orientam agentes e revisores. As decisões normativas vigentes são a [ADR-0016 — fidelidade observável](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md), o [roadmap mestre](docs/project-roadmap.md) e o [escopo do projeto](docs/project-scope.md).
 
-## Prioridade do projeto
+## Prioridade e arquitetura
 
-- Primeiro estabilizar e validar o SG-1000. Evoluir depois para Master System/Game Gear, Mega Drive/Genesis, Sega CD e 32X, sem implementar todas as plataformas ao mesmo tempo.
-- Todo o hardware e runtime de emulação ativo devem ser implementados em Rust. Python de produção fica restrito à interface Qt e seus adaptadores de host, carregamento de ROMs/perfis e integração fina com PyO3. Ferramentas/testes Python são infraestrutura e nunca podem executar implementações de hardware em `legacy/`.
-- Não crie nem mantenha implementações de hardware em Python no caminho ativo. Implementações antigas foram arquivadas em `legacy/python_reference/` exclusivamente para consulta e não devem ser importadas por código, testes ou workflows ativos.
-- Não adicione JIT nem paralelismo entre componentes temporais por antecipação.
+- Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend Qt/PyO3 → P8 compatibilidade/auditoria → P9 validação sistêmica.
+- A prioridade imediata é consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
+- Todo hardware/runtime ativo pertence a Rust. Python/PySide6 fica restrito a GUI, launcher, biblioteca, configurações, logs, diagnóstico, telemetria e tooling.
+- PyO3 é coarse-grained. Não usar callbacks Python por instrução, pixel ou amostra.
+- Não duplicar CPUs ou componentes compartilháveis por console.
+- Não adicionar JIT, frame skipping, hacks temporais ou otimizações especulativas.
+
+## Fidelidade e desempenho
+
+O objetivo é reproduzir o comportamento funcional e temporal observável de cada console com desempenho adequado. Não construir uma réplica elétrica integral.
+
+- Implementar corretamente as instruções e operações que o software dos consoles suportados pode executar.
+- Preservar clocks, ordem causal e sincronização nos pontos em que afetam o resultado de jogos e periféricos.
+- Usar a menor granularidade suficiente: instrução, transação, scanline, amostra ou evento.
+- M-cycles, T-states, WAIT, arbitragem, fases e sinais são requisitos somente quando houver dependência concreta da plataforma.
+- Não exigir representação de todos os pinos nem simular capacitância, tensão, transistores ou fenômenos analógicos.
+- Não adicionar eventos por tick/pixel/pino ou estados serializados sem necessidade demonstrada.
+- Antes de detalhar um componente, identificar o console, jogo, periférico ou divergência que depende desse detalhe e escolher a menor solução capaz de reproduzir o comportamento.
+- Medir desempenho no caminho crítico; otimizar sem alterar a saída funcional/temporal.
 
 ## Antes de alterar
 
-1. Confirme repositório, branch, HEAD, PR associado e estado da árvore; nunca presuma que o clone local corresponde ao GitHub.
-2. Leia a implementação atual, testes, documentação, dependências e histórico relevante antes de editar.
-3. Descreva problema, escopo, riscos, critérios de aceitação e testes que demonstrarão a correção.
-4. Prefira uma mudança pequena e completa. Preserve contratos, trabalho existente e alterações concorrentes. Não faça operações destrutivas nem mude proteções/regras de repositório sem autorização.
-5. Use branches e PRs para alterações com impacto funcional/arquitetural. Não faça merge salvo solicitação explícita.
+1. Confirme repositório, branch, HEAD/SHA remoto, PRs, workflows e estado dos arquivos.
+2. Leia código, testes e documentação relevantes; não presuma que um documento histórico descreve a main.
+3. Defina o comportamento observável a corrigir, critérios de aceitação, riscos e testes.
+4. Pesquise proporcionalmente ao risco: documentação primária, implementações de referência e testes independentes. Distinguir fato, medição, inferência e hipótese.
+5. Implemente mudanças pequenas, compiláveis e revisáveis; preserve trabalho existente.
+6. Use branch e PR. Não commitar diretamente na main, não fazer force-push ou reset destrutivo.
+7. Não fazer merge sem autorização e sem gates aplicáveis verdes no SHA final.
 
-## Testes: escrever para provar comportamento
+## Pesquisa em três frentes
 
-- Para cada bug, crie um teste que reproduza a falha antes de corrigir quando viável.
-- Priorize testes de comportamento observável: estado da CPU, flags, PC/SP, memória, portas, interrupções, ciclos, ordem de eventos, framebuffer, áudio, hashes e determinismo conforme o subsistema.
-- Inclua casos normais, limites, reset, erros e regressões. Use ROMs sintéticas/homebrew e vetores legais; não versionar ROMs comerciais, BIOS protegidas, snapshots que incorporem ROMs comerciais ou logs locais.
-- Não altere expectativas só para fazer o teste passar. Distingua comportamento documentado, observado, inferido e hipotético.
-- Testes Python/Rust devem comparar contratos e resultados observáveis, não detalhes internos irrelevantes. Não alegue fidelidade ciclo a ciclo sem modelo e evidências adequados.
-- Evite testes frágeis dependentes de tempo de parede, áudio/dispositivo real ou estado global, salvo quando forem explicitamente testes de integração.
+Para tarefas complexas de hardware, dividir análise sem duplicar implementação:
+1. Engenharia reversa: comparar implementações abertas e identificar comportamento, sem copiar código.
+2. Documentação/fidelidade: consultar manuais do fabricante e referências técnicas do console.
+3. Arquitetura/validação: reconciliar evidências, identificar comportamento observável, escolher granularidade mínima e definir testes.
+A pesquisa não obriga implementar detalhes sem impacto no console.
 
-## Verificações locais recomendadas
+## Testes e qualidade
 
-Python:
-```powershell
-python -m pytest -q
-python -m ruff check .
-python -m ruff format --check .
-git diff --check
-```
+Criar testes de regressão para bugs quando viável. Priorizar estado arquitetural, memória/I/O, interrupções, framebuffer, áudio, comportamento de cartuchos e interações temporais relevantes. Não ajustar expectativas apenas para fazer CI passar.
 
-Workspace Rust:
-```powershell
+Gates:
+```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
 ```
 
-Extensão PyO3:
-```powershell
-cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
-cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path native/z80_core/Cargo.toml
-python -m pip install maturin
-maturin develop --manifest-path native/z80_core/Cargo.toml --features python-extension --release
-python -m pytest tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py -q
-```
+Executar os checks pertinentes e os gates exigidos pelo CI. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Vincular resultados ao SHA exato.
 
-Execute apenas os comandos relevantes ao escopo, além dos checks completos exigidos pelo CI. Confirme os manifest paths e os comandos nos arquivos atuais antes de executar.
+## Workflows
 
-## Workflows de GitHub Actions e validação por “agentes”
-
-- `.github/workflows/sg1000-three-agent-validation.yml`: sequência de jobs para instruções Z80, mapa de memória/determinismo e qualidade/testes completos do workspace Rust SG-1000.
-- `.github/workflows/rust-sg1000-core.yml`: fmt, Clippy e testes do workspace Rust.
-- `.github/workflows/qt-rust-z80-core.yml`: build Maturin, extensão PyO3, testes Rust e regressão Python/Qt de integração.
-- `.github/workflows/agent-functional-validation.yml`: lint/formatação e testes da aplicação Qt/integração; não deve importar o hardware Python arquivado.
-- `.github/workflows/agent-integrity.yml`: compileall, dependências, repetibilidade da suíte e relatórios.
-- `legacy/workflows/agent-performance-audit.yml`: workflow histórico arquivado; não é executado.
-
-Ao concluir uma alteração:
-1. Identifique os workflows que realmente cobrem os arquivos e contratos modificados; não suponha que todos disparam por qualquer mudança (verifique os filtros `paths`).
-2. Abra o PR/branch correto e acompanhe os runs do commit exato.
-3. Consulte os checks, jobs, logs e artefatos; registre sucesso, falha, cancelamento e checks ausentes.
-4. Se um workflow necessário não disparar por causa de filtros, registre a lacuna e proponha correção explícita; não declare validação completa.
-5. Os jobs “Agent 1/2/3” são tarefas automatizadas independentes no CI, não evidência de agentes de IA que escreveram ou revisaram código.
-
-## Política de precisão e desempenho
-
-- Não invente clocks, timings, comportamento de registradores ou efeitos analógicos. Cite fontes primárias e marque incertezas.
-- Separe lógica digital, temporização, resposta analógica, reamostragem e backend de saída.
-- Meça antes de otimizar. Benchmarks devem identificar commit, configuração, máquina, workload, aquecimento, backend e método.
-- Não use utilização total da CPU como objetivo em si; otimize precisão, estabilidade, latência e desempenho sustentado.
-- Não copie código de outros emuladores sem verificar licença, atribuição e necessidade.
+Inspecionar os filtros paths dos workflows e acompanhar os jobs que realmente executaram. Ler logs e artefatos quando necessário. Jobs chamados Agent 1/2/3 são automações do CI, não prova de que agentes de IA participaram.
 
 ## Relatório obrigatório
 
-Informe objetivo, arquivos alterados, branch/PR e commits com links, testes realmente executados e resultados, checks CI do commit, limitações, validações não executadas e próximo passo. Nunca diga que arquivos foram alterados, testes executados ou merge realizado sem evidências.
+Informar objetivo, arquivos alterados, branch/PR/commits com links, testes realmente executados, resultados de CI, itens NOT RUN/BLOCKED, limitações e próximo passo. Não alegar execução, aprovação ou merge sem evidência.
 
-Se o usuário disser “prossiga”, continue do último estado confirmado sem reiniciar a análise nem ampliar o escopo automaticamente.
-
-
-## Política permanente obrigatória — implementação, validação e entrega
-
-Leia também [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md). Ela é normativa para todas as tarefas, não apenas para o Z80.
-
-- Em cada componente, siga: inventário do HEAD atual → implementação das lacunas reais → testes rápidos por fatia → validação abrangente curta → testes longos → próximo componente. A campanha completa de temporização ciclo a ciclo fica para a integração da máquina SMS completa, mas os contratos temporais necessários devem ser preparados desde o início.
-- O objetivo é a máxima fidelidade demonstrável, não apenas compilar ou reconhecer opcodes. Separar IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS; não promover estado sem evidência.
-- Use no máximo três agentes de IA simultâneos, com funções distintas. Jobs do GitHub Actions são validadores automatizados, não agentes de IA.
-- Consulte documentação técnica oficial atual na web e código de emuladores abertos apenas para estudar lógica e arquitetura. Não copie código/testes/assets sem análise explícita de licença, procedência e compatibilidade; prefira implementação independente.
-- Rust nativo é obrigatório para todo runtime de emulação. Python fica para Qt/PySide6, integração, ferramentas, testes, auditorias e automação.
-- Avalie Vulkan/D3D11/D3D12, WASAPI, SDL3, XInput e APIs de host conforme necessidade e métricas reais de latência/compatibilidade; não introduza todas por padrão nem invoque APIs de host por instrução de CPU.
-- Mantenha GUI moderna, diagnósticos e logs úteis, com instrumentação seletiva e sem registrar ROMs comerciais.
-- Para mudanças que afetem execução de jogos, o merge em `main` exige checks aplicáveis no SHA candidato e evidência in-game reproduzível. Se o teste depender do mantenedor e não puder ser executado, marque BLOCKED/PENDING; não declare sucesso.
-- Use branch e PR para mudanças não triviais. Não publique diretamente em `main`; faça merge apenas após autorização e gates aplicáveis.
+Leia também [política permanente de desenvolvimento e validação](docs/development-and-validation-policy.md).

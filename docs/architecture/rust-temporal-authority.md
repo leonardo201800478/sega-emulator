@@ -110,5 +110,5 @@ Qualquer exceção a esta diretiva exige decisão arquitetural explícita, justi
 ## 9. Relação com outros documentos
 
 - [Arquitetura multi-sistema](../architecture.md)
-- [Master Scheduler Rust](native-master-scheduler.md)
+- [Documentação normativa do Master Clock Scheduler](scheduler/README.md)
 - [Política de desenvolvimento e validação](../development-and-validation-policy.md)

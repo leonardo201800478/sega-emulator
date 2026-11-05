@@ -1,44 +1,27 @@
-# ADRs — reorganização do runtime
+# ADRs — decisões arquiteturais
 
-Decisões arquiteturais da reorganização Rust-first, do motor Z80 compartilhado, das fronteiras host e da infraestrutura temporal.
+Este índice lista decisões vigentes e registros históricos. ADR aceita não significa que a implementação esteja concluída.
 
 | ADR | Decisão | Estado |
 |---|---|---|
-| [ADR-0001 — motor Z80 compartilhado](0001-shared-z80-engine.md) | Um único crate `sega-z80-cpu`, reutilizando ALU e bus contract compartilhados; adaptadores por máquina. | Proposto para implementação |
-| [ADR-0002 — scheduler temporal](0002-machine-temporal-scheduler.md) | Um scheduler por instância de máquina, múltiplos domínios de clock e eventos determinísticos. | Proposto para implementação |
-| [ADR-0003 — fronteiras host/Rust](0003-host-runtime-boundaries.md) | Qt/Python como frontend/ferramentas; runtime de hardware, input, vídeo e áudio em Rust. | Proposto para implementação |
-| [ADR-0011 — modelo temporal cycle-accurate](0011-cycle-accurate-temporal-model.md) | Precisão temporal como requisito arquitetural; scheduler orientado a eventos, CPU micro-op, bus transactions e VDP temporal. | Aceito como direção arquitetural; integração não concluída |
-| [ADR-0012 — dimensões de ordenação temporal](0012-event-ordering-dimensions.md) | Separar timestamp absoluto, hardware phase, platform priority e stable sequence. | Proposto para revisão |
-| [ADR-0013 — snapshot/restore determinístico](0013-deterministic-scheduler-snapshot-restore.md) | DTOs versionados, fila canônica, restauração atômica e equivalência de replay. | Implementação E1–E7 concluída na stack; revisão e integração pendentes |
-| [ADR-0014 — execução e sincronização temporal de dispositivos](0014-temporal-device-execution-and-synchronization.md) | Contratos extensíveis para múltiplas CPUs, chips temporizados, safe points, domínios independentes e determinismo. | Proposto para revisão |
-| [ADR-0015 — contrato temporal SMS/Z80/barramento](0015-sms-z80-bus-temporal-contract.md) | Safe points retomáveis, transações Z80/SMS e integração Scheduler-driven incremental. | T0–T4 integrados em main; T4 SHORT_PASS; runtime completo e TEMPORAL_PASS pendentes |
+| [ADR-0001 — motor Z80 compartilhado](0001-shared-z80-engine.md) | Um único núcleo Z80 reutilizável, com adaptação por plataforma. | Referência arquitetural; validar no código |
+| [ADR-0002 — scheduler temporal](0002-machine-temporal-scheduler.md) | Coordenação de eventos e clocks por máquina composta. | Aplicar na granularidade necessária |
+| [ADR-0003 — fronteiras host/Rust](0003-host-runtime-boundaries.md) | Runtime de hardware em Rust; Python/Qt como host de aplicação. | Diretriz vigente |
+| [ADR-0011 — modelo cycle-accurate](0011-cycle-accurate-temporal-model.md) | Decisão histórica de precisão cycle-accurate universal. | Supersedida pela ADR-0016 |
+| [ADR-0012 — dimensões de ordenação temporal](0012-event-ordering-dimensions.md) | Ordenação determinística de eventos. | Usar quando necessária ao Scheduler |
+| [ADR-0013 — snapshot/restore determinístico](0013-deterministic-scheduler-snapshot-restore.md) | Snapshot, restauração e replay determinísticos. | Aplicar ao estado ativo da máquina |
+| [ADR-0014 — execução e sincronização temporal](0014-temporal-device-execution-and-synchronization.md) | Proposta geral para dispositivos temporizados. | Não impõe granularidade universal |
+| [ADR-0015 — contrato temporal SMS/Z80/barramento](0015-sms-z80-bus-temporal-contract.md) | Proposta e histórico da integração temporal SMS. | Referência histórica; aplicar somente o necessário |
+| [ADR-0016 — fidelidade observável](0016-observable-fidelity-and-proportional-timing.md) | Fidelidade comportamental e temporal proporcional ao console, sem simulação elétrica integral. | **Vigente** |
 
-## Documentação normativa do Scheduler
+## Documentação de referência
 
-- [Master Clock Scheduler — índice](../scheduler/README.md)
-- [Manual de arquitetura e integração](../scheduler/scheduler-integration-manual.md)
-- [Contrato de integração de componentes](../scheduler/component-integration-contract.md)
-- [Prompt permanente de integração](../../prompts/scheduler-component-integration.md)
+- [Escopo do projeto](../../project-scope.md)
+- [Roadmap mestre](../../project-roadmap.md)
+- [Estado dos componentes](../../component-status.md)
+- [Política de fidelidade](0016-observable-fidelity-and-proportional-timing.md)
+- [Scheduler — índice](../scheduler/README.md)
+- [SMS VDP — estado funcional e limites conhecidos](../sms-vdp.md)
+- [Perfis de hardware Z80](../../hardware/z80-silicon-platform-profiles.md)
 
-## Documentos de arquitetura temporal
-
-- [Modelo temporal cycle-accurate do sistema](../cycle-accurate-system-model.md)
-- [Arquitetura temporal do VDP SMS](../sms-vdp-cycle-accurate-design.md)
-- [Registro de evidências de precisão temporal](../cycle-accuracy-evidence-register.md)
-- [Auditoria de integração VRAM/CRAM](../../audits/sms-vram-access-rust-integration-audit-2026-11-01.md)
-- [Caracterização T0 do ASIC SMS1 315-5124](../../audits/sms1-315-5124-vdp-t0-characterization-2026-11-02.md)
-- [Matriz de validação T0.1 do SMS1 VDP](../../audits/sms1-315-5124-vdp-t01-validation-matrix-2026-11-02.md)
-- [Modelo SMS1 315-5124 e processo de três frentes](../sms1-315-5124-vdp-model-and-three-track-process.md)
-- [Registro de evidências temporais do SMS1](../sms1-vdp-temporal-evidence-register.md)
-
-## Gate de implementação
-
-As ADRs consolidam contratos e decisões; não significam que os componentes já estejam implementados ou validados. Código de runtime deve ser desenvolvido em branches próprias, com testes e workflows no SHA candidato exato.
-
-Baseline de evidência: [F0 — inventário remoto e reconciliação das PRs](../migrations/f0-remote-inventory-2026-10-31.md).
-
-A ADR-0013 registra o progresso temporal das PRs #343–#346, a auditoria independente da Etapa E e a sequência de implementação aprovada. A stack consolidada de Scheduler (#358) e a cobertura multi-domain (#359) foram integradas à `main` em 2026-11-02. A documentação normativa atual está em `docs/architecture/scheduler/`; o ledger `docs/evidence/adr-0013-snapshot-restore-validation.md` mantém os heads e workflows exatos. A integração com CPU, barramento e dispositivos continua separada e pendente.
-
-A ADR-0014 define o contrato futuro de execução e sincronização de dispositivos. A cobertura multi-domain da PR #359 valida avanço/replay de domínios racionais em timestamps inteiros, mas não substitui a implementação E1–E7 da ADR-0013 nem autoriza integração temporal prematura de CPU, barramento, VDP, PSG ou FM.
-
-A ADR-0011 estabelece a direção arquitetural de precisão temporal integrada. Os documentos SMS1 T0/T0.1 e o registro de evidências delimitam explicitamente os comportamentos ainda desconhecidos; eles não autorizam inferir offsets, fetch slots, WAIT, fases de IRQ ou prioridades simultâneas sem evidência específica.
+ADRs e auditorias antigas preservam decisões e evidências históricas. Quando um documento antigo exigir precisão maior do que a necessária ao comportamento observável de um console, prevalece a ADR-0016. Uma proposta ou PR aberta não altera a política nem o estado integrado da main.
