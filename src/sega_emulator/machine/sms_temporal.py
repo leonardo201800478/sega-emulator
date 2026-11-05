@@ -8,7 +8,7 @@ from __future__ import annotations
 
 
 class TemporalSMSMachine:
-    """Frame-stepped SMS session backed exclusively by NativeSMSTemporalMachine."""
+    """SMS session adapter backed exclusively by NativeSMSTemporalMachine."""
 
     cpu_core = "rust"
 
@@ -60,11 +60,11 @@ class TemporalSMSMachine:
         self._restore_audio_output()
 
     def start(self) -> None:
-        """Allow the host frame loop to request further frames."""
+        """Mark the session as active for a future native execution host."""
         self.native_machine.start()
 
     def pause(self) -> None:
-        """Pause at the current frame boundary without changing hardware state."""
+        """Pause the native session without changing hardware state."""
         self.native_machine.pause()
 
     def stop(self) -> None:
