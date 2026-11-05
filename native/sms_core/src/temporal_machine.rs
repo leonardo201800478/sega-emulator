@@ -13,6 +13,7 @@ use crate::{
     SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
     SmsTemporalM1Error, SmsTemporalM1State,
 };
+use sega_sn76489::Sn76489Core;
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
@@ -22,7 +23,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 22;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +50,7 @@ pub enum SmsTemporalTraceEvent {
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
@@ -280,6 +281,35 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            instruction_started_at: None,
+            next_internal_cycle_id: 0,
+            pending_internal_cycle_id: None,
+            pending_internal_tstates: None,
+            m1: None,
+            m1_fixture_wait_tstates: None,
+            trace_enabled: false,
+            trace_events: Vec::new(),
+        })
+    }
+
+    /// Construct the temporal SMS slice with an explicit PSG clock and output rate.
+    ///
+    /// The PSG clock must match the selected SMS CPU/PSG hardware profile.
+    /// The sample rate controls resampling only; scheduler time owns chip clocks.
+    pub fn new_with_psg_config(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+    ) -> Result<Self, SmsTemporalMachineError> {
+        Ok(Self {
+            cpu: Z80MicroSequencer::default(),
+            bus: SmsTemporalBus::new_with_psg_config(
+                rom,
+                master_ticks_per_tstate,
+                psg_clock_hz,
+                sample_rate,
+            )?,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -795,6 +825,16 @@ impl SmsTemporalMachine {
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
+    }
+
+    /// Inspect the SMS-profile PSG without advancing machine time.
+    pub fn psg(&self) -> &Sn76489Core {
+        self.bus.psg()
+    }
+
+    /// Drain audio samples already produced by scheduler-owned PSG clocks.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.bus.drain_audio_samples(max_samples)
     }
 
     /// Current absolute machine time.
