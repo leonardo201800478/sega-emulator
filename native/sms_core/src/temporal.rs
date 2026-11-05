@@ -312,8 +312,7 @@ impl SmsTemporalCoordinator {
 mod tests {
     use super::{
         SMS_PSG_CLOCK_DOMAIN_ID, SMS_VDP_CLOCK_DOMAIN_ID, SMS_Z80_CLOCK_DOMAIN_ID,
-        SmsTemporalCoordinator,
-        SmsTemporalCoordinatorError, SmsTemporalEvent,
+        SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalEvent,
     };
     use sega_temporal_core::MachineTime;
 
