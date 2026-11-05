@@ -15,11 +15,11 @@ use crate::{
     SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
 };
 use sega_sn76489::Sn76489Core;
-use sega_video::sms::SmsVdpProfile;
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
+use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{
     Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer,
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
