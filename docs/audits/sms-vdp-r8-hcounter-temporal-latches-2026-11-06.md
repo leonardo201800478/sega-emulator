@@ -125,6 +125,7 @@ A proposta antiga de adicionar `synchronize_tstates` ao caminho de CPU atômica 
 - Borda descendente não substitui o valor capturado.
 - Todos os casos passam pelo `SmsTemporalMachine`, `SmsTemporalBus` e Scheduler.
 - Perfil japonês: saída alta -> entrada alta não captura falsamente; saída baixa -> entrada alta captura.
+- Snapshot/restore: valor de H-counter capturado permanece idêntico; formato anterior (v10) é rejeitado.
 
 ## 6. Limitações e classificação
 
@@ -134,7 +135,7 @@ A proposta antiga de adicionar `synchronize_tstates` ao caminho de CPU atômica 
 | H-counter latched por TH ascendente | Implementado; CI pendente |
 | TH1 e TH2 por escrita de I/O control no caminho temporal | Testes adicionados; CI pendente |
 | Bordas TH externas originadas por periféricos | NOT RUN; evento de entrada ainda não ligado ao barramento |
-| Persistência em snapshot/restore em memória | Incluída via clone do VDP; teste dedicado pendente |
+| Persistência em snapshot/restore em memória | Testada após captura TH; `SMS_TEMPORAL_BUS_STATE_VERSION = 11` rejeita formato 10 |
 | Execução da SmsVdpTest ROM em console físico | NOT RUN |
 | Confirmação física SMS1 e SMS2 | NOT RUN |
 | Fase absoluta do H-counter no reset | Modelo MAME; validação física pendente |
