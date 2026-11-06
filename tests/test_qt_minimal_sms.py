@@ -13,6 +13,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication
 
 import sega_emulator.frontend.qt.minimal_sms_window as minimal_window
+from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
 
 
 class FakeTemporalSMSMachine:
@@ -51,6 +52,12 @@ class FakeTemporalSMSMachine:
     def set_controller(self, player: int, **buttons: bool) -> None:
         self.calls.append(("set_controller", player, buttons))
 
+    def open_video_output_in_viewport(self, window_handle: int) -> None:
+        self.calls.append(("open_video_output_in_viewport", window_handle))
+
+    def close_video_output(self) -> None:
+        self.calls.append(("close_video_output",))
+
     def close_audio_output(self) -> None:
         self.calls.append(("close_audio_output",))
 
@@ -83,9 +90,18 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert window.reset_action.isEnabled()
     assert window.close_rom_action.isEnabled()
     assert not hasattr(window, "_frame_timer")
-    assert window.status_label.text().find("Vídeo desabilitado") >= 0
+    assert "Preparando" in window.status_label.text()
     assert window.run_action.isEnabled()
     assert not any(call[0] == "configure_audio_output" for call in machine.calls)
+
+    window.show()
+    qapplication.processEvents()
+    video_calls = [
+        call for call in machine.calls if call[0] == "open_video_output_in_viewport"
+    ]
+    assert len(video_calls) == 1
+    assert video_calls[0][1] > 0
+    assert "D3D12 ativa" in window.status_label.text()
 
     window._toggle_running()
     assert machine.is_running
@@ -98,6 +114,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert window._machine is None
     assert not window.reset_action.isEnabled()
     assert ("stop",) in machine.calls
+    assert ("close_video_output",) in machine.calls
     assert ("close_audio_output",) in machine.calls
     assert not any(call[0] == "step_frame" for call in machine.calls)
     window.close()
@@ -129,3 +146,20 @@ def test_minimal_sms_window_maps_keyboard_levels_without_rendering_video(
     )
     assert not any(call[0] == "step_frame" for call in machine.calls)
     window.close()
+
+
+
+def test_sms_video_viewport_keeps_a_centered_four_by_three_surface(
+    qapplication: QApplication,
+) -> None:
+    viewport = SmsVideoViewport()
+    viewport.resize(1000, 700)
+    qapplication.processEvents()
+
+    surface = viewport.surface_widget.geometry()
+    assert surface.width() / surface.height() == pytest.approx(4 / 3, abs=0.01)
+    assert surface.x() >= 0
+    assert surface.y() >= 0
+    assert surface.right() < viewport.width()
+    assert surface.bottom() < viewport.height()
+    viewport.close()
