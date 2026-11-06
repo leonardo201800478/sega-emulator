@@ -54,9 +54,7 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{
-    CreateEventW, GetCurrentThreadId, WaitForSingleObjectEx,
-};
+use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, WaitForSingleObjectEx};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
@@ -263,8 +261,7 @@ impl D3d12ChildWindow {
 
         let parent = HWND(parent_handle as *mut c_void);
         let parent_style = unsafe { GetWindowLongPtrW(parent, GWL_STYLE) };
-        let added_parent_clip_children =
-            parent_style & (WS_CLIPCHILDREN.0 as isize) == 0;
+        let added_parent_clip_children = parent_style & (WS_CLIPCHILDREN.0 as isize) == 0;
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
@@ -306,11 +303,7 @@ impl D3d12ChildWindow {
                     0,
                     0,
                     0,
-                    SWP_NOMOVE
-                        | SWP_NOSIZE
-                        | SWP_NOZORDER
-                        | SWP_NOACTIVATE
-                        | SWP_FRAMECHANGED,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
                 )
             } {
                 unsafe {
@@ -367,8 +360,7 @@ impl Drop for D3d12ChildWindow {
             self.hwnd = HWND::default();
         }
 
-        if self.added_parent_clip_children
-            && unsafe { IsWindow(Some(self.parent_hwnd)).as_bool() }
+        if self.added_parent_clip_children && unsafe { IsWindow(Some(self.parent_hwnd)).as_bool() }
         {
             unsafe {
                 let current_style = GetWindowLongPtrW(self.parent_hwnd, GWL_STYLE);
@@ -384,11 +376,7 @@ impl Drop for D3d12ChildWindow {
                     0,
                     0,
                     0,
-                    SWP_NOMOVE
-                        | SWP_NOSIZE
-                        | SWP_NOZORDER
-                        | SWP_NOACTIVATE
-                        | SWP_FRAMECHANGED,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
                 );
             }
         }
@@ -1287,8 +1275,7 @@ mod tests {
     use std::thread;
 
     use super::{
-        D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame,
-        convert_frame_row_to_rgba8888,
+        D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE, ShowWindow, WS_CLIPCHILDREN,
@@ -1308,8 +1295,7 @@ mod tests {
         let parent = NativeVideoWindow::create(640, 480).unwrap();
         let parent_hwnd = parent.hwnd();
         let original_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
-        let originally_clipped =
-            original_style & (WS_CLIPCHILDREN.0 as isize) != 0;
+        let originally_clipped = original_style & (WS_CLIPCHILDREN.0 as isize) != 0;
 
         {
             let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
@@ -1330,10 +1316,9 @@ mod tests {
         let parent = NativeVideoWindow::create(320, 240).unwrap();
         let handle = parent.hwnd().0 as usize;
 
-        let validation =
-            thread::spawn(move || NativeVideoWindow::validate_existing_handle(handle))
-                .join()
-                .unwrap();
+        let validation = thread::spawn(move || NativeVideoWindow::validate_existing_handle(handle))
+            .join()
+            .unwrap();
 
         assert!(validation.is_err());
     }
