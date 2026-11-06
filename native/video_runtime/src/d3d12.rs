@@ -64,11 +64,12 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, GA_ROOT, GetAncestor, GetWindowThreadProcessId, IsIconic, IsWindow, MSG,
-    PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW, SWP_NOACTIVATE, SWP_NOZORDER,
-    SWP_SHOWWINDOW, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_OVERLAPPEDWINDOW,
-    WS_VISIBLE,
+    DispatchMessageW, GA_ROOT, GetAncestor, GetWindowLongPtrW, GetWindowThreadProcessId,
+    IsIconic, IsWindow, MSG, GWL_STYLE, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
+    WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN,
+    WS_CLIPSIBLINGS, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
 use windows::core::{Error, Interface, Result, w};
 
@@ -245,17 +246,25 @@ impl NativeVideoWindow {
 /// raw handle and borrows it from its dedicated worker thread.
 pub struct D3d12ChildWindow {
     hwnd: HWND,
+    parent_hwnd: HWND,
+    added_parent_clip_children: bool,
     _thread_affinity: PhantomData<Rc<()>>,
 }
 
 impl D3d12ChildWindow {
     /// Create a visible child viewport under an existing GUI-owned parent HWND.
+    ///
+    /// The parent receives WS_CLIPCHILDREN while the viewport exists so its
+    /// client painting does not overwrite the independently presented child.
     pub fn create(parent_handle: usize) -> Result<Self> {
         NativeVideoWindow::validate_existing_handle(parent_handle)?;
         let instance = unsafe { GetModuleHandleW(None)? };
         register_d3d12_window_class(HINSTANCE(instance.0))?;
 
         let parent = HWND(parent_handle as *mut c_void);
+        let parent_style = unsafe { GetWindowLongPtrW(parent, GWL_STYLE) };
+        let added_parent_clip_children =
+            parent_style & (WS_CLIPCHILDREN.0 as isize) == 0;
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
@@ -273,8 +282,49 @@ impl D3d12ChildWindow {
             )?
         };
 
+        if added_parent_clip_children {
+            let updated_style = parent_style | WS_CLIPCHILDREN.0 as isize;
+            unsafe {
+                SetWindowLongPtrW(parent, GWL_STYLE, updated_style);
+            }
+            let applied_style = unsafe { GetWindowLongPtrW(parent, GWL_STYLE) };
+            if applied_style & (WS_CLIPCHILDREN.0 as isize) == 0 {
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+                return Err(Error::new(
+                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    "could not enable WS_CLIPCHILDREN on the eframe parent HWND",
+                ));
+            }
+
+            if let Err(error) = unsafe {
+                SetWindowPos(
+                    parent,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE
+                        | SWP_NOSIZE
+                        | SWP_NOZORDER
+                        | SWP_NOACTIVATE
+                        | SWP_FRAMECHANGED,
+                )
+            } {
+                unsafe {
+                    SetWindowLongPtrW(parent, GWL_STYLE, parent_style);
+                    let _ = DestroyWindow(hwnd);
+                }
+                return Err(error);
+            }
+        }
+
         Ok(Self {
             hwnd,
+            parent_hwnd: parent,
+            added_parent_clip_children,
             _thread_affinity: PhantomData,
         })
     }
@@ -316,6 +366,33 @@ impl Drop for D3d12ChildWindow {
             }
             self.hwnd = HWND::default();
         }
+
+        if self.added_parent_clip_children
+            && unsafe { IsWindow(Some(self.parent_hwnd)).as_bool() }
+        {
+            unsafe {
+                let current_style = GetWindowLongPtrW(self.parent_hwnd, GWL_STYLE);
+                SetWindowLongPtrW(
+                    self.parent_hwnd,
+                    GWL_STYLE,
+                    current_style & !(WS_CLIPCHILDREN.0 as isize),
+                );
+                let _ = SetWindowPos(
+                    self.parent_hwnd,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE
+                        | SWP_NOSIZE
+                        | SWP_NOZORDER
+                        | SWP_NOACTIVATE
+                        | SWP_FRAMECHANGED,
+                );
+            }
+        }
+        self.parent_hwnd = HWND::default();
     }
 }
 
