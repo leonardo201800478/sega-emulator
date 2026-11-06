@@ -238,7 +238,7 @@ impl NativeWasapiOutput {
         self.endpoint_submissions.load(Ordering::Acquire)
     }
 
-    /// Last asynchronous error from the WASAPI worker, cleared after recovery.
+    /// Last asynchronous error from the WASAPI worker; remains visible for this session.
     pub fn output_error(&self) -> Option<String> {
         self.output_error.lock().ok().and_then(|error| error.clone())
     }
@@ -422,7 +422,6 @@ fn run_wasapi_worker(
             thread::sleep(Duration::from_millis(250));
             continue;
         }
-        set_worker_output_error(&output_error, None);
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
@@ -786,7 +785,6 @@ fn run_xaudio2_worker(
             return;
         }
     };
-    set_worker_output_error(&output_error, None);
     let _ = ready.send(Ok(()));
 
     let mut submitted = VecDeque::<Vec<u8>>::with_capacity(max_queued_buffers);
