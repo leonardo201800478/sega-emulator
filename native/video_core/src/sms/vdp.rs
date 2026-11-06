@@ -1095,6 +1095,7 @@ mod tests {
         assert_eq!(v.read_h_counter(), 0x08 + 60);
         v.set_light_phaser_input(120, 45, false);
         assert!(!v.light_pulse_active());
+        assert_eq!(v.read_h_counter(), 0x08 + 60);
     }
     #[test]
     fn stereo_output_modes_have_expected_dimensions() {
