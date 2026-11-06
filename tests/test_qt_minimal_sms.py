@@ -337,7 +337,6 @@ def test_video_telemetry_reports_native_runtime_failure(
     window.close()
 
 
-
 def test_sms_window_applies_persisted_audio_preferences(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
