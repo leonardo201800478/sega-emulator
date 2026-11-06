@@ -25,7 +25,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 24;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 25;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,6 +348,16 @@ impl SmsTemporalMachine {
         })
     }
 
+    /// Queue a timestamped external TH transition on the shared machine timeline.
+    pub fn schedule_external_th_transition(
+        &mut self,
+        player: u8,
+        high: bool,
+        timestamp: MachineTime,
+    ) -> Result<MachineTime, SmsTemporalMachineError> {
+        Ok(self.bus.schedule_external_th_transition(player, high, timestamp)?)
+    }
+
     /// Start the next instruction and expose its first bus request.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         let step = self.cpu.begin_instruction()?;
@@ -582,12 +592,30 @@ impl SmsTemporalMachine {
     }
 
     /// Dispatch one event and resume the matching CPU continuation.
+    ///
+    /// Peripheral input events are consumed on the same Scheduler timeline;
+    /// dispatch continues until a CPU continuation boundary is reached.
     pub fn dispatch_next(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
-        let dispatch = self
-            .bus
-            .dispatch_next()?
-            .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+        loop {
+            let dispatch = self
+                .bus
+                .dispatch_next()?
+                .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+            if matches!(dispatch, SmsTemporalDispatch::ExternalThTransition { .. }) {
+                continue;
+            }
+            return self.dispatch_cpu_event(dispatch);
+        }
+    }
+
+    fn dispatch_cpu_event(
+        &mut self,
+        dispatch: SmsTemporalDispatch,
+    ) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         match dispatch {
+            SmsTemporalDispatch::ExternalThTransition { .. } => {
+                Err(SmsTemporalMachineError::InvalidState)
+            }
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
                     let request = self
@@ -967,7 +995,29 @@ impl SmsTemporalMachine {
                     .ok_or(SmsTemporalMachineError::InvalidState)?;
                 let m1_state = m1_cycle.export_state();
                 let events = &state.bus.coordinator.scheduler.event_queue.pending;
-                if state.bus.pending_request.is_some()
+                let external_events_valid = events.iter().all(|event| match event.payload {
+                    crate::SmsTemporalEvent::ExternalThTransition { player, .. } => {
+                        (player == 1 || player == 2)
+                            && event.timestamp
+                                .checked_duration_since(state.bus.coordinator.scheduler.now)
+                                .is_some_and(|elapsed| {
+                                    elapsed > 0
+                                        && elapsed
+                                            % u128::from(state.bus.coordinator.master_ticks_per_tstate)
+                                            == 0
+                                })
+                    }
+                    _ => true,
+                });
+                let m1_events: Vec<_> = events
+                    .iter()
+                    .filter(|event| matches!(
+                        event.payload,
+                        crate::SmsTemporalEvent::M1TStateComplete { .. }
+                    ))
+                    .collect();
+                if !external_events_valid
+                    || state.bus.pending_request.is_some()
                     || state.pending_internal_cycle_id.is_some()
                     || state.cpu.handshake.wait_tstates != total_waits
                     || m1_state.cycle.address != request.address
@@ -978,13 +1028,13 @@ impl SmsTemporalMachine {
                 }
                 match (m1_state.pending_continuation_id, m1_state.pending_deadline) {
                     (Some(id), Some(deadline))
-                        if events.len() == 1
-                            && events[0].payload
+                        if m1_events.len() == 1
+                            && m1_events[0].payload
                                 == (crate::SmsTemporalEvent::M1TStateComplete {
                                     continuation_id: id,
                                 })
-                            && events[0].timestamp == deadline => {}
-                    (None, None) if events.is_empty() => {}
+                            && m1_events[0].timestamp == deadline => {}
+                    (None, None) if m1_events.is_empty() => {}
                     _ => return Err(SmsTemporalMachineError::InvalidState),
                 }
             }
@@ -1017,7 +1067,11 @@ impl SmsTemporalMachine {
                         .scheduler
                         .event_queue
                         .pending
-                        .first()
+                        .iter()
+                        .find(|event| matches!(
+                            event.payload,
+                            crate::SmsTemporalEvent::InternalCycleComplete { .. }
+                        ))
                         .map(|event| event.timestamp)
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
