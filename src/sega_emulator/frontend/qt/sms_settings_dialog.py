@@ -136,9 +136,7 @@ class SmsSettingsDialog(QDialog):
         video_backend.setWordWrap(True)
         video_form.addRow("Apresentação:", video_backend)
 
-        self.integer_scale = QCheckBox(
-            "Preferir escala inteira (pixels sem frações)"
-        )
+        self.integer_scale = QCheckBox("Preferir escala inteira (pixels sem frações)")
         self.integer_scale.setObjectName("smsIntegerScale")
         self.integer_scale.setChecked(preferences.integer_scale)
         video_form.addRow(self.integer_scale)
