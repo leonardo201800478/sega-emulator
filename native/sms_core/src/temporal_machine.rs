@@ -3123,7 +3123,9 @@ mod temporal_frame_tests {
         assert!(
             machine
                 .framebuffer()
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .any(|pixel| pixel.iter().any(|channel| *channel != 0))
         );
         let samples = machine.drain_audio_samples(None);
