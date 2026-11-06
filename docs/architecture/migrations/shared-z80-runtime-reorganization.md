@@ -32,7 +32,7 @@ O HEAD de `main` observado no inventário foi `3cf846d688798080d35f997f6e0d34680
 - `native/z80_bus`
 - `native/audio_runtime`
 
-O workspace exclui `native/z80_core`, `native/sega_emu_core` e `native/audio_output`. A extensão em `native/z80_core` é uma fronteira PyO3/Maturin, não deve ser confundida com um motor Z80 independente de plataforma.
+O workspace exclui `native/z80_core` e `native/audio_output`. O scaffold `native/sega_emu_core` foi removido em 2026-11-06 por não possuir consumidores ativos; o destino de migração será recriado quando a realocação for iniciada. A extensão em `native/z80_core` é uma fronteira PyO3/Maturin, não deve ser confundida com um motor Z80 independente de plataforma.
 
 ### 2.1 Duplicação Z80 confirmada
 
