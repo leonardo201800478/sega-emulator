@@ -1,66 +1,105 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Baseline reconciliada:** main em `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, parent de PR #536); fotografia histórica, não representa necessariamente o estado atual.  
+**Fotografia reconciliada:** `main` em `8bd7f6c78cacd247736268d141e4cc7e30805ccd` (2026-11-06).  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
-**Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
+**Prioridade:** estabilizar imagem e áudio do Master System para permitir testes reais, preservando o SG-1000.
 
-Este documento registra uma fotografia histórica do estado conhecido na baseline indicada. Não o trate como status corrente sem reconciliá-lo. Antes de implementar, audite o SHA mais recente da `main`, o código, os testes, as PRs e os workflows. PR aberta ou Draft não significa código integrado.
+Esta página é a fotografia do SHA indicado. PRs abertas ou Draft não integram a baseline. A correção de IRQ e os testes A/V descritos na auditoria de 2026-11-06 estão em branch/PR e só passam a integrar o estado corrente após merge.
 
 ## 1. Plataformas
 
 | Plataforma | Estado | Diretriz |
 |---|---|---|
-| SG-1000 | Runtime Rust integrado | Preservar funcionalidades e jogos já validados |
-| Master System | Runtime Rust integrado | Prioridade atual; ampliar compatibilidade funcional e corrigir divergências observáveis |
-| Game Gear | Não concluído como plataforma independente | Fase futura, reutilizar SMS quando compatível |
-| Mega Drive / Genesis | Não concluído | Fase futura, CPU 68000 e Z80 auxiliar |
+| SG-1000 | Runtime Rust integrado | Preservar funcionalidades e jogos validados; executar regressões em toda alteração compartilhada |
+| Master System | Runtime Rust temporal integrado à Qt/PyO3 | Prioridade imediata: comprovar imagem e som, corrigir boot e validar em Windows real |
+| Game Gear | Não concluído como plataforma independente | Fase futura; reutilizar SMS onde houver equivalência |
+| Mega Drive / Genesis | Não concluído | Fase futura |
 | Sega CD / 32X | Não concluídos | Dependem das plataformas anteriores |
 
-## 2. Componentes
+## 2. Estado dos componentes no SHA-base
 
-| Componente | Estado conhecido | Prioridade / limite |
+| Componente | Estado observado | Limite / próxima evidência |
 |---|---|---|
-| Z80 compartilhado | Implementado em Rust e consumido pelos perfis SG-1000/SMS | Corrigir semântica e regressões; não duplicar o core. RESET e entrega de IRQ do SMS possuem cobertura dedicada nas PRs #531/#536 |
-| Z80 E5 / E6 | Consta como integrado na main nas auditorias recentes | Confirmar testes no SHA candidato antes de novas alterações |
-| Z80 E7 | Parcial; E7.3/HALT T4, VBlank/Line IRQ SMS e RESET funcional possuem cobertura integrada | Fechamento semântico global ainda aberto; revisar somente comportamentos relevantes aos consoles suportados |
-| Z80 M-cycle/T-state | Há contratos e fatias temporais no runtime | Não exigir microsequenciamento integral de todas as instruções |
-| WAIT / arbitragem | Dependem do circuito e dos consumidores de cada plataforma | Implementar somente quando houver ligação e efeito demonstrados |
-| Memória / mappers SMS | Implementações Rust presentes | Corrigir compatibilidade de cartuchos e mapas reais |
-| VDP SMS | Implementação Rust com Mode 4 e modos legados | Refinar raster/registradores quando jogos demonstrarem divergências |
-| VDP TMS9918A | Runtime SG-1000 em Rust | Preservar compatibilidade e particularidades próprias |
-| PSG / áudio | Runtime de áudio Rust integrado | Validar comportamento audível e temporização necessária |
-| Machine Scheduler | Infraestrutura Rust presente | Coordenar eventos relevantes sem impor eventos por pino/tick |
-| PyO3 / Qt | Extensão nativa e frontend ativos | Manter interface coarse-grained; sem lógica de hardware em Python |
+| Z80 compartilhado | Implementado em Rust; executor atômico e sequenciador retomável usados pelo SMS temporal | Fechamento semântico E7.7 ainda não comprovado; não reabrir o Z80 sem divergência reproduzível |
+| Z80 E5 / E6 | Integrados na main conforme scorecard e matriz DD/FD | Evidências continuam vinculadas aos testes/SHAs registrados nesses documentos |
+| Z80 E7 | Parcial; HALT T4, reset e testes de interrupção SMS possuem cobertura direcionada | Auditoria semântica global ainda aberta |
+| Memória / mapper SMS | Integrados ao `SmsTemporalBus` | Compatibilidade de cartuchos deve ser validada com ROMs legais/homebrew e metadados locais |
+| VDP SMS | `SmsVdp` compartilhado em `sega_video::sms`, conectado ao barramento temporal; portas, VRAM/CRAM, Mode 4 e composição por scanline | Não é pipeline dot/fetch; pixels de jogos reais ainda precisam de comprovação ponta a ponta |
+| IRQ do VDP → INT do Z80 | O VDP calcula VBlank/Line IRQ; a ligação automática não está integrada na main deste SHA | PR #595 liga a linha em dispatch e antes de cada instrução, preserva INT externo e vetor de acknowledge `$FF`; testes/example ainda aguardam CI |
+| PSG SN76489 | Integrado ao `SmsTemporalBus` via `ScheduledPsg`; escritas de porta e geração de amostras seguem avanço do Scheduler | Geração de amostras não prova saída física audível |
+| Scheduler SMS | `SmsTemporalMachine` despacha eventos e o barramento aplica efeitos nas fronteiras programadas | VDP ainda avança em modelo scanline; WAIT físico, fetch arbitration e precisão intralinha não estão comprovados |
+| Vídeo / mailbox | Worker Rust publica frames RGB888 de 256×192 no `FrameMailbox` | Testes de contrato do mailbox não provam que o framebuffer de uma ROM tenha pixels visíveis |
+| D3D12 | Sessão nativa Rust pode anexar ao HWND do viewport Qt e consumir frames do mailbox | CI Windows compila/testa contratos; GPU física, imagem de jogo e device-loss real permanecem NOT RUN |
+| Áudio host | Worker drena PCM do PSG e o encaminha à sessão nativa WASAPI/XAudio2 configurada pelo frontend | Configurar/inicializar endpoint não prova sinal não silencioso nem audição física; validar no Windows |
+| PyO3 / Qt | API coarse-grained; comandos de ciclo de vida e configurações permanecem no frontend | Não transportar pixels/PCM nem temporizar hardware em Python |
 
-## 2.1 Regra de granularidade vigente
+## 3. Caminho efetivo do runtime SMS
 
-- **Temporal prioritário:** caminhos de instrução/processo cuja ordem ou duração afete gameplay (I/O, registradores VDP/PSG, raster, mapper, IRQ/NMI, DMA, contenção e WAIT comprovado).
-- **Atômico padrão:** operações sem efeito intermediário observável; devem ser semanticamente exatas, determinísticas e preservar duração nominal conhecida, sem microestados artificiais.
-- A ausência de microsequenciamento não é falha funcional quando a execução atômica atende ao contrato observável.
-- Nenhuma plataforma exige precisão universal por pino ou ciclo elétrico.
+No SHA-base, o caminho de produção é:
 
-## 3. Modelagem temporal em pausa
+`MinimalSmsWindow` → `TemporalSMSMachine` / PyO3 → `SmsTemporalWorker` → `SmsTemporalMachine` → `SmsTemporalBus` → `SmsVdp + ScheduledPsg`.
 
-Na consulta de 2026-11-05, as PRs #512, #514 e #526 estavam abertas/Draft e não integradas na main. A PR #527 também estava aberta/Draft e não integrada.
+- O worker Rust executa a máquina e publica o framebuffer RGB888 no mailbox de vídeo.
+- A sessão D3D12 consome frames completos em thread nativa separada.
+- O worker drena amostras do PSG e as encaminha à sessão de áudio quando configurada.
+- O frontend configura WASAPI por padrão e permite XAudio2/áudio desativado; falha de endpoint deve ser informada sem interromper a execução do vídeo.
+- A máquina temporal não declara que todos os jogos inicializam corretamente; a cobertura de frame existente antes da correção A/V validava dimensão e avanço, não conteúdo não preto nem amostras PCM não silenciosas.
 
-Essas propostas não são trabalho ativo. Não avançar em timeline racional, microsequenciamento universal, WAIT/TW genérico, BUSREQ/BUSACK ou representação de pinos sem primeiro identificar uma dependência observável de SMS ou SG-1000 e demonstrar que a menor solução funcional exige esse detalhe.
+## 4. Gates de funcionalidade A/V
 
-## 4. Validação
+Os seguintes critérios devem ser tratados separadamente:
 
-- Executar os gates Rust e Python no SHA candidato.
-- Testar a funcionalidade afetada e executar regressões SMS/SG-1000.
-- Usar ROMs de diagnóstico e referências independentes quando agregarem evidência.
-- Medir desempenho quando houver alteração no caminho crítico.
-- Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN; SKIPPED não é PASS.
+| Gate | Critério | Estado na main indicada |
+|---|---|---|
+| A/V-01 | ROM sintética configura VDP/VRAM/CRAM e produz ao menos um pixel RGB não preto | NOT RUN / sem teste integrado que prove o sinal |
+| A/V-02 | ROM sintética programa o PSG e produz amostras PCM não silenciosas | NOT RUN / sem teste integrado que prove o sinal |
+| A/V-03 | Worker publica frame RGB888 real do VDP no mailbox e sequência avança | Teste de conteúdo não preto adicionado na branch; CI NOT RUN |
+| A/V-04 | Sessão de áudio recebe PCM não silencioso sem erro/underrun sustentado | NOT RUN em dispositivo físico |
+| A/V-05 | Janela Windows apresenta imagem de jogo em GPU física e áudio é audível | NOT RUN |
+| A/V-06 | ROM de jogo representativa executa além do boot e permite medir FPS/frametime | NOT RUN |
 
-Nenhuma validação global de cycle-accuracy ou pin-accuracy é requisito universal.
+A branch `fix/sms-functional-av-baseline-20261106` adiciona testes sintéticos para A/V-01/A/V-02 e corrige a composição da linha INT. Os resultados só serão promovidos a PASS após CI no HEAD exato.
 
-## 5. Fontes de autoridade
+## 5. Prioridades de correção
+
+1. Preservar a linha INT externa e combinar sua origem com o IRQ de nível do VDP; salvar/restaurar as duas fontes separadamente.
+2. Provar, em ROM sintética determinística, pixels RGB não pretos e amostras PSG não silenciosas usando a mesma máquina do worker.
+3. Provar publicação do frame no mailbox e encaminhamento PCM à sessão nativa.
+4. Validar manualmente no Windows com GPU e endpoint de áudio reais; registrar região, ROM (hash apenas local), resolução, FPS, frametime, underruns e erros.
+5. Somente depois, localizar a primeira divergência em jogos comerciais fornecidos pelo usuário. Não versionar ROMs comerciais.
+6. Medir custo de instrumentação antes de usar telemetria no benchmark; observabilidade não pode ser confundida com desempenho de produção.
+
+## 6. Modelagem temporal e precisão
+
+- **Temporal prioritário:** I/O, registradores VDP/PSG, raster, mapper, IRQ/NMI e demais interações cuja ordem/duração altere gameplay.
+- **Atômico padrão:** operações sem efeito intermediário observável; devem continuar semanticamente exatas e determinísticas.
+- A ausência de fetch arbitration, WAIT físico ou dot-cycle não deve bloquear a primeira prova funcional de imagem e som.
+- Não adicionar JIT, frame skipping, hacks de timing ou lógica de hardware em Python.
+- Não declarar TEMPORAL_PASS, compatibilidade geral ou desempenho real sem evidência correspondente.
+
+## 7. Validação
+
+Executar no SHA candidato:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+```
+
+Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca equivale a PASS. Testes Windows/D3D12, Qt/PyO3 e hardware real devem ser reportados separadamente.
+
+## 8. Fontes de autoridade
 
 - [Roadmap mestre](project-roadmap.md)
 - [Escopo do projeto](project-scope.md)
 - [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
-- [Scorecard funcional do Z80](z80-completion-scorecard.md)
+- [Matriz de validação temporal VDP/PSG](architecture/sms-vdp-psg-temporal-validation.md)
+- [Scorecard Z80](z80-completion-scorecard.md)
 - [Matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md)
+- [Auditoria da baseline funcional A/V SMS — 2026-11-06](audits/sms-runtime-functional-baseline-2026-11-06.md)
 
-Auditorias datadas preservam evidências históricas; não devem ser usadas como status corrente sem reconciliação com a main.
+Fotografias e auditorias datadas anteriores continuam como evidência histórica dos respectivos SHAs; não substituem esta fotografia reconciliada.

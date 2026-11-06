@@ -5,6 +5,23 @@
 **Base inicial:** `b0bda60e3fbfa56f820fe77d3098f8b82b5af69d`  
 **Regra:** nenhuma linha desta matriz é PASS até existir teste executado no código integrado e evidência reproduzível.
 
+## 0. Gate funcional de imagem e áudio — pré-requisito de gameplay
+
+**Prioridade vigente em 2026-11-06:** antes de ampliar a precisão temporal ou medir desempenho de jogos, comprovar que o runtime SMS produz imagem e áudio não silenciosos e que as saídas nativas recebem esses sinais. Este gate não equivale a compatibilidade geral nem a TEMPORAL_PASS.
+
+| ID | Fronteira | Critério de aceite | Evidência exigida |
+|---|---|---|---|
+| A/V-01 | VDP / core | ROM sintética programa Mode 4, VRAM/name table e CRAM; frame concluído contém pixels RGB não pretos em coordenadas esperadas | Teste Rust determinístico com expected values; dimensão do frame isoladamente não basta |
+| A/V-02 | PSG / core | ROM sintética escreve registradores SN76489 e a timeline gera amostras PCM não silenciosas | Teste Rust determinístico: quantidade de amostras e amplitude não nula; estado de registrador isolado não basta |
+| A/V-03 | Worker / vídeo | O worker publica o framebuffer produzido pela máquina no mailbox como RGB888, com sequência crescente e pixels preservados | Teste do worker/mailbox com conteúdo conhecido |
+| A/V-04 | Worker / áudio | O PCM gerado chega à sessão nativa WASAPI/XAudio2 sem erro; underruns/dropped blocks são observados separadamente | Teste de integração da sessão e métricas; endpoint físico ainda requer teste manual |
+| A/V-05 | Host Windows | A janela D3D12 apresenta uma ROM de diagnóstico/jogo com imagem visível e o endpoint selecionado reproduz som audível | Teste manual em GPU e dispositivo de áudio reais; CI de compilação não substitui esta evidência |
+| A/V-06 | Gameplay | ROM legal/homebrew ou dump local fornecido pelo usuário ultrapassa o boot e permite interação reproduzível | Nome/região/configuração e SHA-256 apenas local; não versionar ROM comercial |
+
+Classificar cada critério separadamente como PASS, FAIL, BLOCKED ou NOT RUN. A ausência de teste ou a execução somente de smoke test com frame sintético é NOT RUN para a geração de imagem de jogo. A geração de PCM no core não é prova de saída física; inicializar WASAPI não é prova de áudio audível.
+
+A análise de desempenho real começa somente após A/V-01 a A/V-05 estarem comprovados. Registrar resolução, região, FPS, frametime por frame, frames publicados/apresentados, áudio underruns/dropped blocks e configuração do host. Telemetria que percorre framebuffer/VRAM/CRAM deve ser desativável ou ter seu overhead medido antes de comparar desempenho.
+
 ## 1. Classificação de evidência
 
 | Código | Evidência |

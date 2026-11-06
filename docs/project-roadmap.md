@@ -5,20 +5,26 @@
 **Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
-## Diretriz vigente — 2026-11-05
+## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 é fechar uma máquina Master System temporal completa antes de declarar gameplay operacional pelo novo caminho. A decisão aceita em [ADR SMS Temporal + Qt](architecture/ADR-sms-temporal-machine-qt-rebuild.md) substitui a reconstrução incremental da Qt.
+A prioridade imediata de P1 foi ajustada: **estabilizar uma baseline funcional de imagem e som no runtime SMS antes de ampliar a precisão temporal ou iniciar análise de desempenho real**.
 
-Ordem vertical atual:
-1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O.
-2. VDP SMS por revisão (315-5124/315-5246), incluindo raster, modos, sprites, IRQ, counters, overscan e coluna esquerda.
-3. Integração Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline.
-4. Fronteira PyO3 coarse-grained e interface operacional Qt para SMS/SG-1000: seletor de sistema/modelo, abrir ROM/ZIP e histórico das 15 recentes, Play/Pause/Stop/Reset, menus essenciais de vídeo/áudio/controles/região/opções e viewport alimentado pelo host gráfico Rust/D3D12. O contrato detalhado e seus critérios de aceite estão na seção **Contrato da primeira interface operacional** abaixo. Biblioteca com capas/scraping, automação ampla e ferramentas avançadas de diagnóstico permanecem fora desta entrega inicial.
-5. Retirada controlada do runtime SMS antigo somente após a nova máquina temporal, PyO3 e smoke test Qt passarem; preservar componentes Qt compartilhados e não regredir SG-1000.
+A `main` em `8bd7f6c78cacd247736268d141e4cc7e30805ccd` já contém a máquina temporal SMS, o worker Rust, o PSG agendado, o framebuffer RGB888, o mailbox e a sessão de apresentação D3D12. O frontend Qt/PyO3 já configura a saída de áudio nativa. Isso comprova a existência dos caminhos de integração, mas não comprova que uma ROM real produza pixels visíveis, áudio não silencioso ou gameplay funcional em GPU/endpoint físicos.
 
-A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). A implementação só avança de gate com testes executados e classificados individualmente. A interrupção temporária de gameplay pelo runtime SMS antigo foi aceita; isso não reduz o critério final de gameplay temporal funcional.
+Ordem vertical ativa:
 
-O objetivo é uma emulação funcionalmente correta e temporalmente fiel nos caminhos de execução que influenciam jogos e periféricos. O detalhamento temporal é prioritário para sequências de instruções e processos de gameplay sensíveis a ordem/duração; o restante usa operações atômicas determinísticas e semanticamente exatas. Não reproduzir pinos, fases elétricas ou estados internos sem efeito observável.
+1. **Interrupções:** conectar a saída IRQ de nível do VDP à entrada INT do Z80 sem sobrescrever fontes externas independentes; preservar o estado das linhas em export/restore.
+2. **Sinal de vídeo no core:** usar ROM sintética determinística para configurar Mode 4, VRAM/name table e CRAM e comprovar pixels RGB não pretos no frame produzido pelo VDP.
+3. **Sinal de áudio no core:** programar o SN76489 por I/O e comprovar que o PSG gera amostras PCM não silenciosas na timeline do Scheduler.
+4. **Saídas nativas:** comprovar que o worker publica o frame real no mailbox consumido pelo D3D12 e encaminha amostras PCM à sessão WASAPI/XAudio2, sem erro ou underrun persistente.
+5. **Validação Windows:** executar uma ROM de diagnóstico e um jogo representativo em GPU e dispositivo de áudio reais; registrar região, resolução, FPS, frametime, sequência de frames, underruns e erros. A validação manual não pode ser substituída por CI de compilação.
+6. **Desempenho e compatibilidade:** somente após imagem e som comprovados, medir o custo do runtime sem instrumentação intrusiva, identificar gargalos e ampliar a matriz de jogos. Corrigir a primeira divergência reproduzível, sem presumir que a IRQ seja a única causa de falhas de boot.
+
+A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). Os gates A/V são distintos dos gates de precisão temporal: pixels e amostras não silenciosas são pré-condições para o teste de saída, mas não comprovam compatibilidade geral, áudio físico ou TEMPORAL_PASS.
+
+A VDP atual produz composição por scanline; fetch arbitration, WAIT físico e efeitos intralinha continuam limitados/pendentes. Não bloquear a primeira baseline funcional por precisão elétrica ou por T-state que ainda não tenha consumidor demonstrado. A ADR-0016 permanece normativa: temporalidade prioritária nos caminhos de gameplay e execução atômica determinística no restante.
+
+O fechamento semântico global E7.7 do Z80 continua sendo uma frente independente. Não reiniciar E4C/E5/E6 nem promover E8 antes de fechar E7. A correção de IRQ do SMS deve preservar o núcleo compartilhado e não criar uma CPU por console.
 
 Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
 

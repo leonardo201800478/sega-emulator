@@ -25,7 +25,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 24;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 25;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +56,8 @@ pub enum SmsTemporalTraceEvent {
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
+    /// External INT source, kept separate from the VDP's wired-OR IRQ output.
+    pub external_int_line: Option<u8>,
     /// Absolute machine timestamp at which the active instruction began.
     pub instruction_started_at: Option<MachineTime>,
     pub bus: SmsTemporalBusState,
@@ -268,6 +270,7 @@ impl From<SmsTemporalM1Error> for SmsTemporalMachineError {
 pub struct SmsTemporalMachine {
     cpu: Z80MicroSequencer,
     bus: SmsTemporalBus,
+    external_int_line: Option<u8>,
     instruction_started_at: Option<MachineTime>,
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
@@ -287,6 +290,7 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            external_int_line: None,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -337,6 +341,7 @@ impl SmsTemporalMachine {
                 vdp_profile,
                 territory,
             )?,
+            external_int_line: None,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -350,6 +355,10 @@ impl SmsTemporalMachine {
 
     /// Start the next instruction and expose its first bus request.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
+        // Sample the VDP's level IRQ at the CPU instruction boundary. The
+        // dispatch path also synchronizes after each scheduled hardware event;
+        // this second boundary check prevents stale INT state before HALT M1.
+        self.sync_vdp_interrupt_line();
         let step = self.cpu.begin_instruction()?;
         self.instruction_started_at = Some(self.bus.now());
         Ok(step)
@@ -587,6 +596,9 @@ impl SmsTemporalMachine {
             .bus
             .dispatch_next()?
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+        // Re-evaluate the wired-OR INT level after the VDP clock and any I/O
+        // side effect at this Scheduler boundary, before the next CPU sample.
+        self.sync_vdp_interrupt_line();
         match dispatch {
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
@@ -892,10 +904,21 @@ impl SmsTemporalMachine {
     /// the line is sampled at each completed M1 T4. None deasserts INT.
     /// Signal changes do not advance machine time.
     pub fn set_int_line(&mut self, vector: Option<u8>) {
-        self.cpu.set_int_line(vector);
-        if let Some(vector) = vector {
-            self.bus.set_interrupt_vector(vector);
-        }
+        self.external_int_line = vector;
+        self.sync_vdp_interrupt_line();
+    }
+
+    /// Combine the independent external INT source with the VDP's level output.
+    /// The SMS VDP is wired onto the Z80 INT input; it must never deassert an
+    /// independently asserted source when its own request is inactive. During
+    /// VDP-only acknowledge, the undriven data bus resolves to the SMS pull-up
+    /// value ($FF), not a stale vector from a previously deasserted source.
+    fn sync_vdp_interrupt_line(&mut self) {
+        let vdp_irq = self.bus.vdp().interrupt_pending().then_some(0xFF);
+        let effective_line = self.external_int_line.or(vdp_irq);
+        self.bus
+            .set_interrupt_vector(effective_line.unwrap_or(0xFF));
+        self.cpu.set_int_line(effective_line);
     }
 
     /// Current mapper-backed memory (read-only).
@@ -923,6 +946,7 @@ impl SmsTemporalMachine {
         SmsTemporalMachineState {
             format_version: SMS_TEMPORAL_MACHINE_STATE_VERSION,
             cpu: self.cpu.export_state(),
+            external_int_line: self.external_int_line,
             instruction_started_at: self.instruction_started_at,
             bus: self.bus.export_state(),
             next_internal_cycle_id: self.next_internal_cycle_id,
@@ -946,7 +970,13 @@ impl SmsTemporalMachine {
         } else {
             cpu.pending_request()
         };
-        if expected_bus_request != state.bus.pending_request
+        let expected_int_line = state
+            .external_int_line
+            .or_else(|| bus.vdp().interrupt_pending().then_some(0xFF));
+        let expected_int_vector = expected_int_line.unwrap_or(0xFF);
+        if cpu.export_state().int_pending != expected_int_line
+            || state.bus.interrupt_vector != expected_int_vector
+            || expected_bus_request != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
             || state.pending_internal_tstates == Some(0)
@@ -1080,6 +1110,7 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu,
             bus,
+            external_int_line: state.external_int_line,
             instruction_started_at: state.instruction_started_at,
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
@@ -2954,8 +2985,84 @@ mod base_immediate_io_temporal_tests {
 }
 
 #[cfg(test)]
-mod temporal_frame_tests {
+mod temporal_interrupt_wiring_tests {
     use super::SmsTemporalMachine;
+
+    #[test]
+    fn vdp_irq_wiring_preserves_an_independent_external_int_source() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
+        machine.set_int_line(Some(0xCF));
+
+        machine.step_instruction(0).unwrap();
+        assert_eq!(machine.cpu().export_state().int_pending, Some(0xCF));
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        restored.step_instruction(0).unwrap();
+        assert_eq!(restored.cpu().export_state().int_pending, Some(0xCF));
+
+        restored.set_int_line(None);
+        assert_eq!(restored.export_state().bus.interrupt_vector, 0xFF);
+        restored.step_instruction(0).unwrap();
+        assert_eq!(restored.cpu().export_state().int_pending, None);
+    }
+
+    #[test]
+    fn step_frame_wires_vdp_vblank_irq_to_z80_and_services_halt_loop() {
+        let mut rom = vec![0; 0x8000];
+        let main: [u8; 26] = [
+            0xF3, // DI
+            0x31, 0xF0, 0xDF, // LD SP,$DFF0
+            0xED, 0x56, // IM 1
+            0x3E, 0x06, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0: Mode 4
+            0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3,
+            0xBF, // R1: 16 KB, display on, VBlank IRQ
+            0xFB, // EI
+            0x76, // HALT
+            0x18, 0xFD, // JR -3
+        ];
+        rom[..main.len()].copy_from_slice(&main);
+        let isr: [u8; 14] = [
+            0xF5, // PUSH AF
+            0xDB, 0xBF, // IN A,($BF): acknowledge VDP IRQ
+            0x3A, 0x00, 0xC0, // LD A,($C000)
+            0x3C, // INC A
+            0x32, 0x00, 0xC0, // LD ($C000),A
+            0xF1, // POP AF
+            0xFB, // EI
+            0xED, 0x4D, // RETI
+        ];
+        rom[0x38..0x38 + isr.len()].copy_from_slice(&isr);
+
+        let mut machine = SmsTemporalMachine::new_with_hardware_profile(
+            rom,
+            1,
+            3_579_545,
+            44_100,
+            super::SmsVdpProfile::sms1_t0_ntsc(),
+            super::Territory::Export,
+        )
+        .unwrap();
+        // A previously asserted external vector must not leak into the VDP's
+        // interrupt-acknowledge data bus after that external source is removed.
+        machine.set_int_line(Some(0xCF));
+        machine.set_int_line(None);
+        assert_eq!(machine.export_state().bus.interrupt_vector, 0xFF);
+
+        const FRAMES: u8 = 20;
+        for _ in 0..FRAMES {
+            machine.step_frame(100_000).unwrap();
+        }
+
+        assert_eq!(machine.vdp().registers()[1] & 0x60, 0x60);
+        assert_eq!(machine.memory().read(0xC000), FRAMES);
+        assert!(!machine.vdp().interrupt_pending());
+    }
+}
+
+#[cfg(test)]
+mod temporal_frame_tests {
+    use super::{SmsTemporalMachine, SmsVdpProfile, Territory};
 
     #[test]
     fn step_frame_returns_a_complete_sms1_rgb24_frame() {
@@ -2976,5 +3083,67 @@ mod temporal_frame_tests {
         assert!(machine.step_frame(0).is_err());
         assert_eq!(machine.frame_number(), 0);
         assert!(!machine.framebuffer().is_empty());
+    }
+
+    #[test]
+    fn synthetic_rom_produces_visible_sms1_pixels_and_nonzero_psg_samples() {
+        let mut rom = vec![0; 0x4000];
+        let mut program = vec![
+            0xF3, // DI
+            0x31, 0xF0, 0xDF, // LD SP,$DFF0
+            // SMS Mode 4, display enabled, name table at $3800.
+            0x3E, 0x06, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0
+            0x3E, 0xC0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1
+            0x3E, 0x0E, 0xD3, 0xBF, 0x3E, 0x82, 0xD3, 0xBF, // R2
+            // CRAM entry 1 = white.
+            0x3E, 0x01, 0xD3, 0xBF, 0x3E, 0xC0, 0xD3, 0xBF, 0x3E, 0x3F, 0xD3, 0xBE,
+            // Tile zero: plane zero set for all eight rows (palette index 1).
+            0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF,
+        ];
+        for _ in 0..8 {
+            // One byte per bitplane per row: only plane 0 is set, so every
+            // pixel selects background palette entry 1 (the white CRAM color).
+            program.extend([
+                0x3E, 0xFF, 0xD3, 0xBE, // Plane 0
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 1
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 2
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 3
+            ]);
+        }
+        program.extend([
+            // Tone channel 0, period 4, maximum volume.
+            0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E, 0x18,
+            0xFE, // JR -2
+        ]);
+        rom[..program.len()].copy_from_slice(&program);
+
+        let mut machine = SmsTemporalMachine::new_with_hardware_profile(
+            rom,
+            1,
+            3_579_545,
+            44_100,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+        .unwrap();
+
+        machine.step_frame(100_000).unwrap();
+
+        assert_eq!(
+            &machine.framebuffer()[32 * 256 * 3..32 * 256 * 3 + 3],
+            &[255, 255, 255],
+            "the Mode 4 background pixel at line 32 must use CRAM entry 1"
+        );
+        assert!(
+            machine
+                .framebuffer()
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .any(|pixel| pixel.iter().any(|channel| *channel != 0))
+        );
+        let samples = machine.drain_audio_samples(None);
+        assert!(!samples.is_empty());
+        assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
     }
 }
