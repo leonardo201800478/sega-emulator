@@ -591,7 +591,11 @@ mod tests {
             let _ = app.render(ui);
         });
 
-        assert!(!output.shapes.is_empty());
+        assert_ne!(
+    output.shapes.len(),
+    0,
+    "A interface deve produzir elementos visuais"
+);
         output.drop_without_applying_deltas();
     }
 }
