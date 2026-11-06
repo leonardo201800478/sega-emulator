@@ -6,7 +6,7 @@
 use sega_audio_runtime::{NativeAudioSession, PcmSink};
 
 /// Audio session accepted by the SMS runtime worker.
-pub trait AudioSession: Send {
+pub trait AudioSession {
     /// Process one machine-generated audio sample batch.
     fn process_samples(&mut self, samples: &[f64]) -> Result<(), String>;
 
