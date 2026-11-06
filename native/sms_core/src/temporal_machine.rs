@@ -3005,10 +3005,11 @@ mod temporal_interrupt_wiring_tests {
     #[test]
     fn step_frame_wires_vdp_vblank_irq_to_z80_and_services_halt_loop() {
         let mut rom = vec![0; 0x8000];
-        let main: [u8; 18] = [
+        let main: [u8; 26] = [
             0xF3, // DI
             0x31, 0xF0, 0xDF, // LD SP,$DFF0
             0xED, 0x56, // IM 1
+            0x3E, 0x06, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0: Mode 4
             0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1: 16 KB, display on, VBlank IRQ
             0xFB, // EI
             0x76, // HALT
