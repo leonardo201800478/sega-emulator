@@ -1,50 +1,65 @@
 # CI validation policy
 
-The CI workflow selects validation jobs from the files changed by a pull request.
-This reduces unrelated runner work without weakening validation for the affected
-project domains.
+The required CI path is Rust-first and must validate the native product without
+installing or executing the legacy Python application. Python, Qt and PyO3
+validation remains available only as an explicit, transitional diagnostic.
 
-## Required classification
+## Required validation
 
-The `Change impact classification` job runs for every pull request. It classifies
-changes into these domains:
-
-| Domain | Trigger paths | Validation |
+| Domain | Trigger | Required validation |
 | --- | --- | --- |
-| Rust | Rust sources, Cargo manifests/lockfiles, toolchain and Cargo config | Rust formatting, Clippy with warnings denied, lockfile audit, targeted SMS/SG-1000 tests and full Cargo workspace tests |
-| Python | Python sources/tests, Python project and test configuration, dependency lock | Ruff format, Ruff lint, Python regression suite and runtime imports |
-| Qt | Qt frontend, Qt/controller integration tests and Python runtime dependencies | Windows Qt/Python smoke test |
-| PowerShell tooling | `scripts/**/*.ps1`, project manager and tooling tests | Windows PowerShell parser validation |
-| PyO3/native bridge | Native crates participating in the Python/native machine bridge | Windows extension build and import |
-| Windows native media | D3D12 video and WASAPI/XAudio2 audio crates | Windows-target compile and native unit tests |
-| Scheduler | Machine scheduler and temporal core | Enables the optional scheduler stress profile when requested |
+| Rust | Every pull request and push to `main` | Cargo workspace metadata/lockfile checks, rustfmt, Clippy with warnings denied, targeted SMS/SG-1000 tests and full Cargo workspace tests |
+| Native application | Changes to `native/sega_app/**` and application manifests | Windows x64 eframe check, Clippy and headless tests |
+| Windows native media | Required CI | D3D12/video-runtime compile and tests; WASAPI/XAudio2/audio-output compile and tests |
+| Scheduler | Scheduler/temporal changes, broad changes, or explicit stress label/profile | Deterministic stress profile; skipped profiles remain NOT RUN |
+| PowerShell tooling | Changes to project PowerShell scripts | Windows PowerShell parser validation |
 
-Changes to workflow definitions, root build/dependency manifests, toolchain
-configuration, or shared project tooling trigger the broad validation set.
+The required Rust CI validates the active Cargo workspaces explicitly with
+`cargo metadata --locked`. It must not invoke `tools/project_manager.py` or
+install Python merely to audit Cargo manifests or lockfiles.
+
+## Transitional legacy validation
+
+The following checks are no longer required on ordinary pull requests or pushes:
+
+- Python Ruff formatting and lint;
+- Python pytest collection and regression;
+- PySide6/Qt runtime import and smoke tests;
+- PyO3/Maturin extension build, import and Python integration tests.
+
+They remain available through the CI workflow's manual
+`workflow_dispatch` input `run_legacy_python_validation`. This preserves a
+diagnostic path while the Rust application reaches functional parity, without
+making the legacy frontend a gate for new Rust-only changes.
+
+A normal PR that does not explicitly dispatch the legacy validation records
+those suites as **NOT RUN**, never PASS. A manually dispatched run must be
+evaluated against its exact SHA and reported separately from required Rust CI.
+
+Do not remove Python modules, PySide6, PyO3, Maturin, their lock/configuration,
+or their historical tests merely because their CI checks became opt-in. Their
+removal remains gated by the corresponding Rust replacement, parity tests,
+migration inventory and the approved removal milestone.
 
 ## Execution policy
 
-- Pull requests run only the validation domains selected by the classifier.
-- Pushes to `main` run the full CI matrix as post-merge regression.
-- Manual lockfile refresh remains an explicit workflow-dispatch operation.
-- Scheduler stress remains opt-in for ordinary scoped changes (short/long profile
-  or the corresponding PR label) because it is intentionally resource-intensive.
-- Broad validation (`full`) automatically runs the bounded short Scheduler stress
-  profile so workflow/toolchain/shared-contract changes exercise the temporal gate.
-- The Python job uses the `uv` cache keyed by `pyproject.toml` and `uv.lock`; a
-  separate pip cache is omitted because that job installs dependencies through uv.
-- Manual Z80 conformance and Qt/native integration workflows remain available
-  for milestone, architecture, and release validation.
-- A skipped domain means it was not applicable to that change; it is not recorded
-  as a passing test suite. The classifier itself must pass for every PR.
+- Pull requests and pushes to `main` run the required Rust/native validation.
+- Legacy Python/Qt/PyO3 validation runs only when a maintainer explicitly
+  dispatches CI with `run_legacy_python_validation=true`.
+- Cargo lockfile refresh remains a separate manual operation.
+- Scheduler stress remains opt-in for ordinary scoped changes and is enabled
+  for scheduler/broad changes or explicit labels/profiles.
+- A skipped or unrequested validation is NOT RUN, not PASS.
+- CI results are valid only for the exact commit SHA whose checks completed.
 
 ## Safety requirements
 
-A domain must be added to the classifier whenever new crates, runtime boundaries,
-or platform-specific components are introduced. Shared contracts (scheduler,
-temporal core, public interfaces, serialization formats, and workspace manifests)
-must continue to trigger broad validation.
+The CI selection is an optimization of the migration's validation path, not
+permission to claim feature parity. Rust changes must still run the relevant
+Rust, Windows-native and deterministic Scheduler tests. Hardware-dependent
+D3D12, audio endpoint, input, display and gameplay checks remain separate
+manual acceptance gates where the hosted runner cannot prove physical behavior.
 
-The CI selection is an optimization of *which* checks run, not a reduction in
-the acceptance criteria for the affected code. Changes with architectural or
-cross-domain impact must expand the test scope even if the diff is small.
+Python checks may be removed permanently only after the Python runtime and
+all active consumers have been replaced and the migration inventory confirms
+that no production path depends on Python, PySide6, PyO3 or Maturin.
