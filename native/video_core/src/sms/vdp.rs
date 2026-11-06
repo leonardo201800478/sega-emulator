@@ -366,8 +366,7 @@ impl SmsVdp {
     /// positions per 228 Z80 T-states. The counter samples the previous HPos,
     /// wraps at the line boundary, subtracts 46, and divides by two.
     pub fn latch_h_counter(&mut self) {
-        let hpos = (u64::from(self.tstates_into_line) * 3 / 2)
-            % SMS_HCOUNTER_POSITIONS_PER_LINE;
+        let hpos = (u64::from(self.tstates_into_line) * 3 / 2) % SMS_HCOUNTER_POSITIONS_PER_LINE;
         let previous_hpos = if hpos == 0 {
             SMS_HCOUNTER_POSITIONS_PER_LINE - 1
         } else {
@@ -2422,13 +2421,7 @@ mod tests {
 
     #[test]
     fn h_counter_conversion_matches_sms_reference_positions() {
-        for (tstates, expected) in [
-            (0, 0x93),
-            (1, 0xE9),
-            (31, 0xFF),
-            (32, 0x00),
-            (136, 0x4E),
-        ] {
+        for (tstates, expected) in [(0, 0x93), (1, 0xE9), (31, 0xFF), (32, 0x00), (136, 0x4E)] {
             let mut vdp = SmsVdp::default();
             vdp.advance(tstates);
             vdp.latch_h_counter();
