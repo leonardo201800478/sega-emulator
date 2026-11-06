@@ -19,12 +19,8 @@
 
 ## PR #609 validation
 
-- `cargo fmt --all -- --check`: PASS on SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13` after correcting the initial formatting failure.
-- `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS on that SHA after correcting the audio-session thread-ownership contract and target-gating the Windows mailbox command.
-- `cargo test --workspace --locked`: PASS on that SHA.
-- `Scheduler deterministic stress`: PASS on that SHA.
-- `Windows PowerShell tooling syntax`: PASS on that SHA.
-- `Windows x64/D3D12 compile`: PASS on that SHA, including the native egui shell, SMS runtime target check/Clippy, and PowerShell workspace audit/lock validation.
+- On SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, run `42255686065` reported **success** for the required jobs: `cargo fmt --all -- --check`, workspace Clippy with `-D warnings`, workspace tests, Scheduler deterministic stress, Windows PowerShell tooling syntax and Windows x64/D3D12 compile/tests.
+- The workflow aggregate conclusion was `cancelled`, even though those required jobs each concluded `success`; the manual lockfile-refresh job was `skipped`. Treat the individual required-job conclusions as PASS for that SHA, not as a fully successful aggregate workflow.
 - After the validated candidate SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, the branch received formatting-only corrections and a temporal CPU RESET implementation with tests for peripheral/timeline preservation and rejection during an in-flight instruction.
 - Those later commits have no confirmed CI result in this audit. Formatting, Clippy, workspace tests, Scheduler stress and Windows/D3D12 on the exact latest HEAD remain NOT RUN until a run is observed.
 - Physical D3D12 presentation, WASAPI/XAudio2 output and input latency: NOT RUN.
