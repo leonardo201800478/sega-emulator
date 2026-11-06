@@ -251,3 +251,30 @@ Este aditivo supersede os estados históricos anteriores que ainda listavam E7.6
 - **E7.7 — auditoria semântica integral:** permanece IN_PROGRESS. A divergência de flags de I/O em bloco continua sem oráculo independente: UM008011-0816 declara C não afetado em INI/IND, enquanto a referência secundária descreve C/H derivados de soma. A implementação atual segue a hipótese secundária de compatibilidade NMOS; vetores SingleStepTests com ancestralidade em Ares não provam silício independente. `OUT (C),0` também permanece variante-dependente.
 - **E8:** BLOCKED até o fechamento formal de E7. Não iniciar ZEXDOC/ZEXALL ou declarar DIFFERENTIAL_PASS antes de resolver a evidência semântica pendente.
 - **E9:** permanece posterior à integração temporal observável e à comprovação de determinismo; não há TEMPORAL_PASS global.
+
+
+---
+
+## Aditivo — reconciliação E7.7 na main de 2026-11-06
+
+**Baseline atual:** `08d9fac1d30a659bde8298e7da2f8ae1d75510d1` (PR #584 integrada). Este aditivo prevalece sobre classificações históricas anteriores quando houver conflito, sem apagar a trilha de auditoria.
+
+### Evidências integradas desde a baseline antiga
+
+- PR #562 integrou a correção do erratum P/V de `LD A,I` e `LD A,R` no microsequenciador, distinguindo INT de NMI e consumindo o latch após uma instrução intermediária. Os testes incluem snapshot/restore.
+- PR #563 integrou testes para as flags das oito instruções de I/O em bloco, para DD/FD `LD r,r'` e para DD/FD half-register ALU e INC/DEC. As matrizes são regressões matemáticas/funcionais independentes da implementação do decoder em alguns aspectos, mas não são oráculos de silício.
+- `docs/audits/z80-e7-block-io-flags-2026-11-05.md` conclui que o runtime atômico e o microsequenciador correspondem às fórmulas pesquisadas para Zilog NMOS; nenhuma alteração de runtime foi justificada para essa subquestão.
+
+### Classificação corrigida de I/O em bloco
+
+As flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR ficam **caracterizadas para o perfil Zilog NMOS**, não universalmente comprovadas para CMOS e clones. A evidência experimental citada é de hardware Z80 NMOS em plataforma ZX, não de cada revisão do Master System. A diferença NMOS/CMOS permanece NOT VERIFIED e a validação direta no SMS físico permanece NOT RUN.
+
+### Pendências que permanecem
+
+- E7.7 global continua IN_PROGRESS: a auditoria integral de todas as famílias/efeitos semânticos não está concluída.
+- `OUT (C),0` continua variante-dependente; não escolher um comportamento universal sem evidência do perfil-alvo.
+- Não promover as matrizes de half-register e I/O em bloco a DIFFERENTIAL_PASS ou TEMPORAL_PASS; os modelos e vetores não são um oráculo independente de silício.
+- E8 permanece BLOCKED até o fechamento documentado de E7. Não iniciar ZEXDOC/ZEXALL nesta etapa.
+- E7/E9 não exigem traces elétricos universais nem microsequenciamento de instruções puramente internas; aplicar ADR-0016 e priorizar efeitos observáveis pelo SMS/SG-1000.
+
+**Status:** evidência atualizada; E7.7 ainda não encerrada.
