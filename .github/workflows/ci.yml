@@ -457,10 +457,14 @@ jobs:
         run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Compile native video runtime for Windows x64
         run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
+      - name: Clippy native video runtime for Windows x64
+        run: cargo clippy --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
       - name: Run Windows video-runtime unit tests
         run: cargo test --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
       - name: Compile native WASAPI and XAudio2 output
         run: cargo check --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Clippy native WASAPI and XAudio2 output
+        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
       - name: Run native audio-output unit tests
         run: cargo test --locked --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
