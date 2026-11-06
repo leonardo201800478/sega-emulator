@@ -11,6 +11,8 @@ resolver = "3"
 [target.'cfg(windows)'.dependencies]
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "wgpu", "wayland", "x11"] }
 raw-window-handle = "=0.6.2"
+rfd = "=0.17.2"
+zip = { version = "=9.4.1", default-features = false, features = ["deflate"] }
 sega-video-runtime = { path = "../video_runtime" }
 sega-sms-runtime = { path = "../../rust/runtime/sms-runtime" }
 

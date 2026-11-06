@@ -1,17 +1,36 @@
 use std::fs;
+use std::io::{Read, Seek};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use rfd::FileDialog;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
+use zip::ZipArchive;
+
+const MAX_ROM_SIZE_BYTES: u64 = 16 * 1024 * 1024;
+const APP_DATA_DIRECTORY: &str = "Sega Emulator";
+const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
-#[derive(Default)]
 pub struct SegaApp {
     rom_path: String,
     region: String,
+    last_rom_directory: Option<PathBuf>,
     native_viewport: NativeViewportState,
+}
+
+impl Default for SegaApp {
+    fn default() -> Self {
+        Self {
+            rom_path: String::new(),
+            region: String::new(),
+            last_rom_directory: load_last_rom_directory(),
+            native_viewport: NativeViewportState::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -126,6 +145,7 @@ impl SegaApp {
         let mut viewport_rect = egui::Rect::NOTHING;
         let mut command = None;
         let mut load_requested = false;
+        let mut browse_requested = false;
 
         ui.vertical(|ui| {
             render_header(ui);
@@ -133,6 +153,7 @@ impl SegaApp {
                 ui,
                 &mut self.rom_path,
                 &mut self.region,
+                &mut browse_requested,
                 &mut load_requested,
             );
             render_machine_controls(ui, &self.native_viewport, &mut command);
@@ -141,6 +162,9 @@ impl SegaApp {
             render_footer(ui);
         });
 
+        if browse_requested {
+            self.open_rom_dialog(frame);
+        }
         if load_requested {
             self.load_rom_from_path();
         }
@@ -151,22 +175,48 @@ impl SegaApp {
         viewport_rect
     }
 
-    fn load_rom_from_path(&mut self) {
-        let path = self.rom_path.trim();
-        if path.is_empty() {
+    /// Open the native Windows file picker, parented to the main application window.
+    fn open_rom_dialog(&mut self, frame: &eframe::Frame) {
+        let Some(window) = frame.winit_window() else {
             self.native_viewport.error =
-                Some("Informe o caminho de uma ROM .sms ou .bin".to_owned());
+                Some("A janela principal ainda não está disponível para abrir o seletor de ROM".to_owned());
+            return;
+        };
+
+        let mut dialog = FileDialog::new()
+            .set_title("Selecionar ROM do Sega Master System")
+            .add_filter("ROM do Master System", &["sms", "zip"]);
+        if let Some(directory) = self.last_rom_directory.as_ref() {
+            dialog = dialog.set_directory(directory);
+        }
+
+        if let Some(path) = dialog.set_parent(window).pick_file() {
+            self.rom_path = path.to_string_lossy().into_owned();
+            if let Some(directory) = path.parent().filter(|path| path.is_dir()) {
+                self.last_rom_directory = Some(directory.to_path_buf());
+                if let Err(error) = save_last_rom_directory(directory) {
+                    self.native_viewport.error = Some(format!(
+                        "ROM selecionada, mas não foi possível salvar o último diretório: {error}"
+                    ));
+                    return;
+                }
+            }
+            self.native_viewport.error = None;
+        }
+    }
+
+    fn load_rom_from_path(&mut self) {
+        let path = Path::new(self.rom_path.trim());
+        if path.as_os_str().is_empty() {
+            self.native_viewport.error =
+                Some("Selecione ou informe o caminho de uma ROM .sms ou .zip".to_owned());
             return;
         }
 
-        let rom = match fs::read(path) {
-            Ok(rom) if !rom.is_empty() => rom,
-            Ok(_) => {
-                self.native_viewport.error = Some("O arquivo da ROM está vazio".to_owned());
-                return;
-            }
+        let rom = match read_rom_file(path) {
+            Ok(rom) => rom,
             Err(error) => {
-                self.native_viewport.error = Some(format!("Não foi possível ler a ROM: {error}"));
+                self.native_viewport.error = Some(error);
                 return;
             }
         };
@@ -384,6 +434,116 @@ impl eframe::App for SegaApp {
     }
 }
 
+
+/// Read a raw SMS image or extract the single SMS image contained in a ZIP archive.
+fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default();
+
+    if extension.eq_ignore_ascii_case("sms") {
+        let rom = fs::read(path)
+            .map_err(|error| format!("Não foi possível ler a ROM: {error}"))?;
+        if rom.is_empty() {
+            return Err("O arquivo da ROM está vazio".to_owned());
+        }
+        if rom.len() as u64 > MAX_ROM_SIZE_BYTES {
+            return Err("A ROM excede o limite de 16 MiB aceito pelo carregador".to_owned());
+        }
+        return Ok(rom);
+    }
+
+    if extension.eq_ignore_ascii_case("zip") {
+        let file = fs::File::open(path)
+            .map_err(|error| format!("Não foi possível abrir o arquivo ZIP: {error}"))?;
+        return read_sms_from_zip(file);
+    }
+
+    Err("Formato não suportado. Selecione um arquivo .sms ou .zip".to_owned())
+}
+
+/// Extract the only non-directory .sms entry from a ZIP archive.
+///
+/// Requiring exactly one candidate avoids silently booting the wrong game when
+/// an archive contains multiple ROM images. The uncompressed-size cap limits
+/// memory consumption when opening malformed or oversized archives.
+fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
+    let mut archive = ZipArchive::new(reader)
+        .map_err(|error| format!("Arquivo ZIP inválido ou não suportado: {error}"))?;
+    let mut sms_entries = Vec::new();
+
+    for index in 0..archive.len() {
+        let is_sms = {
+            let entry = archive
+                .by_index(index)
+                .map_err(|error| format!("Não foi possível inspecionar o ZIP: {error}"))?;
+            !entry.is_dir()
+                && Path::new(entry.name())
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("sms"))
+        };
+        if is_sms {
+            sms_entries.push(index);
+        }
+    }
+
+    let index = match sms_entries.as_slice() {
+        [] => return Err("O ZIP não contém nenhum arquivo .sms".to_owned()),
+        [index] => *index,
+        _ => return Err("O ZIP contém mais de um arquivo .sms; mantenha apenas a ROM desejada".to_owned()),
+    };
+
+    let mut entry = archive
+        .by_index(index)
+        .map_err(|error| format!("Não foi possível abrir a ROM dentro do ZIP: {error}"))?;
+    if entry.size() == 0 {
+        return Err("A ROM dentro do ZIP está vazia".to_owned());
+    }
+    if entry.size() > MAX_ROM_SIZE_BYTES {
+        return Err("A ROM dentro do ZIP excede o limite de 16 MiB".to_owned());
+    }
+
+    let mut rom = Vec::with_capacity(entry.size() as usize);
+    entry
+        .take(MAX_ROM_SIZE_BYTES + 1)
+        .read_to_end(&mut rom)
+        .map_err(|error| format!("Falha ao descompactar a ROM: {error}"))?;
+    if rom.is_empty() {
+        return Err("A ROM dentro do ZIP está vazia".to_owned());
+    }
+    if rom.len() as u64 > MAX_ROM_SIZE_BYTES {
+        return Err("A ROM descompactada excede o limite de 16 MiB".to_owned());
+    }
+
+    Ok(rom)
+}
+
+/// Return the per-user settings directory used to persist the last ROM folder.
+fn rom_settings_directory() -> Option<PathBuf> {
+    std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .map(|directory| directory.join(APP_DATA_DIRECTORY))
+}
+
+/// Restore the last directory used by the ROM picker, if it still exists.
+fn load_last_rom_directory() -> Option<PathBuf> {
+    let settings_file = rom_settings_directory()?.join(LAST_ROM_DIRECTORY_FILE);
+    let directory = PathBuf::from(fs::read_to_string(settings_file).ok()?.trim());
+    directory.is_dir().then_some(directory)
+}
+
+/// Persist only the last selected directory; the ROM itself is not copied.
+fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
+    let settings_directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&settings_directory)?;
+    fs::write(
+        settings_directory.join(LAST_ROM_DIRECTORY_FILE),
+        directory.to_string_lossy().as_bytes(),
+    )
+}
+
 fn render_header(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.heading("Sega Emulator");
@@ -401,11 +561,17 @@ fn render_rom_controls(
     ui: &mut egui::Ui,
     rom_path: &mut String,
     region: &mut String,
+    browse_requested: &mut bool,
     load_requested: &mut bool,
 ) {
     ui.horizontal(|ui| {
-        ui.label("ROM (.sms/.bin):");
-        ui.text_edit_singleline(rom_path);
+        ui.label("ROM:");
+        ui.add(
+            egui::TextEdit::singleline(rom_path)
+                .desired_width(420.0)
+                .hint_text("Cole o caminho ou procure um arquivo .sms/.zip"),
+        );
+        *browse_requested = ui.button("Procurar...").clicked();
         *load_requested = ui.button("Carregar ROM").clicked();
     });
     ui.horizontal(|ui| {
@@ -581,6 +747,7 @@ fn to_win32_pixel(value: f32) -> i32 {
 mod tests {
     use super::SegaApp;
     use eframe::egui;
+    use std::io::{Cursor, Write};
 
     #[test]
     fn application_shell_renders_without_native_window_or_hardware() {
@@ -597,5 +764,35 @@ mod tests {
             "A interface deve produzir elementos visuais"
         );
         output.drop_without_applying_deltas();
+    }
+
+    #[test]
+    fn zip_loader_reads_the_only_sms_entry() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file("games/test.sms", zip::write::SimpleFileOptions::default())
+            .expect("ZIP entry should be created");
+        writer.write_all(&[0xAA, 0x55, 0x01]).expect("ROM bytes should be written");
+        let archive = writer.finish().expect("ZIP archive should be finalized");
+
+        let rom = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
+            .expect("single SMS entry should load");
+        assert_eq!(rom, [0xAA, 0x55, 0x01]);
+    }
+
+    #[test]
+    fn zip_loader_rejects_archives_with_multiple_sms_entries() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for name in ["one.sms", "two.SMS"] {
+            writer
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .expect("ZIP entry should be created");
+            writer.write_all(&[0x00]).expect("ROM byte should be written");
+        }
+        let archive = writer.finish().expect("ZIP archive should be finalized");
+
+        let error = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
+            .expect_err("ambiguous archives must be rejected");
+        assert!(error.contains("mais de um arquivo .sms"));
     }
 }
