@@ -7,7 +7,7 @@
 
 ## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela, formalizada pela [ADR 0009](architecture/adr/0009-full-rust-application-egui-eframe.md), e não substitui nem reordena os gates de hardware.
+A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela, formalizada pela [ADR 0009](adr/0009-full-rust-application-egui-eframe.md), e não substitui nem reordena os gates de hardware.
 
 **Estado remoto confirmado nesta atualização:** `main` em `333900ae35a87b2430caedd2edf26218f272c8a6`, merge da PR #601. A PR #602 (CI Rust-first/Python legado opt-in) foi integrada anteriormente em `1a10779a37cf4da512186104bb5041552559a000`. O relatório detalhado da migração, incluindo escopo integrado, limites e próximos gates, está em [status da migração Rust — 2026-11-06](architecture/rust-application-migration-status-2026-11-06.md).
 
