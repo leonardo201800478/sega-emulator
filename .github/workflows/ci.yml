@@ -289,3 +289,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
+  temp-app-lock-refresh:
+    # Temporary lockfile regeneration aid for the SMS app integration PR.
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/rust-app-sms-runtime-viewport-20261106'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - name: Resolve standalone sega-app lockfile
+        run: cargo metadata --format-version 1 --manifest-path native/sega_app/Cargo.toml > /dev/null
+      - name: Upload resolved sega-app lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: sega-app-lockfile-preview
+          path: native/sega_app/Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
