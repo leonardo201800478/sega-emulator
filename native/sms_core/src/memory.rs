@@ -10,8 +10,9 @@
 //! Reference: https://www.smspower.org/Development/MemoryMap
 //! Standard cartridges retain the documented 6-bit bank-address limit (1 MiB).
 //! A distinct extended profile supports 8-bit bank addressing (4 MiB) for
-//! homebrew cartridges whose TMR SEGA header and power-of-two image size select
-//! that profile. This models a custom mapper extension, not baseline hardware.
+//! homebrew cartridges larger than 1 MiB with a TMR SEGA header. This models a
+//! custom mapper extension, not baseline hardware; non-power-of-two images do
+//! not gain implicit bank mirroring.
 
 use crate::{CartridgeImage, SmsCoreError};
 
