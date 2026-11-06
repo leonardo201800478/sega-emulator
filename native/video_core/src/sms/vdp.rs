@@ -2376,8 +2376,9 @@ mod tests {
     #[test]
     fn r8_write_at_hpos_21_updates_the_current_scanline() {
         let mut actual = setup_midline_write_fixture();
+        actual.write_port(0xBF, 8);
         actual.advance(14);
-        reg(&mut actual, 8, 8);
+        actual.write_port(0xBF, 0x88);
         actual.advance(214);
 
         let mut expected = setup_midline_write_fixture();
@@ -2394,8 +2395,9 @@ mod tests {
     #[test]
     fn r8_write_after_hpos_21_updates_only_the_next_scanline() {
         let mut actual = setup_midline_write_fixture();
+        actual.write_port(0xBF, 8);
         actual.advance(15);
-        reg(&mut actual, 8, 8);
+        actual.write_port(0xBF, 0x88);
         actual.advance(213);
 
         let mut expected_current = setup_midline_write_fixture();
