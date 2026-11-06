@@ -1097,10 +1097,7 @@ mod tests {
             endpoint_submissions > 0,
             "{backend} accepted no PCM-bearing endpoint buffers"
         );
-        assert_eq!(
-            dropped_blocks, 0,
-            "{backend} dropped queued PCM blocks"
-        );
+        assert_eq!(dropped_blocks, 0, "{backend} dropped queued PCM blocks");
         assert_eq!(
             output_error, None,
             "{backend} reported an asynchronous output error"
