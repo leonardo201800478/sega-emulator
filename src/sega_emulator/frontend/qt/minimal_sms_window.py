@@ -373,9 +373,25 @@ class MinimalSmsWindow(QMainWindow):
             return
 
         previous_region = self._region
+        previous_audio = (
+            self._audio_backend,
+            self._preferences.audio_sample_rate,
+            self._preferences.audio_buffer_size,
+            self._preferences.audio_queue_blocks,
+            self._preferences.audio_volume,
+            self._preferences.audio_balance,
+        )
         self._preferences = dialog.preferences()
         self._audio_backend = dialog.selected_audio_backend
         self._region = dialog.selected_region
+        current_audio = (
+            self._audio_backend,
+            self._preferences.audio_sample_rate,
+            self._preferences.audio_buffer_size,
+            self._preferences.audio_queue_blocks,
+            self._preferences.audio_volume,
+            self._preferences.audio_balance,
+        )
         self._preferences.save_to_store(self._settings)
         self._settings.setValue("sms_audio_backend", self._audio_backend)
         self._settings.setValue("sms_region_preference", self._region)
@@ -388,7 +404,7 @@ class MinimalSmsWindow(QMainWindow):
             self._region,
         )
 
-        if self._machine is not None:
+        if self._machine is not None and current_audio != previous_audio:
             self._audio_output_error = self._configure_audio_output(self._machine)
             self.statusBar().showMessage(self._audio_status_text())
         if self._machine is not None and self._region != previous_region:
