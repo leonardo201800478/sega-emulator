@@ -494,6 +494,7 @@ impl SmsTemporalWorker {
     }
 
     #[cfg(test)]
+    #[cfg(test)]
     pub(super) fn audio_endpoint_submission_count(&self) -> u64 {
         self.telemetry
             .audio_endpoint_submissions
@@ -823,6 +824,7 @@ fn handle_command(
             }
             telemetry.set_audio_error(None);
             telemetry.set_audio_metrics((0, 0));
+            #[cfg(test)]
             telemetry.set_audio_endpoint_submissions(0);
             let _ = reply.send(());
         }
