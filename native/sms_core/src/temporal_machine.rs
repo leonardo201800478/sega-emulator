@@ -3104,7 +3104,10 @@ mod temporal_frame_tests {
 
         machine.step_frame(100_000).unwrap();
 
-        assert!(machine.framebuffer().chunks_exact(3).any(|pixel| pixel != [0, 0, 0]));
+        assert!(machine
+            .framebuffer()
+            .chunks_exact(3)
+            .any(|pixel| pixel.iter().any(|channel| *channel != 0)));
         let samples = machine.drain_audio_samples(None);
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
