@@ -33,7 +33,7 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 | `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; overflow, half-carry e carry de entrada têm casos específicos, mas não é varredura combinatória |
 | `42, 52, 62, 72` | SBC HL,BC/DE/HL/SP | Usa borrow/carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; borrow e fronteiras aritméticas têm casos específicos, mas não é varredura combinatória |
 | `40,48,50,58,60,68,70,78` | IN r,(C) | Lê porta BC; destino código 6 descarta o valor; atualiza S/Z/PV/X/Y e preserva C; WZ=BC+1 | 12 | Teste com bus de I/O verifica os oito destinos, endereço BC e flags para valor 0xA5; falta varredura de valores/estados |
-| `41,49,51,59,61,69,71,79` | OUT (C),r / OUT (C),0 | Escreve registrador para porta BC; código 6 escreve zero | 12 | Teste com bus de I/O verifica os oito valores/endereços e preservação de flags; `OUT (C),0` permanece dependente da variante-alvo |
+| `41,49,51,59,61,69,71,79` | OUT (C),r / OUT (C),0 | Escreve registrador para porta BC; código 6 escreve zero no perfil NMOS adotado para SMS1 | 12 | Teste com bus de I/O verifica os oito valores/endereços e preservação de flags. BOMs SMS1 consultadas identificam NEC D780C-1 ou Zilog Z0840004PSC, ambos NMOS; CMOS Z84C00 não está no perfil suportado |
 | `44,4C,54,5C,64,6C,74,7C` | NEG e aliases | Calcula 0−A usando helper de subtração e atualiza A/F | 8 | Os oito aliases são comparados com A=0x80; faltam os demais valores de fronteira |
 | `45,4D,55,5D,65,6D,75,7D` | RETN / RETI / aliases | Todos executam pop de PC, copiam IFF2 para IFF1 e atualizam WZ | 14 | Vetores dirigidos percorrem os oito aliases, PC/SP e cópia IFF2→IFF1. O modelo não emite evento externo distinto para RETI/daisy chain |
 | `46,4E,66,6E` | IM 0 / aliases | Define modo de interrupção 0 | 8 | Todos os aliases IM 0 têm vetor dirigido |
@@ -100,7 +100,7 @@ O mesmo handler cobre os oito bytes e sempre restaura IFF1 a partir de IFF2. Iss
 
 ### 4.3 I/O por (C)
 
-IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa fases de barramento nem o wait state de I/O. `IN (C)` (código destino 6) descarta o valor e atualiza flags; `OUT (C),0` escreve zero conforme a implementação. O comportamento de saída zero deve ser documentado para a variante escolhida e testado em relação à fonte independente apropriada.
+IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa fases de barramento nem o wait state de I/O. `IN (C)` (código destino 6) descarta o valor e atualiza flags; `OUT (C),0` escreve zero conforme a implementação. O código atual e os testes adotam saída `0x00`, correspondente ao perfil NMOS usado como baseline para SMS1. A documentação de placas SMS1 consultada identifica CPUs NEC D780C-1 ou Zilog Z0840004PSC; as folhas de dados classificam ambas as famílias como NMOS. Fontes secundárias documentam `0xFF` em Zilog CMOS Z84C00. O runtime não oferece atualmente seleção de variante CMOS; não generalizar o resultado NMOS para clones ou CMOS.
 
 ### 4.4 Flags, WZ e estado de interrupção
 
@@ -130,6 +130,8 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 | Registradores especiais e flags | `ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags`, `ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry`, `int_acknowledge_clears_pv_after_ld_a_i_and_ld_a_r_even_after_snapshot_restore`, `normal_instruction_consumes_ld_a_i_r_erratum_latch_without_clearing_pv`, `nmi_after_ld_a_i_or_r_does_not_apply_maskable_interrupt_pv_erratum` e testes atômicos correspondentes | **PENDING CI** nesta branch; hardware físico não executado nesta sessão |
 | NEG, IM e RETN/RETI | `ed_neg_aliases_produce_identical_results_and_flags`, `ed_interrupt_mode_aliases_select_the_documented_mode`, `ed_retn_reti_aliases_restore_iff1_and_pop_return_address` | **PASS** |
 | IN/OUT por BC | `ed_in_out_register_forms_use_bc_port_and_expected_data`: todos os destinos/fontes, endereço BC, flags de IN e saída zero do modelo | **PASS** |
+| Transferências ED em `nn=FFFF` | `ed_absolute_word_transfers_wrap_at_ffff_for_all_register_pairs`: BC/DE/HL/SP, ordem low/high, wrap em `0000`, WZ e PC | **PENDING CI** no candidato desta auditoria |
+| NEG e aliases — fronteiras | `ed_neg_aliases_cover_documented_operand_boundaries`: A=00/01/7F/80/FF nos oito aliases, resultado, flags e 8 T-states | **PENDING CI** no candidato desta auditoria |
 | RRD/RLD | `ed_rrd_rld_match_nibble_transfer_and_documented_flags`: nibbles, A, memória, flags e WZ | **PASS** |
 | LDI/LDD/LDIR/LDDR | `ed_block_transfer_vectors_check_copy_direction_counter_flags_and_repeat` | **PASS** |
 | CPI/CPD/CPIR/CPDR | `ed_block_compare_vectors_check_match_stop_repeat_and_flags`, `ed_cpd_decrements_hl_and_cpdr_stops_on_match` | **PASS** |
@@ -157,7 +159,7 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 
 1. Expandir vetores fixos por codificação explícita para cobrir registradores, memória/I/O, PC, SP, F, IFFs, R, WZ e duração nominal aplicável em múltiplos estados iniciais.
 2. Para instruções paramétricas, adicionar fronteiras e estados iniciais discriminantes; para blocos repetitivos, testar iteração que continua e a última iteração.
-3. Expandir casos de fronteira para cada alias e documentar a variante-alvo; os aliases básicos já têm cobertura dirigida.
+3. Expandir casos de fronteira para cada alias e documentar a variante-alvo. O candidato atual acrescenta fronteiras para NEG e wraparound para transferências ED; ainda faltam outras famílias/campos listados nesta auditoria.
 4. Comparar com ao menos um oráculo independente de procedência/licença verificadas e, quando possível, com uma segunda referência sem ancestralidade comum conhecida.
 5. Para bytes fallback, manter teste estrutural separado da decisão de compatibilidade. Confirmar a política de ED-NOP contra documentação e variante; não tratar fallback como instrução documentada sem fonte.
 6. Executar e registrar checks no SHA candidato exato: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, workflows pertinentes e seus logs.
