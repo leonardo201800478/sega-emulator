@@ -326,7 +326,7 @@ fn run_wasapi_worker(
             break;
         }
 
-        let setup = (|| {
+        let setup: std::result::Result<_, String> = (|| {
             let enumerator = DeviceEnumerator::new().map_err(|error| error.to_string())?;
             let device = enumerator
                 .get_default_device(&Direction::Render)
@@ -775,7 +775,7 @@ fn run_xaudio2_worker(
     };
     let voice_callback = IXAudio2VoiceCallback::new(&voice_callback_state);
 
-    let setup = (|| {
+    let setup: std::result::Result<_, String> = (|| {
         let mut engine: Option<IXAudio2> = None;
         unsafe {
             XAudio2CreateWithVersionInfo(
