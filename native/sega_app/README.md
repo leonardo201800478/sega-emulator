@@ -53,3 +53,17 @@ the fitted viewport rectangle.
 - Polling do teclado ocorre na fronteira do frame da UI e somente envia snapshot quando o estado muda. O Pause é enviado como NMI de borda, não como pausa do worker.
 
 **Limite desta fatia:** gamepads SDL3, hotplug, perfis/remapeamento, analógicos, gyro e touchpad ainda não estão conectados ao shell. A integração física dos backends WASAPI/XAudio2 também requer validação em Windows com dispositivo real.
+
+
+### Gamepads SDL3
+
+O shell tenta carregar `SDL3.dll` dinamicamente e usa o backend compartilhado
+`sega-input-runtime::Sdl3Backend`. É possível informar outro caminho com
+`SEGA_EMULATOR_SDL3_DLL`. A enumeração e o polling são feitos na thread da UI,
+uma vez por frame do host, nunca dentro da CPU ou de callbacks de barramento.
+
+O mapeamento inicial de gamepad SDL3 usa D-pad ou hat, stick esquerdo,
+botões padronizados South/East para os dois botões SMS e Start para Pause/NMI.
+Teclado e gamepad são combinados por OR no snapshot do jogador 1. O backend
+preserva capacidades e estados brutos; gyro, touchpad, eixos de volante,
+perfis configuráveis e jogador 2 ainda não fazem parte desta fatia.

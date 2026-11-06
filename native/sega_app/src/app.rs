@@ -8,7 +8,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
 use sega_input_runtime::{
-    BackendKind, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend,
+    AxisSemantic, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend,
     InputBuffers, sdl3_backend::Sdl3Backend,
 };
 use sega_sms_core::ControllerButtons;
@@ -422,6 +422,7 @@ impl SegaApp {
             self.input_error = Some(error.to_string());
             return (ControllerButtons::default(), false);
         }
+        self.input_error = None;
         if !self.input_buffers.events.is_empty()
             && let Err(error) = backend.enumerate(&mut self.input_devices)
         {
@@ -446,22 +447,7 @@ impl SegaApp {
         else {
             return (ControllerButtons::default(), false);
         };
-        let state = reading.state;
-        let up = state.buttons.is_pressed(11) || state.hat(0) & 0x01 != 0 || state.axis(1) < -16_000;
-        let down = state.buttons.is_pressed(12) || state.hat(0) & 0x04 != 0 || state.axis(1) > 16_000;
-        let left = state.buttons.is_pressed(13) || state.hat(0) & 0x08 != 0 || state.axis(0) < -16_000;
-        let right = state.buttons.is_pressed(14) || state.hat(0) & 0x02 != 0 || state.axis(0) > 16_000;
-        (
-            ControllerButtons {
-                up,
-                down,
-                left,
-                right,
-                button_1: state.buttons.is_pressed(0),
-                button_2: state.buttons.is_pressed(1),
-            },
-            state.buttons.is_pressed(6),
-        )
+        map_sdl3_gamepad(reading.state)
     }
 
     fn update_keyboard_input(&mut self, context: &egui::Context) {
@@ -934,6 +920,32 @@ fn render_audio_controls(
     }
 }
 
+fn map_sdl3_gamepad(state: DeviceState) -> (ControllerButtons, bool) {
+    let up = state.buttons.is_pressed(11)
+        || state.hat(0) & 0x01 != 0
+        || state.axis(1) < -16_000;
+    let down = state.buttons.is_pressed(12)
+        || state.hat(0) & 0x04 != 0
+        || state.axis(1) > 16_000;
+    let left = state.buttons.is_pressed(13)
+        || state.hat(0) & 0x08 != 0
+        || state.axis(0) < -16_000;
+    let right = state.buttons.is_pressed(14)
+        || state.hat(0) & 0x02 != 0
+        || state.axis(0) > 16_000;
+    (
+        ControllerButtons {
+            up,
+            down,
+            left,
+            right,
+            button_1: state.buttons.is_pressed(0),
+            button_2: state.buttons.is_pressed(1),
+        },
+        state.buttons.is_pressed(6),
+    )
+}
+
 fn render_input_controls(
     ui: &mut egui::Ui,
     devices: &[DeviceDescriptor],
@@ -1158,6 +1170,37 @@ mod tests {
         let available = egui::vec2(800.0, 1000.0);
         let fitted = super::fit_viewport_size(available, 16.0 / 9.0);
         assert_eq!(fitted, egui::vec2(800.0, 450.0));
+    }
+
+    #[test]
+    fn sdl3_gamepad_maps_standard_buttons_hat_and_left_stick() {
+        let mut state = DeviceState::default();
+        state.buttons.set(0, true).unwrap();
+        state.buttons.set(1, true).unwrap();
+        state.buttons.set(6, true).unwrap();
+        state.set_axis(0, -20_000, AxisSemantic::LeftStickX).unwrap();
+        state.set_hat(0, 0x01).unwrap();
+
+        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        assert!(buttons.up);
+        assert!(buttons.left);
+        assert!(buttons.button_1);
+        assert!(buttons.button_2);
+        assert!(pause);
+    }
+
+    #[test]
+    fn sdl3_gamepad_maps_axis_thresholds_without_button_activity() {
+        let mut state = DeviceState::default();
+        state.set_axis(0, 20_000, AxisSemantic::LeftStickX).unwrap();
+        state.set_axis(1, 20_000, AxisSemantic::LeftStickY).unwrap();
+
+        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        assert!(buttons.right);
+        assert!(buttons.down);
+        assert!(!buttons.button_1);
+        assert!(!buttons.button_2);
+        assert!(!pause);
     }
 
     #[test]
