@@ -592,12 +592,10 @@ impl SmsTemporalBus {
                 // become an input whose external level is high. Do not infer
                 // the previous electrical level from port readback: Japanese
                 // SMS intentionally hides driven TH output levels on $DD.
-                let th1_rising = io_control & 0x02 != 0
-                    && previous_control & 0x22 == 0
-                    && th_levels & 0x40 != 0;
-                let th2_rising = io_control & 0x08 != 0
-                    && previous_control & 0x88 == 0
-                    && th_levels & 0x80 != 0;
+                let th1_rising =
+                    io_control & 0x02 != 0 && previous_control & 0x22 == 0 && th_levels & 0x40 != 0;
+                let th2_rising =
+                    io_control & 0x08 != 0 && previous_control & 0x88 == 0 && th_levels & 0x80 != 0;
                 if th1_rising || th2_rising {
                     self.vdp.latch_h_counter();
                 }
