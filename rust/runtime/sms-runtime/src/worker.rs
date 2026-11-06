@@ -278,6 +278,26 @@ impl SmsTemporalWorker {
             .map_err(|error| format!("SMS machine worker did not configure video: {error}"))?
     }
 
+    /// Attach an externally owned presentation mailbox to the SMS worker.
+    ///
+    /// The application may own the D3D12 session and HWND while the machine
+    /// worker publishes completed frames through a clone of its mailbox.
+    /// Attaching or detaching the mailbox is a coarse-grained worker command;
+    /// it never advances MachineTime.
+    #[cfg(any(windows, test))]
+    pub fn attach_video_mailbox(&self, mailbox: FrameMailbox) -> Result<(), String> {
+        self.set_video_mailbox(Some(mailbox))
+    }
+
+    /// Detach the presentation mailbox without closing its owner-managed queue.
+    ///
+    /// The caller remains responsible for shutting down the presentation
+    /// session after this command has been acknowledged.
+    #[cfg(any(windows, test))]
+    pub fn detach_video_mailbox(&self) -> Result<(), String> {
+        self.set_video_mailbox(None)
+    }
+
     #[cfg(windows)]
     fn start_video_session<E>(
         &self,
@@ -937,7 +957,7 @@ mod tests {
     fn completed_frames_publish_rgb888_and_keep_sequence_monotonic_across_reset() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let mailbox = FrameMailbox::new();
-        worker.set_video_mailbox(Some(mailbox.clone())).unwrap();
+        worker.attach_video_mailbox(mailbox.clone()).unwrap();
 
         worker.step_frame(100_000).unwrap();
         let first = mailbox.take_latest().unwrap().unwrap();
@@ -953,6 +973,13 @@ mod tests {
         let second = mailbox.take_latest().unwrap().unwrap();
         assert_eq!(second.sequence(), 2);
         assert_eq!(worker.video_last_published_sequence(), 2);
+
+        worker.detach_video_mailbox().unwrap();
+        worker.step_frame(100_000).unwrap();
+        assert!(
+            mailbox.take_latest().unwrap().is_none(),
+            "detaching must stop frame publication without closing the owner mailbox"
+        );
     }
 
     #[test]
