@@ -214,3 +214,12 @@ def test_explicit_cover_refresh_discovers_local_artwork(
     assert dialog._box_art_matches[str(rom_path)] == cover_path
     assert "1 capa(s) encontrada(s)" in dialog.status_label.text()
     dialog.close()
+
+
+def test_library_can_open_directly_on_master_system(qt_app, settings):
+    dialog = RomLibraryDialog(settings, initial_system="master_system")
+
+    assert dialog.selected_system == "master_system"
+    assert dialog.pages.currentWidget() == dialog.library_page
+    assert "Biblioteca" in dialog.library_title.text()
+    dialog.close()
