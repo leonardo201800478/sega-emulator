@@ -111,6 +111,7 @@ class RomLibraryDialog(QDialog):
         self,
         settings: QSettings,
         *,
+        initial_system: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -175,6 +176,12 @@ class RomLibraryDialog(QDialog):
         )
         self._build_pages()
         self._show_splash()
+        if initial_system is not None:
+            if initial_system not in SUPPORTED_SYSTEMS:
+                raise ValueError(
+                    f"Sistema não suportado pela biblioteca: {initial_system}"
+                )
+            self._open_library(initial_system)
 
     @staticmethod
     def _cache_path() -> Path:
