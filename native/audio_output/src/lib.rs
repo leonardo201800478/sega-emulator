@@ -1,6 +1,6 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
@@ -36,7 +36,7 @@ impl std::fmt::Display for AudioOutputError {
             Self::InvalidQueueCapacity => write!(f, "queue_blocks must be positive"),
             Self::InvalidBalance => write!(f, "balance must be between -100 and 100"),
             Self::InvalidPcmBlock => write!(f, "PCM16 blocks must contain an even byte count"),
-            Self::Device(message) => write!(f, "WASAPI output failed: {message}"),
+            Self::Device(message) => write!(f, "native audio output failed: {message}"),
             Self::WorkerStopped => write!(f, "WASAPI output worker has stopped"),
         }
     }
@@ -77,6 +77,8 @@ pub struct NativeWasapiOutput {
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
     dropped_blocks: Arc<AtomicU64>,
+    endpoint_submissions: Arc<AtomicU64>,
+    output_error: Arc<Mutex<Option<String>>>,
     sample_rate: u32,
     buffer_size: u32,
     balance: i8,
@@ -117,8 +119,12 @@ impl NativeWasapiOutput {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let endpoint_submissions = Arc::new(AtomicU64::new(0));
+            let output_error = Arc::new(Mutex::new(None));
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_endpoint_submissions = Arc::clone(&endpoint_submissions);
+            let worker_output_error = Arc::clone(&output_error);
             let worker = thread::Builder::new()
                 .name("sega-wasapi-output".to_owned())
                 .spawn(move || {
@@ -127,6 +133,8 @@ impl NativeWasapiOutput {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_endpoint_submissions,
+                        worker_output_error,
                         sample_rate,
                         buffer_size,
                     );
@@ -140,6 +148,8 @@ impl NativeWasapiOutput {
                     shutdown,
                     underruns,
                     dropped_blocks,
+                    endpoint_submissions,
+                    output_error,
                     sample_rate,
                     buffer_size,
                     balance,
@@ -223,6 +233,16 @@ impl NativeWasapiOutput {
         self.dropped_blocks.load(Ordering::Relaxed)
     }
 
+    /// Number of WASAPI render-buffer writes that included queued PCM data.
+    pub fn endpoint_submission_count(&self) -> u64 {
+        self.endpoint_submissions.load(Ordering::Acquire)
+    }
+
+    /// Last asynchronous error from the WASAPI worker, cleared after recovery.
+    pub fn output_error(&self) -> Option<String> {
+        self.output_error.lock().ok().and_then(|error| error.clone())
+    }
+
     pub fn close(&mut self) {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
@@ -267,11 +287,20 @@ impl Drop for ComApartment {
 }
 
 #[cfg(windows)]
+fn set_worker_output_error(output_error: &Mutex<Option<String>>, error: Option<String>) {
+    if let Ok(mut current) = output_error.lock() {
+        *current = error;
+    }
+}
+
+#[cfg(windows)]
 fn run_wasapi_worker(
     mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    endpoint_submissions: Arc<AtomicU64>,
+    output_error: Arc<Mutex<Option<String>>>,
     sample_rate: u32,
     buffer_size: u32,
 ) {
@@ -358,6 +387,7 @@ fn run_wasapi_worker(
         let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
             Ok(state) => state,
             Err(message) => {
+                set_worker_output_error(&output_error, Some(message.clone()));
                 if first_start {
                     let _ = ready.send(Err(message));
                     return;
@@ -373,21 +403,26 @@ fn run_wasapi_worker(
             .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
             .is_err()
         {
+            let message = "failed to prime the WASAPI render buffer".to_owned();
+            set_worker_output_error(&output_error, Some(message.clone()));
             if first_start {
-                let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
+                let _ = ready.send(Err(message));
                 return;
             }
             thread::sleep(Duration::from_millis(250));
             continue;
         }
         if let Err(error) = audio_client.start_stream() {
+            let message = error.to_string();
+            set_worker_output_error(&output_error, Some(message.clone()));
             if first_start {
-                let _ = ready.send(Err(error.to_string()));
+                let _ = ready.send(Err(message));
                 return;
             }
             thread::sleep(Duration::from_millis(250));
             continue;
         }
+        set_worker_output_error(&output_error, None);
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
@@ -398,22 +433,30 @@ fn run_wasapi_worker(
             if shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if event.wait_for_event(1000).is_err() {
+            if let Err(error) = event.wait_for_event(1000) {
                 // A failed event wait usually means that the endpoint stopped.
+                set_worker_output_error(&output_error, Some(error.to_string()));
                 break;
             }
 
             let frames = match audio_client.get_available_space_in_frames() {
                 Ok(frames) => frames as usize,
-                Err(_) => break,
+                Err(error) => {
+                    set_worker_output_error(&output_error, Some(error.to_string()));
+                    break;
+                }
             };
             if frames == 0 {
                 continue;
             }
             let required = frames.saturating_mul(block_align);
+            let mut supplied_pcm = false;
             while pending.len() < required {
                 match consumer.pop() {
-                    Ok(block) => pending.extend(block),
+                    Ok(block) => {
+                        pending.extend(block);
+                        supplied_pcm = true;
+                    },
                     Err(rtrb::PopError::Empty) => {
                         if consumer.is_abandoned() {
                             disconnected = true;
@@ -428,11 +471,14 @@ fn run_wasapi_worker(
             if disconnected || shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if render_client
-                .write_to_device_from_deque(frames, &mut pending, None)
-                .is_err()
+            if let Err(error) =
+                render_client.write_to_device_from_deque(frames, &mut pending, None)
             {
+                set_worker_output_error(&output_error, Some(error.to_string()));
                 break;
+            }
+            if supplied_pcm {
+                endpoint_submissions.fetch_add(1, Ordering::Release);
             }
         }
 
@@ -785,6 +831,14 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
 
     fn metrics(&self) -> (u64, u64) {
         (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn endpoint_submission_count(&self) -> u64 {
+        NativeWasapiOutput::endpoint_submission_count(self)
+    }
+
+    fn output_error(&self) -> Option<String> {
+        NativeWasapiOutput::output_error(self)
     }
 
     fn close(&mut self) {
