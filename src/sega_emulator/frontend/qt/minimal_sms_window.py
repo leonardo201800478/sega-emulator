@@ -47,6 +47,7 @@ class MinimalSmsWindow(QMainWindow):
         self._rom_path: Path | None = None
         self._pressed_actions: set[str] = set()
         self._video_output_started = False
+        self._last_frame_sample: tuple[float, int] | None = None
         self._audio_output_error: str | None = None
         self._video_telemetry_timer = QTimer(self)
         self._video_telemetry_timer.setInterval(250)
