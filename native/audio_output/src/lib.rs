@@ -860,7 +860,10 @@ fn run_xaudio2_worker(
         if critical_error_code != 0 {
             set_worker_output_error(
                 &output_error,
-                Some(format!("XAudio2 critical engine error: 0x{:08X}", critical_error_code as u32)),
+                Some(format!(
+                    "XAudio2 critical engine error: 0x{:08X}",
+                    critical_error_code as u32
+                )),
             );
             break;
         }
@@ -868,7 +871,10 @@ fn run_xaudio2_worker(
         if voice_error_code != 0 {
             set_worker_output_error(
                 &output_error,
-                Some(format!("XAudio2 source voice error: 0x{:08X}", voice_error_code as u32)),
+                Some(format!(
+                    "XAudio2 source voice error: 0x{:08X}",
+                    voice_error_code as u32
+                )),
             );
             break;
         }
@@ -892,9 +898,7 @@ fn run_xaudio2_worker(
                         pAudioData: block.as_ptr(),
                         ..Default::default()
                     };
-                    if let Err(error) =
-                        unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }
-                    {
+                    if let Err(error) = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) } {
                         submitted.pop_back();
                         set_worker_output_error(&output_error, Some(error.to_string()));
                         break 'worker;
