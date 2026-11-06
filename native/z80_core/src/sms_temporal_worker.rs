@@ -71,6 +71,7 @@ struct WorkerTelemetry {
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
+    audio_endpoint_submissions: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
     video_last_published_sequence: AtomicU64,
@@ -110,6 +111,10 @@ impl WorkerTelemetry {
         self.audio_underruns.store(metrics.0, Ordering::Release);
         self.audio_dropped_blocks
             .store(metrics.1, Ordering::Release);
+    }
+
+    fn set_audio_endpoint_submissions(&self, count: u64) {
+        self.audio_endpoint_submissions.store(count, Ordering::Release);
     }
 
     fn reset_machine_counters(&self) {
@@ -486,6 +491,12 @@ impl SmsTemporalWorker {
         )
     }
 
+    pub(super) fn audio_endpoint_submission_count(&self) -> u64 {
+        self.telemetry
+            .audio_endpoint_submissions
+            .load(Ordering::Acquire)
+    }
+
     #[cfg(test)]
     fn wait_for_frame_after(&self, frame_number: u64, timeout: Duration) -> bool {
         let Ok(observed) = self.telemetry.frame_signal.0.lock() else {
@@ -574,6 +585,7 @@ fn execute_frame<S: PcmSink>(
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
                 telemetry.set_audio_metrics(session.metrics());
+                telemetry.set_audio_endpoint_submissions(session.endpoint_submission_count());
                 telemetry.set_audio_error(session.output_error());
             }
         }
@@ -583,6 +595,7 @@ fn execute_frame<S: PcmSink>(
             }
             telemetry.set_audio_error(Some(error));
             telemetry.set_audio_metrics((0, 0));
+            telemetry.set_audio_endpoint_submissions(0);
         }
         None => {}
     }
@@ -789,6 +802,7 @@ fn handle_command(
                     }
                     telemetry.set_audio_error(None);
                     telemetry.set_audio_metrics((0, 0));
+                    telemetry.set_audio_endpoint_submissions(0);
                     let _ = reply.send(Ok(()));
                 }
                 Err(error) => {
@@ -803,6 +817,7 @@ fn handle_command(
             }
             telemetry.set_audio_error(None);
             telemetry.set_audio_metrics((0, 0));
+            telemetry.set_audio_endpoint_submissions(0);
             let _ = reply.send(());
         }
         WorkerCommand::SetVideoMailbox(mailbox, reply) => {
@@ -1043,35 +1058,23 @@ mod tests {
 
     #[cfg(windows)]
     fn run_real_audio_backend_smoke(backend: &str) {
-        let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
-        let mut audio_session = Some(
-            open_audio_session(backend, SMS_TEMPORAL_SAMPLE_RATE as u32, 512, 16, 100, 0)
-                .unwrap_or_else(|error| panic!("{backend} endpoint initialization failed: {error}")),
+        let worker = SmsTemporalWorker::new(av_test_rom(), "usa").unwrap();
+        worker
+            .configure_audio_output(backend, SMS_TEMPORAL_SAMPLE_RATE as u32, 512, 16, 100, 0)
+            .unwrap_or_else(|error| panic!("{backend} endpoint initialization failed: {error}"));
+        let initial_frame = worker.frame_number();
+        worker.start().unwrap();
+        assert!(
+            worker.wait_for_frame_after(initial_frame, Duration::from_secs(2)),
+            "{backend} worker did not produce its first frame"
         );
-        let telemetry = WorkerTelemetry::default();
-        let mut video_mailbox = None;
-        let mut video_sequence = 0;
+        std::thread::sleep(Duration::from_secs(2));
+        worker.pause().unwrap();
 
-        for _ in 0..120 {
-            let (_, frame_wait) = execute_frame(
-                &mut machine,
-                DEFAULT_MAX_FRAME_INSTRUCTIONS,
-                &mut audio_session,
-                &mut video_mailbox,
-                &mut video_sequence,
-                &telemetry,
-            )
-            .expect("SMS worker frame must complete");
-            if !frame_wait.is_zero() {
-                std::thread::sleep(frame_wait);
-            }
-        }
-
-        let session = audio_session.as_mut().expect("audio session remains active");
-        let (underruns, dropped_blocks) = session.metrics();
-        let endpoint_submissions = session.endpoint_submission_count();
-        let output_error = session.output_error();
-        session.close();
+        let (underruns, dropped_blocks) = worker.audio_output_metrics();
+        let endpoint_submissions = worker.audio_endpoint_submission_count();
+        let output_error = worker.audio_output_error();
+        worker.close_audio_output().unwrap();
 
         eprintln!(
             "backend={backend} endpoint_submissions={endpoint_submissions} underruns={underruns} dropped_blocks={dropped_blocks} output_error={output_error:?}"
