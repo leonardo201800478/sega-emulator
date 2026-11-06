@@ -380,6 +380,13 @@ class MinimalSmsWindow(QMainWindow):
         self._settings.setValue("sms_audio_backend", self._audio_backend)
         self._settings.setValue("sms_region_preference", self._region)
         self.video_viewport.set_integer_scale(self._preferences.integer_scale)
+        logger.info(
+            "SMS preferences saved: audio_backend=%s sample_rate=%d integer_scale=%s region=%s",
+            self._audio_backend,
+            self._preferences.audio_sample_rate,
+            self._preferences.integer_scale,
+            self._region,
+        )
 
         if self._machine is not None:
             self._audio_output_error = self._configure_audio_output(self._machine)
