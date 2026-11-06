@@ -40,6 +40,38 @@ def test_cargo_options_keep_manifest_as_cargo_argument() -> None:
     assert "--locked" in command
 
 
+def test_lock_check_validates_metadata_without_compiling(monkeypatch) -> None:
+    workspace = project_manager.Workspace(
+        manifest="native/audio_output/Cargo.toml",
+        root="native/audio_output",
+        lockfile="native/audio_output/Cargo.lock",
+    )
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd, timeout=1800, output_limit=12000, stream=False):
+        commands.append(command)
+        return project_manager.Result("metadata", "PASS")
+
+    monkeypatch.setattr(project_manager, "run", fake_run)
+
+    results = project_manager.lock_check([workspace])
+
+    assert [result.status for result in results] == ["PASS"]
+    assert len(commands) == 1
+    assert commands[0][:5] == [
+        "cargo",
+        "metadata",
+        "--locked",
+        "--format-version",
+        "1",
+    ]
+    assert commands[0][-2:] == [
+        "--manifest-path",
+        str(Path(__file__).resolve().parents[2] / "native/audio_output/Cargo.toml"),
+    ]
+    assert "check" not in commands[0]
+
+
 def test_inventory_reports_not_run_without_failing_audit(capsys) -> None:
     result = project_manager.Result(
         "unassigned manifest", "NOT RUN", output="outside active workspace"
