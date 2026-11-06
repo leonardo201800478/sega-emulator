@@ -6,6 +6,7 @@ Framebuffer storage, pixel conversion, filters and presentation remain in Rust.
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 from pathlib import Path
@@ -30,6 +31,8 @@ from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
 from sega_emulator.frontend.qt.sms_settings_dialog import SmsSettingsDialog
 from sega_emulator.machine.sms import load_sms_rom
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
+
+logger = logging.getLogger(__name__)
 
 _KEY_ACTIONS = {
     Qt.Key.Key_Up: "up",
@@ -69,6 +72,7 @@ class MinimalSmsWindow(QMainWindow):
         self._pressed_actions: set[str] = set()
         self._video_output_started = False
         self._last_frame_sample: tuple[float, int] | None = None
+        self._last_telemetry_log_time = 0.0
         self._audio_output_error: str | None = None
         self._video_telemetry_timer = QTimer(self)
         self._video_telemetry_timer.setInterval(250)
@@ -187,10 +191,18 @@ class MinimalSmsWindow(QMainWindow):
             loaded_rom = load_sms_rom(path)
             machine = TemporalSMSMachine(loaded_rom.data, region=self._region)
         except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            logger.exception("Falha ao carregar ROM SMS: %s", path.name)
             QMessageBox.critical(self, "Falha ao abrir ROM", str(exc))
             return
 
         display_name = loaded_rom.display_name
+        logger.info(
+            "SMS ROM carregada: name=%s size=%d sha256=%s region=%s",
+            display_name,
+            len(loaded_rom.data),
+            loaded_rom.sha256,
+            self._region,
+        )
         audio_error = self._configure_audio_output(machine)
 
         if self._machine is not None:
@@ -208,6 +220,7 @@ class MinimalSmsWindow(QMainWindow):
 
         self._video_output_started = False
         self._last_frame_sample = None
+        self._last_telemetry_log_time = 0.0
         self._audio_output_error = audio_error
         self._machine = machine
         self._rom_path = path
@@ -299,7 +312,9 @@ class MinimalSmsWindow(QMainWindow):
             try:
                 machine.close_audio_output()
             except RuntimeError as exc:
+                logger.exception("Falha ao desativar áudio SMS")
                 return str(exc)
+            logger.info("SMS audio output disabled by user preference")
             return None
         try:
             machine.configure_audio_output(
@@ -313,11 +328,22 @@ class MinimalSmsWindow(QMainWindow):
         except (OSError, RuntimeError, ValueError) as exc:
             # Audio is a host service: report its failure without blocking video
             # presentation or preventing the cartridge from being loaded.
+            logger.exception("Falha ao configurar áudio SMS (%s)", self._audio_backend)
             try:
                 machine.close_audio_output()
             except RuntimeError:
-                pass
+                logger.exception("Falha ao encerrar áudio SMS após erro de configuração")
             return str(exc)
+        logger.info(
+            "SMS audio configured: backend=%s sample_rate=%d buffer=%d queue=%d "
+            "volume=%d balance=%d",
+            self._audio_backend,
+            self._preferences.audio_sample_rate,
+            self._preferences.audio_buffer_size,
+            self._preferences.audio_queue_blocks,
+            self._preferences.audio_volume,
+            self._preferences.audio_balance,
+        )
         return None
 
     def _audio_status_text(self) -> str:
@@ -382,6 +408,7 @@ class MinimalSmsWindow(QMainWindow):
         try:
             machine.close_video_output()
         except RuntimeError as exc:
+            logger.exception("Falha ao encerrar saída de vídeo D3D12 SMS")
             return str(exc)
         return None
 
@@ -407,6 +434,7 @@ class MinimalSmsWindow(QMainWindow):
 
         runtime_error = machine.runtime_error
         if runtime_error:
+            logger.error("SMS native runtime stopped: %s", runtime_error)
             self._video_telemetry_timer.stop()
             self.status_label.setText(
                 f"Falha de execução do núcleo Rust: {runtime_error}"
@@ -416,12 +444,14 @@ class MinimalSmsWindow(QMainWindow):
 
         error = machine.video_output_error
         if error:
+            logger.error("SMS D3D12 presentation failed: %s", error)
             self._video_telemetry_timer.stop()
             self.status_label.setText(f"Falha na apresentação D3D12: {error}")
             self.statusBar().showMessage(f"Vídeo D3D12: falha — {error}")
             return
 
         if not machine.video_output_is_running:
+            logger.warning("SMS D3D12 presentation worker stopped unexpectedly")
             self._video_telemetry_timer.stop()
             self.statusBar().showMessage(
                 "Vídeo D3D12: worker de apresentação encerrado"
@@ -435,6 +465,20 @@ class MinimalSmsWindow(QMainWindow):
         presented = machine.video_last_presented_sequence
         replaced = machine.video_replaced_frames
         recoveries = machine.video_device_recovery_count
+        now = time.monotonic()
+        if now - self._last_telemetry_log_time >= 5.0:
+            logger.info(
+                "SMS output telemetry: region=%s frame=%d fps=%s "
+                "published=%d presented=%d replaced=%d device_recoveries=%d",
+                self._active_region or self._region,
+                frame_number,
+                frame_rate,
+                published,
+                presented,
+                replaced,
+                recoveries,
+            )
+            self._last_telemetry_log_time = now
         if presented:
             self.statusBar().showMessage(
                 f"{prefix}D3D12: apresentado {presented}/{published} | "
