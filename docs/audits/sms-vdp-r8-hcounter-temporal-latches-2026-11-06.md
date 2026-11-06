@@ -49,7 +49,11 @@ O perfil SMS usa 342 posições horizontais por linha e 228 Z80 T-states por lin
 - Uma escrita em R8 enquanto `HPos <= 21` (inclusive) atualiza a linha corrente.
 - Uma escrita após HPos 21 só afeta a próxima linha.
 - HPos 21 corresponde a Z80 T-state 14, não 7.
+- O SmsVdpTest descreve a região de latch de HScroll em HCount `$F3`, compatível com a conversão 315-5124 acima.
+- O MAME usa `XSCROLL_HPOS = 21` tanto para 315-5124 quanto para 315-5246; seu perfil 315-5377 (Game Gear) usa HPos 24. A referência `$F4` do manual oficial do Game Gear não foi transplantada para SMS.
 - Escritas durante VBlank atualizam o latch imediatamente para o próximo período visível.
+
+O ponto exato HPos 21 permanece evidência de diagnóstico/emulador para a família SMS; ainda não é uma medição física nova realizada por este projeto.
 
 A implementação usa `latched_scroll_x`; o renderer recebe uma cópia dos registradores com R8 substituído pelo valor latched. A escrita em R8 continua atualizando o registrador de leitura, mas só altera o latch corrente dentro da janela documentada.
 
