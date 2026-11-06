@@ -23,7 +23,7 @@ Mailbox replacement affects presentation only. It does not skip CPU instructions
 
 - `SmsVideoViewport` owns geometry only and letterboxes a native child widget to 4:3.
 - `WA_NativeWindow`/ `winId()` ensure a real HWND exists.
-- `WA_PaintOnScreen` and `WA_NoSystemBackground` prevent the Qt backing store from painting over the swap-chain surface.
+- `WA_NativeWindow` provides a real HWND; `WA_NoSystemBackground` and `WA_OpaquePaintEvent` prevent Qt from erasing the swap-chain surface with its normal background paint.
 - The DXGI swap chain uses `DXGI_SCALING_STRETCH`; the native child HWND is resized by Qt while the 256x192 logical surface remains unchanged.
 - The Python adapter exposes only coarse `open_video_output_in_viewport(hwnd)` and `close_video_output()` calls. No framebuffer getter or per-frame callback is introduced.
 
