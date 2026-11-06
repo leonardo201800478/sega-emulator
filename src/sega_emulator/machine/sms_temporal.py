@@ -194,3 +194,23 @@ class TemporalSMSMachine:
     def audio_output_metrics(self) -> tuple[int, int]:
         """Return native audio underrun and dropped-block counters."""
         return tuple(self.native_machine.audio_output_metrics)
+
+    @property
+    def runtime_signal_metrics(self) -> dict[str, int]:
+        """Return last-frame VDP pixel/register/memory and PSG signal metrics.
+
+        PSG peak amplitude is expressed in millionths to keep the native
+        telemetry integer-only across the PyO3 boundary.
+        """
+        values = tuple(self.native_machine.runtime_signal_metrics)
+        keys = (
+            "non_black_pixels",
+            "vdp_mode4_enabled",
+            "vdp_display_enabled",
+            "vdp_nonzero_vram_bytes",
+            "vdp_nonzero_cram_bytes",
+            "psg_samples",
+            "psg_nonzero_samples",
+            "psg_peak_amplitude_micros",
+        )
+        return dict(zip(keys, values, strict=True))
