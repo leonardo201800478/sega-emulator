@@ -30,19 +30,26 @@ A lista é um resumo funcional, não uma certificação de todas as revisões de
 
 ## Granularidade temporal
 
-A implementação atual usa o modelo de raster scanline-level. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística e frames funcionais, mas não é dot-accurate, não arbitra fetches por dot e não reproduz efeitos mid-scanline.
+A composição continua scanline-level, mas o caminho temporal agora modela dois boundaries subline observáveis: o latch de R8 em HPos 21 e o latch de H-counter em transições TH ascendentes. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística para esses efeitos, mas não é dot-accurate, não arbitra fetches por dot e não reproduz todos os efeitos mid-scanline.
 
 A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
 ## Limites conhecidos
 
-- Efeitos de registrador no meio da scanline e certas fases do H-counter ainda podem ser aproximados. A constante legada `LINE_TSTATES = 228` e a fórmula atual de H-counter são aproximações de compatibilidade, não fatos físicos validados para SMS1/315-5124; não usar como oracle temporal.
+- R8 agora usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições) e o H-counter usa latch persistente por TH ascendente. O modelo é confrontado com MAME 315-5124 e a ROM de diagnóstico SmsVdpTest, mas ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.
 - Light Phaser e SegaScope usam adaptações de entrada/apresentação; não simulam integralmente sensores e temporização elétrica originais.
 
 Essas limitações devem ser priorizadas por compatibilidade observada e testes reproduzíveis, não pela busca abstrata de dot-accuracy.
+
+## Latches horizontais R8 e H-counter
+
+- R8 é copiado para a nova linha e pode atualizar o latch da linha corrente enquanto `HPos <= 21` (inclusive). Com 342 posições por linha e 228 Z80 T-states, o limite corresponde a T14. Escritas posteriores só afetam a próxima linha.
+- O port `$7F` retorna o último H-counter capturado, não um contador livre. O latch é disparado pela borda ascendente TH 0→1 quando o pino está configurado como entrada; a transição saída-baixa → entrada-alta também é detectada no write do I/O control `$3F`.
+- O Scheduler avança o VDP até o timestamp de conclusão do ciclo antes de aplicar o efeito da escrita de porta. Assim, os latches usam o instante real do boundary temporal, sem callbacks por instrução em Python.
+- Evidências, derivação de HPos/T-state, vetores e limitações físicas: [auditoria R8/H-counter de 2026-11-06](../audits/sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md).
 
 ## Referências
 
