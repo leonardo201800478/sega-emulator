@@ -10,7 +10,8 @@ use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
 
-const MAX_ROM_SIZE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_ROM_SIZE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_ROM_SIZE_BYTES_U64: u64 = 16 * 1024 * 1024;
 const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 
@@ -450,7 +451,7 @@ fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
         if rom.is_empty() {
             return Err("O arquivo da ROM está vazio".to_owned());
         }
-        if rom.len() as u64 > MAX_ROM_SIZE_BYTES {
+        if rom.len() > MAX_ROM_SIZE_BYTES {
             return Err("A ROM excede o limite de 16 MiB aceito pelo carregador".to_owned());
         }
         return Ok(rom);
@@ -493,16 +494,20 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
     let index = match sms_entries.as_slice() {
         [] => return Err("O ZIP não contém nenhum arquivo .sms".to_owned()),
         [index] => *index,
-        _ => return Err("O ZIP contém mais de um arquivo .sms; mantenha apenas a ROM desejada".to_owned()),
+        _ => {
+            return Err(
+                "O ZIP contém mais de um arquivo .sms; mantenha apenas a ROM desejada".to_owned(),
+            );
+        }
     };
 
-    let mut entry = archive
+    let entry = archive
         .by_index(index)
         .map_err(|error| format!("Não foi possível abrir a ROM dentro do ZIP: {error}"))?;
     if entry.size() == 0 {
         return Err("A ROM dentro do ZIP está vazia".to_owned());
     }
-    if entry.size() > MAX_ROM_SIZE_BYTES {
+    if entry.size() > MAX_ROM_SIZE_BYTES_U64 {
         return Err("A ROM dentro do ZIP excede o limite de 16 MiB".to_owned());
     }
 
@@ -510,13 +515,13 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
         .map_err(|_| "O tamanho da ROM não cabe na memória deste processo".to_owned())?;
     let mut rom = Vec::with_capacity(capacity);
     entry
-        .take(MAX_ROM_SIZE_BYTES + 1)
+        .take(MAX_ROM_SIZE_BYTES_U64 + 1)
         .read_to_end(&mut rom)
         .map_err(|error| format!("Falha ao descompactar a ROM: {error}"))?;
     if rom.is_empty() {
         return Err("A ROM dentro do ZIP está vazia".to_owned());
     }
-    if rom.len() as u64 > MAX_ROM_SIZE_BYTES {
+    if rom.len() > MAX_ROM_SIZE_BYTES {
         return Err("A ROM descompactada excede o limite de 16 MiB".to_owned());
     }
 
@@ -776,7 +781,9 @@ mod tests {
         writer
             .start_file("games/test.sms", zip::write::SimpleFileOptions::default())
             .expect("ZIP entry should be created");
-        writer.write_all(&[0xAA, 0x55, 0x01]).expect("ROM bytes should be written");
+        writer
+            .write_all(&[0xAA, 0x55, 0x01])
+            .expect("ROM bytes should be written");
         let archive = writer.finish().expect("ZIP archive should be finalized");
 
         let rom = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
