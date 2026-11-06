@@ -215,6 +215,14 @@ impl NativeSMSTemporalMachine {
     fn audio_output_metrics(&self) -> (u64, u64) {
         self.worker.audio_output_metrics()
     }
+
+    /// Return (non-black pixels, Mode 4, display enabled, nonzero VRAM bytes,
+    /// nonzero CRAM bytes, PSG samples, nonzero PSG samples, peak amplitude in
+    /// millionths). Values describe the last completed emulated frame.
+    #[getter]
+    fn runtime_signal_metrics(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
+        self.worker.runtime_signal_metrics()
+    }
 }
 
 #[cfg(test)]
