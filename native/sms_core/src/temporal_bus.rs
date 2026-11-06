@@ -1553,6 +1553,29 @@ mod external_th_temporal_tests {
         assert_eq!(restored.io().read_port(0xDD) & 0xC0, 0x80);
     }
 
+
+    #[test]
+    fn same_timestamp_th1_and_th2_events_remain_restorable_after_first_dispatch() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let timestamp = MachineTime::from_ticks(9);
+        bus.schedule_external_th_transition(1, false, timestamp).unwrap();
+        bus.schedule_external_th_transition(2, false, timestamp).unwrap();
+
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::ExternalThTransition { completed_at, .. })
+                if completed_at == timestamp
+        ));
+        let snapshot = bus.export_state();
+        let mut restored = SmsTemporalBus::restore_state(snapshot).unwrap();
+        assert!(matches!(
+            restored.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::ExternalThTransition { completed_at, .. })
+                if completed_at == timestamp
+        ));
+        assert_eq!(restored.io().read_port(0xDD) & 0xC0, 0x00);
+    }
+
     #[test]
     fn external_th_events_can_be_pending_alongside_a_cpu_bus_deadline() {
         use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
