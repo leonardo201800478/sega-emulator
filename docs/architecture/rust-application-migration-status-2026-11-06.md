@@ -183,3 +183,12 @@ A migração somente poderá ser declarada concluída quando todos os itens abai
 - [PR #602 — CI Rust-first, MERGED](https://github.com/leonardo201800478/sega-emulator/pull/602)
 - [PR #603 — viewport D3D12 filho](https://github.com/leonardo201800478/sega-emulator/pull/603)
 - [Merge #601 — `333900ae35a87b2430caedd2edf26218f272c8a6`](https://github.com/leonardo201800478/sega-emulator/commit/333900ae35a87b2430caedd2edf26218f272c8a6)
+
+
+## 10. Diretriz adicional — eliminar a suíte de testes Python
+
+A decisão do projeto passa a ser retirar integralmente os testes Python ativos. Os comportamentos essenciais serão comprovados por testes Rust; a interface egui/eframe terá testes próprios de aplicação e integrações nativas Windows. Não serão adicionados novos testes Python.
+
+A auditoria inicial está registrada em [python-test-retirement-inventory-2026-11-06.md](python-test-retirement-inventory-2026-11-06.md): 42 arquivos, 272 funções de teste declaradas. A execução local reportada pelo usuário coletou 352 casos (351 aprovados, 1 falha), mas o log não informa o SHA e não deve ser atribuído à baseline GitHub.
+
+**Status nesta etapa:** inventário estático PASS; equivalência Python/Rust NOT AUDITED; execução Rust nesta etapa NOT RUN; remoção de testes NOT STARTED. A suíte não será apagada em lote. Cada domínio será migrado e validado antes da retirada dos respectivos arquivos, da configuração pytest e dos jobs manuais Python na CI.
