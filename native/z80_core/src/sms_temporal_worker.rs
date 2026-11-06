@@ -961,6 +961,31 @@ mod tests {
     }
 
     #[test]
+    fn runtime_signal_metrics_distinguish_uninitialized_synthetic_rom_output() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.step_frame(100_000).unwrap();
+
+        let (
+            non_black_pixels,
+            mode4_enabled,
+            display_enabled,
+            nonzero_vram,
+            nonzero_cram,
+            psg_samples,
+            psg_nonzero_samples,
+            psg_peak_micros,
+        ) = worker.runtime_signal_metrics();
+
+        assert_eq!(non_black_pixels, 0);
+        assert_eq!(mode4_enabled, 0);
+        assert_eq!(display_enabled, 0);
+        assert_eq!(nonzero_vram, 0);
+        assert_eq!(nonzero_cram, 0);
+        assert!(psg_nonzero_samples <= psg_samples);
+        assert!(psg_peak_micros <= 1_000_000);
+    }
+
+    #[test]
     fn closed_video_mailbox_does_not_stop_machine_execution() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let mailbox = FrameMailbox::new();
