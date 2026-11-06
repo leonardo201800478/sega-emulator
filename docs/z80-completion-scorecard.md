@@ -89,9 +89,9 @@ Baseline: `main` = `08d9fac1d30a659bde8298e7da2f8ae1d75510d1`.
 **Decisão:** E7.7 continua IN_PROGRESS e E8 continua BLOCKED. O próximo trabalho deve fechar as lacunas semânticas restantes com evidência específica por família, incluindo a variante de `OUT (C),0`, sem iniciar ZEXDOC/ZEXALL nem exigir microsequenciamento universal.
 
 
-## 8. Reconciliacao apos PR #595 — baseline main 2026-11-06
+## 8. Registro historico apos PR #595 — fotografia de 2026-11-06
 
-A baseline atual da `main` e `733152f61b706b2243914ae017643cef949d4ae1`. A PR #595 alterou somente a integracao temporal SMS e seus testes/documentacao; nao alterou o decoder Z80, as familias DD/FD, os resultados E4C/E5/E6 ou as lacunas semanticas globais.
+Na fotografia imediatamente apos a PR #595, a `main` estava em `733152f61b706b2243914ae017643cef949d4ae1`. A baseline posterior, apos a PR #597, esta registrada na secao 9. A PR #595 alterou somente a integracao temporal SMS e seus testes/documentacao; nao alterou o decoder Z80, as familias DD/FD, os resultados E4C/E5/E6 ou as lacunas semanticas globais.
 
 - A conexao VDP IRQ → Z80 INT temporal foi integrada, com preservacao da fonte externa e validacao de snapshot/acknowledge. Os testes direcionados passaram no CI #5178 no HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
 - E7.7 permanece IN_PROGRESS. Nenhuma pendencia semantica do Z80 foi fechada por essa integracao de SMS.
