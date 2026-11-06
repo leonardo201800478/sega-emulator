@@ -118,6 +118,8 @@ impl WorkerTelemetry {
     }
 }
 
+type AudioSessionFactory = Box<dyn FnOnce() -> Result<Box<dyn AudioSession>, String> + Send>;
+
 enum WorkerCommand {
     Start(SyncSender<Result<(), String>>),
     Pause(SyncSender<Result<(), String>>),
@@ -127,7 +129,7 @@ enum WorkerCommand {
     StepFrame(usize, SyncSender<Result<usize, String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
-    SetAudioSession(Box<dyn AudioSession>, SyncSender<Result<(), String>>),
+    ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
@@ -247,9 +249,15 @@ impl SmsTemporalWorker {
             .map_err(|error| format!("SMS machine worker is unavailable: {error}"))
     }
 
-    /// Attach an already configured host audio session to the worker thread.
-    pub fn set_audio_session(&self, session: Box<dyn AudioSession>) -> Result<(), String> {
-        self.request_unit(|reply| WorkerCommand::SetAudioSession(session, reply))
+    /// Configure host audio on the worker thread using an application-supplied factory.
+    ///
+    /// The factory is transferred as a coarse-grained command and invoked by the
+    /// machine-owning thread, so host objects never cross thread boundaries.
+    pub fn configure_audio_output<F>(&self, factory: F) -> Result<(), String>
+    where
+        F: FnOnce() -> Result<Box<dyn AudioSession>, String> + Send + 'static,
+    {
+        self.request_unit(|reply| WorkerCommand::ConfigureAudio(Box::new(factory), reply))
     }
 
     pub fn close_audio_output(&self) -> Result<(), String> {
@@ -747,13 +755,21 @@ fn handle_command(
             let _ = reply.send(result);
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
-        WorkerCommand::SetAudioSession(session, reply) => {
-            if let Some(mut previous) = audio_session.replace(session) {
-                previous.close();
+        WorkerCommand::ConfigureAudio(factory, reply) => {
+            match factory() {
+                Ok(session) => {
+                    if let Some(mut previous) = audio_session.replace(session) {
+                        previous.close();
+                    }
+                    telemetry.set_audio_error(None);
+                    telemetry.set_audio_metrics((0, 0));
+                    let _ = reply.send(Ok(()));
+                }
+                Err(error) => {
+                    telemetry.set_audio_error(Some(error.clone()));
+                    let _ = reply.send(Err(error));
+                }
             }
-            telemetry.set_audio_error(None);
-            telemetry.set_audio_metrics((0, 0));
-            let _ = reply.send(Ok(()));
         }
         WorkerCommand::CloseAudio(reply) => {
             if let Some(mut session) = audio_session.take() {
@@ -845,7 +861,7 @@ mod tests {
     }
 
     #[test]
-    fn native_worker_runs_pauses_and_steps_without_python_callbacks() {
+    fn native_worker_runs_pauses_and_steps_through_coarse_commands() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let initial = worker.frame_number();
 
