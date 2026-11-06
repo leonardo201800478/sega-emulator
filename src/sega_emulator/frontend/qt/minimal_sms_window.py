@@ -182,9 +182,7 @@ class MinimalSmsWindow(QMainWindow):
         try:
             machine.close_video_output()
         except RuntimeError as exc:
-            self.statusBar().showMessage(
-                f"Host de vídeo encerrou com erro: {exc}"
-            )
+            self.statusBar().showMessage(f"Host de vídeo encerrou com erro: {exc}")
 
     def _start_video_output_if_visible(self) -> None:
         """Attach the Rust D3D12 swap chain to the Qt-owned native viewport."""
