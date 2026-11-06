@@ -832,6 +832,26 @@ mod tests {
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
 
+    fn av_test_rom() -> Vec<u8> {
+        let mut rom = vec![0; 0x4000];
+        let mut program = vec![
+            0xF3, // DI
+            0x31, 0xF0, 0xDF, // LD SP,$DFF0
+            0x3E, 0x04, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0: Mode 4
+            0x3E, 0x40, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1: display
+            0x3E, 0x0E, 0xD3, 0xBF, 0x3E, 0x82, 0xD3, 0xBF, // R2: name table
+            0x3E, 0x01, 0xD3, 0xBF, 0x3E, 0xC0, 0xD3, 0xBF, 0x3E, 0x3F, 0xD3, 0xBE,
+            0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF,
+        ];
+        program.extend([0x3E, 0xFF, 0xD3, 0xBE].repeat(8));
+        program.extend([
+            0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E,
+            0x18, 0xFE,
+        ]);
+        rom[..program.len()].copy_from_slice(&program);
+        rom
+    }
+
     #[test]
     fn native_worker_runs_pauses_and_steps_without_python_callbacks() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
@@ -915,6 +935,25 @@ mod tests {
         let second = mailbox.take_latest().unwrap().unwrap();
         assert_eq!(second.sequence(), 2);
         assert_eq!(worker.video_last_published_sequence(), 2);
+    }
+
+
+    #[test]
+    fn worker_publishes_vdp_generated_non_black_pixels_to_video_mailbox() {
+        let worker = SmsTemporalWorker::new(av_test_rom(), "usa").unwrap();
+        let mailbox = FrameMailbox::new();
+        worker.set_video_mailbox(Some(mailbox.clone())).unwrap();
+
+        worker.step_frame(100_000).unwrap();
+
+        let frame = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(frame.width(), 256);
+        assert_eq!(frame.height(), 192);
+        assert_eq!(frame.pixel_format(), PixelFormat::Rgb888);
+        assert!(frame
+            .pixels()
+            .chunks_exact(3)
+            .any(|pixel| pixel.iter().any(|channel| *channel != 0)));
     }
 
     #[test]
