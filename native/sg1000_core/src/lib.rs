@@ -1,11 +1,11 @@
-//! Standalone, Python-independent SG-1000 emulation core.
+//! Temporary Rust SG-1000 reference core retained during the SMS-first migration.
 //!
-//! Device state and scheduling logic belong in plain Rust types; Python
-//! bindings belong in the separate PyO3 adapter until the frontend migrates.
-//! This crate is being built incrementally; its public machine is not yet a
-//! complete standalone emulator.
+//! This instruction-boundary implementation is not an active product runtime.
+//! It remains in the workspace temporarily for regression/reference purposes
+//! and will be retired after the SMS runtime is executable and validated. The
+//! future SG-1000 implementation will reuse the shared Z80 and temporal devices.
 //!
-//! Host controller APIs are normalized at the frontend boundary; the core
+//! Host controller APIs are normalized at the application boundary; the core
 //! accepts deterministic active-low snapshots without polling SDL or Windows.
 
 /// Size of the Z80's logical address space.
