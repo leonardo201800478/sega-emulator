@@ -132,6 +132,16 @@ class TemporalSMSMachine:
         if self._audio_config is not None:
             self.native_machine.configure_audio_output(**self._audio_config)
 
+    def open_video_output_in_viewport(self, window_handle: int) -> None:
+        """Attach the Rust D3D12 host to an existing native GUI widget handle."""
+        if type(window_handle) is not int or window_handle <= 0:
+            raise ValueError("window_handle deve ser um HWND inteiro positivo.")
+        self.native_machine.open_video_output_in_viewport(window_handle)
+
+    def close_video_output(self) -> None:
+        """Detach and release the native D3D12 presentation session."""
+        self.native_machine.close_video_output()
+
     def close_audio_output(self) -> None:
         """Stop and release the native audio output session."""
         self.native_machine.close_audio_output()
