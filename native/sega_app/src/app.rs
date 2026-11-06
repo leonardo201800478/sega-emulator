@@ -8,7 +8,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
 use sega_input_runtime::{
-    AxisSemantic, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
+    DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
 };
 use sega_sms_core::ControllerButtons;
@@ -33,12 +33,10 @@ pub struct SegaApp {
     audio_volume: u8,
     last_controller: Option<ControllerButtons>,
     pause_key_down: bool,
-    input_backend: Option<Sdl3Backend>,
-    input_attempted: bool,
+    input_backend: Option<Result<Sdl3Backend, String>>,
     input_buffers: InputBuffers,
     input_devices: Vec<DeviceDescriptor>,
     selected_gamepad: Option<DeviceId>,
-    input_error: Option<String>,
     native_viewport: NativeViewportState,
 }
 
@@ -56,11 +54,9 @@ impl Default for SegaApp {
             last_controller: None,
             pause_key_down: false,
             input_backend: None,
-            input_attempted: false,
             input_buffers: InputBuffers::default(),
             input_devices: Vec::new(),
             selected_gamepad: None,
-            input_error: None,
             native_viewport: NativeViewportState::default(),
         }
     }
@@ -249,7 +245,7 @@ impl SegaApp {
                 ui,
                 &self.input_devices,
                 &mut self.selected_gamepad,
-                self.input_error.as_deref(),
+                self.input_backend.as_ref().and_then(|state| state.as_ref().err()).map(String::as_str),
             );
             render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui, self.aspect_ratio);
@@ -391,44 +387,42 @@ impl SegaApp {
     }
 
     fn ensure_input_backend(&mut self) {
-        if self.input_attempted {
+        if self.input_backend.is_some() {
             return;
         }
-        self.input_attempted = true;
-        match Sdl3Backend::new() {
-            Ok(mut backend) => match backend.enumerate(&mut self.input_devices) {
-                Ok(()) => {
-                    self.selected_gamepad = self
-                        .input_devices
-                        .iter()
-                        .find(|device| device.class == DeviceClass::Gamepad)
-                        .map(|device| device.id);
-                    self.input_backend = Some(backend);
-                }
-                Err(error) => {
-                    self.input_error = Some(error.to_string());
-                    backend.shutdown();
-                }
-            },
-            Err(error) => self.input_error = Some(error.to_string()),
+        let backend_result = Sdl3Backend::new().and_then(|mut backend| {
+            backend
+                .enumerate(&mut self.input_devices)
+                .map(|()| backend)
+        });
+        match backend_result {
+            Ok(backend) => {
+                self.selected_gamepad = self
+                    .input_devices
+                    .iter()
+                    .find(|device| device.class == DeviceClass::Gamepad)
+                    .map(|device| device.id);
+                self.input_backend = Some(Ok(backend));
+            }
+            Err(error) => self.input_backend = Some(Err(error.to_string())),
         }
     }
 
     fn update_gamepad_input(&mut self) -> (ControllerButtons, bool) {
         self.ensure_input_backend();
-        let Some(backend) = self.input_backend.as_mut() else {
+        let Some(Ok(backend)) = self.input_backend.as_mut() else {
             return (ControllerButtons::default(), false);
         };
         self.input_buffers.clear();
         if let Err(error) = backend.poll_into(&mut self.input_buffers) {
-            self.input_error = Some(error.to_string());
+            self.input_backend = Some(Err(error.to_string()));
             return (ControllerButtons::default(), false);
         }
-        self.input_error = None;
         if !self.input_buffers.events.is_empty()
             && let Err(error) = backend.enumerate(&mut self.input_devices)
         {
-            self.input_error = Some(error.to_string());
+            self.input_backend = Some(Err(error.to_string()));
+            return (ControllerButtons::default(), false);
         }
         if self.selected_gamepad.is_none_or(|selected| {
             !self
