@@ -16,7 +16,7 @@ Esta página é a fotografia do SHA indicado. PRs #595 e #597 estão integradas;
 | Mega Drive / Genesis | Não concluído | Fase futura |
 | Sega CD / 32X | Não concluídos | Dependem das plataformas anteriores |
 
-## 2. Estado dos componentes no SHA-base
+## 2. Estado dos componentes na main reconciliada
 
 | Componente | Estado observado | Limite / próxima evidência |
 |---|---|---|
@@ -62,12 +62,13 @@ A PR #595 foi integrada no merge SHA `733152f61b706b2243914ae017643cef949d4ae1`;
 
 ## 5. Prioridades de correção
 
-1. Preservar a linha INT externa e combinar sua origem com o IRQ de nível do VDP; salvar/restaurar as duas fontes separadamente.
-2. Provar, em ROM sintética determinística, pixels RGB não pretos e amostras PSG não silenciosas usando a mesma máquina do worker.
-3. Provar publicação do frame no mailbox e encaminhamento PCM à sessão nativa.
-4. Validar manualmente no Windows com GPU e endpoint de áudio reais; registrar região, ROM (hash apenas local), resolução, FPS, frametime, underruns e erros.
-5. Somente depois, localizar a primeira divergência em jogos comerciais fornecidos pelo usuário. Não versionar ROMs comerciais.
-6. Medir custo de instrumentação antes de usar telemetria no benchmark; observabilidade não pode ser confundida com desempenho de produção.
+1. Provar PCM não silencioso aceito por `NativeAudioBackend` WASAPI/XAudio2, incluindo contagem de blocos, erros, underruns e dropped blocks; o sink em memória da #597 não fecha esse gate.
+2. Validar manualmente no Windows a apresentação de frames D3D12 em GPU física e estabilidade da sequência de frames.
+3. Validar áudio audível em endpoint WASAPI/XAudio2 real, com taxa de amostragem, latência, underruns e erros registrados.
+4. Executar ROM legal/homebrew e jogo representativo, registrando região, hash local, boot, input e comportamento observável; não versionar ROM comercial.
+5. Validar VBlank/Line IRQ, controles, HALT e snapshots no host real, mantendo regressão SG-1000.
+6. Provar execução contínua versus em blocos, save/restore e replay determinístico.
+7. Medir custo da telemetria antes de habilitá-la em benchmark; observabilidade não pode ser confundida com desempenho de produção.
 
 ## 6. Modelagem temporal e precisão
 
