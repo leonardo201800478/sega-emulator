@@ -597,4 +597,4 @@ Próximo passo operacional:
 
 ## Follow-up — cleanup audit 2026-11-06
 
-A revisão posterior do scaffold `native/sega_emu_core` confirmou que ele continha apenas reexports de `sega-z80-alu` e `sega-z80-bus`, sem consumidores no runtime, frontend, testes ou workflows ativos. O diretório, manifesto e lockfile foram removidos na PR #581. Os crates originais `native/z80_alu` e `native/z80_bus` foram preservados; a realocação arquitetural continua adiada e o diretório de destino deverá ser criado quando essa fase for iniciada.
+A revisão posterior do scaffold `native/sega_emu_core` confirmou que ele continha apenas reexports de `sega-z80-alu` e `sega-z80-bus`, sem consumidores no runtime, frontend, testes ou workflows ativos. O diretório, manifesto e lockfile foram removidos na PR #581. Os crates originais `native/z80_alu` e `native/z80_bus` foram preservados; a realocação arquitetural continua adiada e o diretório de destino deverá ser criado quando essa fase for iniciada. Também foram removidos os namespaces Python vazios `src/sega_emulator/{bus,cpu,video}`, sem imports ativos fora da referência histórica em `legacy/`.
