@@ -295,6 +295,8 @@ jobs:
     if: github.event_name == 'pull_request' && github.head_ref == 'feat/rust-app-sms-runtime-viewport-20261106'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
@@ -302,10 +304,15 @@ jobs:
           toolchain: 1.99.1
       - name: Resolve standalone sega-app lockfile
         run: cargo metadata --format-version 1 --manifest-path native/sega_app/Cargo.toml > /dev/null
-      - name: Upload resolved sega-app lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: sega-app-lockfile-preview
-          path: native/sega_app/Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit resolved sega-app lockfile
+        shell: bash
+        run: |
+          if git diff --quiet -- native/sega_app/Cargo.lock; then
+            echo "Standalone sega-app lockfile is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native/sega_app/Cargo.lock
+          git commit -m "build(sega-app): refresh resolved Cargo lockfile"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
