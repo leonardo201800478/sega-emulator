@@ -19,6 +19,7 @@ class FakeNativeSMSTemporalMachine:
         self.is_running = False
         self.audio_output_error = None
         self.audio_output_metrics = (0, 0)
+        self.runtime_signal_metrics = (0, 0, 0, 0, 0, 0, 0, 0)
         self.video_output_is_running = True
         self.video_last_published_sequence = 0
         self.video_last_presented_sequence = 0
@@ -208,3 +209,20 @@ def test_temporal_adapter_exposes_read_only_video_presentation_telemetry(
     assert machine.video_replaced_frames == 2
     assert machine.video_device_recovery_count == 1
     assert machine.video_output_error == "DXGI device removed"
+
+def test_temporal_adapter_exposes_hardware_signal_metrics(
+    temporal_machine_module: SimpleNamespace,
+) -> None:
+    machine = TemporalSMSMachine(b"rom")
+    machine.native_machine.runtime_signal_metrics = (1200, 1, 1, 512, 8, 735, 500, 250_000)
+
+    assert machine.runtime_signal_metrics == {
+        "non_black_pixels": 1200,
+        "vdp_mode4_enabled": 1,
+        "vdp_display_enabled": 1,
+        "vdp_nonzero_vram_bytes": 512,
+        "vdp_nonzero_cram_bytes": 8,
+        "psg_samples": 735,
+        "psg_nonzero_samples": 500,
+        "psg_peak_amplitude_micros": 250_000,
+    }
