@@ -662,6 +662,11 @@ fn worker_loop(
     }
 }
 
+/// Dispatch one coarse worker command over the worker-owned machine and outputs.
+///
+/// The explicit state references keep machine, audio, video and timing ownership
+/// visible at this boundary instead of hiding them in shared mutable globals.
+#[allow(clippy::too_many_arguments)]
 fn handle_command(
     command: WorkerCommand,
     machine: &mut SmsTemporalMachine,
