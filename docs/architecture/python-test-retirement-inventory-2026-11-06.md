@@ -122,3 +122,14 @@ Não declarar cobertura migrada com base apenas na existência de `#[test]` em u
 - [Inventário de migração da aplicação](rust-application-migration-inventory.md)
 - [Status da migração da aplicação](rust-application-migration-status-2026-11-06.md)
 - [CI validation policy](../ci-validation-policy.md)
+
+
+## 8. Primeira auditoria detalhada por domínio
+
+A auditoria inicial de `tests/test_sms_native_audio.py` está em [python-test-audit-sms-audio-2026-11-06.md](python-test-audit-sms-audio-2026-11-06.md). Dos nove testes:
+- Contratos já cobertos no núcleo Rust: NTSC/PAL PSG, NMI, frame/input e sprite-limit (com uma confirmação pendente de sample rate e validação da API de aplicação).
+- Migração necessária: seleção de backend e política regional Brasil/PAL-M.
+- Substituição por testes egui/eframe: contrato visual/adapter Qt.
+- Remoção justificável após confirmação da API Rust tipada: rejeição de valor não booleano, específica da fronteira Python.
+
+O arquivo Python permanece ativo até que os critérios daquela auditoria sejam satisfeitos e validados no SHA candidato.
