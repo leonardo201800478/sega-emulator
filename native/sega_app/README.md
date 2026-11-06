@@ -4,9 +4,9 @@
 
 ## Current vertical slice
 
-- Opens the native Windows file picker for `.sms` and `.zip` ROMs, while keeping the path field editable and paste-friendly.
+- Opens the native Windows file picker for `.sms` and `.zip` ROMs, while keeping the path field editable and enabling Windows clipboard paste (`eframe/clipboard`). Raw `.bin` paths remain accepted for compatibility.
 - Remembers the last selected ROM directory in `%APPDATA%\\Sega Emulator\\last_rom_directory.txt`.
-- Loads raw `.sms` files or the only `.sms` entry inside a ZIP archive; archives with zero or multiple SMS entries are rejected explicitly.
+- Loads raw `.sms` / `.bin` files or the only `.sms` entry inside a ZIP archive; archives with zero or multiple SMS entries are rejected explicitly.
 - Selects the machine region (USA/NTSC, Brazil/PAL-M, Europe/PAL, Japan/NTSC).
 - Creates the existing `SmsTemporalWorker`; it does not implement a second machine or scheduler.
 - Exposes coarse-grained start, pause, stop, reset and single-frame commands.

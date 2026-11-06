@@ -445,7 +445,7 @@ fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
         .and_then(|extension| extension.to_str())
         .unwrap_or_default();
 
-    if extension.eq_ignore_ascii_case("sms") {
+    if extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin") {
         let rom = fs::read(path)
             .map_err(|error| format!("Não foi possível ler a ROM: {error}"))?;
         if rom.is_empty() {
@@ -463,7 +463,7 @@ fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
         return read_sms_from_zip(file);
     }
 
-    Err("Formato não suportado. Selecione um arquivo .sms ou .zip".to_owned())
+    Err("Formato não suportado. Selecione um arquivo .sms ou .zip (ou informe um .bin manualmente)".to_owned())
 }
 
 /// Extract the only non-directory .sms entry from a ZIP archive.
