@@ -68,7 +68,7 @@ impl SegaApp {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                 ui.separator();
-                ui.small("M1 · shell sem hardware · nenhuma dependência Python no binário");
+                ui.small("M1 · shell sem hardware · runtime SMS ainda não integrado");
             });
         });
     }
