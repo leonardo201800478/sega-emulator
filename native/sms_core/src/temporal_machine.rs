@@ -1068,9 +1068,8 @@ impl SmsTemporalMachine {
                         .event_queue
                         .pending
                         .iter()
-                        .find(|event| matches!(
-                            event.payload,
-                            crate::SmsTemporalEvent::InternalCycleComplete { .. }
+                        .find(|event| event.payload == (
+                            crate::SmsTemporalEvent::BusCompletion { request_id: request.id }
                         ))
                         .map(|event| event.timestamp)
                 })
@@ -1116,7 +1115,11 @@ impl SmsTemporalMachine {
                         .scheduler
                         .event_queue
                         .pending
-                        .first()
+                        .iter()
+                        .find(|event| matches!(
+                            event.payload,
+                            crate::SmsTemporalEvent::InternalCycleComplete { .. }
+                        ))
                         .map(|event| event.timestamp)
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
