@@ -9,8 +9,7 @@ pub struct SegaApp {
 impl SegaApp {
     /// Render the initial application shell without starting emulation.
     pub fn render(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::central_panel(ui.style()).show(ui, |ui| {
-            ui.vertical(|ui| {
+        ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.heading("Sega Emulator");
                     ui.separator();
@@ -22,9 +21,10 @@ impl SegaApp {
 
                 ui.separator();
                 ui.heading("Aplicação nativa em construção");
-                ui.label(
-                    "Esta etapa valida somente o shell egui/eframe. Nenhuma ROM ou máquina                      é iniciada e o frontend Python legado permanece intacto.",
-                );
+                ui.label(concat!(
+                    "Esta etapa valida somente o shell egui/eframe. ",
+                    "Nenhuma ROM ou máquina é iniciada e o frontend Python legado permanece intacto."
+                ));
 
                 ui.add_space(12.0);
                 ui.group(|ui| {
@@ -73,7 +73,6 @@ impl SegaApp {
                         ui.small("M1 · shell sem hardware · nenhuma dependência Python no binário");
                     },
                 );
-            });
         });
     }
 }
