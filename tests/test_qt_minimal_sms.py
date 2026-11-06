@@ -251,7 +251,6 @@ def test_sms_video_viewport_keeps_a_centered_four_by_three_surface(
     viewport.close()
 
 
-
 def test_audio_output_failure_does_not_prevent_loading_rom(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
