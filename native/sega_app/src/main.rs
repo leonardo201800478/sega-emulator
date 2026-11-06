@@ -1,3 +1,5 @@
+//! Windows entry point for the native egui application shell.
+
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
