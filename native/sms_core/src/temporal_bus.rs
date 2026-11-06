@@ -698,7 +698,7 @@ impl SmsTemporalBus {
             SmsTemporalEvent::ExternalThTransition { player, .. } => {
                 (player == 1 || player == 2)
                     && event.timestamp.checked_duration_since(now).is_some_and(|elapsed| {
-                        elapsed > 0 && elapsed % u128::from(scale) == 0
+                        elapsed % u128::from(scale) == 0
                     })
             }
             _ => true,
