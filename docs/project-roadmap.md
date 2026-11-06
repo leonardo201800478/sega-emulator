@@ -7,19 +7,20 @@
 
 ## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela e não substitui nem reordena os gates de hardware.
+A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela, formalizada pela [ADR 0009](architecture/adr/0009-full-rust-application-egui-eframe.md), e não substitui nem reordena os gates de hardware.
 
-A `main` atual é `b82f748b83749eac2173ff86e535cc2a9e2ca862` (merge da PR #598). Ela contém a baseline VDP IRQ/INT e A/V sintética da PR #595, mais o teste de integração worker → `NativeAudioSession` → `PcmSink` da PR #597 e a reconciliação documental da PR #598.
+**Estado remoto confirmado nesta atualização:** `main` em `333900ae35a87b2430caedd2edf26218f272c8a6`, merge da PR #601. A PR #602 (CI Rust-first/Python legado opt-in) foi integrada anteriormente em `1a10779a37cf4da512186104bb5041552559a000`. O relatório detalhado da migração, incluindo escopo integrado, limites e próximos gates, está em [status da migração Rust — 2026-11-06](architecture/rust-application-migration-status-2026-11-06.md).
 
-**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → NativeAudioSession → sink em memória, PCM não silencioso) = PASS automatizado. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN até execução dos testes físicos ignorados da PR #599. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling não podem ser considerados PASS quando SKIPPED.
+**Gates A/V do runtime SMS:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → `NativeAudioSession` → sink em memória, PCM não silencioso) = PASS automatizado conforme baseline integrada. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN até execução dos testes físicos ignorados da PR #599. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Jobs SKIPPED ou não executados nunca são PASS.
 
-**PRs relevantes observadas nesta auditoria:**
+**Estado da migração da aplicação:**
+- M0 — decisão arquitetural e inventário M0.2: documentados e integrados na PR #601.
+- M1a — shell nativo `native/sega_app` com egui/eframe 0.37.0: integrado na PR #601; CI #5262 PASS no HEAD `86a51e1217aa588764c1559152765d0931beccb7`. O shell ainda não carrega ROM nem inicia hardware.
+- Política CI Rust-first e execução manual/opt-in dos gates Python/Qt/PyO3: integrada pela PR #602.
+- M1b — viewport D3D12 filho: PR #603 aberta; CI #5259 PASS no HEAD `d591c1648dd13bb384ae07cf3e2b8c9842202cec`, mas validação em Windows físico/GPU real permanece NOT RUN e o contrato latest-frame ainda precisa ser reconciliado com o FIFO lossless da ADR-0012. Não integrar ainda.
+- Aceitação de áudio em endpoint Windows: PR #599 aberta; CI #5206 PASS no HEAD `bb88e96cdb45d703f66d23acde42a2ead74fadd4`, mas testes físicos WASAPI/XAudio2 permanecem NOT RUN. Não integrar como prova de áudio físico.
 
-- PR #599: aberta, não integrada, HEAD `bb88e96cdb45d703f66d23acde42a2ead74fadd4`; CI #5206 SUCCESS, com Rust quality/tests, Python lint/regression, Windows PyO3 e D3D12 PASS. Scheduler stress, Qt smoke, PowerShell tooling e lock refresh SKIPPED. Os testes WASAPI/XAudio2 de endpoint real são ignorados por padrão e permanecem NOT RUN; A/V-04b/A/V-05 não estão fechados.
-- PR #600: fechada como SUPERSEDED por PR #601, sem merge e sem alterações na main. ADR 0009, inventário M0.2 e reconciliação do roadmap foram incorporados à PR #601.
-- PR #601: aberta em Draft, base `main`; contém ADR 0009, inventário M0.2, roadmap e shell nativo `sega-app` com eframe 0.37.0. Candidato de código M1a `f1df5883aa33c187fd7ab16d7fb9383f7c96c833`: CI #5225 SUCCESS — Rust quality/tests, Python lint/regression, Qt smoke, PowerShell, Scheduler stress, PyO3 build/import/smoke, app Windows check/Clippy/headless test, D3D12 compile/tests e WASAPI/XAudio2 compile/tests PASS. O shell não inicia ROM/hardware e ainda não integra o viewport D3D12. Execução manual em Windows físico: NOT RUN.
-
-Ordem vertical ativa:
+**Ordem vertical ativa do runtime SMS:**
 
 1. **Áudio nativo:** comprovar PCM aceito pelo NativeAudioBackend WASAPI/XAudio2 e depois saída audível em dispositivo físico, sem confundir sink de teste com endpoint real.
 2. **Vídeo/host físico:** executar ROM de diagnóstico em janela D3D12 real, verificar pixels apresentados e estabilidade da sequência de frames em GPU Windows.
@@ -28,13 +29,11 @@ Ordem vertical ativa:
 5. **Determinismo:** provar execução contínua versus em blocos, save/restore e replay no runtime SMS sem pular ciclos nem eventos.
 6. **Desempenho e compatibilidade:** somente após os gates A/V de host, medir o caminho crítico sem telemetria intrusiva e ampliar a matriz de jogos.
 
-A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). Os gates A/V são distintos dos gates de precisão temporal: pixels e amostras não silenciosas são pré-condições para o teste de saída, mas não comprovam compatibilidade geral, áudio físico ou TEMPORAL_PASS.
-
 A VDP atual produz composição por scanline; fetch arbitration, WAIT físico e efeitos intralinha continuam limitados/pendentes. Não bloquear a primeira baseline funcional por precisão elétrica ou por T-state que ainda não tenha consumidor demonstrado. A ADR-0016 permanece normativa: temporalidade prioritária nos caminhos de gameplay e execução atômica determinística no restante.
 
 O fechamento semântico global E7.7 do Z80 continua sendo uma frente independente. Não reiniciar E4C/E5/E6 nem promover E8 antes de fechar E7. A correção de IRQ do SMS deve preservar o núcleo compartilhado e não criar uma CPU por console.
 
-Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes. A migração egui/eframe é formalizada pela [ADR 0009](architecture/adr/0009-full-rust-application-egui-eframe.md) e pelo [inventário M0.2](architecture/rust-application-migration-inventory.md); não é uma segunda sequência de plataformas.
+Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes. O estado da migração deve ser atualizado no relatório vinculado acima, sem duplicar sua linha de execução nesta rota normativa.
 
 ## Contrato da primeira interface operacional — SMS e SG-1000
 
