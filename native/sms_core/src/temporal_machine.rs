@@ -876,6 +876,31 @@ impl SmsTemporalMachine {
         &mut self.cpu
     }
 
+    /// Apply the Z80 RESET input while preserving the SMS machine timeline and
+    /// all peripheral state. Reset is accepted only at an instruction boundary
+    /// with no pending memory, I/O, M1 or internal-cycle transaction.
+    pub fn reset_cpu(&mut self) -> Result<(), SmsTemporalMachineError> {
+        let state = self.export_state();
+        if !matches!(state.cpu.phase, Z80MicroSequencerPhase::Ready)
+            || state.instruction_started_at.is_some()
+            || state.bus.pending_request.is_some()
+            || state.bus.request_started_at.is_some()
+            || state.bus.completion.is_some()
+            || state.bus.pending_internal_cycle.is_some()
+            || state.bus.internal_cycle_started_at.is_some()
+            || state.bus.internal_completion.is_some()
+            || state.pending_internal_cycle_id.is_some()
+            || state.pending_internal_tstates.is_some()
+            || state.m1.is_some()
+            || state.m1_fixture_wait_tstates.is_some()
+        {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
+
+        self.cpu.reset();
+        Ok(())
+    }
+
     /// Update the controller input levels without advancing machine time.
     pub fn set_controller(
         &mut self,
@@ -1275,6 +1300,61 @@ mod tests {
         assert_eq!(machine.cpu().wz, 0x1234);
         assert_eq!(machine.cpu().registers.sp, 0xC000);
         assert_eq!(machine.now(), MachineTime::from_ticks(57));
+    }
+
+    #[test]
+    fn cpu_reset_preserves_sms_scheduler_and_peripheral_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        retired(machine.step_instruction(0).unwrap(), 0x00, 4);
+
+        machine.set_int_line(Some(0xCF));
+        {
+            let cpu = machine.cpu_mut();
+            cpu.registers.a = 0xA5;
+            cpu.registers.f = 0x5A;
+            cpu.registers.sp = 0xC123;
+            cpu.registers.set_bc(0x1234);
+            cpu.alternate.a = 0x3C;
+            cpu.ix = 0x4567;
+            cpu.iy = 0x89AB;
+            cpu.i = 0x11;
+            cpu.refresh = 0x92;
+            cpu.iff1 = true;
+            cpu.iff2 = true;
+            cpu.interrupt_mode = 2;
+            cpu.wz = 0xCAFE;
+            cpu.ei_delay = 1;
+            cpu.nmi_pending = true;
+            cpu.halted = true;
+        }
+
+        let before = machine.export_state();
+        let time_before = machine.now();
+        machine.reset_cpu().unwrap();
+        let after = machine.export_state();
+
+        assert_eq!(machine.now(), time_before);
+        assert_eq!(after.bus, before.bus);
+        assert_eq!(after.external_int_line, Some(0xCF));
+        assert_eq!(after.cpu.registers.pc, 0);
+        assert_eq!(after.cpu.registers.a, 0xA5);
+        assert_eq!(after.cpu.registers.f, 0x5A);
+        assert_eq!(after.cpu.registers.sp, 0xC123);
+        assert_eq!(after.cpu.registers.bc(), 0x1234);
+        assert_eq!(after.cpu.alternate.a, 0x3C);
+        assert_eq!(after.cpu.ix, 0x4567);
+        assert_eq!(after.cpu.iy, 0x89AB);
+        assert_eq!(after.cpu.i, 0);
+        assert_eq!(after.cpu.refresh, 0);
+        assert!(!after.cpu.iff1);
+        assert!(!after.cpu.iff2);
+        assert_eq!(after.cpu.interrupt_mode, 0);
+        assert_eq!(after.cpu.wz, 0);
+        assert_eq!(after.cpu.ei_delay, 0);
+        assert!(!after.cpu.nmi_pending);
+        assert_eq!(after.cpu.int_pending, Some(0xCF));
+        assert!(!after.cpu.halted);
+        assert!(matches!(after.cpu.phase, Z80MicroSequencerPhase::Ready));
     }
 
     #[test]
