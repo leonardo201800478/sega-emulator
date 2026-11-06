@@ -148,7 +148,6 @@ def test_minimal_sms_window_maps_keyboard_levels_without_rendering_video(
     window.close()
 
 
-
 def test_sms_video_viewport_keeps_a_centered_four_by_three_surface(
     qapplication: QApplication,
 ) -> None:
