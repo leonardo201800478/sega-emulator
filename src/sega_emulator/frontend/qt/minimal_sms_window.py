@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 )
 
 from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
-
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
 
 _KEY_ACTIONS = {
