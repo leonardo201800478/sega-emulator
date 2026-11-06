@@ -1,7 +1,7 @@
 # Rust workspace boundary and relocation plan
 
 **Date:** 2026-11-06  
-**Status:** approved target; R1 extraction in progress  
+**Status:** R1 runtime extraction implemented on migration branch; validation pending  
 **Parent decision:** ADR 0010 — Rust-only, SMS temporal first
 
 ## 1. Objective
@@ -143,19 +143,19 @@ At the baseline `edbec9272efe87a6a408bac74283d86a91d87b23`:
   cartridge, I/O and VDP types in the same crate.
 - `SmsTemporalWorker` remains inside `native/z80_core`, which depends on
   PyO3 and exposes both atomic and temporal bindings.
-- CI still defines Python, Qt, PyO3, Maturin and PowerShell tooling jobs.
+- The baseline CI defined Python, Qt, PyO3, Maturin and PowerShell tooling jobs. Python/Qt/PyO3 workflows were removed on the migration branch; PowerShell remains only as a native Rust build/validation wrapper.
 
 These counts are an inventory of tracked paths, not a claim that all files are
 runtime-active.
 
 ## 7. Implementation status
 
-R0 established the destination and migration contract. R1 has now created
-rust/runtime/sms-runtime as a pure-Rust workspace member and extracted the
-SMS worker implementation from the PyO3-bound source tree. The source has not
-yet been compiled in this session; CI on the exact PR head is the next
-validation gate. Python/PyO3 legacy removal remains a later gate, after the
-native application consumes this runtime directly.
+R0 established the destination and migration contract. R1 created
+`rust/runtime/sms-runtime` as a pure-Rust workspace member and extracted the
+SMS worker. The Python application, tests, Python tooling, PyO3 adapter and
+associated workflows were removed rather than ported. The shell egui app is
+not yet wired to the worker; this is the next integration increment. CI on
+the exact PR head is required before considering the extraction validated.
 
 
 ## 8. SMS worker extraction — source-level dependency audit
@@ -201,8 +201,9 @@ controller state, audio failure isolation, video detachment, shutdown/join,
 and deterministic execution. Existing tests inside the source file are not
 sufficient by themselves to prove the public crate boundary.
 
-This is a source-level dependency audit only. The crate has not been created,
-the worker has not been moved, and no compilation or tests have been run.
+The source-level dependency audit was used to define the extraction. The new
+crate and worker now exist on the migration branch. Compilation and tests
+remain pending CI on the exact PR head.
 
 
 ## 9. Única correção funcional autorizada durante a migração: desempenho
@@ -271,7 +272,9 @@ Python/SG-1000 da issue #44.
 - Added Windows-target compile and Clippy checks for the new D3D12-enabled
   runtime.
 
-**Validation status:** source and workspace metadata are committed on the
-migration branch. Local Cargo validation is unavailable in this environment;
-formatting, Clippy, Linux unit tests and Windows target compilation are
-therefore NOT RUN locally and remain dependent on CI for the PR head.
+**Validation status:** source, workspace metadata and legacy cleanup are
+committed on the migration branch. Local Cargo validation is unavailable in
+this environment; formatting, Clippy, Linux unit tests and Windows target
+compilation are NOT RUN locally and remain dependent on CI for the PR head.
+The external Z80 conformance harness was removed with its Python runner and
+is NOT RUN until a Rust-native replacement exists.
