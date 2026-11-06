@@ -783,6 +783,7 @@ fn handle_command(
 mod tests {
     use super::SmsTemporalWorker;
     use sega_sms_core::ControllerButtons;
+    use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::time::Duration;
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
@@ -848,5 +849,41 @@ mod tests {
                 .is_err()
         );
         assert!(!worker.is_running());
+    }
+
+    #[test]
+    fn completed_frames_publish_rgb888_and_keep_sequence_monotonic_across_reset() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let mailbox = FrameMailbox::new();
+        worker.set_video_mailbox(Some(mailbox.clone())).unwrap();
+
+        worker.step_frame(100_000).unwrap();
+        let first = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(first.sequence(), 1);
+        assert_eq!(first.width(), 256);
+        assert_eq!(first.height(), 192);
+        assert_eq!(first.pixel_format(), PixelFormat::Rgb888);
+        assert_eq!(first.stride_bytes(), 256 * 3);
+        assert_eq!(first.pixels().len(), 256 * 192 * 3);
+
+        worker.reset().unwrap();
+        worker.step_frame(100_000).unwrap();
+        let second = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(second.sequence(), 2);
+        assert_eq!(worker.video_last_published_sequence(), 2);
+    }
+
+    #[test]
+    fn closed_video_mailbox_does_not_stop_machine_execution() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let mailbox = FrameMailbox::new();
+        mailbox.close().unwrap();
+        worker.set_video_mailbox(Some(mailbox)).unwrap();
+
+        worker.step_frame(100_000).unwrap();
+
+        assert_eq!(worker.frame_number(), 1);
+        assert!(worker.video_output_error().is_some());
+        assert_eq!(worker.runtime_error(), None);
     }
 }
