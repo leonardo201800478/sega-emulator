@@ -123,10 +123,15 @@ pub struct D3d12MailboxSession {
     running: Arc<AtomicBool>,
     last_presented_sequence: Arc<AtomicU64>,
     device_recoveries: Arc<AtomicU64>,
+    startup_receiver: Option<mpsc::Receiver<Result<(), String>>>,
+    startup_complete: bool,
 }
 
 impl D3d12MailboxSession {
     /// Start the standalone native window and presentation worker.
+    ///
+    /// This compatibility constructor waits for the startup handshake. GUI
+    /// event loops must prefer the asynchronous constructor below.
     pub fn start(
         render_width: u32,
         render_height: u32,
@@ -141,15 +146,30 @@ impl D3d12MailboxSession {
                 window_height,
             )
         };
-        Self::start_with_host_factory(initialize_host)
+        Self::start_with_host_factory_async(initialize_host)?.wait_for_startup()
     }
 
     /// Start presentation on an existing HWND owned by the calling GUI thread.
     ///
-    /// The caller must invoke this method on the HWND's owning thread and keep
-    /// the associated widget alive until shutdown() has completed. The D3D12
-    /// worker never pumps or destroys this external window.
+    /// This compatibility constructor waits for D3D12 initialization. GUI
+    /// event loops must use `start_for_existing_window_async` instead.
     pub fn start_for_existing_window(
+        render_width: u32,
+        render_height: u32,
+        window_handle: usize,
+    ) -> Result<Self, D3d12MailboxSessionError> {
+        Self::start_for_existing_window_async(render_width, render_height, window_handle)?
+            .wait_for_startup()
+    }
+
+    /// Start D3D12 initialization without blocking the calling GUI thread.
+    ///
+    /// Validate and capture the external HWND on its owning thread. Device,
+    /// swap-chain and presentation initialization run on the dedicated worker.
+    /// The caller must keep the HWND alive until this session has been shut
+    /// down and dropped. Call `poll_startup` from the GUI event loop until it
+    /// returns `Ok(true)`; `Ok(false)` means initialization is still pending.
+    pub fn start_for_existing_window_async(
         render_width: u32,
         render_height: u32,
         window_handle: usize,
@@ -159,10 +179,12 @@ impl D3d12MailboxSession {
         let initialize_host = move || {
             D3d12Host::initialize_for_existing_window(render_width, render_height, window_handle)
         };
-        Self::start_with_host_factory(initialize_host)
+        Self::start_with_host_factory_async(initialize_host)
     }
 
-    fn start_with_host_factory<F>(initialize_host: F) -> Result<Self, D3d12MailboxSessionError>
+    fn start_with_host_factory_async<F>(
+        initialize_host: F,
+    ) -> Result<Self, D3d12MailboxSessionError>
     where
         F: Fn() -> windows::core::Result<D3d12Host> + Send + 'static,
     {
@@ -282,20 +304,68 @@ impl D3d12MailboxSession {
             })
             .map_err(D3d12MailboxSessionError::WorkerStart)?;
 
-        match startup_receiver.recv() {
-            Ok(Ok(())) => Ok(Self {
-                mailbox,
-                worker: Some(worker),
-                running,
-                last_presented_sequence,
-                device_recoveries,
-            }),
+        Ok(Self {
+            mailbox,
+            worker: Some(worker),
+            running,
+            last_presented_sequence,
+            device_recoveries,
+            startup_receiver: Some(startup_receiver),
+            startup_complete: false,
+        })
+    }
+
+    /// Poll the startup handshake without waiting for the D3D12 worker.
+    ///
+    /// Returns `Ok(false)` while device/swap-chain initialization is pending,
+    /// `Ok(true)` once the presentation worker is ready, or an error if startup
+    /// failed. This method is safe to call on every eframe update.
+    pub fn poll_startup(&mut self) -> Result<bool, D3d12MailboxSessionError> {
+        if self.startup_complete {
+            return Ok(true);
+        }
+
+        let startup_result = match self.startup_receiver.as_ref() {
+            Some(receiver) => receiver.try_recv(),
+            None => return Err(D3d12MailboxSessionError::StartupChannelClosed),
+        };
+
+        match startup_result {
+            Ok(Ok(())) => {
+                self.startup_receiver = None;
+                self.startup_complete = true;
+                Ok(true)
+            }
             Ok(Err(message)) => {
-                let _ = worker.join();
+                self.startup_receiver = None;
+                let _ = self.join_worker();
+                Err(D3d12MailboxSessionError::HostInitialization(message))
+            }
+            Err(mpsc::TryRecvError::Empty) => Ok(false),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.startup_receiver = None;
+                let _ = self.join_worker();
+                Err(D3d12MailboxSessionError::StartupChannelClosed)
+            }
+        }
+    }
+
+    fn wait_for_startup(mut self) -> Result<Self, D3d12MailboxSessionError> {
+        let receiver = self
+            .startup_receiver
+            .take()
+            .ok_or(D3d12MailboxSessionError::StartupChannelClosed)?;
+        match receiver.recv() {
+            Ok(Ok(())) => {
+                self.startup_complete = true;
+                Ok(self)
+            }
+            Ok(Err(message)) => {
+                let _ = self.join_worker();
                 Err(D3d12MailboxSessionError::HostInitialization(message))
             }
             Err(_) => {
-                let _ = worker.join();
+                let _ = self.join_worker();
                 Err(D3d12MailboxSessionError::StartupChannelClosed)
             }
         }
@@ -364,6 +434,15 @@ mod tests {
     #[test]
     fn rejects_zero_external_hwnd_before_starting_worker() {
         let result = D3d12MailboxSession::start_for_existing_window(256, 192, 0);
+        assert!(matches!(
+            result,
+            Err(D3d12MailboxSessionError::HostInitialization(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_zero_external_hwnd_before_starting_async_worker() {
+        let result = D3d12MailboxSession::start_for_existing_window_async(256, 192, 0);
         assert!(matches!(
             result,
             Err(D3d12MailboxSessionError::HostInitialization(_))
