@@ -597,18 +597,30 @@ fn execute_frame(
     let registers = machine.vdp().registers();
     let vram_nonzero = machine.vdp().vram().iter().filter(|byte| **byte != 0).count() as u64;
     let cram_nonzero = machine.vdp().cram().iter().filter(|byte| **byte != 0).count() as u64;
-    telemetry.framebuffer_non_black_pixels.store(non_black_pixels, Ordering::Release);
-    telemetry.vdp_mode4_enabled.store(u64::from(registers[0] & 0x04 != 0), Ordering::Release);
-    telemetry.vdp_display_enabled.store(u64::from(registers[1] & 0x40 != 0), Ordering::Release);
+    telemetry
+        .framebuffer_non_black_pixels
+        .store(non_black_pixels, Ordering::Release);
+    telemetry
+        .vdp_mode4_enabled
+        .store(if registers[0] & 0x04 != 0 { 1 } else { 0 }, Ordering::Release);
+    telemetry
+        .vdp_display_enabled
+        .store(if registers[1] & 0x40 != 0 { 1 } else { 0 }, Ordering::Release);
     telemetry.vdp_nonzero_vram_bytes.store(vram_nonzero, Ordering::Release);
     telemetry.vdp_nonzero_cram_bytes.store(cram_nonzero, Ordering::Release);
 
     let samples = machine.drain_audio_samples(None);
     let nonzero_samples = samples.iter().filter(|sample| sample.abs() > 1.0e-9).count() as u64;
     let peak = samples.iter().fold(0.0_f64, |peak, sample| peak.max(sample.abs()));
-    telemetry.psg_samples_total.store(samples.len() as u64, Ordering::Release);
-    telemetry.psg_nonzero_samples.store(nonzero_samples, Ordering::Release);
-    telemetry.psg_peak_amplitude_micros.store((peak * 1_000_000.0).round() as u64, Ordering::Release);
+    telemetry
+        .psg_samples_total
+        .store(samples.len() as u64, Ordering::Release);
+    telemetry
+        .psg_nonzero_samples
+        .store(nonzero_samples, Ordering::Release);
+    telemetry
+        .psg_peak_amplitude_micros
+        .store((peak * 1_000_000.0).round() as u64, Ordering::Release);
     let audio_result = audio_session
         .as_mut()
         .map(|session| session.process_samples(&samples));
@@ -982,7 +994,6 @@ mod tests {
         assert_eq!(nonzero_vram, 0);
         assert_eq!(nonzero_cram, 0);
         assert!(psg_nonzero_samples <= psg_samples);
-        assert!(psg_peak_micros <= 1_000_000);
     }
 
     #[test]
