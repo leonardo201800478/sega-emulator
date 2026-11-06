@@ -23,6 +23,6 @@
 
 ```powershell
 cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
-cargo check --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-cargo test --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+cargo check --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+cargo test --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 ```
