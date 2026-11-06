@@ -36,6 +36,11 @@ class FakeTemporalSMSMachine:
         self.video_close_error: str | None = None
         self.audio_output_error: str | None = None
         self.audio_output_metrics = (0, 0)
+        self.runtime_signal_metrics = {key: 0 for key in (
+            "non_black_pixels", "vdp_mode4_enabled", "vdp_display_enabled",
+            "vdp_nonzero_vram_bytes", "vdp_nonzero_cram_bytes", "psg_samples",
+            "psg_nonzero_samples", "psg_peak_amplitude_micros",
+        )}
         self.audio_configure_error: str | None = None
         self.calls: list[tuple[object, ...]] = []
 
