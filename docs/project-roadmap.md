@@ -9,13 +9,13 @@
 
 A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**.
 
-A `main` atual é `733152f61b706b2243914ae017643cef949d4ae1` (merge da PR #595). Ela contém a ligação VDP IRQ → Z80 INT com preservação da INT externa, testes de restauração do estado, uma ROM sintética Mode 4 que exige pixels RGB conhecidos, geração de PCM não silencioso pelo SN76489 e publicação do pixel esperado pelo worker no mailbox RGB888. Esses testes passaram no CI #5178 no HEAD exato `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
+A `main` atual é `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (merge da PR #597). Ela contém a baseline VDP IRQ/INT e A/V sintética da PR #595, mais o teste de integração worker → `NativeAudioSession` → `PcmSink` da PR #597. O CI #5178 passou no HEAD #595 `69ca40ab29c486f26852adb7536a04f95f9dd7ae`; o CI #5185 passou no HEAD #597 `30554cc6642dd49d06adf495dca3e80f4822b081`.
 
-**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core) e A/V-03 (worker/mailbox de vídeo) = PASS automatizado. A/V-04 (worker → sessão de áudio nativa) = NOT RUN. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling também ficaram NOT RUN no CI #5178.
+**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → NativeAudioSession → sink em memória, PCM não silencioso) = PASS automatizado. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling também ficaram NOT RUN nos workflows #5178/#5185.
 
 Ordem vertical ativa:
 
-1. **Áudio nativo:** comprovar separadamente PCM gerado, PCM drenado pelo worker, PCM recebido pela `NativeAudioSession`, PCM aceito pelo backend e saída audível. Criar teste de integração worker → sessão com PCM conhecido e métricas de erro/underrun.
+1. **Áudio nativo:** o worker → `NativeAudioSession` → `PcmSink` em memória está coberto por teste de integração. Próximo gate: comprovar PCM aceito pelo `NativeAudioBackend` WASAPI/XAudio2 e depois saída audível em dispositivo físico, sem confundir sink de teste com endpoint real.
 2. **Vídeo/host físico:** executar ROM de diagnóstico em janela D3D12 real, verificar pixels apresentados e estabilidade da sequência de frames em GPU Windows.
 3. **Gameplay:** executar ROM legal/homebrew e jogo representativo, registrando região, hash local, boot, input e comportamento observável. Não versionar ROM comercial.
 4. **Controles e IRQ:** validar VBlank/Line IRQ, input, HALT e restauração de snapshots em cenários integrados; preservar o SG-1000.
