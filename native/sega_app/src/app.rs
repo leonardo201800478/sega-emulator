@@ -157,6 +157,7 @@ impl SegaApp {
         let Some(window) = frame.winit_window() else {
             self.native_viewport.error =
                 Some("A janela nativa do eframe ainda não está disponível".to_owned());
+            context.request_repaint_after(Duration::from_millis(16));
             return;
         };
 
@@ -165,6 +166,7 @@ impl SegaApp {
             Err(error) => {
                 self.native_viewport.error =
                     Some(format!("Não foi possível obter o HWND do eframe: {error}"));
+                context.request_repaint_after(Duration::from_millis(16));
                 return;
             }
         };
@@ -210,7 +212,7 @@ impl SegaApp {
             self.native_viewport.session = Some(session);
         }
 
-        let scale = window.scale_factor() as f32;
+        let scale = context.pixels_per_point();
         let bounds = (
             (viewport_rect.min.x * scale).round() as i32,
             (viewport_rect.min.y * scale).round() as i32,
