@@ -1918,9 +1918,8 @@ mod tests {
         for (revision, revision_name, register5) in revisions {
             for (sprite_shift, left_mask, sprite_x) in cases {
                 let mut v = SmsVdp::default();
-                v.registers[0] = 0x04
-                    | if sprite_shift { 0x08 } else { 0 }
-                    | if left_mask { 0x20 } else { 0 };
+                v.registers[0] =
+                    0x04 | if sprite_shift { 0x08 } else { 0 } | if left_mask { 0x20 } else { 0 };
                 v.registers[1] = 0x40;
                 v.registers[2] = 0x0E;
                 v.registers[5] = register5;
