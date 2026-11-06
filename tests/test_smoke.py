@@ -21,7 +21,7 @@ def test_entry_point_without_rom_opens_minimal_sms_control_window(
 
     calls: list[tuple[object, ...]] = []
 
-    def fake_run(rom: object, *, region: str) -> None:
+    def fake_run(rom: object, *, region: str | None) -> None:
         calls.append((rom, region))
 
     frontend = ModuleType("sega_emulator.frontend.qt.minimal_sms_window")
@@ -34,7 +34,7 @@ def test_entry_point_without_rom_opens_minimal_sms_control_window(
 
     main(["--log-dir", str(tmp_path)])
 
-    assert calls == [(None, "usa")]
+    assert calls == [(None, None)]
     assert capsys.readouterr().out == ""
 
 
