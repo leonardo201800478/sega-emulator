@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
+from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.frontend.qt.sms_settings_dialog import SmsSettingsDialog
 from sega_emulator.machine.sms import load_sms_rom
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
 
@@ -40,9 +42,24 @@ _KEY_ACTIONS = {
 class MinimalSmsWindow(QMainWindow):
     """SMS control panel with a native Rust-owned D3D12 presentation surface."""
 
-    def __init__(self, *, region: str = "usa", parent=None) -> None:
+    def __init__(
+        self,
+        *,
+        region: str | None = None,
+        settings: QSettings | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
-        self._region = region
+        self._settings = settings or QSettings("SegaEmulator", "SegaEmulator")
+        self._preferences = FrontendPreferences.from_store(self._settings)
+        saved_region = str(self._settings.value("sms_region_preference", "usa"))
+        self._region = region or (
+            saved_region if saved_region in {"usa", "brazil", "europe", "japan"} else "usa"
+        )
+        self._audio_backend = str(self._settings.value("sms_audio_backend", "wasapi"))
+        if self._audio_backend not in {"wasapi", "xaudio2", "disabled"}:
+            self._audio_backend = "wasapi"
+        self._active_region: str | None = None
         self._machine: TemporalSMSMachine | None = None
         self._rom_path: Path | None = None
         self._pressed_actions: set[str] = set()
@@ -62,6 +79,7 @@ class MinimalSmsWindow(QMainWindow):
         central_layout.setContentsMargins(12, 12, 12, 12)
         central_layout.setSpacing(8)
         self.video_viewport = SmsVideoViewport(central_widget)
+        self.video_viewport.set_integer_scale(self._preferences.integer_scale)
         central_layout.addWidget(self.video_viewport, 1)
 
         self.status_label = QLabel("Abra uma ROM do Master System")
@@ -98,6 +116,29 @@ class MinimalSmsWindow(QMainWindow):
         self.close_rom_action.triggered.connect(self._close_rom)
         toolbar.addAction(self.close_rom_action)
 
+        file_menu = self.menuBar().addMenu("Arquivo")
+        file_menu.addAction(self.open_action)
+        file_menu.addAction(self.close_rom_action)
+        file_menu.addSeparator()
+        exit_action = QAction("Sair", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        emulation_menu = self.menuBar().addMenu("Emulação")
+        emulation_menu.addAction(self.run_action)
+        emulation_menu.addAction(self.reset_action)
+
+        settings_menu = self.menuBar().addMenu("Configurações")
+        self.settings_action = QAction("Áudio, vídeo e sistema…", self)
+        self.settings_action.setShortcut("Ctrl+,")
+        self.settings_action.triggered.connect(self._show_settings_dialog)
+        settings_menu.addAction(self.settings_action)
+
+        help_menu = self.menuBar().addMenu("Ajuda")
+        about_action = QAction("Sobre o Sega Emulator…", self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
         self.statusBar().showMessage(
             "Viewport 4:3 nativo — apresentação D3D12 ativada ao carregar uma ROM"
         )
@@ -123,20 +164,7 @@ class MinimalSmsWindow(QMainWindow):
             return
 
         display_name = loaded_rom.display_name
-        audio_error = None
-        try:
-            machine.configure_audio_output(
-                "wasapi",
-                sample_rate=48_000,
-                buffer_size=512,
-                queue_blocks=4,
-                volume=80,
-                balance=0,
-            )
-        except (OSError, RuntimeError, ValueError) as exc:
-            # Audio is a host service: report its failure without blocking video
-            # presentation or preventing the cartridge from being loaded.
-            audio_error = str(exc)
+        audio_error = self._configure_audio_output(machine)
 
         if self._machine is not None:
             self._video_telemetry_timer.stop()
@@ -156,6 +184,7 @@ class MinimalSmsWindow(QMainWindow):
         self._audio_output_error = audio_error
         self._machine = machine
         self._rom_path = path
+        self._active_region = self._region
         self._pressed_actions.clear()
         self.setWindowTitle(f"Sega Emulator — {display_name}")
         self.status_label.setText(
@@ -216,6 +245,7 @@ class MinimalSmsWindow(QMainWindow):
         self._last_frame_sample = None
         self._machine = None
         self._rom_path = None
+        self._active_region = None
         self._pressed_actions.clear()
         self._audio_output_error = None
         self.status_label.setText("Abra uma ROM do Master System")
@@ -236,11 +266,79 @@ class MinimalSmsWindow(QMainWindow):
             self.statusBar().showMessage("ROM fechada")
         self._update_actions()
 
+    def _configure_audio_output(self, machine: TemporalSMSMachine) -> str | None:
+        """Apply persisted host audio preferences through the coarse Rust API."""
+        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
+            try:
+                machine.close_audio_output()
+            except RuntimeError as exc:
+                return str(exc)
+            return None
+        try:
+            machine.configure_audio_output(
+                self._audio_backend,
+                sample_rate=self._preferences.audio_sample_rate,
+                buffer_size=self._preferences.audio_buffer_size,
+                queue_blocks=self._preferences.audio_queue_blocks,
+                volume=self._preferences.audio_volume,
+                balance=self._preferences.audio_balance,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            # Audio is a host service: report its failure without blocking video
+            # presentation or preventing the cartridge from being loaded.
+            return str(exc)
+        return None
+
     def _audio_status_text(self) -> str:
-        """Describe the native audio endpoint state without exposing PCM to Qt."""
+        """Describe the selected native audio endpoint without exposing PCM."""
+        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
+            return "Áudio desativado"
         if self._audio_output_error:
-            return f"Áudio WASAPI indisponível: {self._audio_output_error}"
-        return "Áudio WASAPI inicializado (48 kHz)"
+            return f"Áudio {self._audio_backend.upper()} indisponível: {self._audio_output_error}"
+        rate = self._preferences.audio_sample_rate
+        return f"Áudio {self._audio_backend.upper()} inicializado ({rate:,} Hz)".replace(",", ".")
+
+    def _show_settings_dialog(self) -> None:
+        """Edit and persist SMS host preferences; apply only supported settings."""
+        dialog = SmsSettingsDialog(
+            self._preferences,
+            region=self._region,
+            audio_backend=self._audio_backend,
+            parent=self,
+        )
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        previous_region = self._region
+        self._preferences = dialog.preferences()
+        self._audio_backend = dialog.selected_audio_backend
+        self._region = dialog.selected_region
+        self._preferences.save_to_store(self._settings)
+        self._settings.setValue("sms_audio_backend", self._audio_backend)
+        self._settings.setValue("sms_region_preference", self._region)
+        self.video_viewport.set_integer_scale(self._preferences.integer_scale)
+
+        if self._machine is not None:
+            self._audio_output_error = self._configure_audio_output(self._machine)
+            self.statusBar().showMessage(self._audio_status_text())
+        if self._machine is not None and self._region != previous_region:
+            QMessageBox.information(
+                self,
+                "Região atualizada",
+                "A nova região será aplicada quando a ROM atual for carregada novamente.",
+            )
+        else:
+            self.statusBar().showMessage("Configurações SMS salvas")
+
+    def _show_about(self) -> None:
+        """Show project identity and the current SMS runtime boundary."""
+        QMessageBox.about(
+            self,
+            "Sobre o Sega Emulator",
+            "Sega Emulator — Master System\n"
+            "Núcleo, Scheduler, VDP, PSG e apresentação D3D12 em Rust.\n"
+            "Qt/Python controla a interface e as preferências do host.",
+        )
 
     def _close_video_output(self, machine: TemporalSMSMachine) -> str | None:
         """Release D3D12 and return an error without interrupting Qt teardown."""
@@ -409,8 +507,8 @@ class MinimalSmsWindow(QMainWindow):
         super().closeEvent(event)
 
 
-def run_minimal_sms(rom_path: Path | None = None, *, region: str = "usa") -> int:
-    """Run the minimal Master System control application."""
+def run_minimal_sms(rom_path: Path | None = None, *, region: str | None = None) -> int:
+    """Run the Master System application with persisted host preferences."""
     app = QApplication.instance() or QApplication(sys.argv)
     window = MinimalSmsWindow(region=region)
     if rom_path is not None:
