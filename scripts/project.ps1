@@ -4,7 +4,6 @@ param(
     [ValidateSet("audit", "locks", "validate")]
     [string]$Command = "audit",
     [switch]$RefreshOffline,
-    [switch]$RustOnly,
     [string]$Json
 )
 
@@ -48,15 +47,35 @@ if ($Command -eq "audit") {
             $results += [pscustomobject]@{ Name = "tool $tool"; Status = $(if ($code -eq 0) { "PASS" } else { "FAIL" }); ExitCode = $code; Output = ($version | Out-String).Trim() }
         }
     }
-    foreach ($workspace in $workspaces) {
+
+    $rootWorkspace = $workspaces | Where-Object Name -eq "root" | Select-Object -First 1
+    $rootManifest = Join-Path $repoRoot $rootWorkspace.Manifest
+    $rootMetadata = Invoke-ProjectCargo -Name "metadata root" -CargoArguments @("metadata", "--locked", "--no-deps", "--format-version", "1", "--manifest-path", $rootManifest)
+    $results += $rootMetadata
+    $knownManifestPaths = @()
+    if ($rootMetadata.Status -eq "PASS") {
+        $metadataObject = $rootMetadata.Output | ConvertFrom-Json
+        $knownManifestPaths += @($metadataObject.packages | ForEach-Object { [System.IO.Path]::GetFullPath($_.manifest_path) })
+    }
+
+    foreach ($workspace in ($workspaces | Where-Object Name -ne "root")) {
         $manifestPath = Join-Path $repoRoot $workspace.Manifest
         $lockPath = Join-Path $repoRoot $workspace.Lockfile
+        $knownManifestPaths += [System.IO.Path]::GetFullPath($manifestPath)
         if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
             $results += [pscustomobject]@{ Name = "manifest $($workspace.Manifest)"; Status = "NOT RUN"; ExitCode = $null; Output = "Manifest nao encontrado; workspace pode ter sido consolidado." }
             continue
         }
         $results += Invoke-ProjectCargo -Name "metadata $($workspace.Name)" -CargoArguments @("metadata", "--locked", "--no-deps", "--format-version", "1", "--manifest-path", $manifestPath)
         $results += [pscustomobject]@{ Name = "lockfile $($workspace.Lockfile)"; Status = $(if (Test-Path -LiteralPath $lockPath -PathType Leaf) { "PASS" } else { "NOT RUN" }); ExitCode = $null; Output = $(if (Test-Path -LiteralPath $lockPath -PathType Leaf) { "presente" } else { "ausente" }) }
+    }
+
+    $allManifests = Get-ChildItem -Path $repoRoot -Filter "Cargo.toml" -File -Recurse | Where-Object { $_.FullName -notmatch "[\\/](target|\\.git)[\\/]" }
+    foreach ($manifest in $allManifests) {
+        $fullPath = [System.IO.Path]::GetFullPath($manifest.FullName)
+        if ($knownManifestPaths -contains $fullPath) { continue }
+        $relativePath = $manifest.FullName.Substring($repoRoot.Length).TrimStart("\\", "/")
+        $results += [pscustomobject]@{ Name = "unassigned manifest $relativePath"; Status = "NOT RUN"; ExitCode = $null; Output = "Crate fora dos workspaces ativos; nao compilado nesta fase." }
     }
 }
 elseif ($Command -eq "locks") {
