@@ -328,7 +328,7 @@ class MinimalSmsWindow(QMainWindow):
         }.get(self._audio_backend, self._audio_backend)
         if self._audio_output_error:
             return f"Áudio {backend_label} indisponível: {self._audio_output_error}"
-        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
+        if self._audio_backend == "disabled":
             return "Áudio desativado"
         rate = self._preferences.audio_sample_rate
         return (
