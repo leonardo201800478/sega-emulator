@@ -1,65 +1,28 @@
-# CI validation policy
+# CI validation policy — Rust-only migration
 
-The required CI path is Rust-first and must validate the native product without
-installing or executing the legacy Python application. Python, Qt and PyO3
-validation remains available only as an explicit, transitional diagnostic.
+## Required Rust gates
 
-## Required validation
+The pull-request workflow validates the active root Cargo workspace with the pinned Rust toolchain:
 
-| Domain | Trigger | Required validation |
-| --- | --- | --- |
-| Rust | Every pull request and push to `main` | Cargo workspace metadata/lockfile checks, rustfmt, Clippy with warnings denied, targeted SMS/SG-1000 tests and full Cargo workspace tests |
-| Native application | Changes to `native/sega_app/**` and application manifests | Windows x64 eframe check, Clippy and headless tests |
-| Windows native media | Required CI | D3D12/video-runtime compile and tests; WASAPI/XAudio2/audio-output compile and tests |
-| Scheduler | Scheduler/temporal changes, broad changes, or explicit stress label/profile | Deterministic stress profile; skipped profiles remain NOT RUN |
-| PowerShell tooling | Changes to project PowerShell scripts | Windows PowerShell parser validation |
+- `cargo metadata --locked --format-version 1 --no-deps`;
+- `cargo fmt --all -- --check`;
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+- `cargo test --workspace --locked`.
 
-The required Rust CI validates the active Cargo workspaces explicitly with
-`cargo metadata --locked`. It must not invoke `tools/project_manager.py` or
-install Python merely to audit Cargo manifests or lockfiles.
+The standalone `native/audio_output` and `native/sega_app` workspaces retain their own lockfiles and receive Windows x64 checks until they are consolidated under `rust/`.
 
-## Transitional legacy validation
+## Windows host validation
 
-The following checks are no longer required on ordinary pull requests or pushes:
+The Windows workflow validates the egui shell, the SMS temporal runtime with D3D12 enabled, the video runtime, and WASAPI/XAudio2 output. Compile/Clippy success is not a substitute for physical-device validation. GPU presentation, actual audio output, input latency and shutdown behavior must be classified separately.
 
-- Python Ruff formatting and lint;
-- Python pytest collection and regression;
-- PySide6/Qt runtime import and smoke tests;
-- PyO3/Maturin extension build, import and Python integration tests.
+The PowerShell tooling job parses the maintained scripts. The scripts invoke Cargo directly; no language runtime or binding build is required.
 
-They remain available through the CI workflow's manual
-`workflow_dispatch` input `run_legacy_python_validation`. This preserves a
-diagnostic path while the Rust application reaches functional parity, without
-making the legacy frontend a gate for new Rust-only changes.
+## Removed legacy validation
 
-A normal PR that does not explicitly dispatch the legacy validation records
-those suites as **NOT RUN**, never PASS. A manually dispatched run must be
-evaluated against its exact SHA and reported separately from required Rust CI.
+The Python/Qt/PyO3 jobs and their workflows were removed together with the corresponding source tree and extension crate. Their former test results are historical only and are not part of the current gate.
 
-Do not remove Python modules, PySide6, PyO3, Maturin, their lock/configuration,
-or their historical tests merely because their CI checks became opt-in. Their
-removal remains gated by the corresponding Rust replacement, parity tests,
-migration inventory and the approved removal milestone.
+The Python orchestration for external Z80 conformance was removed. A low-level Rust test binary remains in the SMS core but is not yet an independent, complete harness: it still depends on SMS compatibility exports and requires the upstream-suite acquisition/assembly/preflight pipeline. ZEXDOC/ZEXALL are **NOT RUN** until that harness is relocated to the shared Z80 crate and completed in Rust. Existing Rust semantic, bus, microsequencing and temporal tests remain active; they do not replace those external suites.
 
-## Execution policy
+## Result classification
 
-- Pull requests and pushes to `main` run the required Rust/native validation.
-- Legacy Python/Qt/PyO3 validation runs only when a maintainer explicitly
-  dispatches CI with `run_legacy_python_validation=true`.
-- Cargo lockfile refresh remains a separate manual operation.
-- Scheduler stress remains opt-in for ordinary scoped changes and is enabled
-  for scheduler/broad changes or explicit labels/profiles.
-- A skipped or unrequested validation is NOT RUN, not PASS.
-- CI results are valid only for the exact commit SHA whose checks completed.
-
-## Safety requirements
-
-The CI selection is an optimization of the migration's validation path, not
-permission to claim feature parity. Rust changes must still run the relevant
-Rust, Windows-native and deterministic Scheduler tests. Hardware-dependent
-D3D12, audio endpoint, input, display and gameplay checks remain separate
-manual acceptance gates where the hosted runner cannot prove physical behavior.
-
-Python checks may be removed permanently only after the Python runtime and
-all active consumers have been replaced and the migration inventory confirms
-that no production path depends on Python, PySide6, PyO3 or Maturin.
+Every required suite is reported as PASS, FAIL, BLOCKED or NOT RUN. Skipped, cancelled, unavailable or unexecuted checks never count as PASS. Results are valid only for the exact commit SHA being reviewed. A green Linux workspace does not imply Windows host or physical-device validation.

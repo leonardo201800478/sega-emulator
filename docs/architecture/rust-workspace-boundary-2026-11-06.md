@@ -1,7 +1,7 @@
 # Rust workspace boundary and relocation plan
 
 **Date:** 2026-11-06  
-**Status:** approved target; implementation not yet migrated  
+**Status:** R1 runtime extraction implemented on migration branch; validation pending  
 **Parent decision:** ADR 0010 — Rust-only, SMS temporal first
 
 ## 1. Objective
@@ -143,18 +143,19 @@ At the baseline `edbec9272efe87a6a408bac74283d86a91d87b23`:
   cartridge, I/O and VDP types in the same crate.
 - `SmsTemporalWorker` remains inside `native/z80_core`, which depends on
   PyO3 and exposes both atomic and temporal bindings.
-- CI still defines Python, Qt, PyO3, Maturin and PowerShell tooling jobs.
+- The baseline CI defined Python, Qt, PyO3, Maturin and PowerShell tooling jobs. Python/Qt/PyO3 workflows were removed on the migration branch; PowerShell remains only as a native Rust build/validation wrapper.
 
 These counts are an inventory of tracked paths, not a claim that all files are
 runtime-active.
 
 ## 7. Implementation status
 
-This change establishes the destination and migration contract only.
-**No Rust source has yet been relocated, no Python files have yet been
-removed, and no Cargo validation has been run.** The next implementation
-increment must extract the SMS worker into a pure-Rust crate and prove its
-contract before removing the PyO3-bound crate.
+R0 established the destination and migration contract. R1 created
+`rust/runtime/sms-runtime` as a pure-Rust workspace member and extracted the
+SMS worker. The Python application, tests, Python tooling, PyO3 adapter and
+associated workflows were removed rather than ported. The shell egui app is
+not yet wired to the worker; this is the next integration increment. CI on
+the exact PR head is required before considering the extraction validated.
 
 
 ## 8. SMS worker extraction — source-level dependency audit
@@ -186,10 +187,11 @@ boundary:
 ### Proposed first implementation slice
 
 Create `rust/runtime/sms-runtime` as a pure Rust library with dependencies
-on SMS core, audio runtime/output, video runtime, and the shared input/runtime
-contracts only when directly required. Move the worker and audio adapter as
-one implementation, convert internal `pub(super)` APIs into a deliberate
-public runtime API, and add a thin `lib.rs` facade. Do not bring over
+on SMS core, audio runtime and video runtime. The worker has been extracted
+with a public coarse-grained API. Physical audio output is supplied by an
+application-owned factory that is invoked on the machine worker thread; this
+keeps WASAPI/XAudio2 host objects thread-affine and avoids a dependency from
+the runtime crate to the host backend. Do not bring over
 `sms_temporal_machine.rs`, `input.rs`, `machine.rs`, PyO3 macros, or the
 atomic SG-1000 dependency.
 
@@ -199,8 +201,9 @@ controller state, audio failure isolation, video detachment, shutdown/join,
 and deterministic execution. Existing tests inside the source file are not
 sufficient by themselves to prove the public crate boundary.
 
-This is a source-level dependency audit only. The crate has not been created,
-the worker has not been moved, and no compilation or tests have been run.
+The source-level dependency audit was used to define the extraction. The new
+crate and worker now exist on the migration branch. Compilation and tests
+remain pending CI on the exact PR head.
 
 
 ## 9. Única correção funcional autorizada durante a migração: desempenho
@@ -250,3 +253,30 @@ o shell ou a janela abre.
 ainda precisa ser ligada à evidência correta do runtime SMS temporal atual
 antes da alteração de código. Não confundir com a auditoria histórica
 Python/SG-1000 da issue #44.
+
+
+## 10. R1 extraction — implementation record
+
+- Added `rust/runtime/sms-runtime` to the active root Cargo workspace and
+  default members.
+- Extracted the existing 1,056-line `SmsTemporalWorker` implementation and
+  its unit tests into `rust/runtime/sms-runtime/src/worker.rs`.
+- Added a public `AudioSession` contract. The application supplies a
+  `Send` audio-session factory; the factory is executed on the worker thread,
+  and the resulting host session never crosses thread boundaries.
+- The runtime depends only on `sega-sms-core`, `sega-audio-runtime`, and
+  `sega-video-runtime`; it has no PyO3, Python, Qt, or physical audio-output
+  dependency.
+- Added a public-API integration test for ROM loading, stepping, controller
+  input and reset, plus a worker-thread audio-factory test.
+- Added Windows-target compile and Clippy checks for the new D3D12-enabled
+  runtime.
+
+**Validation status:** source, workspace metadata and legacy cleanup are
+committed on the migration branch. Local Cargo validation is unavailable in
+this environment; formatting, Clippy, Linux unit tests and Windows target
+compilation are NOT RUN locally and remain dependent on CI for the PR head.
+The Python orchestration for external Z80 conformance was removed. A low-level
+Rust runner remains under the SMS core but still depends on compatibility
+exports and lacks Rust-native suite acquisition/assembly orchestration; ZEXDOC/
+ZEXALL are NOT RUN until that harness is relocated and completed.

@@ -1,26 +1,4 @@
-# Shared Windows build-environment helpers for repository scripts.
-function Get-SegaPython {
-    [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string]$RepositoryRoot)
-    $venvPython = Join-Path $RepositoryRoot ".venv\Scripts\python.exe"
-    if (Test-Path -LiteralPath $venvPython -PathType Leaf) { return $venvPython }
-    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-    if ($null -eq $pythonCommand) { throw "Python nao encontrado. Crie .venv ou instale Python 3.15 e adicione-o ao PATH." }
-    return $pythonCommand.Source
-}
-function Initialize-SegaPythonRuntime {
-    [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][string]$PythonExecutable)
-    $pythonVersion = (& $PythonExecutable -c "import sys; print('.'.join(map(str, sys.version_info[:3])))").Trim()
-    if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.15.2") {
-        throw "O projeto exige CPython 3.15.2; encontrado '$pythonVersion' em '$PythonExecutable'. Recrie .venv com Python 3.15.2."
-    }
-    $basePrefix = (& $PythonExecutable -c "import sys; print(sys.base_prefix)").Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($basePrefix)) { throw "Nao foi possivel determinar sys.base_prefix de '$PythonExecutable'." }
-    $pathEntries = @($env:PATH -split [System.IO.Path]::PathSeparator)
-    $alreadyPresent = $pathEntries | Where-Object { $_.TrimEnd('\') -ieq $basePrefix.TrimEnd('\') }
-    if (-not $alreadyPresent) { $env:PATH = "$basePrefix$([System.IO.Path]::PathSeparator)$env:PATH" }
-}
+# Shared Windows build-environment helpers for Rust scripts.
 function Initialize-SegaMsvcEnvironment {
     [CmdletBinding()]
     param()

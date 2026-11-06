@@ -673,6 +673,29 @@ impl Default for Z80MicroSequencer {
 }
 
 impl Z80MicroSequencer {
+    /// Apply the Z80 RESET input without advancing machine time.
+    ///
+    /// Architectural general-purpose, alternate, index and stack registers are
+    /// preserved. PC, I, R and interrupt/control state are reset. The external
+    /// INT level remains latched, matching the shared atomic CPU contract.
+    /// Any in-flight continuation is discarded; machine integration must only
+    /// call this at an instruction boundary with no outstanding bus transaction.
+    pub fn reset(&mut self) {
+        let mut registers = self.registers;
+        let alternate = self.alternate;
+        let ix = self.ix;
+        let iy = self.iy;
+        let int_pending = self.int_pending;
+
+        *self = Self::default();
+        registers.pc = 0;
+        self.registers = registers;
+        self.alternate = alternate;
+        self.ix = ix;
+        self.iy = iy;
+        self.int_pending = int_pending;
+    }
+
     /// Export the complete resumable state without advancing emulated time.
     pub fn export_state(&self) -> Z80MicroSequencerState {
         Z80MicroSequencerState {

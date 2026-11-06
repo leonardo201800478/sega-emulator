@@ -1,0 +1,14 @@
+[package]
+name = "sega-sms-runtime"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_sms_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+sega-audio-runtime = { path = "../../../native/audio_runtime" }
+sega-sms-core = { path = "../../../native/sms_core" }
+sega-video-runtime = { path = "../../../native/video_runtime" }

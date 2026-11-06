@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 exclude = [
-    "native/z80_core",
     "native/audio_output",
 ]
 members = [
@@ -17,6 +16,7 @@ members = [
     "native/machine_scheduler",
     "native/video_runtime",
     "native/video_core",
+    "rust/runtime/sms-runtime",
 ]
 default-members = [
     "native/sg1000_core",
@@ -30,4 +30,5 @@ default-members = [
     "native/temporal_core",
     "native/machine_scheduler",
     "native/video_runtime",
+    "rust/runtime/sms-runtime",
 ]

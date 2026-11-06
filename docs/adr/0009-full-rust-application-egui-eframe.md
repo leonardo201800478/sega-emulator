@@ -1,8 +1,10 @@
+> ADR histórica. A decisão vigente é a ADR 0010; requisitos e critérios abaixo que conflitem com o SMS temporal como único runtime e com a remoção integral do legado não são normativos.
+
 > **SUPERSEDED — 2026-11-06:** esta ADR foi substituída pela [ADR 0010 — Produto 100% Rust, SMS temporal como único runtime inicial](0010-rust-only-sms-temporal-first.md). A decisão anterior de manter Python/Qt/PyO3 como baseline de rollback não está mais vigente. Nenhum código Python, teste Python ou binding PyO3 será preservado no produto nem em legacy. Consulte a ADR 0010 e o roadmap mestre para a sequência atual.
 
 # ADR 0009 — Aplicação integralmente Rust com egui/eframe
 
-- **Status:** ACCEPTED — decisão de destino; migração incremental e ainda não concluída.
+- **Status:** SUPERSEDED — replaced by [ADR 0010 — Produto 100% Rust, SMS temporal como único runtime inicial](0010-rust-only-sms-temporal-first.md).
 - **Data:** 2026-11-06.
 - **Baseline:** `main` em `b82f748b83749eac2173ff86e535cc2a9e2ca862`.
 - **Branch inicial:** `migration/rust-egui-application-phase0-20261106`.

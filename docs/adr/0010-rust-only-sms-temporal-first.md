@@ -53,7 +53,7 @@ Eliminar do repositório e da distribuição, não apenas desativar na CI:
 - wheels, artefatos binários da extensão e workflows de Python/Qt/PyO3;
 - dependências, scripts, documentação de build e tarefas que exijam Python.
 
-Antes de apagar um componente compartilhado, extrair seu comportamento necessário para Rust puro. O worker SMS temporal atualmente localizado em `native/z80_core/src/sms_temporal_worker.rs` deve ser extraído para um crate Rust comum de runtime/aplicação. O backend de áudio e vídeo será consumido diretamente por esse runtime. Nenhum adapter PyO3 temporário será mantido.
+Antes de apagar um componente compartilhado, extrair seu comportamento necessário para Rust puro. No baseline, o worker SMS temporal estava localizado em `native/z80_core/src/sms_temporal_worker.rs`; na branch de migração ele foi extraído para `rust/runtime/sms-runtime`, sem PyO3. O runtime usa um contrato de sessão de áudio e recebe uma factory de host executada na thread da máquina; o vídeo continua integrado por `sega-video-runtime`. Nenhum adapter PyO3 temporário será mantido.
 
 A eliminação é completa: não manter Python sob `legacy/`, nem como suíte de testes, ferramenta de auditoria, benchmark, gerador, referência ou fallback. Dados e fixtures não executáveis podem permanecer quando tiverem licença e utilidade comprovadas.
 
@@ -86,12 +86,12 @@ A árvore é alvo lógico; nomes e limites de crates serão ajustados somente pa
 
 ## 6. Sequência obrigatória
 
-1. **M0 — congelar a direção e mapear dependências:** inventariar todos os arquivos Python, Qt, PyO3, artefatos, workflows, manifests e consumidores dos módulos SMS/SG-1000. Identificar o conjunto mínimo de módulos compartilhados necessário ao SMS temporal.
-2. **M1 — extrair runtime puro:** mover worker SMS, construção da máquina, seleção regional, comandos, telemetria e integração de áudio/vídeo para crates Rust comuns; manter o worker como único owner da máquina e do Scheduler.
-3. **M2 — tornar SMS temporal exclusivo:** retirar o SMS atômico do grafo ativo, eliminar CPU/PSG/VDP duplicados e provar que todas as instruções e operações da máquina usam `sega-z80-cpu`, PSG temporal e VDP temporal.
-4. **M3 — shell egui operacional mínimo:** substituir o shell demonstrativo por menus nativos para abrir ROM, iniciar/pausar/parar/resetar, fechar sessão e sair. Integrar o viewport D3D12 e os hosts de áudio/input sem lógica de hardware na UI.
-5. **M4 — retirar SG-1000 legado:** arquivar temporariamente o crate antigo fora do workspace e remover toda referência ativa. Só depois do SMS executável, excluir o arquivo SG-1000 antigo e iniciar uma implementação nova baseada no Z80 compartilhado.
-6. **M5 — eliminar Python/Qt/PyO3 por completo:** remover fontes, testes, ferramentas, dependências, lockfiles, wheels, artefatos, workflows e documentação de build Python. O repositório deve passar por busca automatizada que prove ausência de arquivos e dependências executáveis Python.
+1. **M0 — congelar a direção e mapear dependências:** inventariar arquivos, manifests, workflows e consumidores dos módulos SMS/SG-1000; identificar o conjunto mínimo compartilhado necessário ao SMS temporal.
+2. **M1 — extrair runtime puro:** mover worker SMS, construção da máquina, seleção regional, comandos, telemetria e integração de áudio/vídeo para crates Rust comuns; manter o worker como único owner da máquina e do Scheduler. O crate `rust/runtime/sms-runtime` foi criado na branch de migração; validação CI ainda pendente.
+3. **M2 — eliminar Python/Qt/PyO3 legado:** remover fontes, testes, ferramentas, dependências, lockfiles, artefatos e workflows. Esta remoção foi executada na branch de migração; não é prova de conclusão funcional nem substitui testes Rust.
+4. **M3 — tornar SMS temporal exclusivo:** retirar o SMS atômico do grafo ativo, eliminar CPU/PSG/VDP duplicados e provar que todas as operações usam o Z80 compartilhado, PSG temporal e VDP temporal.
+5. **M4 — shell egui operacional mínimo:** integrar menus nativos para abrir ROM, iniciar/pausar/parar/resetar, fechar sessão e sair, além de D3D12, áudio e input nativos; a UI não executa hardware.
+6. **M5 — retirar SG-1000 legado:** somente depois do SMS executável, remover o crate antigo e iniciar uma implementação nova baseada no Z80 compartilhado.
 7. **M6 — validação final:** compilar e testar em Rust, executar integração Windows física e validar ROM sintética/homebrew. Só então declarar a aplicação Rust-only operacional.
 
 A ordem é dependente: não remover módulos Rust compartilhados necessários ao SMS temporal; não iniciar SG-1000 novo antes do SMS executável; não declarar migração completa apenas porque os arquivos Python foram apagados.

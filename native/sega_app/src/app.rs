@@ -23,7 +23,7 @@ impl SegaApp {
             ui.heading("Aplicação nativa em construção");
             ui.label(concat!(
                 "Esta etapa valida somente o shell egui/eframe. ",
-                "Nenhuma ROM ou máquina é iniciada e o frontend Python legado permanece intacto."
+                "Nenhuma ROM ou máquina é iniciada nesta etapa; a integração com o runtime SMS está pendente."
             ));
 
             ui.add_space(12.0);
@@ -68,7 +68,7 @@ impl SegaApp {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                 ui.separator();
-                ui.small("M1 · shell sem hardware · nenhuma dependência Python no binário");
+                ui.small("M1 · shell sem hardware · runtime SMS ainda não integrado");
             });
         });
     }

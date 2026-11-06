@@ -1,130 +1,60 @@
-# Sega Emulator
+# Sega Emulator — Rust-only
 
-Emulador multi-sistema Sega com runtime de hardware em Rust e uma janela Qt mínima para operação do emulador. O objetivo é oferecer **fidelidade funcional e temporal próxima ao console original**, com execução eficiente e comportamento consistente em jogos e periféricos.
+Emulador Sega em desenvolvimento, com runtime e aplicação nativos em Rust. A prioridade atual é o Master System temporal, com um único Z80 compartilhado e o MachineScheduler como autoridade temporal.
 
-O projeto não busca simulação elétrica integral, reprodução de transistores ou atualização de todos os pinos físicos. A precisão é aplicada onde influencia o comportamento observável do console. Consulte a [ADR-0016 — fidelidade observável](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
+## Estado real
 
-## Estado do projeto
+- rust/runtime/sms-runtime contém o worker SMS temporal extraído para Rust puro.
+- O runtime usa sega-sms-core, sega-audio-runtime e sega-video-runtime; não depende de Python, PyO3, Qt ou Maturin.
+- A sessão de áudio física é criada por uma factory fornecida pelo host e executada na thread proprietária da máquina, preservando a afinidade dos objetos WASAPI/XAudio2.
+- native/sega_app ainda é somente um shell egui/eframe. A integração operacional entre GUI, worker SMS, viewport D3D12, áudio e input permanece pendente.
+- O SMS atômico antigo foi removido do core ativo; native/sms_core agora contém a máquina temporal e fachadas para o Z80/ALU e VDP compartilhados. A implementação temporal ainda é parcial (VDP por scanline, WAIT de fixture e sem Save States persistentes).
+- A migração dos crates restantes para a raiz canônica rust/ e a integração do runtime ao shell egui ainda estão em andamento.
+- O legado Python/PyO3 foi removido desta branch em vez de portado; não haverá fallback Python nem runtime alternativo.
 
-- **Plataformas prioritárias:** Master System e SG-1000; preservar regressões SG-1000 durante a consolidação do SMS.
-- **CPU:** núcleo Z80 compartilhado em Rust. Correção funcional de instruções, registradores, flags e interrupções é prioritária; detalhamento de ciclos e sinais só é exigido quando uma plataforma depender dele.
-- **Vídeo e áudio:** componentes específicos por console, com sincronização na granularidade necessária aos efeitos observáveis.
-- **Scheduler:** coordena o tempo da máquina e os eventos relevantes; não exige um evento por pino, tick ou pixel.
-- **Qt / host gráfico:** Python/PySide6 controla a sessão e fornece um viewport nativo (HWND); o host D3D12 em Rust recebe frames por mailbox e faz a apresentação. Pixels não atravessam Python, que não converte imagens nem renderiza vídeo.
-- **Integração:** PyO3 coarse-grained, sem callbacks Python por instrução.
-- **Precisão elétrica/analógica:** fora do escopo.
+A existência do worker e dos crates temporais não comprova ainda que o emulador esteja pronto para gameplay real. Não declarar FPS, compatibilidade ou fidelidade final sem benchmarks e validação reproduzível.
 
-O estado exato de cada componente e das PRs deve ser conferido na [main](https://github.com/leonardo201800478/sega-emulator) e em [Estado dos componentes](docs/component-status.md). Documentos históricos não prevalecem sobre o código integrado nem sobre a ADR-0016.
+## Arquitetura normativa
 
-## Fonte da verdade, roadmap e conclusão
+- Backend integralmente Rust: CPU Z80 compartilhada, barramento, memória, mapper, VDP, PSG, Scheduler, áudio, input e lifecycle.
+- GUI egui/eframe: apresentação e comandos coarse-grained; não executa instruções, clocks ou eventos de hardware.
+- SmsTemporalWorker possui a máquina em uma thread dedicada. O host envia comandos de sessão, não callbacks por instrução.
+- Sem JIT, frame skipping, hacks temporais ou otimizações especulativas.
+- SG-1000 atômico e SMS atômico não são fallback. O runtime ativo inicial é SMS temporal.
 
-- **GitHub `main` é a fonte da verdade.** Código em branches e PRs ainda não mescladas não está integrado, mesmo quando a PR está aberta, aprovada ou com CI verde.
-- **Existe um único roadmap normativo:** [Roadmap mestre](docs/project-roadmap.md). Ele define a ordem P0–P9. Não criar cronogramas, listas de sprints ou roadmaps paralelos.
-- [Estado dos componentes](docs/component-status.md), scorecards e auditorias podem conter fotografias históricas. Antes de iniciar trabalho, conferir o SHA atual da `main`, o código integrado, as PRs abertas e os workflows; não tratar um SHA antigo ou o estado de uma PR como estado integrado.
-- A [PR permanente de conclusão #533](https://github.com/leonardo201800478/sega-emulator/pull/533) é o gate final do projeto. Ela permanece Draft e aberta durante o desenvolvimento e só poderá ser finalizada quando todas as fases P0–P9, os critérios funcionais/temporais, a compatibilidade, o determinismo, os save states/replays e os gates finais estiverem comprovados no SHA final da `main`. Ela não substitui o roadmap nem autoriza antecipar fases.
+Consulte a ADR 0010 (docs/adr/0010-rust-only-sms-temporal-first.md), ADR-0016 e o roadmap mestre (docs/project-roadmap.md).
 
-### Ordem obrigatória das plataformas
+## Ambiente de desenvolvimento
 
-P0 Infraestrutura/Hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 Frontend Qt/PyO3 → P8 Compatibilidade/Auditoria → P9 Validação sistêmica.
+- Windows x64 para validar D3D12, WASAPI/XAudio2 e input físico.
+- Rust toolchain definida em rust-toolchain.toml (atualmente 1.99.1).
+- Git e PowerShell.
+- Visual Studio Build Tools com MSVC para targets Windows.
+- Não é necessário instalar Python, Qt ou Maturin.
 
-A prioridade atual dentro dessa sequência é consolidar o Master System e o Z80 compartilhado, preservando o SG-1000. Uma prioridade não significa que a fase esteja concluída.
+## Compilar e validar
 
-## Política de precisão
-
-A semântica funcional é exata em todas as instruções e operações suportadas. A precisão temporal recebe prioridade nos caminhos de instrução e processos cuja ordem ou duração possa alterar gameplay — por exemplo, I/O, raster/VDP, áudio, mapper, interrupções, DMA e contenção comprovada. Operações sem efeito intermediário observável usam execução atômica determinística, preservando resultado, flags, estado, efeitos colaterais e duração nominal conhecida. M-cycles, T-states, WAIT e suspensão/retomada são exigidos apenas quando uma dependência concreta estiver demonstrada. Não se exige cycle-accuracy universal, simulação elétrica nem precisão por pino. A [ADR-0016](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md) define os critérios.
-
-## Arquitetura
-
-| Camada | Responsabilidade |
-|---|---|
-| Rust | CPUs, ALUs, memória, barramentos, mappers, VDPs, áudio, interrupções, sincronização e Scheduler |
-| Python / PySide6 | Janela de controle, diálogos de ROM, comandos coarse-grained, entrada e status; sem lógica de hardware ou renderização de vídeo |
-| PyO3 | Comandos de alto nível e telemetria; sem callbacks por instrução |
-
-Componentes são compartilhados quando representam hardware compatível. Diferenças reais de console, revisão, região ou periférico permanecem em perfis/adaptadores próprios.
-
-A menor granularidade suficiente deve ser preferida: execução por instrução, transação, scanline, amostra ou evento, conforme o comportamento que precisa ser reproduzido. M-cycles, T-states, WAIT, arbitragem e sinais são modelados quando necessários ao hardware suportado, não como objetivos independentes.
-
-## Requisitos de desenvolvimento
-
-- Windows x64
-- Python 3.15 x64
-- Rust toolchain definida pelo projeto
-- Git for Windows e PowerShell
-- Visual Studio Build Tools com MSVC para compilar a extensão nativa no Windows
-
-## Instalação no PowerShell
-
-Na raiz do repositório:
-
-```powershell
-py -3.15 -m venv .venv
-.\.venv\Scripts\python.exe -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,qt]"
-```
-
-## Executar
-
-```powershell
-.\.venv\Scripts\python.exe -m sega_emulator
-```
-
-A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para controlar a sessão. A execução contínua pertence a um worker Rust dedicado; a Qt envia comandos coarse-grained e consulta telemetria. O viewport Qt fornece apenas o HWND: o host D3D12 em Rust apresenta os frames publicados pelo worker, sem transferir pixels para Python. O caminho SMS usa `SmsTemporalMachine`. O frontend Qt legado do SG-1000 permanece desativado; o núcleo SG-1000 continua preservado e testável.
-
-**Limite importante:** a presença do worker, da extensão PyO3 e do caminho D3D12 comprova integração de software e permite testes locais de build/execução, mas não comprova compatibilidade ampla de jogos nem fidelidade funcional/temporal final. O SMS continua sendo uma implementação temporal em etapas. Permanecem gates específicos de VDP/raster/fetch, arbitragem e WAIT quando exigidos por evidência, integração completa de interrupções da máquina, save states serializados e validação independente de VDP/PSG e jogos. Consulte a [matriz de validação temporal](docs/architecture/sms-vdp-psg-temporal-validation.md); nenhum item deve ser marcado PASS sem teste executado e evidência reproduzível.
-
-Para iniciar diretamente uma ROM:
-
-```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms" --region brazil
-```
-
-A janela de controle SMS aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção de região é explícita por `--region usa|brazil|europe|japan`; o padrão é `usa`. O fluxo ZIP e o frontend anterior permanecem no caminho SG-1000/legado até a migração ser validada.
-
-## Compilar e testar
-
-Compilação rápida Rust no Windows/PowerShell:
+Na raiz do repositório, no PowerShell:
 
 ```powershell
 .\scripts\compile-fast.ps1 -Release -AllWorkspaces
+.\scripts\project.ps1 audit
+.\scripts\project.ps1 locks
+.\scripts\project.ps1 validate
 ```
 
-Esse comando executa `cargo check` nos workspaces descobertos; é uma verificação de compilação, não substitui os testes nem os gates de qualidade.
-
-Construir a extensão PyO3 em Release, validar os imports nativos e abrir a janela Qt com uma ROM local:
-
-```powershell
-.\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sms"
-```
-
-O script usa a Maturin fixada em `.[dev]`, constrói `native/z80_core` com `--locked` e `python-extension`, executa o smoke test de import e inicia o frontend. Sem argumento, inicia a janela sem ROM.
-
-Gates de qualidade:
+Gates Rust obrigatórios:
 
 ```powershell
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-python -m pytest
-python -m ruff check .
-python -m ruff format --check .
 ```
 
-Uma suíte ignorada ou não executada não conta como PASS. Resultados devem ser vinculados ao SHA exato.
-
-## Documentação normativa
-
-- [Roadmap mestre — fases e prioridades](docs/project-roadmap.md)
-- [Escopo e princípios arquiteturais](docs/project-scope.md)
-- [ADR-0016 — fidelidade observável e precisão proporcional](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
-- [Estado dos componentes](docs/component-status.md)
-- [Índice de ADRs](docs/architecture/adr/README.md)
-- [Estado do VDP SMS](docs/architecture/sms-vdp.md)
-- [Perfis de hardware Z80](docs/hardware/z80-silicon-platform-profiles.md)
+Workspaces standalone de áudio e aplicação ainda recebem validação separada até a consolidação final. Testes externos ZEXDOC/ZEXALL estão NOT RUN: o executor Rust de baixo nível existe, mas a aquisição, montagem e orquestração da suíte ainda precisam ser portadas para Rust; isso não equivale a PASS.
 
 ## Segurança e licença
 
 Use somente ROMs e firmware que você tenha direito de executar. ROMs comerciais, BIOS proprietárias e dumps protegidos não devem ser versionados.
 
-O projeto é distribuído sob a licença MIT. Consulte [LICENSE](LICENSE). Sega e nomes de consoles/chips são marcas de seus respectivos titulares; o projeto é independente e não afiliado à SEGA.
+O projeto é distribuído sob a licença MIT. Consulte LICENSE. Sega e nomes de consoles/chips são marcas de seus respectivos titulares; o projeto é independente e não afiliado à SEGA.

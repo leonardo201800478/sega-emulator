@@ -1,65 +1,14 @@
-# External Z80 conformance harness for the SMS CPU core
+# External Z80 conformance suites
 
-This harness runs Patrik Rak's [Zilog Z80 CPU Test Suite](https://github.com/raxoft/z80test)
-against the Rust Z80 engine in `native/sms_core`. It does not vendor the suite:
-the driver checks out fixed upstream commits, keeps the test vectors and CRCs,
-builds the assembler, and assembles the selected variant in a temporary directory.
+The Python orchestration driver for Patrik Rak's Zilog Z80 CPU Test Suite has been removed as part of the Rust-only migration. A Rust execution binary still exists at `native/sms_core/src/bin/z80test_runner.rs`; it consumes a preassembled test image and remains coupled to compatibility exports in the SMS core. The upstream suite is not vendored.
 
-## Scope and limitations
+The existing Rust Z80 unit, semantic, bus and temporal tests remain the active automated regression. The low-level Rust test binary is not yet a complete harness: source acquisition, Sjasm assembly, preflight setup, expected-vector checks and invocation orchestration were in the removed Python driver. The binary should be relocated to the shared Z80 crate and the missing orchestration implemented in Rust. The external z80full and z80ccf variants are NOT RUN until that Rust-native harness is implemented and validated. Their absence must never be reported as PASS, and the project must not advance the formal ZEXDOC/ZEXALL gate on the basis of unit tests alone.
 
-The upstream suite targets a ZX Spectrum, not an SMS. The driver replaces only
-the display module with a headless shim. The inline-string reader is retained;
-Spectrum ROM printing and decimal/CRC formatting are omitted. Test instructions
-and expected CRC values are not changed. The runner uses flat 64 KiB memory and
-returns `0xBF` for ports whose low byte is `0xFE`, satisfying the suite's
-Spectrum-specific preflight; other port reads return `0xFF`.
+Pinned upstream dependencies for a future Rust harness:
 
-This is a **CPU-core semantic conformance run**, not a complete SMS integration
-test. It does not validate mapper, VDP, PSG, device-driven interrupts, or
-cycle-by-cycle bus timing. A failure is a discrepancy to triage, not automatic
-proof of a core bug until CPU variant assumptions and the harness are checked.
+- raxoft/z80test: c490c0ca94f1021509f8bd656b413861bd7cfb41 (MIT)
+- samsaga2/sjasm: d51f5504b24ea9273050ac5fa2896c8970da0b4b (Sjasm 0.42c, Zlib license)
 
-## Requirements
+The test suite targets a ZX Spectrum, not an SMS. A future harness must preserve the existing documented preflight shim and expected CRC vectors without changing upstream tests. It must use temporary build directories and must not commit generated binaries or commercial ROMs.
 
-- Python 3.10+
-- Git
-- CMake and a C++ compiler
-- Rust/Cargo
-
-Pinned external dependencies:
-- `raxoft/z80test`: `c490c0ca94f1021509f8bd656b413861bd7cfb41` (MIT)
-- `samsaga2/sjasm`: `d51f5504b24ea9273050ac5fa2896c8970da0b4b` (Sjasm 0.42c, Zlib license)
-
-## Run
-
-From the repository root:
-
-```bash
-python tools/z80test/run_sms_z80test.py
-```
-
-The default is `z80full`. Other variants are available:
-
-```bash
-python tools/z80test/run_sms_z80test.py --variant z80flags
-python tools/z80test/run_sms_z80test.py --variant z80doc
-python tools/z80test/run_sms_z80test.py --variant z80docflags
-python tools/z80test/run_sms_z80test.py --variant z80ccf
-python tools/z80test/run_sms_z80test.py --variant z80memptr
-```
-
-The runner reports test/failure counters, executed instructions, nominal
-T-states and elapsed time. It exits nonzero on upstream failures, CPU errors,
-an invalid zero-test result, or instruction-budget exhaustion.
-
-```bash
-python tools/z80test/run_sms_z80test.py --variant z80full --max-steps 500000000
-python tools/z80test/run_sms_z80test.py --image path/to/z80full.out
-python tools/z80test/run_sms_z80test.py --work-dir path/to/work
-```
-
-Use `--work-dir` to preserve fetched sources and generated artifacts for
-diagnosis. Do not commit generated binaries or commercial ROMs. Preserve
-upstream license and attribution if upstream material is ever incorporated.
-
-Third-party licensing and attribution for the adapted temporary print shim are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Third-party licensing and attribution are recorded in THIRD_PARTY_NOTICES.md.
