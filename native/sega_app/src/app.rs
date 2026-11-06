@@ -325,7 +325,8 @@ fn diagnostic_frame() -> Result<VideoFrame, String> {
     let mut pixels = Vec::with_capacity(STRIDE * HEIGHT as usize);
     for _y in 0..HEIGHT {
         for x in 0..WIDTH {
-            pixels.extend_from_slice(&BARS[x as usize * BARS.len() / WIDTH as usize]);
+            let bar_index = usize::from(x) * BARS.len() / usize::from(WIDTH);
+            pixels.extend_from_slice(&BARS[bar_index]);
         }
     }
 
