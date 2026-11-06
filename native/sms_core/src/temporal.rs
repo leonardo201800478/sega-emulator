@@ -15,7 +15,7 @@ use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
-pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 4;
+pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 5;
 pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 /// PSG input clock follows the SMS Z80 clock on the supported SMS profiles.
 pub const SMS_PSG_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(1);
@@ -241,11 +241,10 @@ impl SmsTemporalCoordinator {
         if player != 1 && player != 2 {
             return Err(SmsTemporalCoordinatorError::InvalidExternalThPlayer(player));
         }
-        let elapsed = timestamp
+        timestamp
             .checked_duration_since(self.now())
             .filter(|elapsed| *elapsed > 0 && *elapsed % u128::from(self.master_ticks_per_tstate) == 0)
             .ok_or(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)?;
-        let _ = elapsed;
         self.scheduler.schedule_at_with_phase(
             timestamp,
             HardwarePhase::new(0),
