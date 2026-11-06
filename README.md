@@ -10,7 +10,7 @@ O projeto não busca simulação elétrica integral, reprodução de transistore
 - **CPU:** núcleo Z80 compartilhado em Rust. Correção funcional de instruções, registradores, flags e interrupções é prioritária; detalhamento de ciclos e sinais só é exigido quando uma plataforma depender dele.
 - **Vídeo e áudio:** componentes específicos por console, com sincronização na granularidade necessária aos efeitos observáveis.
 - **Scheduler:** coordena o tempo da máquina e os eventos relevantes; não exige um evento por pino, tick ou pixel.
-- **Qt inicial:** Python/PySide6 exclusivamente para comandos de sessão, abertura/fechamento de ROM, entrada e telemetria textual. Não recebe framebuffer, não converte pixels e não renderiza vídeo. A apresentação ficará em um host gráfico nativo separado.
+- **Qt / host gráfico:** Python/PySide6 controla a sessão e fornece um viewport nativo (HWND); o host D3D12 em Rust recebe frames por mailbox e faz a apresentação. Pixels não atravessam Python, que não converte imagens nem renderiza vídeo.
 - **Integração:** PyO3 coarse-grained, sem callbacks Python por instrução.
 - **Precisão elétrica/analógica:** fora do escopo.
 
@@ -70,7 +70,9 @@ py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para enviar comandos coarse-grained à sessão. O loop contínuo de execução nativo ainda precisa ser conectado. A Qt não executa stepping, não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; O caminho Qt legado do SG-1000 permanece desativado até o host D3D12 nativo em Rust ser conectado; o núcleo SG-1000 continua preservado e testável.
+A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para controlar a sessão. A execução contínua pertence a um worker Rust dedicado; a Qt envia comandos coarse-grained e consulta telemetria. O viewport Qt fornece apenas o HWND: o host D3D12 em Rust apresenta os frames publicados pelo worker, sem transferir pixels para Python. O caminho SMS usa `SmsTemporalMachine`. O frontend Qt legado do SG-1000 permanece desativado; o núcleo SG-1000 continua preservado e testável.
+
+**Limite importante:** a presença do worker, da extensão PyO3 e do caminho D3D12 comprova integração de software e permite testes locais de build/execução, mas não comprova compatibilidade ampla de jogos nem fidelidade funcional/temporal final. O SMS continua sendo uma implementação temporal em etapas. Permanecem gates específicos de VDP/raster/fetch, arbitragem e WAIT quando exigidos por evidência, integração completa de interrupções da máquina, save states serializados e validação independente de VDP/PSG e jogos. Consulte a [matriz de validação temporal](docs/architecture/sms-vdp-psg-temporal-validation.md); nenhum item deve ser marcado PASS sem teste executado e evidência reproduzível.
 
 Para iniciar diretamente uma ROM:
 
@@ -85,23 +87,18 @@ A janela de controle SMS aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção 
 Compilação rápida Rust no Windows/PowerShell:
 
 ```powershell
-.\scripts\compile-fast.ps1
+.\scripts\compile-fast.ps1 -Release -AllWorkspaces
 ```
 
-Compilar e instalar a extensão PyO3 (a partir da raiz):
+Esse comando executa `cargo check` nos workspaces descobertos; é uma verificação de compilação, não substitui os testes nem os gates de qualidade.
 
-```powershell
-python -m pip install maturin
-Push-Location native/z80_core
-maturin develop --release --features python-extension
-Pop-Location
-```
-
-Executar a janela de controle com uma ROM local após instalar a extensão:
+Construir a extensão PyO3 em Release, validar os imports nativos e abrir a janela Qt com uma ROM local:
 
 ```powershell
 .\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sms"
 ```
+
+O script usa a Maturin fixada em `.[dev]`, constrói `native/z80_core` com `--locked` e `python-extension`, executa o smoke test de import e inicia o frontend. Sem argumento, inicia a janela sem ROM.
 
 Gates de qualidade:
 
