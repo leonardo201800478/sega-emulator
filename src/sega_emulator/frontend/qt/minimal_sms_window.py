@@ -295,7 +295,7 @@ class MinimalSmsWindow(QMainWindow):
 
     def _configure_audio_output(self, machine: TemporalSMSMachine) -> str | None:
         """Apply persisted host audio preferences through the coarse Rust API."""
-        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
+        if self._audio_backend == "disabled":
             try:
                 machine.close_audio_output()
             except RuntimeError as exc:
