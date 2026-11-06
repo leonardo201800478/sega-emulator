@@ -509,6 +509,7 @@ class MinimalSmsWindow(QMainWindow):
         try:
             machine.open_video_output_in_viewport(self.video_viewport.native_handle())
         except (AttributeError, OSError, RuntimeError, ValueError) as exc:
+            logger.exception("Falha ao iniciar saída de vídeo D3D12 SMS")
             self.status_label.setText(
                 f"ROM carregada: {self._rom_path.name if self._rom_path else 'SMS'}\n"
                 f"Vídeo D3D12 indisponível: {exc}"
@@ -519,6 +520,7 @@ class MinimalSmsWindow(QMainWindow):
             return
 
         self._video_output_started = True
+        logger.info("SMS D3D12 output attached to native Qt viewport")
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
             "Host D3D12 inicializado; aguardando o primeiro frame. "
