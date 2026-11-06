@@ -42,23 +42,23 @@ struct NativeViewportState {
 }
 
 impl NativeViewportState {
-    fn status(&self) -> &str {
-        if let Some(error) = self.error.as_deref() {
-            error
+    fn status(&self) -> String {
+        if let Some(error) = self.error.as_ref() {
+            error.clone()
         } else if self.child.is_none() {
-            "Aguardando janela nativa"
+            "Aguardando janela nativa".to_owned()
         } else if !self.ready {
-            "Inicializando D3D12 em worker dedicado"
+            "Inicializando D3D12 em worker dedicado".to_owned()
         } else if let Some(worker) = self.worker.as_ref() {
             if worker.is_running() {
-                "SMS em execução — vídeo D3D12 ativo"
+                "SMS em execução — vídeo D3D12 ativo".to_owned()
             } else if let Some(error) = worker.runtime_error() {
-                return error;
+                format!("Runtime SMS pausado: {error}")
             } else {
-                "SMS carregado e pausado — vídeo D3D12 ativo"
+                "SMS carregado e pausado — vídeo D3D12 ativo".to_owned()
             }
         } else {
-            "D3D12 pronto — aguardando ROM SMS"
+            "D3D12 pronto — aguardando ROM SMS".to_owned()
         }
     }
 
@@ -144,7 +144,7 @@ impl SegaApp {
             });
 
             ui.horizontal(|ui| {
-                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Iniciar")).clicked() {
+                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(|worker| !worker.is_running()), egui::Button::new("Iniciar")).clicked() {
                     command = Some(UiCommand::Start);
                 }
                 if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(SmsTemporalWorker::is_running), egui::Button::new("Pausar")).clicked() {
@@ -244,30 +244,41 @@ impl SegaApp {
     }
 
     fn apply_command(&mut self, command: UiCommand) {
+        if matches!(command, UiCommand::CloseMachine) {
+            self.native_viewport.start_requested = false;
+            if let Some(worker) = self.native_viewport.worker.take() {
+                let _ = worker.stop();
+                if self.native_viewport.video_attached {
+                    let _ = worker.detach_video_mailbox();
+                }
+                drop(worker);
+            }
+            self.native_viewport.video_attached = false;
+            self.native_viewport.error = None;
+            return;
+        }
+
         let Some(worker) = self.native_viewport.worker.as_ref() else {
             return;
         };
 
         let result = match command {
             UiCommand::Start => {
-                self.native_viewport.start_requested = true;
-                Ok(())
+                if self.native_viewport.video_attached {
+                    worker.start()
+                } else {
+                    self.native_viewport.start_requested = true;
+                    Ok(())
+                }
             }
             UiCommand::Pause => worker.pause(),
-            UiCommand::Stop => worker.stop(),
+            UiCommand::Stop => {
+                self.native_viewport.start_requested = false;
+                worker.stop()
+            }
             UiCommand::Reset => worker.reset(),
             UiCommand::StepFrame => worker.step_frame(100_000).map(|_| ()),
-            UiCommand::CloseMachine => {
-                let _ = worker.stop();
-                let detach_result = if self.native_viewport.video_attached {
-                    worker.detach_video_mailbox()
-                } else {
-                    Ok(())
-                };
-                self.native_viewport.worker = None;
-                self.native_viewport.video_attached = false;
-                detach_result
-            }
+            UiCommand::CloseMachine => unreachable!("handled before borrowing the worker"),
         };
 
         if let Err(error) = result {
