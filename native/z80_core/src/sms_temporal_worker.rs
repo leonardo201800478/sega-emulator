@@ -957,6 +957,11 @@ mod tests {
         assert_eq!(frame.width(), 256);
         assert_eq!(frame.height(), 192);
         assert_eq!(frame.pixel_format(), PixelFormat::Rgb888);
+        assert_eq!(
+            &frame.pixels()[..3],
+            &[255, 255, 255],
+            "the worker must preserve the first Mode 4 background pixel"
+        );
         assert!(
             frame
                 .pixels()
