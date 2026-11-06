@@ -366,15 +366,21 @@ def cargo_for(workspace: Workspace, *args: str) -> list[str]:
 
 
 def lock_check(workspaces: list[Workspace]) -> list[Result]:
-    """Verify each existing lockfile without allowing Cargo to modify it."""
+    """Verify lockfile resolution without compiling workspace packages."""
     results = []
     for workspace in workspaces:
-        results.append(run(cargo_for(workspace, "check", "--locked"), ROOT))
+        results.append(
+            run(
+                cargo_for(workspace, "metadata", "--locked", "--format-version", "1"),
+                ROOT,
+                output_limit=2000,
+            )
+        )
     return results
 
 
 def lock_refresh(workspaces: list[Workspace]) -> list[Result]:
-    """Refresh existing lockfiles from cache, then verify the result with --locked."""
+    """Refresh and verify lockfiles offline without compiling workspace packages."""
     results = []
     for workspace in workspaces:
         if not workspace.lockfile_exists:
@@ -387,15 +393,27 @@ def lock_refresh(workspaces: list[Workspace]) -> list[Result]:
             )
             continue
 
-        refresh = run(cargo_for(workspace, "check", "--offline"), ROOT)
+        refresh = run(
+            cargo_for(workspace, "metadata", "--offline", "--format-version", "1"),
+            ROOT,
+            output_limit=2000,
+        )
         results.append(refresh)
         if refresh.status == "PASS":
-            results.append(run(cargo_for(workspace, "check", "--locked"), ROOT))
+            results.append(
+                run(
+                    cargo_for(
+                        workspace, "metadata", "--locked", "--format-version", "1"
+                    ),
+                    ROOT,
+                    output_limit=2000,
+                )
+            )
     return results
 
 
 def validate(workspaces: list[Workspace], include_python: bool) -> list[Result]:
-    """Run the Rust gates once per workspace and Python gates once per repository."""
+    """Run Rust gates once per active workspace and Python gates once per repository."""
     results = []
     for workspace in workspaces:
         results.append(

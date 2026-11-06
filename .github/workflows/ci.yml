@@ -78,7 +78,6 @@ jobs:
               - 'uv.lock'
             pyo3:
               - 'native/z80_core/**'
-              - 'native/sega_emu_core/**'
               - 'native/sg1000_core/**'
               - 'native/sms_core/**'
             windows_native:
@@ -133,10 +132,6 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: SMS core targeted unit tests
-        run: cargo test -p sega-sms-core --locked
-      - name: SG-1000 core targeted unit tests
-        run: cargo test -p sega-sg1000-core --locked
       - name: Workspace unit tests
         run: cargo test --workspace --locked
 
@@ -171,7 +166,6 @@ jobs:
             Cargo.lock
             native/audio_output/Cargo.lock
             native/z80_core/Cargo.lock
-            native/sega_emu_core/Cargo.lock
           if-no-files-found: error
           retention-days: 1
 
