@@ -313,8 +313,8 @@ impl SmsMemory {
 #[cfg(test)]
 mod tests {
     use super::{
-        BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE,
-        MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE,
+        MapperKind, RAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
 
