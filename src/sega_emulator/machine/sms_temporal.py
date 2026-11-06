@@ -191,12 +191,6 @@ class TemporalSMSMachine:
         return str(error) if error is not None else None
 
     @property
-    def audio_output_error(self) -> str | None:
-        """Return the last native audio endpoint error, if any."""
-        error = self.native_machine.audio_output_error
-        return str(error) if error is not None else None
-
-    @property
     def audio_output_metrics(self) -> tuple[int, int]:
         """Return native audio underrun and dropped-block counters."""
         return tuple(self.native_machine.audio_output_metrics)
