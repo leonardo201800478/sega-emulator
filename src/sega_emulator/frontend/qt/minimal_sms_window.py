@@ -170,6 +170,13 @@ class MinimalSmsWindow(QMainWindow):
             dialog.exec() == QDialog.DialogCode.Accepted
             and dialog.selected_rom is not None
         ):
+            if dialog.selected_system != "master_system":
+                QMessageBox.information(
+                    self,
+                    "Sistema ainda não disponível",
+                    "Esta janela executa somente o Master System temporal.",
+                )
+                return
             self.load_rom(dialog.selected_rom)
 
     def load_rom(self, path: Path) -> None:
