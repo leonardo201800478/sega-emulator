@@ -22,7 +22,7 @@ use sega_temporal_core::MachineTime;
 use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 11;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 12;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
 const DEFAULT_AUDIO_SAMPLE_RATE: u64 = 44_100;
@@ -85,6 +85,11 @@ pub enum SmsTemporalDispatch {
     InternalCycleComplete(SmsInternalCycleCompletion),
     M1TStateComplete {
         continuation_id: u64,
+        completed_at: MachineTime,
+    },
+    ExternalThTransition {
+        player: u8,
+        high: bool,
         completed_at: MachineTime,
     },
 }
@@ -274,6 +279,16 @@ impl SmsTemporalBus {
         })
     }
 
+    /// Schedule an external TH line transition on the shared machine timeline.
+    pub fn schedule_external_th_transition(
+        &mut self,
+        player: u8,
+        high: bool,
+        timestamp: MachineTime,
+    ) -> Result<MachineTime, SmsTemporalBusError> {
+        Ok(self.coordinator.schedule_external_th_transition(player, high, timestamp)?)
+    }
+
     /// Begin one memory or port request and schedule its completion deadline.
     ///
     /// WAIT is supplied by a deterministic fixture; this API does not sample
@@ -386,6 +401,14 @@ impl SmsTemporalBus {
             .map_err(|_| SmsTemporalBusError::InvalidState)?;
         self.vdp.advance(vdp_tstates);
         match dispatch.event.payload {
+            SmsTemporalEvent::ExternalThTransition { player, high } => {
+                self.io.set_external_th_level(player, high)?;
+                Ok(Some(SmsTemporalDispatch::ExternalThTransition {
+                    player,
+                    high,
+                    completed_at: dispatch.event.timestamp,
+                }))
+            }
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
                     .pending_request
@@ -671,6 +694,19 @@ impl SmsTemporalBus {
             return Err(SmsTemporalBusError::InvalidState);
         }
         let last_dispatch = state.coordinator.scheduler.last_dispatch_timestamp;
+        let external_events_valid = pending_events.iter().all(|event| match event.payload {
+            SmsTemporalEvent::ExternalThTransition { player, .. } => {
+                (player == 1 || player == 2)
+                    && event.timestamp.checked_duration_since(now).is_some_and(|elapsed| {
+                        elapsed > 0 && elapsed % u128::from(scale) == 0
+                    })
+            }
+            _ => true,
+        });
+        let non_external_event_count = pending_events
+            .iter()
+            .filter(|event| !matches!(event.payload, SmsTemporalEvent::ExternalThTransition { .. }))
+            .count();
         match (
             state.pending_request,
             state.request_started_at,
@@ -680,18 +716,20 @@ impl SmsTemporalBus {
             state.internal_completion,
         ) {
             (None, None, None, None, None, None)
-                if pending_events.is_empty()
-                    || (pending_events.len() == 1
-                        && matches!(
-                            pending_events[0].payload,
-                            SmsTemporalEvent::M1TStateComplete { .. }
-                        )) => {}
+                if external_events_valid
+                    && (non_external_event_count == 0
+                        || (non_external_event_count == 1
+                            && pending_events.iter().any(|event| matches!(
+                                event.payload,
+                                SmsTemporalEvent::M1TStateComplete { .. }
+                            )))) => {}
             (Some(request), Some(started_at), None, None, None, None)
-                if pending_events.len() == 1
-                    && pending_events[0].payload
+                if external_events_valid
+                    && non_external_event_count == 1
+                    && pending_events.iter().any(|event| event.payload
                         == (SmsTemporalEvent::BusCompletion {
                             request_id: request.id,
-                        })
+                        }))
                     && started_at <= now
                     && pending_events[0].timestamp >= now
                     && valid_bus_deadline(
@@ -706,8 +744,9 @@ impl SmsTemporalBus {
                             },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
-                if request.id == completion.request_id
-                    && pending_events.is_empty()
+                if external_events_valid
+                    && request.id == completion.request_id
+                    && non_external_event_count == 0
                     && completion.completed_at == now
                     && last_dispatch == Some(completion.completed_at)
                     && valid_bus_deadline(
@@ -722,15 +761,17 @@ impl SmsTemporalBus {
                             },
                     ) => {}
             (None, None, None, Some(continuation_id), Some(started_at), None)
-                if pending_events.len() == 1
-                    && pending_events[0].payload
-                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id })
+                if external_events_valid
+                    && non_external_event_count == 1
+                    && pending_events.iter().any(|event| event.payload
+                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id }))
                     && started_at <= now
                     && pending_events[0].timestamp >= now
                     && valid_internal_deadline(started_at, pending_events[0].timestamp, scale) => {}
             (None, None, None, Some(continuation_id), Some(started_at), Some(completion))
-                if continuation_id == completion.continuation_id
-                    && pending_events.is_empty()
+                if external_events_valid
+                    && continuation_id == completion.continuation_id
+                    && non_external_event_count == 0
                     && completion.completed_at == now
                     && last_dispatch == Some(completion.completed_at)
                     && valid_internal_deadline(started_at, completion.completed_at, scale) => {}
@@ -1404,7 +1445,7 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 11);
+        assert_eq!(snapshot.format_version, 12);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
