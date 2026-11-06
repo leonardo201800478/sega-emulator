@@ -1363,7 +1363,10 @@ mod tests {
         machine.begin_instruction().unwrap();
         let before = machine.export_state();
 
-        assert_eq!(machine.reset_cpu(), Err(SmsTemporalMachineError::InvalidState));
+        assert_eq!(
+            machine.reset_cpu(),
+            Err(SmsTemporalMachineError::InvalidState)
+        );
         assert_eq!(machine.export_state(), before);
     }
 
