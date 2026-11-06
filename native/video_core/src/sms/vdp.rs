@@ -373,7 +373,7 @@ impl SmsVdp {
         } else {
             hpos - 1
         };
-        let hclock = i64::from(previous_hpos) - 46;
+        let hclock = previous_hpos as i64 - 46;
         self.h_counter_latch = (hclock >> 1) as u8;
     }
 
