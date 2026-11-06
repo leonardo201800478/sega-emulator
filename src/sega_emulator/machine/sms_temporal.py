@@ -148,6 +148,37 @@ class TemporalSMSMachine:
         self._audio_config = None
 
     @property
+    def video_output_is_running(self) -> bool:
+        """Return whether the native D3D12 presentation worker is alive."""
+        return bool(self.native_machine.video_output_is_running)
+
+    @property
+    def video_last_published_sequence(self) -> int:
+        """Return the latest completed frame sequence published by Rust."""
+        return int(self.native_machine.video_last_published_sequence)
+
+    @property
+    def video_last_presented_sequence(self) -> int:
+        """Return the latest frame sequence successfully presented by D3D12."""
+        return int(self.native_machine.video_last_presented_sequence)
+
+    @property
+    def video_replaced_frames(self) -> int:
+        """Return pending frames replaced by the latest-frame mailbox."""
+        return int(self.native_machine.video_replaced_frames)
+
+    @property
+    def video_device_recovery_count(self) -> int:
+        """Return successful D3D12 device-loss recoveries."""
+        return int(self.native_machine.video_device_recovery_count)
+
+    @property
+    def video_output_error(self) -> str | None:
+        """Return the last native video presentation error, if any."""
+        error = self.native_machine.video_output_error
+        return str(error) if error is not None else None
+
+    @property
     def audio_output_error(self) -> str | None:
         """Return the last native audio output error, if any."""
         error = self.native_machine.audio_output_error

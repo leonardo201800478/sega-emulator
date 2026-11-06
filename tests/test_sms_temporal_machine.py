@@ -19,6 +19,12 @@ class FakeNativeSMSTemporalMachine:
         self.is_running = False
         self.audio_output_error = None
         self.audio_output_metrics = (0, 0)
+        self.video_output_is_running = True
+        self.video_last_published_sequence = 0
+        self.video_last_presented_sequence = 0
+        self.video_replaced_frames = 0
+        self.video_device_recovery_count = 0
+        self.video_output_error = None
         self.calls: list[tuple[object, ...]] = []
 
     def load_rom(self, rom: bytes) -> None:
@@ -182,3 +188,23 @@ def test_reset_reopens_the_previous_native_audio_configuration(
         100,
         0,
     )
+
+
+def test_temporal_adapter_exposes_read_only_video_presentation_telemetry(
+    temporal_machine_module: SimpleNamespace,
+) -> None:
+    machine = TemporalSMSMachine(b"rom")
+    native = machine.native_machine
+    native.video_output_is_running = True
+    native.video_last_published_sequence = 18
+    native.video_last_presented_sequence = 16
+    native.video_replaced_frames = 2
+    native.video_device_recovery_count = 1
+    native.video_output_error = "DXGI device removed"
+
+    assert machine.video_output_is_running is True
+    assert machine.video_last_published_sequence == 18
+    assert machine.video_last_presented_sequence == 16
+    assert machine.video_replaced_frames == 2
+    assert machine.video_device_recovery_count == 1
+    assert machine.video_output_error == "DXGI device removed"
