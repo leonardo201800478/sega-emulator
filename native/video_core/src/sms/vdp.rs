@@ -363,13 +363,17 @@ impl SmsVdp {
     /// Capture the current SMS H-counter value at a TH 0-to-1 transition.
     ///
     /// The conversion follows the 315-5124 timing model: 342 horizontal
-    /// positions per 228 Z80 T-states, with the counter offset by 47 positions
-    /// and divided by two. The absolute reset phase remains a hardware-validation
-    /// item; the conversion and latch persistence are deterministic.
+    /// positions per 228 Z80 T-states. The counter samples the previous HPos,
+    /// wraps at the line boundary, subtracts 46, and divides by two.
     pub fn latch_h_counter(&mut self) {
         let hpos = (u64::from(self.tstates_into_line) * 3 / 2)
             % SMS_HCOUNTER_POSITIONS_PER_LINE;
-        let hclock = i64::from(hpos) - 47;
+        let previous_hpos = if hpos == 0 {
+            SMS_HCOUNTER_POSITIONS_PER_LINE - 1
+        } else {
+            hpos - 1
+        };
+        let hclock = i64::from(previous_hpos) - 46;
         self.h_counter_latch = (hclock >> 1) as u8;
     }
 
@@ -2418,6 +2422,7 @@ mod tests {
     #[test]
     fn h_counter_conversion_matches_sms_reference_positions() {
         for (tstates, expected) in [
+            (0, 0x93),
             (1, 0xE9),
             (31, 0xFF),
             (32, 0x00),
