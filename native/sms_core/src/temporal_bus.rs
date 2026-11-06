@@ -1165,7 +1165,7 @@ mod tests {
 
 #[cfg(test)]
 mod immediate_port_transaction_tests {
-    use super::{SmsTemporalBus, SmsTemporalDispatch, SmsVdpProfile};
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
     use crate::input::ControllerButtons;
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
@@ -1243,7 +1243,7 @@ mod immediate_port_transaction_tests {
 
 #[cfg(test)]
 mod temporal_vdp_tests {
-    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use super::{SmsTemporalBus, SmsTemporalDispatch, SmsVdpProfile};
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
