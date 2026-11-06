@@ -45,6 +45,7 @@ class MinimalSmsWindow(QMainWindow):
         self._rom_path: Path | None = None
         self._pressed_actions: set[str] = set()
         self._video_output_started = False
+        self._audio_output_error: str | None = None
         self._video_telemetry_timer = QTimer(self)
         self._video_telemetry_timer.setInterval(250)
         self._video_telemetry_timer.timeout.connect(self._refresh_video_telemetry)
@@ -118,6 +119,21 @@ class MinimalSmsWindow(QMainWindow):
             QMessageBox.critical(self, "Falha ao abrir ROM", str(exc))
             return
 
+        audio_error = None
+        try:
+            machine.configure_audio_output(
+                "wasapi",
+                sample_rate=48_000,
+                buffer_size=512,
+                queue_blocks=4,
+                volume=80,
+                balance=0,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            # Audio is a host service: report its failure without blocking video
+            # presentation or preventing the cartridge from being loaded.
+            audio_error = str(exc)
+
         if self._machine is not None:
             self._video_telemetry_timer.stop()
             self._video_output_started = False
@@ -132,16 +148,18 @@ class MinimalSmsWindow(QMainWindow):
                 pass
 
         self._video_output_started = False
+        self._audio_output_error = audio_error
         self._machine = machine
         self._rom_path = path
         self._pressed_actions.clear()
         self.setWindowTitle(f"Sega Emulator — {path.name}")
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
-            "Preparando a apresentação nativa D3D12 no viewport 4:3."
+            "Pressione F5 ou Iniciar para executar a emulação.\n"
+            f"{self._audio_status_text()}"
         )
         self.statusBar().showMessage(
-            f"{path.name} | {self._region} | vídeo: inicializando host D3D12"
+            f"{path.name} | {self._region} | {self._audio_status_text()}"
         )
         self._start_video_output_if_visible()
         self._update_actions()
@@ -193,6 +211,7 @@ class MinimalSmsWindow(QMainWindow):
         self._machine = None
         self._rom_path = None
         self._pressed_actions.clear()
+        self._audio_output_error = None
         self.status_label.setText("Abra uma ROM do Master System")
         self.setWindowTitle("Sega Emulator — Master System")
         if stop_error:
@@ -211,6 +230,12 @@ class MinimalSmsWindow(QMainWindow):
             self.statusBar().showMessage("ROM fechada")
         self._update_actions()
 
+    def _audio_status_text(self) -> str:
+        """Describe the native audio endpoint state without exposing PCM to Qt."""
+        if self._audio_output_error:
+            return f"Áudio WASAPI indisponível: {self._audio_output_error}"
+        return "Áudio WASAPI inicializado (48 kHz)"
+
     def _close_video_output(self, machine: TemporalSMSMachine) -> str | None:
         """Release D3D12 and return an error without interrupting Qt teardown."""
         try:
@@ -225,6 +250,11 @@ class MinimalSmsWindow(QMainWindow):
         if machine is None or not self._video_output_started:
             self._video_telemetry_timer.stop()
             return
+
+        audio_error = machine.audio_output_error
+        if audio_error:
+            self._audio_output_error = audio_error
+        audio_status = self._audio_status_text()
 
         error = machine.video_output_error
         if error:
@@ -247,15 +277,18 @@ class MinimalSmsWindow(QMainWindow):
         if presented:
             self.statusBar().showMessage(
                 f"D3D12: apresentado {presented}/{published} | "
-                f"substituídos {replaced} | recuperações {recoveries}"
+                f"substituídos {replaced} | recuperações {recoveries} | "
+                f"{audio_status}"
             )
         elif published:
             self.statusBar().showMessage(
-                f"D3D12: {published} frame(s) publicados; aguardando primeiro Present"
+                f"D3D12: {published} frame(s) publicados; aguardando primeiro Present | "
+                f"{audio_status}"
             )
         else:
             self.statusBar().showMessage(
-                "D3D12 inicializado; aguardando o primeiro frame da emulação"
+                "D3D12 inicializado; aguardando F5/Iniciar | "
+                f"{audio_status}"
             )
 
     def _start_video_output_if_visible(self) -> None:
@@ -278,7 +311,8 @@ class MinimalSmsWindow(QMainWindow):
         self._video_output_started = True
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            "Host D3D12 inicializado; aguardando o primeiro frame da emulação."
+            "Host D3D12 inicializado; pressione F5/Iniciar para executar.\n"
+            f"{self._audio_status_text()}"
         )
         self._video_telemetry_timer.start()
         self._refresh_video_telemetry()
