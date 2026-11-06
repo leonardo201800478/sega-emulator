@@ -21,7 +21,7 @@ The PowerShell tooling job parses the maintained scripts. The scripts invoke Car
 
 The Python/Qt/PyO3 jobs and their workflows were removed together with the corresponding source tree and extension crate. Their former test results are historical only and are not part of the current gate.
 
-The external Z80 conformance runner was also removed because it was Python-based. ZEXDOC/ZEXALL are **NOT RUN** until a Rust-native runner exists. Existing Rust semantic, bus, microsequencing and temporal tests remain active; they do not replace those external suites.
+The Python orchestration for external Z80 conformance was removed. A low-level Rust test binary remains in the SMS core but is not yet an independent, complete harness: it still depends on SMS compatibility exports and requires the upstream-suite acquisition/assembly/preflight pipeline. ZEXDOC/ZEXALL are **NOT RUN** until that harness is relocated to the shared Z80 crate and completed in Rust. Existing Rust semantic, bus, microsequencing and temporal tests remain active; they do not replace those external suites.
 
 ## Result classification
 
