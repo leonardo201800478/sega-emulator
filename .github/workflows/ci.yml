@@ -299,6 +299,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
