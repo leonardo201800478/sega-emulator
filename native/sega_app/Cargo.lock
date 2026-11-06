@@ -2500,6 +2500,15 @@ name = "sega-app"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "raw-window-handle",
+ "sega-video-runtime",
+]
+
+[[package]]
+name = "sega-video-runtime"
+version = "0.1.0"
+dependencies = [
+ "windows",
 ]
 
 [[package]]
