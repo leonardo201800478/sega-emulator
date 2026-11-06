@@ -266,6 +266,6 @@ def _setting_bool(settings, key: str, default: bool) -> bool:
 def _setting_int(settings, key: str, default: int, minimum: int, maximum: int) -> int:
     try:
         value = int(settings.value(key, default))
-    except TypeError, ValueError, OverflowError:
+    except (TypeError, ValueError, OverflowError):
         return default
     return value if minimum <= value <= maximum else default
