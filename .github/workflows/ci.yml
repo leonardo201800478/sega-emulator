@@ -71,8 +71,6 @@ jobs:
               - '.github/workflows/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
-              - 'pyproject.toml'
-              - 'uv.lock'
               - 'rust-toolchain*'
               - '.cargo/**'
               - 'scripts/common.ps1'
