@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 exclude = [
-    "native/z80_core",
     "native/audio_output",
 ]
 members = [
