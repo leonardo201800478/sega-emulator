@@ -1519,3 +1519,71 @@ mod temporal_vdp_tests {
         assert_ne!(valid_th1_bus.vdp().read_h_counter(), 0);
     }
 }
+
+
+#[cfg(test)]
+mod external_th_temporal_tests {
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use sega_temporal_core::MachineTime;
+
+    #[test]
+    fn external_th_event_updates_the_selected_input_at_its_scheduler_timestamp() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let timestamp = MachineTime::from_ticks(12);
+        bus.schedule_external_th_transition(1, false, timestamp).unwrap();
+
+        let snapshot = bus.export_state();
+        let mut restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        let dispatch = restored.dispatch_next().unwrap().unwrap();
+
+        assert_eq!(
+            dispatch,
+            SmsTemporalDispatch::ExternalThTransition {
+                player: 1,
+                high: false,
+                completed_at: timestamp,
+            }
+        );
+        assert_eq!(restored.now(), timestamp);
+        assert_eq!(restored.io().external_th_level(1), Ok(false));
+        assert_eq!(restored.io().external_th_level(2), Ok(true));
+        assert_eq!(restored.io().read_port(0xDD) & 0xC0, 0x80);
+    }
+
+    #[test]
+    fn external_th_events_can_be_pending_alongside_a_cpu_bus_deadline() {
+        use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let request = Z80BusRequest {
+            id: 41,
+            operation: Z80BusOperation::PortRead,
+            address: 0x00DD,
+            base_tstates: 4,
+        };
+        let bus_deadline = bus.begin_request(request, 0).unwrap();
+        let th_timestamp = MachineTime::from_ticks(6);
+        bus.schedule_external_th_transition(2, false, th_timestamp).unwrap();
+
+        let snapshot = bus.export_state();
+        let mut restored = SmsTemporalBus::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::ExternalThTransition {
+                player: 2,
+                high: false,
+                completed_at: th_timestamp,
+            })
+        );
+        assert_eq!(restored.now(), th_timestamp);
+        assert_eq!(
+            restored.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(super::SmsBusCompletion {
+                request_id: 41,
+                data: Some(0x7F),
+                completed_at: bus_deadline,
+            }))
+        );
+    }
+}
