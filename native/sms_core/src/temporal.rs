@@ -243,7 +243,9 @@ impl SmsTemporalCoordinator {
         }
         timestamp
             .checked_duration_since(self.now())
-            .filter(|elapsed| *elapsed > 0 && *elapsed % u128::from(self.master_ticks_per_tstate) == 0)
+            .filter(|elapsed| {
+                *elapsed > 0 && *elapsed % u128::from(self.master_ticks_per_tstate) == 0
+            })
             .ok_or(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)?;
         self.scheduler.schedule_at_with_phase(
             timestamp,
@@ -508,7 +510,11 @@ mod tests {
             SMS_PSG_CLOCK_DOMAIN_ID,
             SMS_VDP_CLOCK_DOMAIN_ID,
         ] {
-            let advance = dispatch.clock_advances.iter().find(|advance| advance.domain == domain).unwrap();
+            let advance = dispatch
+                .clock_advances
+                .iter()
+                .find(|advance| advance.domain == domain)
+                .unwrap();
             assert_eq!(advance.elapsed_cycles, 5);
         }
     }
