@@ -21,6 +21,7 @@ pub struct SegaApp {
     region: String,
     last_rom_directory: Option<PathBuf>,
     rom_dialog_requested: bool,
+    aspect_ratio: AspectRatioMode,
     native_viewport: NativeViewportState,
 }
 
@@ -31,7 +32,33 @@ impl Default for SegaApp {
             region: String::new(),
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
+            aspect_ratio: AspectRatioMode::FourThree,
             native_viewport: NativeViewportState::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AspectRatioMode {
+    OneToOne,
+    FourThree,
+    SixteenNine,
+}
+
+impl AspectRatioMode {
+    const fn value(self) -> f32 {
+        match self {
+            Self::OneToOne => 1.0,
+            Self::FourThree => 4.0 / 3.0,
+            Self::SixteenNine => 16.0 / 9.0,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::OneToOne => "1:1",
+            Self::FourThree => "4:3",
+            Self::SixteenNine => "16:9",
         }
     }
 }
@@ -156,11 +183,12 @@ impl SegaApp {
                 &mut self.rom_path,
                 &mut self.region,
                 &mut self.rom_dialog_requested,
+                &mut self.aspect_ratio,
                 &mut load_requested,
             );
             render_machine_controls(ui, &self.native_viewport, &mut command);
             render_runtime_status(ui, &self.native_viewport);
-            viewport_rect = render_video_viewport(ui);
+            viewport_rect = render_video_viewport(ui, self.aspect_ratio);
             render_footer(ui);
         });
 
@@ -578,6 +606,7 @@ fn render_rom_controls(
     rom_path: &mut String,
     region: &mut String,
     browse_requested: &mut bool,
+    aspect_ratio: &mut AspectRatioMode,
     load_requested: &mut bool,
 ) {
     ui.horizontal(|ui| {
@@ -603,6 +632,14 @@ fn render_rom_controls(
                 ui.selectable_value(region, "brazil".to_owned(), "Brasil / PAL-M");
                 ui.selectable_value(region, "europe".to_owned(), "Europa / PAL");
                 ui.selectable_value(region, "japan".to_owned(), "Japão / NTSC");
+            });
+        ui.label("Proporção:");
+        egui::ComboBox::from_id_salt("sms_aspect_ratio")
+            .selected_text(aspect_ratio.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(aspect_ratio, AspectRatioMode::OneToOne, "1:1");
+                ui.selectable_value(aspect_ratio, AspectRatioMode::FourThree, "4:3");
+                ui.selectable_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
             });
     });
 }
@@ -695,19 +732,31 @@ fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     }
 }
 
-fn render_video_viewport(ui: &mut egui::Ui) -> egui::Rect {
+fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> egui::Rect {
     ui.add_space(6.0);
-    let width = ui.available_width().max(1.0);
-    let height = (width * 0.75).min(ui.available_height().max(1.0));
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
-    rect
+
+    let available = ui.available_size().max(egui::Vec2::splat(1.0));
+    let ratio = aspect_ratio.value();
+    let width = available.x.min(available.y * ratio).max(1.0);
+    let height = (width / ratio).min(available.y).max(1.0);
+    let horizontal_padding = ((available.x - width) * 0.5).max(0.0);
+
+    let mut viewport_rect = egui::Rect::NOTHING;
+    ui.horizontal(|ui| {
+        ui.add_space(horizontal_padding);
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+        viewport_rect = rect;
+    });
+    ui.painter()
+        .rect_filled(viewport_rect, 0.0, egui::Color32::BLACK);
+    viewport_rect
 }
 
 fn render_footer(ui: &mut egui::Ui) {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         ui.separator();
-        ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · D3D12");
+        ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · proporção configurável");
     });
 }
 
@@ -764,6 +813,13 @@ mod tests {
     use super::SegaApp;
     use eframe::egui;
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn aspect_ratio_modes_preserve_requested_geometry() {
+        assert_eq!(super::AspectRatioMode::OneToOne.value(), 1.0);
+        assert!((super::AspectRatioMode::FourThree.value() - 4.0 / 3.0).abs() < f32::EPSILON);
+        assert!((super::AspectRatioMode::SixteenNine.value() - 16.0 / 9.0).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn application_shell_renders_without_native_window_or_hardware() {

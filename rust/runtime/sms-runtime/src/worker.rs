@@ -794,6 +794,20 @@ fn handle_command(
         }
         #[cfg(any(windows, test))]
         WorkerCommand::SetVideoMailbox(mailbox, reply) => {
+            if let Some(attached_mailbox) = mailbox.as_ref() {
+                match attached_mailbox.last_sequence() {
+                    Ok(Some(last_sequence)) => {
+                        *video_sequence = (*video_sequence).max(last_sequence);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        let _ = reply.send(Err(format!(
+                            "could not read video mailbox sequence: {error}"
+                        )));
+                        return true;
+                    }
+                }
+            }
             *video_mailbox = mailbox;
             telemetry.set_video_error(None);
             let _ = reply.send(Ok(()));
@@ -984,6 +998,29 @@ mod tests {
             !mailbox.is_closed().unwrap(),
             "detaching must not close the externally owned mailbox"
         );
+    }
+
+    #[test]
+    fn replacement_worker_continues_existing_mailbox_sequence() {
+        let mailbox = FrameMailbox::new();
+
+        let first_worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        first_worker.attach_video_mailbox(mailbox.clone()).unwrap();
+        first_worker.step_frame(100_000).unwrap();
+        let first = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(first.sequence(), 1);
+        drop(first_worker);
+
+        let replacement_worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        replacement_worker
+            .attach_video_mailbox(mailbox.clone())
+            .unwrap();
+        replacement_worker.step_frame(100_000).unwrap();
+
+        let second = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(second.sequence(), 2);
+        assert_eq!(replacement_worker.video_last_published_sequence(), 2);
+        assert_eq!(replacement_worker.video_output_error(), None);
     }
 
     #[test]

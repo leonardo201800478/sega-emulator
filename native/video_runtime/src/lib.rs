@@ -314,6 +314,18 @@ impl FrameMailbox {
         Ok(state.latest.take())
     }
 
+    /// Return the last sequence accepted by this mailbox, including consumed frames.
+    ///
+    /// A newly attached producer uses this value to continue the mailbox sequence
+    /// instead of restarting at one when a ROM worker is replaced.
+    pub fn last_sequence(&self) -> Result<Option<u64>, FrameMailboxError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+        Ok(state.last_sequence)
+    }
+
     /// Return how many pending frames were replaced before presentation.
     pub fn replaced_frames(&self) -> Result<u64, FrameMailboxError> {
         let state = self
@@ -480,6 +492,15 @@ mod tests {
         assert_eq!(frame.sequence(), 2);
         assert_eq!(mailbox.replaced_frames().unwrap(), 1);
         assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_reports_last_accepted_sequence_after_consumption() {
+        let mailbox = super::FrameMailbox::new();
+        assert_eq!(mailbox.last_sequence().unwrap(), None);
+        mailbox.publish(test_frame(12)).unwrap();
+        mailbox.take_latest().unwrap();
+        assert_eq!(mailbox.last_sequence().unwrap(), Some(12));
     }
 
     #[test]
