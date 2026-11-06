@@ -155,3 +155,49 @@ This change establishes the destination and migration contract only.
 removed, and no Cargo validation has been run.** The next implementation
 increment must extract the SMS worker into a pure-Rust crate and prove its
 contract before removing the PyO3-bound crate.
+
+
+## 8. SMS worker extraction — source-level dependency audit
+
+The source inspection of the baseline identifies a relatively narrow extraction
+boundary:
+
+- `native/z80_core/src/sms_temporal_worker.rs` is 1,056 lines and contains
+  the worker, command channel, lifecycle, telemetry, frame execution and its
+  unit tests. Its direct imports are standard-library synchronization/thread
+  primitives, `sega_sms_core`, `sega_audio_runtime`,
+  `sega_video_runtime`, and the local `crate::audio` adapter.
+- `native/z80_core/src/audio.rs` is 77 lines. It is already Python-independent
+  and adapts `sega-audio-output` WASAPI/XAudio2 sinks to
+  `sega-audio-runtime::NativeAudioSession`. This adapter belongs with the
+  new SMS runtime/host composition, not in a PyO3 module.
+- `native/z80_core/src/sms_temporal_machine.rs` is the PyO3 wrapper around
+  `SmsTemporalWorker`; it should not be copied into the new runtime.
+- `native/z80_core/src/input.rs` is a separate PyO3 input-manager surface.
+  The worker itself receives `ControllerButtons`; native input capture is
+  already represented by `sega-input-runtime` and should be integrated from
+  the Rust application/session boundary, not imported from this PyO3 module.
+- The current `sega-z80-core` manifest also depends on the atomic SG-1000
+  core and PyO3. Neither dependency is required by the worker source itself.
+- The worker's Windows video output depends on the existing
+  `sega-video-runtime::d3d12::D3d12MailboxSession`; the runtime extraction
+  must retain this dependency until the host viewport contract is resolved.
+
+### Proposed first implementation slice
+
+Create `rust/runtime/sms-runtime` as a pure Rust library with dependencies
+on SMS core, audio runtime/output, video runtime, and the shared input/runtime
+contracts only when directly required. Move the worker and audio adapter as
+one implementation, convert internal `pub(super)` APIs into a deliberate
+public runtime API, and add a thin `lib.rs` facade. Do not bring over
+`sms_temporal_machine.rs`, `input.rs`, `machine.rs`, PyO3 macros, or the
+atomic SG-1000 dependency.
+
+The extraction must preserve the existing worker tests and add integration
+coverage for construction, lifecycle, ROM replacement, frame stepping,
+controller state, audio failure isolation, video detachment, shutdown/join,
+and deterministic execution. Existing tests inside the source file are not
+sufficient by themselves to prove the public crate boundary.
+
+This is a source-level dependency audit only. The crate has not been created,
+the worker has not been moved, and no compilation or tests have been run.
