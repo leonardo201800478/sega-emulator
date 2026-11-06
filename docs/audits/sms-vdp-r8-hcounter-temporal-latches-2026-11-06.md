@@ -120,7 +120,8 @@ A proposta antiga de adicionar `synchronize_tstates` ao caminho de CPU atômica 
 |---|---|
 | R8 HPos 21 / T14 no modelo de referência | Implementado; CI pendente |
 | H-counter latched por TH ascendente | Implementado; CI pendente |
-| TH1 e TH2 pelo caminho temporal | Testes adicionados; CI pendente |
+| TH1 e TH2 por escrita de I/O control no caminho temporal | Testes adicionados; CI pendente |
+| Bordas TH externas originadas por periféricos | NOT RUN; evento de entrada ainda não ligado ao barramento |
 | Persistência em snapshot/restore em memória | Incluída via clone do VDP; teste dedicado pendente |
 | Execução da SmsVdpTest ROM em console físico | NOT RUN |
 | Confirmação física SMS1 e SMS2 | NOT RUN |
