@@ -119,9 +119,17 @@ class MinimalSmsWindow(QMainWindow):
             return
 
         if self._machine is not None:
-            self._machine.stop()
+            self._video_telemetry_timer.stop()
+            self._video_output_started = False
+            try:
+                self._machine.stop()
+            except RuntimeError:
+                pass
             self._close_video_output(self._machine)
-            self._machine.close_audio_output()
+            try:
+                self._machine.close_audio_output()
+            except RuntimeError:
+                pass
 
         self._video_output_started = False
         self._machine = machine
@@ -168,10 +176,14 @@ class MinimalSmsWindow(QMainWindow):
     def _close_rom(self) -> None:
         machine = self._machine
         self._video_telemetry_timer.stop()
+        stop_error = None
         video_error = None
         audio_error = None
         if machine is not None:
-            machine.stop()
+            try:
+                machine.stop()
+            except RuntimeError as exc:
+                stop_error = str(exc)
             video_error = self._close_video_output(machine)
             try:
                 machine.close_audio_output()
@@ -183,7 +195,9 @@ class MinimalSmsWindow(QMainWindow):
         self._pressed_actions.clear()
         self.status_label.setText("Abra uma ROM do Master System")
         self.setWindowTitle("Sega Emulator — Master System")
-        if video_error:
+        if stop_error:
+            self.statusBar().showMessage(f"ROM fechada; falha ao parar worker: {stop_error}")
+        elif video_error:
             self.statusBar().showMessage(f"ROM fechada; falha ao encerrar vídeo: {video_error}")
         elif audio_error:
             self.statusBar().showMessage(f"ROM fechada; falha ao encerrar áudio: {audio_error}")
@@ -208,11 +222,13 @@ class MinimalSmsWindow(QMainWindow):
 
         error = machine.video_output_error
         if error:
+            self._video_telemetry_timer.stop()
             self.status_label.setText(f"Falha na apresentação D3D12: {error}")
             self.statusBar().showMessage(f"Vídeo D3D12: falha — {error}")
             return
 
         if not machine.video_output_is_running:
+            self._video_telemetry_timer.stop()
             self.statusBar().showMessage("Vídeo D3D12: worker de apresentação encerrado")
             return
 
@@ -311,7 +327,10 @@ class MinimalSmsWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override name
         self._video_telemetry_timer.stop()
         if self._machine is not None:
-            self._machine.stop()
+            try:
+                self._machine.stop()
+            except RuntimeError as exc:
+                self.statusBar().showMessage(f"Falha ao parar worker: {exc}")
             video_error = self._close_video_output(self._machine)
             try:
                 self._machine.close_audio_output()
