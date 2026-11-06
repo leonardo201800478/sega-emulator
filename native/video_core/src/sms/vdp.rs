@@ -1965,7 +1965,7 @@ mod tests {
                     } else {
                         [0, 255, 0]
                     };
-                    let offset = x * 3;
+                    let offset = (SMS_VDP_WIDTH + x) * 3;
                     assert_eq!(
                         &v.working_framebuffer[offset..offset + 3],
                         &expected,
