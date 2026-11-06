@@ -254,6 +254,11 @@ jobs:
           toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Validate PowerShell Cargo workspace discovery and lockfiles
+        shell: pwsh
+        run: |
+          ./scripts/project.ps1 audit
+          ./scripts/project.ps1 locks
       - name: Format native egui application
         run: cargo fmt --all --manifest-path native/sega_app/Cargo.toml -- --check
       - name: Check native egui application
