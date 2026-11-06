@@ -168,7 +168,7 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 
 **M1a — shell inicial (implementado em branch, validação pendente):**
 - [x] Criar `native/sega_app` com binário `sega-app`, workspace Cargo isolado e lockfile próprio; a consolidação no workspace raiz fica para a fase de integração de crates.
-- [x] Adotar efixamente `eframe = 0.37.0` no alvo Windows x64.
+- [x] Fixar `eframe = 0.37.0` no alvo Windows x64.
 - [x] Implementar janela egui com estado explícito de subsistemas, opção de exibir arquitetura e encerramento da janela.
 - [x] Adicionar teste headless usando `egui::Context`, sem janela nativa nem hardware.
 - [x] Incluir fmt, check, Clippy e teste headless no job Windows da CI.
