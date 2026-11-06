@@ -1392,6 +1392,21 @@ mod temporal_vdp_tests {
             0x003F,
         );
         assert_eq!(th2_bus.vdp().read_h_counter(), 0);
+
+        let mut valid_th1_bus = japanese_bus();
+        transact(
+            &mut valid_th1_bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xDD },
+            0x003F,
+        );
+        transact(
+            &mut valid_th1_bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xDF },
+            0x003F,
+        );
+        assert_ne!(valid_th1_bus.vdp().read_h_counter(), 0);
     }
 
     #[test]
