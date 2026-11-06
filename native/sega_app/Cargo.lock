@@ -102,7 +102,6 @@ dependencies = [
 ]
 
 [[package]]
-[[package]]
 name = "accesskit"
 version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

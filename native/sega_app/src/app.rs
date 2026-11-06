@@ -8,8 +8,8 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
 use sega_input_runtime::{
-    AxisSemantic, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend,
-    InputBuffers, sdl3_backend::Sdl3Backend,
+    AxisSemantic, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
+    sdl3_backend::Sdl3Backend,
 };
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
@@ -342,7 +342,9 @@ impl SegaApp {
             return;
         };
         let result = match command {
-            AudioCommand::Configure => configure_audio_output(worker, self.audio_backend, self.audio_volume),
+            AudioCommand::Configure => {
+                configure_audio_output(worker, self.audio_backend, self.audio_volume)
+            },
             AudioCommand::Disable => worker.close_audio_output(),
         };
         if let Err(error) = result {
@@ -428,10 +430,12 @@ impl SegaApp {
         {
             self.input_error = Some(error.to_string());
         }
-        if self
-            .selected_gamepad
-            .is_none_or(|selected| !self.input_devices.iter().any(|device| device.id == selected))
-        {
+        if self.selected_gamepad.is_none_or(|selected| {
+            !self
+                .input_devices
+                .iter()
+                .any(|device| device.id == selected)
+        }) {
             self.selected_gamepad = self
                 .input_devices
                 .iter()
@@ -893,14 +897,22 @@ fn render_audio_controls(
 ) {
     ui.horizontal(|ui| {
         if ui.checkbox(enabled, "Áudio ativo").changed() {
-            *command = Some(if *enabled { AudioCommand::Configure } else { AudioCommand::Disable });
+            *command = Some(if *enabled {
+                AudioCommand::Configure
+            } else {
+                AudioCommand::Disable
+            });
         }
         ui.label("Saída:");
         egui::ComboBox::from_id_salt("sms_audio_backend")
             .selected_text(backend.label())
             .show_ui(ui, |ui| {
-                if ui.selectable_value(backend, AudioBackend::Wasapi, "WASAPI Shared").changed()
-                    || ui.selectable_value(backend, AudioBackend::XAudio2, "XAudio2").changed()
+                if ui
+                    .selectable_value(backend, AudioBackend::Wasapi, "WASAPI Shared")
+                    .changed()
+                    || ui
+                        .selectable_value(backend, AudioBackend::XAudio2, "XAudio2")
+                        .changed()
                 {
                     *command = Some(AudioCommand::Configure);
                     *enabled = true;
@@ -914,25 +926,19 @@ fn render_audio_controls(
     ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
     if let Some(worker) = viewport.worker.as_ref() {
         let (underruns, dropped) = worker.audio_output_metrics();
-        ui.small(format!("Áudio: {underruns} underruns · {dropped} blocos descartados"));
+        ui.small(format!(
+            "Áudio: {underruns} underruns · {dropped} blocos descartados"
+        ));
     } else {
         ui.small("Áudio: aguardando ROM");
     }
 }
 
 fn map_sdl3_gamepad(state: DeviceState) -> (ControllerButtons, bool) {
-    let up = state.buttons.is_pressed(11)
-        || state.hat(0) & 0x01 != 0
-        || state.axis(1) < -16_000;
-    let down = state.buttons.is_pressed(12)
-        || state.hat(0) & 0x04 != 0
-        || state.axis(1) > 16_000;
-    let left = state.buttons.is_pressed(13)
-        || state.hat(0) & 0x08 != 0
-        || state.axis(0) < -16_000;
-    let right = state.buttons.is_pressed(14)
-        || state.hat(0) & 0x02 != 0
-        || state.axis(0) > 16_000;
+    let up = state.buttons.is_pressed(11) || state.hat(0) & 0x01 != 0 || state.axis(1) < -16_000;
+    let down = state.buttons.is_pressed(12) || state.hat(0) & 0x04 != 0 || state.axis(1) > 16_000;
+    let left = state.buttons.is_pressed(13) || state.hat(0) & 0x08 != 0 || state.axis(0) < -16_000;
+    let right = state.buttons.is_pressed(14) || state.hat(0) & 0x02 != 0 || state.axis(0) > 16_000;
     (
         ControllerButtons {
             up,
@@ -961,12 +967,24 @@ fn render_input_controls(
         egui::ComboBox::from_id_salt("sms_gamepad")
             .selected_text(selected_name)
             .show_ui(ui, |ui| {
-                for device in devices.iter().filter(|device| device.class == DeviceClass::Gamepad) {
+                for device in devices
+                    .iter()
+                    .filter(|device| device.class == DeviceClass::Gamepad)
+                {
                     ui.selectable_value(selected, Some(device.id), &device.name);
                 }
             });
-        if devices.iter().any(|device| device.class == DeviceClass::Gamepad) {
-            ui.label(format!("{} gamepad(s) detectado(s)", devices.iter().filter(|device| device.class == DeviceClass::Gamepad).count()));
+        if devices
+            .iter()
+            .any(|device| device.class == DeviceClass::Gamepad)
+        {
+            ui.label(format!(
+                "{} gamepad(s) detectado(s)",
+                devices
+                    .iter()
+                    .filter(|device| device.class == DeviceClass::Gamepad)
+                    .count()
+            ));
         } else {
             ui.label("Conecte um gamepad compatível com SDL3");
         }
@@ -1059,8 +1077,7 @@ fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> eg
     let mut viewport_rect = egui::Rect::NOTHING;
     ui.horizontal(|ui| {
         ui.add_space(horizontal_padding);
-        let (rect, _) =
-            ui.allocate_exact_size(viewport_size, egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(viewport_size, egui::Sense::hover());
         viewport_rect = rect;
     });
     ui.painter()
@@ -1181,7 +1198,9 @@ mod tests {
         state.buttons.set(0, true).unwrap();
         state.buttons.set(1, true).unwrap();
         state.buttons.set(6, true).unwrap();
-        state.set_axis(0, -20_000, AxisSemantic::LeftStickX).unwrap();
+        state
+            .set_axis(0, -20_000, AxisSemantic::LeftStickX)
+            .unwrap();
         state.set_hat(0, 0x01).unwrap();
 
         let (buttons, pause) = super::map_sdl3_gamepad(state);
