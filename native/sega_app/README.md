@@ -1,22 +1,7 @@
-# sega-app — M1
+# Native egui application shell
 
-Primeiro executável nativo Rust do Sega Emulator, usando egui/eframe 0.37.0.
+`sega-app` is a native Rust/egui application shell. At the current migration checkpoint it renders only the initial shell and does not yet create an SMS machine, load a ROM or connect the SMS worker.
 
-## Build (Windows x64)
+The next integration increment must connect this shell to `rust/runtime/sms-runtime` through coarse-grained commands and native host services. The UI must not advance hardware time or own machine state.
 
-```powershell
-cargo fmt --all --manifest-path native/sega_app/Cargo.toml -- --check
-cargo check --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-cargo test --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-cargo run --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-```
-
-## Limites desta fatia
-
-- A janela comprova somente a inicialização do eframe.
-- Nenhuma ROM, CPU, Scheduler, áudio ou input é iniciado.
-- O viewport D3D12 ainda não foi acoplado ao shell.
-- O frontend Python permanece disponível como baseline/rollback.
-- O crate tem workspace e lockfile próprios nesta etapa; a consolidação com o workspace raiz fica para a fase de integração de crates.
-
-A janela não declara paridade funcional nem substitui o frontend legado.
+The shell is not yet an executable emulator frontend. Do not claim gameplay, audio, input or video integration until the corresponding Windows and headless tests pass.
