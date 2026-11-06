@@ -412,29 +412,10 @@ def lock_refresh(workspaces: list[Workspace]) -> list[Result]:
     return results
 
 
-VALIDATION_EXCLUDED_WORKSPACES = {
-    "native/sega_emu_core": (
-        "Migration scaffold only; no active runtime or frontend consumer. "
-        "Cargo metadata/lockfile resolution is still checked separately."
-    ),
-}
-
-
 def validate(workspaces: list[Workspace], include_python: bool) -> list[Result]:
-    """Run active Rust gates once per workspace and Python gates once per repository."""
+    """Run Rust gates once per active workspace and Python gates once per repository."""
     results = []
     for workspace in workspaces:
-        excluded_reason = VALIDATION_EXCLUDED_WORKSPACES.get(workspace.root)
-        if excluded_reason:
-            results.append(
-                Result(
-                    f"Rust validation: {workspace.root}",
-                    "NOT RUN",
-                    output=excluded_reason,
-                )
-            )
-            continue
-
         results.append(
             run(cargo_for(workspace, "fmt", "--all", "--", "--check"), ROOT, 300)
         )
