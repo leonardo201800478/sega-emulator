@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import zipfile
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 import sega_emulator.frontend.qt.minimal_sms_window as minimal_window
@@ -93,13 +95,16 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
     rom_path = tmp_path / "test.sms"
     rom_path.write_bytes(b"test-rom")
 
-    window = minimal_window.MinimalSmsWindow(region="brazil")
-    window.load_rom(rom_path)
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    window = minimal_window.MinimalSmsWindow(region="brazil", settings=settings)
+    with caplog.at_level(logging.INFO):
+        window.load_rom(rom_path)
 
     machine = window._machine
     assert isinstance(machine, FakeTemporalSMSMachine)
@@ -110,7 +115,16 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert not hasattr(window, "_frame_timer")
     assert "F5" in window.status_label.text()
     assert "Áudio WASAPI inicializado" in window.status_label.text()
+    assert "SMS ROM carregada" in caplog.text
+    assert "SMS audio configured" in caplog.text
     assert window.run_action.isEnabled()
+    assert [action.text() for action in window.menuBar().actions()] == [
+        "Arquivo",
+        "Emulação",
+        "Configurações",
+        "Ajuda",
+    ]
+    assert window.settings_action.shortcut().toString() == "Ctrl+,"
     audio_calls = [
         call for call in machine.calls if call[0] == "configure_audio_output"
     ]
@@ -153,6 +167,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
 
 def test_video_telemetry_reports_published_and_presented_sequences(
     qapplication: QApplication,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     window = minimal_window.MinimalSmsWindow()
     machine = FakeTemporalSMSMachine(b"rom", region="usa")
@@ -164,9 +179,12 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     machine.video_device_recovery_count = 1
     window._machine = machine
     window._video_output_started = True
+    window._last_telemetry_log_time = -10.0
 
-    window._refresh_video_telemetry()
+    with caplog.at_level(logging.INFO):
+        window._refresh_video_telemetry()
 
+    assert "SMS output telemetry" in caplog.text
     message = window.statusBar().currentMessage()
     assert "Frames 25" in message
     assert "apresentado 5/7" in message
@@ -316,4 +334,154 @@ def test_video_telemetry_reports_native_runtime_failure(
     assert "FrameStepLimitReached" in window.status_label.text()
     assert "Execução SMS interrompida" in window.statusBar().currentMessage()
     assert not window._video_telemetry_timer.isActive()
+    window.close()
+
+
+def test_sms_window_applies_persisted_audio_preferences(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "audio.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_audio_backend", "xaudio2")
+    settings.setValue("audio_sample_rate", 44_100)
+    settings.setValue("audio_buffer_size", 1024)
+    settings.setValue("audio_queue_blocks", 8)
+    settings.setValue("audio_volume", 55)
+    settings.setValue("audio_balance", -30)
+    rom_path = tmp_path / "configured.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(region="usa", settings=settings)
+    window.load_rom(rom_path)
+
+    machine = window._machine
+    assert isinstance(machine, FakeTemporalSMSMachine)
+    audio_call = next(
+        call for call in machine.calls if call[0] == "configure_audio_output"
+    )
+    assert audio_call[1] == "xaudio2"
+    assert audio_call[2] == {
+        "sample_rate": 44_100,
+        "buffer_size": 1024,
+        "queue_blocks": 8,
+        "volume": 55,
+        "balance": -30,
+    }
+    assert "XAudio2 inicializado" in window.status_label.text()
+    window.close()
+
+
+def test_sms_window_can_disable_native_audio_from_preferences(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "disabled.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_audio_backend", "disabled")
+    rom_path = tmp_path / "silent.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(region="usa", settings=settings)
+    window.load_rom(rom_path)
+
+    machine = window._machine
+    assert isinstance(machine, FakeTemporalSMSMachine)
+    assert ("close_audio_output",) in machine.calls
+    assert not any(call[0] == "configure_audio_output" for call in machine.calls)
+    assert "Áudio desativado" in window.status_label.text()
+    window.close()
+
+
+def test_sms_video_viewport_supports_integer_scaling(
+    qapplication: QApplication,
+) -> None:
+    viewport = SmsVideoViewport()
+    viewport.resize(1000, 700)
+    viewport.set_integer_scale(True)
+    qapplication.processEvents()
+
+    surface = viewport.surface_widget.geometry()
+    assert surface.width() == 768
+    assert surface.height() == 576
+    assert surface.width() % 256 == 0
+    assert surface.height() % 192 == 0
+
+    viewport.set_integer_scale(False)
+    qapplication.processEvents()
+    fractional_surface = viewport.surface_widget.geometry()
+    assert fractional_surface.width() / fractional_surface.height() == pytest.approx(
+        4 / 3, abs=0.01
+    )
+    viewport.close()
+
+
+def test_sms_window_uses_saved_region_when_cli_does_not_override(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "region.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_region_preference", "europe")
+    rom_path = tmp_path / "region.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(settings=settings)
+    window.load_rom(rom_path)
+
+    assert isinstance(window._machine, FakeTemporalSMSMachine)
+    assert window._machine.region == "europe"
+    window.close()
+
+
+def test_sms_menu_opens_library_on_master_system_and_loads_selection(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    selected_rom = tmp_path / "library-game.sms"
+    loaded: list[Path] = []
+
+    class FakeLibraryDialog:
+        def __init__(self, settings, *, initial_system: str, parent=None) -> None:
+            assert initial_system == "master_system"
+            self.selected_rom = selected_rom
+            self.selected_system = initial_system
+
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(minimal_window, "RomLibraryDialog", FakeLibraryDialog)
+    window = minimal_window.MinimalSmsWindow()
+    monkeypatch.setattr(window, "load_rom", loaded.append)
+
+    window._open_library_dialog()
+
+    assert loaded == [selected_rom]
+    window.close()
+
+
+def test_video_telemetry_logs_native_audio_endpoint_error(
+    qapplication: QApplication,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.audio_output_error = "default endpoint disconnected"
+    machine.audio_output_metrics = (3, 2)
+    machine.video_output_is_running = True
+    window._machine = machine
+    window._video_output_started = True
+    window._last_telemetry_log_time = -10.0
+
+    with caplog.at_level(logging.INFO):
+        window._refresh_video_telemetry()
+
+    assert "SMS native audio endpoint failed" in caplog.text
+    assert "audio_underruns=3" in caplog.text
+    assert "audio_dropped_blocks=2" in caplog.text
+    assert "default endpoint disconnected" in caplog.text
     window.close()

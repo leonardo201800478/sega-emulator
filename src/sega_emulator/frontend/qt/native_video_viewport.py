@@ -23,6 +23,7 @@ class SmsVideoViewport(QWidget):
             QSizePolicy.Policy.Expanding,
         )
         self.setStyleSheet("QWidget#smsVideoViewport { background: #080a0f; }")
+        self._integer_scale = False
 
         self.surface_widget = QWidget(self)
         self.surface_widget.setObjectName("smsD3d12Surface")
@@ -38,6 +39,13 @@ class SmsVideoViewport(QWidget):
             Qt.WidgetAttribute.WA_NoSystemBackground,
             True,
         )
+        self._layout_surface()
+
+    def set_integer_scale(self, enabled: bool) -> None:
+        """Enable or disable integer-only scaling of the native 256x192 surface."""
+        if type(enabled) is not bool:
+            raise TypeError("enabled deve ser bool.")
+        self._integer_scale = enabled
         self._layout_surface()
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt override name
@@ -64,9 +72,19 @@ class SmsVideoViewport(QWidget):
             self.surface_widget.setGeometry(0, 0, 0, 0)
             return
 
-        scale = min(available_width / 4, available_height / 3)
-        surface_width = max(1, int(4 * scale))
-        surface_height = max(1, int(3 * scale))
+        if self._integer_scale:
+            scale = min(available_width // 256, available_height // 192)
+            if scale >= 1:
+                surface_width = 256 * scale
+                surface_height = 192 * scale
+            else:
+                scale = min(available_width / 256, available_height / 192)
+                surface_width = max(1, int(256 * scale))
+                surface_height = max(1, int(192 * scale))
+        else:
+            scale = min(available_width / 4, available_height / 3)
+            surface_width = max(1, int(4 * scale))
+            surface_height = max(1, int(3 * scale))
         left = (available_width - surface_width) // 2
         top = (available_height - surface_height) // 2
         self.surface_widget.setGeometry(

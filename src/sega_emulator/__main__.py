@@ -37,8 +37,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--region",
         choices=("usa", "brazil", "europe", "japan"),
-        default="usa",
-        help="perfil regional do Master System",
+        default=None,
+        help="perfil regional do Master System (usa preferência salva se omitido)",
     )
     parser.add_argument(
         "--log-dir",
