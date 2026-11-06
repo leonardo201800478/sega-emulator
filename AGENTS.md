@@ -1,67 +1,58 @@
 # Instruções para agentes de código — Sega Emulator
 
-Estas regras orientam agentes e revisores. As decisões normativas vigentes são a [ADR-0016 — fidelidade observável](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md), o [roadmap mestre](docs/project-roadmap.md) e o [escopo do projeto](docs/project-scope.md).
+As regras normativas são a [ADR 0010 — produto 100% Rust e SMS temporal](docs/adr/0010-rust-only-sms-temporal-first.md), a [ADR-0016 — fidelidade observável](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md) e o [roadmap mestre](docs/project-roadmap.md).
 
 ## Prioridade e arquitetura
 
-- Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend Qt/PyO3 → P8 compatibilidade/auditoria → P9 validação sistêmica.
-- A prioridade imediata é consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
-- Arquitetura-alvo: produto integralmente Rust, incluindo GUI egui/eframe, launcher, biblioteca, mídia, configurações, controles, áudio, vídeo, telemetria, diagnósticos e serviços.
-- Python, PySide6, PyO3 e Maturin são componentes transitórios do produto legado e devem ser eliminados somente após paridade funcional e validação dos equivalentes Rust.
-- Durante a transição, não remover módulos Python ativos nem quebrar a ponte PyO3 antes de migrar seus consumidores. Não introduzir novos recursos de produto em Python.
-- Não duplicar CPUs ou componentes compartilháveis por console.
-- Não adicionar JIT, frame skipping, hacks temporais ou otimizações especulativas.
+- Decisão definitiva: produto 100% Rust. Não manter Python, PySide6/Qt, PyO3 ou Maturin, nem como legado versionado, tooling, testes ou fallback.
+- Interface nativa egui/eframe. Escopo inicial: menus operacionais mínimos; não construir biblioteca visual ou frontend rico nesta etapa.
+- Único runtime ativo inicial: Master System temporal, exclusivamente sobre o Z80 compartilhado, SN76489 temporal, VDP temporal e MachineScheduler.
+- Desconectar e arquivar temporariamente o SMS atômico antigo e o SG-1000 atômico antigo fora do workspace/runtime. Preservar somente código Rust necessário à auditoria durante a extração.
+- Eliminar o SG-1000 antigo depois que o SMS estiver executável. Só então criar um SG-1000 novo baseado no Z80 compartilhado.
+- Não criar fallback nem duplicar CPU, PSG, VDP, worker ou Scheduler.
+- A UI nunca executa hardware, avança clocks ou faz callbacks por instrução.
+- Não usar JIT, frame skipping, hacks temporais ou otimizações especulativas.
+
+## Sequência obrigatória
+
+1. Auditar SHA/main, PRs, workflows, manifests e árvore completa.
+2. Mapear dependências entre SMS temporal e módulos atualmente compartilhados com SMS atômico.
+3. Extrair worker SMS temporal e serviços de host para Rust puro, sem PyO3.
+4. Tornar SMS temporal o único caminho de execução e retirar os cores atômicos do workspace.
+5. Integrar menus egui/eframe e comandos coarse-grained ao runtime SMS.
+6. Remover todos os arquivos e dependências Python/Qt/PyO3, incluindo testes, tooling, workflows, artefatos e referências de build.
+7. Validar em PRs pequenas com gates Rust e testes físicos aplicáveis.
 
 ## Fidelidade e desempenho
 
-A correção funcional de toda instrução/operação suportada é obrigatória. A granularidade segue dois níveis:
+- MachineScheduler é a autoridade única dos clocks/eventos.
+- CPU, barramento, PSG, VDP, áudio e vídeo devem preservar ordem causal e determinismo.
+- WAIT states, operações suspensíveis/retomáveis e snapshots devem refletir o estado real do runtime.
+- Execução contínua e em blocos deve produzir estados/saídas equivalentes.
+- Desempenho só será otimizado após comprovação de correção.
 
-- **Temporal prioritário para gameplay:** preservar ordem e duração de instruções/processos que interagem com barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos quando o instante altera o jogo.
-- **Atômico como padrão:** instruções internas e operações sem efeito intermediário observável executam como unidades determinísticas, com semântica, flags, estado, side effects e duração nominal correta quando conhecida.
-- M-cycles, T-states, WAIT, arbitragem, fases e sinais só são exigidos quando a dependência concreta estiver demonstrada.
-- Não exigir representação de todos os pinos nem simular capacitância, tensão, transistores ou fenômenos analógicos.
-- Não adicionar eventos por tick/pixel/pino ou estados serializados sem necessidade demonstrada.
-- Antes de detalhar um componente, identificar jogo/console/periférico, efeito observável, evidência e menor granularidade capaz de reproduzi-lo.
-- Ausência de microsequenciamento não é falha funcional quando a execução atômica satisfaz o contrato observável.
-- Medir desempenho no caminho crítico; otimizar sem alterar a saída funcional/temporal.
+## Pesquisa e modelagem
 
-## Antes de alterar
+Para tarefas complexas de hardware, usar três frentes independentes: engenharia reversa, documentação primária e arquitetura/modelagem. Confrontar evidências antes de implementar. Identificar estado, transições, ciclos, eventos, critérios de aceitação e testes diferenciais/temporais.
 
-1. Confirme repositório, branch, HEAD/SHA remoto, PRs, workflows e estado dos arquivos.
-2. Leia código, testes e documentação relevantes; não presuma que um documento histórico descreve a main.
-3. Defina o comportamento observável a corrigir, critérios de aceitação, riscos e testes.
-4. Pesquise proporcionalmente ao risco: documentação primária, implementações de referência e testes independentes. Distinguir fato, medição, inferência e hipótese.
-5. Implemente mudanças pequenas, compiláveis e revisáveis; preserve trabalho existente.
-6. Use branch e PR. Não commitar diretamente na main, não fazer force-push ou reset destrutivo.
-7. Não fazer merge sem autorização e sem gates aplicáveis verdes no SHA final.
+## Gates obrigatórios
 
-## Pesquisa em três frentes
-
-Para tarefas complexas de hardware, dividir análise sem duplicar implementação:
-1. Engenharia reversa: comparar implementações abertas e identificar comportamento, sem copiar código.
-2. Documentação/fidelidade: consultar manuais do fabricante e referências técnicas do console.
-3. Arquitetura/validação: reconciliar evidências, identificar comportamento observável, escolher granularidade mínima e definir testes.
-A pesquisa não obriga implementar detalhes sem impacto no console.
-
-## Testes e qualidade
-
-Criar testes de regressão para bugs quando viável. Priorizar estado arquitetural, memória/I/O, interrupções, framebuffer, áudio, comportamento de cartuchos e interações temporais relevantes. Não ajustar expectativas apenas para fazer CI passar.
-
-Gates obrigatórios do produto Rust:
 ```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-Validar também workspaces independentes e os targets Windows/D3D12/WASAPI/XAudio2 aplicáveis. Python/Ruff/pytest, Qt e PyO3 permanecem validações legadas opt-in por dispatch manual durante a migração; não são gates obrigatórios de PR Rust. Sua ausência em um run normal deve ser registrada como NOT RUN, nunca PASS. Não remover código legado até a paridade funcional estar comprovada. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN e vincular resultados ao SHA exato.
+Validar também targets Windows/D3D12/WASAPI/XAudio2 e workspaces específicos enquanto existirem. Após a consolidação, o workspace ativo e seus lockfiles devem ser Cargo-only. Testes físicos não executados são NOT RUN, nunca PASS. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN e vincular ao SHA exato.
 
-## Workflows
+## GitHub e publicação
 
-Inspecionar os filtros paths dos workflows e acompanhar os jobs que realmente executaram. Ler logs e artefatos quando necessário. Jobs chamados Agent 1/2/3 são automações do CI, não prova de que agentes de IA participaram.
+- GitHub é a fonte da verdade.
+- Toda alteração em branch e Pull Request.
+- Proibido commit direto na main, force-push e reset destrutivo.
+- Não fazer merge sem CI 100% verde no HEAD final e autorização explícita.
+- Não declarar migração concluída por compilação isolada ou remoção de arquivos sem validação funcional.
 
-## Relatório obrigatório
+## Relatório
 
-Informar objetivo, arquivos alterados, branch/PR/commits com links, testes realmente executados, resultados de CI, itens NOT RUN/BLOCKED, limitações e próximo passo. Não alegar execução, aprovação ou merge sem evidência.
-
-Leia também [política permanente de desenvolvimento e validação](docs/development-and-validation-policy.md).
+Informar SHA base/final, branch/PR, arquivos alterados, testes realmente executados, CI, limitações e próximos passos. Nunca alegar execução local, teste físico, aprovação ou merge sem evidência.
