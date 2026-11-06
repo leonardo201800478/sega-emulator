@@ -1377,6 +1377,45 @@ mod temporal_vdp_tests {
     }
 
     #[test]
+    fn h_counter_latch_survives_bus_snapshot_restore_and_rejects_old_format() {
+        let mut bus = SmsTemporalBus::new_with_hardware_profile(
+            vec![0; 0x4000],
+            3,
+            super::DEFAULT_SMS_PSG_CLOCK_HZ,
+            super::DEFAULT_AUDIO_SAMPLE_RATE,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            super::Territory::Export,
+        )
+        .unwrap();
+        transact(
+            &mut bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xDD },
+            0x003F,
+        );
+        transact(
+            &mut bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xDF },
+            0x003F,
+        );
+
+        let captured = bus.vdp().read_h_counter();
+        assert_eq!(captured, 0x03);
+        let mut snapshot = bus.export_state();
+        assert_eq!(snapshot.format_version, 11);
+
+        let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.vdp().read_h_counter(), captured);
+
+        snapshot.format_version = 10;
+        assert!(matches!(
+            SmsTemporalBus::restore_state(snapshot),
+            Err(super::SmsTemporalBusError::InvalidState)
+        ));
+    }
+
+    #[test]
     fn japanese_output_high_to_input_high_does_not_fake_a_th_rising_edge() {
         fn japanese_bus() -> SmsTemporalBus {
             SmsTemporalBus::new_with_hardware_profile(
