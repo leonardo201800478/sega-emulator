@@ -13,6 +13,8 @@ from types import SimpleNamespace
 
 from sega_emulator.rom_loader import LoadedRom
 
+MAX_SMS_ROM_SIZE = 0x400000
+
 
 class SMSMachine:
     """Instruction-stepping SMS machine with native PSG and optional BIOS boot."""
@@ -214,8 +216,8 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
                         "O ZIP contém várias ROMs; selecione uma ROM SMS individual."
                     )
                 item = candidates[0]
-                if item.file_size > 0x100000:
-                    raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
+                if item.file_size > MAX_SMS_ROM_SIZE:
+                    raise ValueError("A ROM SMS excede o limite atual de 4 MiB.")
                 data = archive.read(item)
                 name = Path(item.filename).name
                 member_name = item.filename
@@ -224,8 +226,8 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
                 raise ValueError(
                     "Formato SMS não suportado. Use .sms, .rom, .bin ou ZIP."
                 )
-            if source.stat().st_size > 0x100000:
-                raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
+            if source.stat().st_size > MAX_SMS_ROM_SIZE:
+                raise ValueError("A ROM SMS excede o limite atual de 4 MiB.")
             data = source.read_bytes()
             name = source.name
             member_name = None
@@ -234,8 +236,8 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
 
     if not data:
         raise ValueError("A ROM do Master System está vazia.")
-    if len(data) > 0x100000:
-        raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
+    if len(data) > MAX_SMS_ROM_SIZE:
+        raise ValueError("A ROM SMS excede o limite atual de 4 MiB.")
     return LoadedRom(
         data=data,
         display_name=name,
