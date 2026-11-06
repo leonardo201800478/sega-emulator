@@ -2,14 +2,18 @@
 
 **Data da fotografia:** 2026-11-06  
 **Repositório:** `leonardo201800478/sega-emulator`  
-**Main auditada após PR #595:** `733152f61b706b2243914ae017643cef949d4ae1`  
+**Main auditada após PR #597:** `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`  
 **Critério:** PR aberta/Draft, CI antigo verde ou `mergeable=true` isoladamente não autorizam merge. O CI precisa corresponder ao HEAD atual, a base deve estar reconciliada, os gates SKIPPED são NOT RUN e a revisão técnica precisa cobrir o diff integrado.
 
 ## 1. Resumo executivo
 
 - PR #595 — MERGED na main pelo SHA `733152f61b706b2243914ae017643cef949d4ae1`; CI #5178 SUCCESS no HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
+- PR #596 — MERGED na main pelo SHA `3c0e0548f0f7923ec2e5a500b3a953528266fd2e`; documentação de baseline reconciliada.
+- PR #597 — MERGED na main pelo SHA `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`; CI #5185 SUCCESS no HEAD `30554cc6642dd49d06adf495dca3e80f4822b081`, comprovando worker → NativeAudioSession → PcmSink em memória.
 - PR #594 — CLOSED / SUPERSEDED pela #595; a implementação de IRQ foi substituída pela versão que preserva INT externa e estado de acknowledge. Nenhuma alteração exclusiva útil permaneceu sem port.
-- Permanecem 14 PRs abertas na fotografia. Nenhuma das PRs abaixo foi integrada por esta auditoria.
+- PR #537 — CLOSED / SUPERSEDED; aditivo E7 exclusivo foi preservado no relatório histórico, e inventário antigo foi substituído por esta auditoria.
+- PRs #538–#541 — CLOSED / SUPERSEDED por #562/#563, já integradas na main; seus limites de evidência permanecem documentados.
+- Permanecem 13 PRs abertas na fotografia. Nenhuma das PRs abertas abaixo foi integrada por esta auditoria.
 - CI de uma branch antiga é evidência histórica. Para todas as PRs abertas abaixo, a base/HEAD deve ser reconciliada e o CI repetido no novo HEAD antes de qualquer merge.
 
 ## 2. PRs resolvidas
@@ -18,6 +22,9 @@
 |---|---|---|---|---|---|
 | #595 — functional A/V baseline | `fix/sms-functional-av-baseline-20261106` @ `69ca40ab29c486f26852adb7536a04f95f9dd7ae` | `main` @ `8bd7f6c78cacd247736268d141e4cc7e30805ccd` | **MERGED** → `733152f61b706b2243914ae017643cef949d4ae1` | CI #5178 SUCCESS; Rust/Python/Windows D3D12/PyO3 PASS; Scheduler stress, Qt smoke e PowerShell NOT RUN | Prosseguir A/V-04, host físico e gameplay; não declarar SMS funcional |
 | #594 — VDP IRQ → Z80 INT | `fix/sms-vdp-irq-wiring-20261106` @ `9fc6a669c2d77c90c675f20060e78707d1633504` | `main` @ `8bd7f6c78cacd247736268d141e4cc7e30805ccd` | **SUPERSEDED / CLOSED** | CI antigo CANCELLED; diff comparado com #595 | Nenhuma portabilidade exclusiva identificada; relatório absorvido em `sms-runtime-functional-baseline-2026-11-06.md` |
+| #596 — SMS A/V documentation | `docs/reconcile-post-sms-av-baseline-20261106` @ `b6cbdddd73a24c7b9c9e7c3f379ca6872f0eff3d` | `main` @ `733152f61b706b2243914ae017643cef949d4ae1` | **MERGED** → `3c0e0548f0f7923ec2e5a500b3a953528266fd2e` | CI documental SUCCESS no HEAD exato; jobs não aplicáveis SKIPPED | Atualizada novamente nesta branch para refletir PR #597 e main atual |
+| #597 — worker audio integration | `test/sms-worker-native-audio-session-20261106` @ `30554cc6642dd49d06adf495dca3e80f4822b081` | `main` @ `3c0e0548f0f7923ec2e5a500b3a953528266fd2e` (merge-base exato) | **MERGED** → `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` | CI #5185 SUCCESS no HEAD exato; Rust, Python, D3D12 e PyO3 PASS; Scheduler stress, Qt, PowerShell e lock refresh NOT RUN | Comprovado PCM não silencioso no `NativeAudioSession` com sink em memória; backend físico e audibilidade NOT RUN |
+| #537 — open PR/Z80 audit docs | `docs/reconcile-open-pr-audit-2026-11-05` @ `0a578ed8c28e481905f2d93bcfa34eddcee65b4b` | `main` @ `1da784f556b9524f5a6f43ce8a7c525e68354f9e` | **SUPERSEDED / CLOSED** | Sem CI útil no HEAD atual; branch divergente | Conteúdo histórico E7 portado; auditoria de PRs substituída por este relatório |
 
 ## 3. PRs abertas — fotografia atual
 
@@ -27,7 +34,7 @@
 | #587 — external TH events | `feat/sms-scheduler-external-th-events` @ `381e3cb98c5cc901b5b25953966627575ed907c4` | `main` @ `5211a2f66b04f7489109baf4a52e001632631b0f` | **BLOCKED** | Run `42157641684` SUCCESS no HEAD consultado; não valida a base atual | Base antiga/divergente e mergeable=false após #595. Reconciliar com a main atual; revisar deadlines, snapshots e causalidade. Não implementa captura H-counter por borda TH, offset de Light Phaser ou precisão dot-level. Reexecutar todos os gates após reconciliação. |
 | #566 — frame geometry/overscan metadata | `feat/video-frame-metadata-20261105` @ `490efa3cc7f72a638277e82c84d74db8c40c8429` | `main` @ `b129cd1577fd2b2fd1c1f6b8afb8b40d4f4d59a4` | **BLOCKED** | Run `42098595074` SUCCESS no HEAD consultado | Conflito de integração. Revisar consumidores de geometria, contratos de frame, metadados e dependências; reconciliar com main e repetir CI. Não integrar apenas pelo CI histórico. |
 | #543 — Sega mapper SRAM | `feat/sms-cartridge-sram-stack-20261105` @ `3bb07dc981d22d4242e86bd89090ed212d3e4f71` | `fix/sms-io-event-timing-gameplay-20261105` @ `02b8c5526a79513364783904a9300b533fe5669a` | **DRAFT** | Run `42029934531` SUCCESS no HEAD consultado | PR depende de branch de correção de timing de I/O, não aponta para main. Validar integração da SRAM e persistência in-game, capacidade/caminho por DAT e regressão. Reavaliar base/dependência antes de retirar Draft. |
-| #537 — reconcile Z80/open PR audit | `docs/reconcile-open-pr-audit-2026-11-05` @ `0a578ed8c28e481905f2d93bcfa34eddcee65b4b` | `main` @ `1da784f556b9524f5a6f43ce8a7c525e68354f9e` | **BLOCKED** | Run `42026110431` SUCCESS no HEAD consultado | Auditoria documental desatualizada e conflito de base. Comparar com este relatório, preservar evidência ainda útil e atualizar no SHA atual; não publicar fotografia antiga como estado corrente. |
+
 | #533 — permanent completion contract | `project/permanent-completion-contract` @ `bad9978a04bdcce389cd0a5c5af0d76575942e97` | `main` @ `6ffd7c45ba4c1a1ddd8da7cde1145d52f2a2ed9b` | **DRAFT** | Run `41966637150` SUCCESS no HEAD consultado | Contrato de conclusão global. Deve permanecer Draft até o projeto e seus gates estarem efetivamente concluídos; não usar como selo prematuro. |
 | #530 — multiplatform temporal contract | `design/z80-multiplatform-temporal-contract` @ `8f1e49d5e199d27a15916e0aaa7f23abd1659cbb` | `main` @ `c8da934d051f69f0fad01d133a923c26248a7250` | **DRAFT** | Run `41962771409` SUCCESS no HEAD consultado | Revisar consistência com ADR-0016 e arquitetura atual; manter Draft enquanto contrato não estiver reconciliado e validado pelas plataformas. |
 | #527 — independent E7 audits | `audit/z80-e7-three-agent-20261104` @ `eee762564025140d992ecee4630a6cb966220915` | `main` @ `249d7a3da613dec456f22aa6a7ceaccb2418ee0b` | **DRAFT** | Run `41946088177` SUCCESS no HEAD consultado | Evidência documental E7 antiga; confrontar com scorecard/matriz atuais e main. E7.7 permanece IN_PROGRESS; E8 BLOCKED. Não integrar auditoria sem reconciliação. |
@@ -50,11 +57,11 @@
 
 ## 5. Próxima sequência de trabalho
 
-1. Implementar teste worker → `NativeAudioSession` com PCM conhecido e comprovar cada fronteira de entrega.
-2. Validar host Windows físico: janela D3D12, GPU, endpoint WASAPI/XAudio2 e áudio audível.
+1. Validar `NativeAudioBackend` real/WASAPI/XAudio2 com PCM conhecido e métricas de aceitação/underrun.
+2. Validar host Windows físico: janela D3D12, GPU e áudio audível em endpoint real.
 3. Executar ROM legal/homebrew e jogo representativo; registrar hash local e comportamento, sem versionar ROM comercial.
 4. Reconciliar #587 e #566 somente depois de inspecionar conflitos e consumidores na main atual.
-5. Reavaliar #593 como telemetria opcional com custo medido.
+5. Manter #593 como Draft até a telemetria ser opt-in ou ter overhead medido.
 6. Manter E7.7 IN_PROGRESS e E8 BLOCKED; consultar scorecard e matriz DD/FD antes de qualquer alteração Z80.
 7. Preservar e executar regressões SG-1000 em todas as alterações compartilhadas.
 
