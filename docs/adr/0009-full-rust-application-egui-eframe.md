@@ -182,7 +182,7 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 - [ ] Implementar teste/smoke Windows e validar apresentação D3D12 real.
 - [ ] Não carregar ROM nem iniciar hardware até o contrato de sessão estar pronto.
 
-**Gate M1:** ainda NÃO PASS. O shell está implementado em fonte, mas CI e execução manual Windows ainda precisam confirmar compilação e inicialização. A integração D3D12 e a camada de aplicação permanecem pendentes. Nenhuma operação de hardware é executada pelo shell M1a.
+**Gate M1a (shell e validação automatizada): PASS** no CI #5225 e SHA `f1df5883aa33c187fd7ab16d7fb9383f7c96c833`: workspace/lockfile, fmt, check, Clippy, teste headless, D3D12 compile/tests, áudio compile/tests, PyO3, Python, Qt smoke, PowerShell e Scheduler stress passaram. **Gate M1 completo: NÃO PASS** — execução manual no Windows físico, integração HWND filho/D3D12 e camada de aplicação continuam pendentes. Nenhuma operação de hardware é executada pelo shell M1a.
 
 ### M2 — Integração vertical SG-1000/SMS
 - Integrar máquina Rust por API Rust direta, sem PyO3.
