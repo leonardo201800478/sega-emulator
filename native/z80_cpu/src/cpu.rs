@@ -3136,8 +3136,7 @@ mod tests {
             (0x73, 0x7B, 3_u8), // SP
         ] {
             let mut store_bus = TestBus([0; 0x10000]);
-            store_bus.0[0x8000..0x8004]
-                .copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
+            store_bus.0[0x8000..0x8004].copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
             let mut store = Z80::default();
             store.registers.pc = 0x8000;
             store.registers.set_bc(0x1234);
@@ -3152,8 +3151,7 @@ mod tests {
                 "store ED {store_opcode:02X}"
             );
             assert_eq!(
-                store_bus.0[0xFFFF],
-                expected as u8,
+                store_bus.0[0xFFFF], expected as u8,
                 "store low byte ED {store_opcode:02X}"
             );
             assert_eq!(
@@ -3165,8 +3163,7 @@ mod tests {
             assert_eq!(store.registers.pc, 0x8004);
 
             let mut load_bus = TestBus([0; 0x10000]);
-            load_bus.0[0x8000..0x8004]
-                .copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
+            load_bus.0[0x8000..0x8004].copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
             load_bus.0[0xFFFF] = 0xCD;
             load_bus.0[0x0000] = 0xAB;
             let mut load = Z80::default();
