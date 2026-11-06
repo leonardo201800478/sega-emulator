@@ -90,8 +90,8 @@ mod tests {
         let context = egui::Context::default();
         let mut app = SegaApp::default();
 
-        let output = context.run_ui(Default::default(), |ui| app.render(ui));
+        let output = context.run_ui(egui::RawInput::default(), |ui| app.render(ui));
 
-        assert!(!output.shapes.is_empty());
+        assert_ne!(output.shapes, [] as [eframe::epaint::ClippedShape; 0]);
     }
 }
