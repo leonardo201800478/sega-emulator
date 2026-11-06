@@ -9,6 +9,8 @@ pub const SMS_VDP_MAX_HEIGHT: usize = 240;
 const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
+const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
+const SMS_R8_LATCH_HPOS: u16 = 21;
 const STRIDE: usize = SMS_VDP_WIDTH * 3;
 const FRAME_SIZE: usize = STRIDE * SMS_VDP_MAX_HEIGHT;
 const VBLANK: u8 = 0x80;
@@ -61,6 +63,7 @@ pub struct SmsVdp {
     vram: Vec<u8>,
     cram: [u8; CRAM_SIZE],
     registers: [u8; 16],
+    latched_scroll_x: u8,
     latched_scroll_y: u8,
     pending_scroll_y: Option<u8>,
     status: u8,
@@ -81,7 +84,7 @@ pub struct SmsVdp {
     light_y: u16,
     light_trigger: bool,
     light_pulse: bool,
-    light_h_counter: Option<u8>,
+    h_counter_latch: u8,
     stereo_eye: SmsVdpEye,
     stereo_presentation: StereoPresentation,
     left_frame: Vec<u8>,
@@ -104,6 +107,7 @@ impl SmsVdp {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
             registers: [0; 16],
+            latched_scroll_x: 0,
             latched_scroll_y: 0,
             pending_scroll_y: None,
             status: 0,
@@ -124,7 +128,7 @@ impl SmsVdp {
             light_y: 0,
             light_trigger: false,
             light_pulse: false,
-            light_h_counter: None,
+            h_counter_latch: 0,
             stereo_eye: SmsVdpEye::Right,
             stereo_presentation: StereoPresentation::Alternating,
             left_frame: vec![0; FRAME_SIZE],
@@ -351,10 +355,26 @@ impl SmsVdp {
             _ => line as u8,
         }
     }
-    /// Approximate H-counter outside the click latch; sub-instruction timing is pending.
+    /// Return the last H-counter value captured by a TH rising edge or Light Phaser hit.
     pub fn read_h_counter(&self) -> u8 {
-        self.light_h_counter
-            .unwrap_or_else(|| ((u64::from(self.tstates_into_line) * 256) / LINE_TSTATES) as u8)
+        self.h_counter_latch
+    }
+
+    /// Capture the current SMS H-counter value at a TH 0-to-1 transition.
+    ///
+    /// The conversion follows the 315-5124 timing model: 342 horizontal
+    /// positions per 228 Z80 T-states, with the counter offset by 47 positions
+    /// and divided by two. The absolute reset phase remains a hardware-validation
+    /// item; the conversion and latch persistence are deterministic.
+    pub fn latch_h_counter(&mut self) {
+        let hpos = (u64::from(self.tstates_into_line) * 3 / 2)
+            % SMS_HCOUNTER_POSITIONS_PER_LINE;
+        let hclock = i64::from(hpos) - 47;
+        self.h_counter_latch = (hclock >> 1) as u8;
+    }
+
+    fn current_hpos(&self) -> u16 {
+        ((u64::from(self.tstates_into_line) * 3) / 2) as u16
     }
 
     pub fn advance(&mut self, tstates: u64) {
@@ -373,10 +393,10 @@ impl SmsVdp {
     fn complete_scanline(&mut self) {
         let line = self.scanline;
         self.light_pulse = false;
-        self.light_h_counter = None;
         let height = self.visible_height();
         if line < height {
             let mut render_registers = self.registers;
+            render_registers[8] = self.latched_scroll_x;
             render_registers[9] = self.latched_scroll_y;
             render_scanline_for_revision(
                 &self.vram,
@@ -390,7 +410,7 @@ impl SmsVdp {
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
-                self.light_h_counter = Some(0x08 + (self.light_x / 2) as u8);
+                self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
             }
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
@@ -418,6 +438,9 @@ impl SmsVdp {
             self.working_framebuffer.fill(0);
             self.line_counter = self.registers[10];
         }
+        // R8 is copied for the next scanline. Writes during the current line
+        // may replace this latch only through HPos 21 (inclusive).
+        self.latched_scroll_x = self.registers[8];
     }
 
     fn write_data(&mut self, value: u8) {
@@ -443,6 +466,12 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
+                if register == 8
+                    && (self.scanline >= self.visible_height()
+                        || self.current_hpos() <= SMS_R8_LATCH_HPOS)
+                {
+                    self.latched_scroll_x = first;
+                }
                 if register == 9 {
                     if self.scanline < self.visible_height() {
                         self.pending_scroll_y = Some(first);
@@ -2341,23 +2370,81 @@ mod tests {
     }
 
     #[test]
-    fn midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model() {
+    fn r8_write_at_hpos_21_updates_the_current_scanline() {
         let mut actual = setup_midline_write_fixture();
-        let mut expected = setup_midline_write_fixture();
+        actual.advance(14);
+        reg(&mut actual, 8, 8);
+        actual.advance(214);
 
-        // Configure the expected final state before the line starts. The
-        // current renderer samples R8 only when the scanline is completed.
+        let mut expected = setup_midline_write_fixture();
         reg(&mut expected, 8, 8);
         expected.advance(228);
 
-        actual.advance(114);
-        reg(&mut actual, 8, 8);
-        actual.advance(114);
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        assert_eq!(
+            &actual.working_framebuffer[..line_bytes],
+            &expected.working_framebuffer[..line_bytes]
+        );
+    }
 
-        // This characterizes the current abstraction, not hardware-correct
-        // timing: a mid-line write produces the same completed line as if R8
-        // had been set before the line began.
-        assert_eq!(actual.working_framebuffer, expected.working_framebuffer);
+    #[test]
+    fn r8_write_after_hpos_21_updates_only_the_next_scanline() {
+        let mut actual = setup_midline_write_fixture();
+        actual.advance(15);
+        reg(&mut actual, 8, 8);
+        actual.advance(213);
+
+        let mut expected_current = setup_midline_write_fixture();
+        expected_current.advance(228);
+
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        assert_eq!(
+            &actual.working_framebuffer[..line_bytes],
+            &expected_current.working_framebuffer[..line_bytes]
+        );
+
+        actual.advance(228);
+
+        let mut expected_next = setup_midline_write_fixture();
+        reg(&mut expected_next, 8, 8);
+        expected_next.advance(456);
+
+        assert_eq!(
+            &actual.working_framebuffer[line_bytes..line_bytes * 2],
+            &expected_next.working_framebuffer[line_bytes..line_bytes * 2]
+        );
+    }
+
+    #[test]
+    fn h_counter_conversion_matches_sms_reference_positions() {
+        for (tstates, expected) in [
+            (1, 0xE9),
+            (31, 0xFF),
+            (32, 0x00),
+            (136, 0x4E),
+        ] {
+            let mut vdp = SmsVdp::default();
+            vdp.advance(tstates);
+            vdp.latch_h_counter();
+            assert_eq!(
+                vdp.read_h_counter(),
+                expected,
+                "H-counter at Z80 T-state {tstates}"
+            );
+        }
+    }
+
+    #[test]
+    fn h_counter_remains_latched_while_the_vdp_advances() {
+        let mut vdp = SmsVdp::default();
+        assert_eq!(vdp.read_h_counter(), 0);
+
+        vdp.advance(136);
+        vdp.latch_h_counter();
+        assert_eq!(vdp.read_h_counter(), 0x4E);
+
+        vdp.advance(50);
+        assert_eq!(vdp.read_h_counter(), 0x4E);
     }
 
     #[test]
