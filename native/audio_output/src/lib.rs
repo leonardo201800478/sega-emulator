@@ -477,11 +477,8 @@ fn run_wasapi_worker(
             if disconnected || shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if let Err(error) = render_client.write_to_device_from_deque(
-                frames,
-                &mut pending,
-                None,
-            ) {
+            if let Err(error) = render_client.write_to_device_from_deque(frames, &mut pending, None)
+            {
                 set_worker_output_error(&output_error, Some(error.to_string()));
                 break;
             }
