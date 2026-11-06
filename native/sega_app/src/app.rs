@@ -252,8 +252,7 @@ impl SegaApp {
             }
             Some(Err(error)) => {
                 self.native_viewport.shutdown();
-                self.native_viewport.error =
-                    Some(format!("Inicialização D3D12 falhou: {error}"));
+                self.native_viewport.error = Some(format!("Inicialização D3D12 falhou: {error}"));
                 context.request_repaint();
             }
             None => {}
@@ -337,7 +336,6 @@ fn diagnostic_frame() -> Result<VideoFrame, String> {
         .map_err(|error| format!("Não foi possível criar o frame diagnóstico: {error}"))
 }
 
-
 fn resolve_parent_hwnd(
     frame: &eframe::Frame,
     context: &egui::Context,
@@ -352,7 +350,9 @@ fn resolve_parent_hwnd(
     let window_handle = match window.window_handle() {
         Ok(handle) => handle,
         Err(handle_error) => {
-            *error = Some(format!("Não foi possível obter o HWND do eframe: {handle_error}"));
+            *error = Some(format!(
+                "Não foi possível obter o HWND do eframe: {handle_error}"
+            ));
             context.request_repaint_after(Duration::from_millis(16));
             return None;
         }
