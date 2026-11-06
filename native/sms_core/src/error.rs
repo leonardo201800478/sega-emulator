@@ -23,7 +23,7 @@ impl fmt::Display for SmsCoreError {
             ),
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
-                "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
+                "ROM size {size} exceeds the supported Sega cartridge mapper range of {max_size} bytes"
             ),
         }
     }
