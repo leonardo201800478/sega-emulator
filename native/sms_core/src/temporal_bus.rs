@@ -578,6 +578,21 @@ impl SmsTemporalBus {
             _ if port_byte <= 0x3F && port_byte & 1 == 0 => {
                 self.memory.write_control_port(value);
             }
+            _ if port_byte <= 0x3F && port_byte & 1 == 1 => {
+                // The scheduler has advanced the VDP to this bus-completion
+                // boundary before the I/O side effect is applied. A TH rising
+                // edge latches H-counter only when the resulting pin is input.
+                let th_before = self.io.read_port(0xDD) & 0xC0;
+                self.io.write_port(port, value);
+                let io_control = self.io.io_control();
+                let th_after = self.io.read_port(0xDD) & 0xC0;
+                let th_input_mask =
+                    ((io_control & 0x02) << 5) | ((io_control & 0x08) << 4);
+                let rising_edges = th_after & !th_before & th_input_mask;
+                if rising_edges != 0 {
+                    self.vdp.latch_h_counter();
+                }
+            }
             _ => self.io.write_port(port, value),
         }
         if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
