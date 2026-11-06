@@ -188,7 +188,7 @@ class MinimalSmsWindow(QMainWindow):
         self._pressed_actions.clear()
         self.setWindowTitle(f"Sega Emulator — {display_name}")
         self.status_label.setText(
-            f"ROM carregada: {path.name}\n"
+            f"ROM carregada: {display_name}\n"
             "Pressione F5 ou Iniciar para executar a emulação.\n"
             f"{self._audio_status_text()}"
         )
@@ -286,15 +286,19 @@ class MinimalSmsWindow(QMainWindow):
         except (OSError, RuntimeError, ValueError) as exc:
             # Audio is a host service: report its failure without blocking video
             # presentation or preventing the cartridge from being loaded.
+            try:
+                machine.close_audio_output()
+            except RuntimeError:
+                pass
             return str(exc)
         return None
 
     def _audio_status_text(self) -> str:
         """Describe the selected native audio endpoint without exposing PCM."""
-        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
-            return "Áudio desativado"
         if self._audio_output_error:
             return f"Áudio {self._audio_backend.upper()} indisponível: {self._audio_output_error}"
+        if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
+            return "Áudio desativado"
         rate = self._preferences.audio_sample_rate
         return f"Áudio {self._audio_backend.upper()} inicializado ({rate:,} Hz)".replace(",", ".")
 
