@@ -11,13 +11,13 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::{MachineAudioSession, open_audio_session};
-#[cfg(windows)]
-use sega_video_runtime::d3d12::D3d12MailboxSession;
-use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
 };
+#[cfg(windows)]
+use sega_video_runtime::d3d12::D3d12MailboxSession;
+use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
 const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
