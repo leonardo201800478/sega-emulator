@@ -211,8 +211,11 @@ Para tarefas complexas, pesquisas independentes podem ser conduzidas em três fr
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-# Gates Python são transitórios: manter enquanto houver código Python ativo; remover após o gate P7.
+# Não adicionar novos testes Python. Os testes Python existentes são transitórios
+# durante a migração da aplicação; migrar os contratos essenciais para Rust e
+# substituir testes de UI por testes egui/eframe. Remover pytest após o gate P7.
 python -m pytest
+# Ruff permanece somente enquanto houver código Python ativo; removê-lo com o Python. 
 python -m ruff check .
 python -m ruff format --check .
 ```
