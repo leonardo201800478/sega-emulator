@@ -71,6 +71,7 @@ struct WorkerTelemetry {
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
+    #[cfg(test)]
     audio_endpoint_submissions: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
@@ -113,6 +114,7 @@ impl WorkerTelemetry {
             .store(metrics.1, Ordering::Release);
     }
 
+    #[cfg(test)]
     fn set_audio_endpoint_submissions(&self, count: u64) {
         self.audio_endpoint_submissions.store(count, Ordering::Release);
     }
@@ -491,6 +493,7 @@ impl SmsTemporalWorker {
         )
     }
 
+    #[cfg(test)]
     pub(super) fn audio_endpoint_submission_count(&self) -> u64 {
         self.telemetry
             .audio_endpoint_submissions
@@ -585,6 +588,7 @@ fn execute_frame<S: PcmSink>(
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
                 telemetry.set_audio_metrics(session.metrics());
+                #[cfg(test)]
                 telemetry.set_audio_endpoint_submissions(session.endpoint_submission_count());
                 telemetry.set_audio_error(session.output_error());
             }
@@ -595,6 +599,7 @@ fn execute_frame<S: PcmSink>(
             }
             telemetry.set_audio_error(Some(error));
             telemetry.set_audio_metrics((0, 0));
+            #[cfg(test)]
             telemetry.set_audio_endpoint_submissions(0);
         }
         None => {}
@@ -802,6 +807,7 @@ fn handle_command(
                     }
                     telemetry.set_audio_error(None);
                     telemetry.set_audio_metrics((0, 0));
+                    #[cfg(test)]
                     telemetry.set_audio_endpoint_submissions(0);
                     let _ = reply.send(Ok(()));
                 }
@@ -847,6 +853,7 @@ mod tests {
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
+    #[cfg(windows)]
     use super::open_audio_session;
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
