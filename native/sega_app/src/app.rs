@@ -1,29 +1,43 @@
+use std::fs;
 use std::time::Duration;
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
-use sega_video_runtime::{PixelFormat, VideoFrame};
 
-/// Native eframe application shell with a D3D12 child-window viewport.
+/// Native eframe application shell connected to the Rust SMS temporal runtime.
 #[derive(Default)]
 pub struct SegaApp {
-    show_architecture: bool,
+    rom_path: String,
+    region: String,
     native_viewport: NativeViewportState,
 }
 
-/// Owns the UI-thread HWND child and the worker session that borrows it.
+#[derive(Debug, Clone, Copy)]
+enum UiCommand {
+    Start,
+    Pause,
+    Stop,
+    Reset,
+    StepFrame,
+    CloseMachine,
+}
+
+/// Owns the UI-thread HWND child, SMS worker and D3D12 presentation session.
 ///
-/// Field ownership is intentionally explicit: shutdown joins the D3D12 worker
-/// before the child HWND is destroyed.
+/// Shutdown order is deliberate: stop the machine, detach its borrowed mailbox,
+/// join the machine worker, close/join D3D12 presentation, then destroy the HWND.
 #[derive(Default)]
 struct NativeViewportState {
     parent_hwnd: Option<usize>,
     session: Option<D3d12MailboxSession>,
     child: Option<D3d12ChildWindow>,
+    worker: Option<SmsTemporalWorker>,
     last_bounds: Option<(i32, i32, i32, i32)>,
     ready: bool,
-    diagnostic_frame_submitted: bool,
+    video_attached: bool,
+    start_requested: bool,
     error: Option<String>,
 }
 
@@ -35,28 +49,52 @@ impl NativeViewportState {
             "Aguardando janela nativa"
         } else if !self.ready {
             "Inicializando D3D12 em worker dedicado"
-        } else if self
-            .session
-            .as_ref()
-            .is_some_and(D3d12MailboxSession::is_running)
-        {
-            "D3D12 ativo — padrão de diagnóstico"
+        } else if let Some(worker) = self.worker.as_ref() {
+            if worker.is_running() {
+                "SMS em execução — vídeo D3D12 ativo"
+            } else if let Some(error) = worker.runtime_error() {
+                return error;
+            } else {
+                "SMS carregado e pausado — vídeo D3D12 ativo"
+            }
         } else {
-            "Worker D3D12 encerrado"
+            "D3D12 pronto — aguardando ROM SMS"
         }
     }
 
     fn shutdown(&mut self) {
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.stop();
+            if self.video_attached {
+                let _ = worker.detach_video_mailbox();
+            }
+            drop(worker);
+        }
+        self.video_attached = false;
+
         if let Some(session) = self.session.take() {
-            // D3d12MailboxSession joins its worker before returning. The child
-            // HWND must remain alive until this operation has completed.
+            // The presentation worker is joined while its borrowed HWND is alive.
             let _ = session.shutdown();
         }
         self.child = None;
         self.parent_hwnd = None;
         self.last_bounds = None;
         self.ready = false;
-        self.diagnostic_frame_submitted = false;
+        self.start_requested = false;
+    }
+
+    fn replace_worker(&mut self, worker: SmsTemporalWorker) {
+        if let Some(previous) = self.worker.take() {
+            let _ = previous.stop();
+            if self.video_attached {
+                let _ = previous.detach_video_mailbox();
+            }
+            drop(previous);
+        }
+        self.video_attached = false;
+        self.worker = Some(worker);
+        self.start_requested = true;
+        self.error = None;
     }
 }
 
@@ -67,12 +105,14 @@ impl Drop for NativeViewportState {
 }
 
 impl SegaApp {
-    /// Render the application shell without requiring a native window.
+    /// Render the shell and collect coarse-grained user commands.
     ///
-    /// This entry point remains headless-testable. The eframe callback performs
-    /// native HWND/D3D12 work after the layout has produced the viewport rect.
+    /// This method remains headless-testable; native HWND/D3D12 work is handled
+    /// by the eframe callback after layout has produced the viewport rectangle.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
+        let mut command = None;
+        let mut load_requested = false;
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -85,56 +125,76 @@ impl SegaApp {
             });
 
             ui.separator();
-            ui.heading("Aplicação nativa em construção");
-            ui.label(concat!(
-                "Esta etapa valida o shell egui/eframe e o host de vídeo D3D12. ",
-                "Nenhuma ROM ou máquina é iniciada nesta etapa; a integração com o runtime SMS está pendente."
-            ));
-
-            ui.add_space(8.0);
-            ui.label(format!("Viewport: {}", self.native_viewport.status()));
-
-            ui.add_space(8.0);
-            ui.group(|ui| {
-                ui.heading("Estado dos subsistemas");
-                egui::Grid::new("sega_application_status")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        ui.label("Interface");
-                        ui.label("egui/eframe 0.37.0");
-                        ui.end_row();
-
-                        ui.label("Máquina / Scheduler");
-                        ui.label("Não iniciado nesta etapa");
-                        ui.end_row();
-
-                        ui.label("Vídeo");
-                        ui.label("D3D12 nativo em HWND filho");
-                        ui.end_row();
-
-                        ui.label("Áudio / Input");
-                        ui.label("Não inicializados nesta etapa");
-                        ui.end_row();
-
-                        ui.label("Mídia");
-                        ui.label("Loader Rust será integrado após o contrato de sessão");
-                        ui.end_row();
+            ui.heading("Sega Master System");
+            ui.horizontal(|ui| {
+                ui.label("ROM (.sms/.bin):");
+                ui.text_edit_singleline(&mut self.rom_path);
+                load_requested = ui.button("Carregar ROM").clicked();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Região:");
+                egui::ComboBox::from_id_salt("sms_region")
+                    .selected_text(if self.region.is_empty() { "USA / NTSC" } else { &self.region })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.region, "usa".to_owned(), "USA / NTSC");
+                        ui.selectable_value(&mut self.region, "brazil".to_owned(), "Brasil / PAL-M");
+                        ui.selectable_value(&mut self.region, "europe".to_owned(), "Europa / PAL");
+                        ui.selectable_value(&mut self.region, "japan".to_owned(), "Japão / NTSC");
                     });
             });
 
-            ui.add_space(8.0);
-            ui.checkbox(&mut self.show_architecture, "Exibir arquitetura de destino");
-            if self.show_architecture {
-                ui.group(|ui| {
-                    ui.label("sega-app → sega-ui-egui → sega-application");
-                    ui.label("                    ↓");
-                    ui.label("SMS / SG-1000 runtime Rust + MachineScheduler");
-                    ui.label("                    ↓");
-                    ui.label("D3D12 host · WASAPI/XAudio2 · input nativo");
-                });
+            ui.horizontal(|ui| {
+                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Iniciar")).clicked() {
+                    command = Some(UiCommand::Start);
+                }
+                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(SmsTemporalWorker::is_running), egui::Button::new("Pausar")).clicked() {
+                    command = Some(UiCommand::Pause);
+                }
+                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Parar")).clicked() {
+                    command = Some(UiCommand::Stop);
+                }
+                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Reset")).clicked() {
+                    command = Some(UiCommand::Reset);
+                }
+                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(|worker| !worker.is_running()), egui::Button::new("Avançar quadro")).clicked() {
+                    command = Some(UiCommand::StepFrame);
+                }
+                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Fechar ROM")).clicked() {
+                    command = Some(UiCommand::CloseMachine);
+                }
+            });
+
+            ui.separator();
+            ui.label(format!("Estado: {}", self.native_viewport.status()));
+            if let Some(worker) = self.native_viewport.worker.as_ref() {
+                egui::Grid::new("sms_runtime_telemetry")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("Frame");
+                        ui.label(worker.frame_number().to_string());
+                        ui.end_row();
+                        ui.label("Instruções Z80");
+                        ui.label(worker.total_instructions().to_string());
+                        ui.end_row();
+                        ui.label("Frames publicados");
+                        ui.label(worker.video_last_published_sequence().to_string());
+                        ui.end_row();
+                        ui.label("Frames substituídos na apresentação");
+                        ui.label(worker.video_replaced_frames().to_string());
+                        ui.end_row();
+                    });
+                if let Some(error) = worker.video_output_error() {
+                    ui.colored_label(egui::Color32::YELLOW, format!("Vídeo: {error}"));
+                }
+                if let Some(error) = worker.audio_output_error() {
+                    ui.colored_label(egui::Color32::YELLOW, format!("Áudio: {error}"));
+                }
+                if let Some(error) = worker.runtime_error() {
+                    ui.colored_label(egui::Color32::RED, format!("Runtime: {error}"));
+                }
             }
 
-            ui.add_space(8.0);
+            ui.add_space(6.0);
             let width = ui.available_width().max(1.0);
             let height = (width * 0.75).min(ui.available_height().max(1.0));
             let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
@@ -143,11 +203,78 @@ impl SegaApp {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                 ui.separator();
-                ui.small("M1b · viewport Win32 filho · renderer D3D12 independente do eframe");
+                ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · D3D12");
             });
         });
 
+        if load_requested {
+            self.load_rom_from_path();
+        }
+        if let Some(command) = command {
+            self.apply_command(command);
+        }
+
         viewport_rect
+    }
+
+    fn load_rom_from_path(&mut self) {
+        let path = self.rom_path.trim();
+        if path.is_empty() {
+            self.native_viewport.error = Some("Informe o caminho de uma ROM .sms ou .bin".to_owned());
+            return;
+        }
+
+        let rom = match fs::read(path) {
+            Ok(rom) if !rom.is_empty() => rom,
+            Ok(_) => {
+                self.native_viewport.error = Some("O arquivo da ROM está vazio".to_owned());
+                return;
+            }
+            Err(error) => {
+                self.native_viewport.error = Some(format!("Não foi possível ler a ROM: {error}"));
+                return;
+            }
+        };
+
+        let region = if self.region.is_empty() { "usa" } else { &self.region };
+        match SmsTemporalWorker::new(rom, region) {
+            Ok(worker) => self.native_viewport.replace_worker(worker),
+            Err(error) => self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}")),
+        }
+    }
+
+    fn apply_command(&mut self, command: UiCommand) {
+        let Some(worker) = self.native_viewport.worker.as_ref() else {
+            return;
+        };
+
+        let result = match command {
+            UiCommand::Start => {
+                self.native_viewport.start_requested = true;
+                Ok(())
+            }
+            UiCommand::Pause => worker.pause(),
+            UiCommand::Stop => worker.stop(),
+            UiCommand::Reset => worker.reset(),
+            UiCommand::StepFrame => worker.step_frame(100_000).map(|_| ()),
+            UiCommand::CloseMachine => {
+                let _ = worker.stop();
+                let detach_result = if self.native_viewport.video_attached {
+                    worker.detach_video_mailbox()
+                } else {
+                    Ok(())
+                };
+                self.native_viewport.worker = None;
+                self.native_viewport.video_attached = false;
+                detach_result
+            }
+        };
+
+        if let Err(error) = result {
+            self.native_viewport.error = Some(format!("Comando SMS falhou: {error}"));
+        } else if !matches!(command, UiCommand::Start) {
+            self.native_viewport.error = None;
+        }
     }
 
     fn update_native_viewport(
@@ -156,9 +283,7 @@ impl SegaApp {
         context: &egui::Context,
         viewport_rect: egui::Rect,
     ) {
-        let Some(parent_hwnd) =
-            resolve_parent_hwnd(frame, context, &mut self.native_viewport.error)
-        else {
+        let Some(parent_hwnd) = resolve_parent_hwnd(frame, context, &mut self.native_viewport.error) else {
             return;
         };
 
@@ -168,7 +293,8 @@ impl SegaApp {
 
         self.update_child_bounds(context, viewport_rect);
         self.poll_native_startup(context);
-        self.monitor_native_worker(context);
+        self.connect_worker_video(context);
+        self.monitor_native_state(context);
     }
 
     fn ensure_native_child(&mut self, parent_hwnd: usize) -> bool {
@@ -182,22 +308,19 @@ impl SegaApp {
         let child = match D3d12ChildWindow::create(parent_hwnd) {
             Ok(child) => child,
             Err(error) => {
-                self.native_viewport.error =
-                    Some(format!("Falha ao criar HWND filho D3D12: {error}"));
+                self.native_viewport.error = Some(format!("Falha ao criar HWND filho D3D12: {error}"));
                 return false;
             }
         };
 
-        let session =
-            match D3d12MailboxSession::start_for_existing_window_async(256, 192, child.handle()) {
-                Ok(session) => session,
-                Err(error) => {
-                    self.native_viewport.error =
-                        Some(format!("Falha ao iniciar worker D3D12: {error}"));
-                    drop(child);
-                    return false;
-                }
-            };
+        let session = match D3d12MailboxSession::start_for_existing_window_async(256, 192, child.handle()) {
+            Ok(session) => session,
+            Err(error) => {
+                self.native_viewport.error = Some(format!("Falha ao iniciar worker D3D12: {error}"));
+                drop(child);
+                return false;
+            }
+        };
 
         self.native_viewport.parent_hwnd = Some(parent_hwnd);
         self.native_viewport.child = Some(child);
@@ -222,8 +345,7 @@ impl SegaApp {
             match child.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
                 Ok(()) => self.native_viewport.last_bounds = Some(bounds),
                 Err(error) => {
-                    self.native_viewport.error =
-                        Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
+                    self.native_viewport.error = Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
                     context.request_repaint();
                 }
             }
@@ -231,22 +353,13 @@ impl SegaApp {
     }
 
     fn poll_native_startup(&mut self, context: &egui::Context) {
-        let startup = self
-            .native_viewport
-            .session
-            .as_mut()
-            .map(D3d12MailboxSession::poll_startup);
-
+        let startup = self.native_viewport.session.as_mut().map(D3d12MailboxSession::poll_startup);
         match startup {
             Some(Ok(true)) => {
                 self.native_viewport.ready = true;
-                self.submit_diagnostic_frame();
                 context.request_repaint();
             }
-            Some(Ok(false)) => {
-                // Keep the UI responsive while polling the asynchronous startup.
-                context.request_repaint_after(Duration::from_millis(16));
-            }
+            Some(Ok(false)) => context.request_repaint_after(Duration::from_millis(16)),
             Some(Err(error)) => {
                 self.native_viewport.shutdown();
                 self.native_viewport.error = Some(format!("Inicialização D3D12 falhou: {error}"));
@@ -256,46 +369,45 @@ impl SegaApp {
         }
     }
 
-    fn submit_diagnostic_frame(&mut self) {
-        if self.native_viewport.diagnostic_frame_submitted {
+    fn connect_worker_video(&mut self, context: &egui::Context) {
+        if !self.native_viewport.ready || self.native_viewport.video_attached {
             return;
         }
-
-        let video_frame = match diagnostic_frame() {
-            Ok(frame) => frame,
-            Err(error) => {
-                self.native_viewport.error = Some(error);
-                return;
-            }
+        let mailbox = self.native_viewport.session.as_ref().map(D3d12MailboxSession::mailbox);
+        let Some(mailbox) = mailbox else {
+            return;
         };
-
-        let Some(session) = self.native_viewport.session.as_ref() else {
+        let Some(worker) = self.native_viewport.worker.as_ref() else {
             return;
         };
 
-        match session.submit(video_frame) {
-            Ok(()) => self.native_viewport.diagnostic_frame_submitted = true,
-            Err(error) => {
-                self.native_viewport.error =
-                    Some(format!("Falha ao submeter frame diagnóstico: {error}"));
+        match worker.attach_video_mailbox(mailbox) {
+            Ok(()) => {
+                self.native_viewport.video_attached = true;
+                if self.native_viewport.start_requested {
+                    match worker.start() {
+                        Ok(()) => self.native_viewport.start_requested = false,
+                        Err(error) => {
+                            self.native_viewport.start_requested = false;
+                            self.native_viewport.error = Some(format!("Falha ao iniciar SMS: {error}"));
+                        }
+                    }
+                }
+                context.request_repaint();
             }
+            Err(error) => self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}")),
         }
     }
 
-    fn monitor_native_worker(&mut self, context: &egui::Context) {
+    fn monitor_native_state(&mut self, context: &egui::Context) {
         if self.native_viewport.ready
-            && self
-                .native_viewport
-                .session
-                .as_ref()
-                .is_some_and(|session| !session.is_running())
+            && self.native_viewport.session.as_ref().is_some_and(|session| !session.is_running())
         {
             self.native_viewport.shutdown();
-            self.native_viewport.error =
-                Some("O worker de apresentação D3D12 foi encerrado".to_owned());
+            self.native_viewport.error = Some("O worker de apresentação D3D12 foi encerrado".to_owned());
             context.request_repaint();
-        } else if self.native_viewport.ready {
-            context.request_repaint_after(Duration::from_millis(250));
+        } else {
+            context.request_repaint_after(Duration::from_millis(100));
         }
     }
 }
@@ -305,34 +417,6 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
     }
-}
-
-fn diagnostic_frame() -> Result<VideoFrame, String> {
-    const WIDTH: u32 = 256;
-    const HEIGHT: u32 = 192;
-    const STRIDE: usize = WIDTH as usize * 4;
-    const BARS: [[u8; 4]; 8] = [
-        [255, 255, 255, 255],
-        [255, 255, 0, 255],
-        [0, 255, 255, 255],
-        [0, 255, 0, 255],
-        [255, 0, 255, 255],
-        [255, 0, 0, 255],
-        [0, 0, 255, 255],
-        [0, 0, 0, 255],
-    ];
-
-    let mut pixels = Vec::with_capacity(STRIDE * HEIGHT as usize);
-    for _y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            let bar_index = usize::try_from(x * 8 / WIDTH)
-                .map_err(|error| format!("Índice de barra inválido: {error}"))?;
-            pixels.extend_from_slice(&BARS[bar_index]);
-        }
-    }
-
-    VideoFrame::new(1, WIDTH, HEIGHT, PixelFormat::Rgba8888, STRIDE, pixels)
-        .map_err(|error| format!("Não foi possível criar o frame diagnóstico: {error}"))
 }
 
 fn resolve_parent_hwnd(
@@ -349,9 +433,7 @@ fn resolve_parent_hwnd(
     let window_handle = match window.window_handle() {
         Ok(handle) => handle,
         Err(handle_error) => {
-            *error = Some(format!(
-                "Não foi possível obter o HWND do eframe: {handle_error}"
-            ));
+            *error = Some(format!("Não foi possível obter o HWND do eframe: {handle_error}"));
             context.request_repaint_after(Duration::from_millis(16));
             return None;
         }
@@ -385,7 +467,7 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{SegaApp, diagnostic_frame};
+    use super::SegaApp;
     use eframe::egui;
 
     #[test]
@@ -397,16 +479,7 @@ mod tests {
             let _ = app.render(ui);
         });
 
-        assert_ne!(output.shapes, [] as [eframe::epaint::ClippedShape; 0]);
+        assert!(!output.shapes.is_empty());
         output.drop_without_applying_deltas();
-    }
-
-    #[test]
-    fn diagnostic_frame_has_valid_sms_surface_geometry() {
-        let frame = diagnostic_frame().expect("diagnostic frame uses fixed valid geometry");
-        assert_eq!(frame.width(), 256);
-        assert_eq!(frame.height(), 192);
-        assert_eq!(frame.stride_bytes(), 256 * 4);
-        assert_eq!(frame.sequence(), 1);
     }
 }
