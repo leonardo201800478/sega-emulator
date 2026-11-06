@@ -8,8 +8,10 @@
 //!
 //! Reference: https://www.smspower.org/Development/Mappers
 //! Reference: https://www.smspower.org/Development/MemoryMap
-//! This initial slice does not model cartridge SRAM or mapper variants. ROMs
-//! beyond the standard mapper's 256-bank range are rejected, never truncated.
+//! Standard cartridges retain the documented 6-bit bank-address limit (1 MiB).
+//! A distinct extended profile supports 8-bit bank addressing (4 MiB) for
+//! homebrew cartridges whose TMR SEGA header and power-of-two image size select
+//! that profile. This models a custom mapper extension, not baseline hardware.
 
 use crate::{CartridgeImage, SmsCoreError};
 
