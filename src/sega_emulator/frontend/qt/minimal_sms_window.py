@@ -196,11 +196,17 @@ class MinimalSmsWindow(QMainWindow):
         self.status_label.setText("Abra uma ROM do Master System")
         self.setWindowTitle("Sega Emulator — Master System")
         if stop_error:
-            self.statusBar().showMessage(f"ROM fechada; falha ao parar worker: {stop_error}")
+            self.statusBar().showMessage(
+                f"ROM fechada; falha ao parar worker: {stop_error}"
+            )
         elif video_error:
-            self.statusBar().showMessage(f"ROM fechada; falha ao encerrar vídeo: {video_error}")
+            self.statusBar().showMessage(
+                f"ROM fechada; falha ao encerrar vídeo: {video_error}"
+            )
         elif audio_error:
-            self.statusBar().showMessage(f"ROM fechada; falha ao encerrar áudio: {audio_error}")
+            self.statusBar().showMessage(
+                f"ROM fechada; falha ao encerrar áudio: {audio_error}"
+            )
         else:
             self.statusBar().showMessage("ROM fechada")
         self._update_actions()
@@ -229,7 +235,9 @@ class MinimalSmsWindow(QMainWindow):
 
         if not machine.video_output_is_running:
             self._video_telemetry_timer.stop()
-            self.statusBar().showMessage("Vídeo D3D12: worker de apresentação encerrado")
+            self.statusBar().showMessage(
+                "Vídeo D3D12: worker de apresentação encerrado"
+            )
             return
 
         published = machine.video_last_published_sequence
