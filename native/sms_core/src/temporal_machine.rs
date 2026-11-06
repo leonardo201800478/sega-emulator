@@ -3015,7 +3015,8 @@ mod temporal_interrupt_wiring_tests {
             0x31, 0xF0, 0xDF, // LD SP,$DFF0
             0xED, 0x56, // IM 1
             0x3E, 0x06, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0: Mode 4
-            0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1: 16 KB, display on, VBlank IRQ
+            0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3,
+            0xBF, // R1: 16 KB, display on, VBlank IRQ
             0xFB, // EI
             0x76, // HALT
             0x18, 0xFD, // JR -3
@@ -3119,10 +3120,12 @@ mod temporal_frame_tests {
 
         machine.step_frame(100_000).unwrap();
 
-        assert!(machine
-            .framebuffer()
-            .chunks_exact(3)
-            .any(|pixel| pixel.iter().any(|channel| *channel != 0)));
+        assert!(
+            machine
+                .framebuffer()
+                .chunks_exact(3)
+                .any(|pixel| pixel.iter().any(|channel| *channel != 0))
+        );
         let samples = machine.drain_audio_samples(None);
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
