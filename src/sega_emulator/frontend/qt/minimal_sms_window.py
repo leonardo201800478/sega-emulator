@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
+from sega_emulator.machine.sms import load_sms_rom
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
 
 _KEY_ACTIONS = {
@@ -105,7 +106,7 @@ class MinimalSmsWindow(QMainWindow):
             self,
             "Abrir ROM do Master System",
             "",
-            "ROMs Master System (*.sms *.bin *.rom);;Todos os arquivos (*)",
+            "ROMs Master System (*.sms *.bin *.rom *.zip);;Todos os arquivos (*)",
         )
         if filename:
             self.load_rom(Path(filename))
@@ -113,12 +114,13 @@ class MinimalSmsWindow(QMainWindow):
     def load_rom(self, path: Path) -> None:
         """Load a cartridge and create the Rust temporal machine."""
         try:
-            rom = path.read_bytes()
-            machine = TemporalSMSMachine(rom, region=self._region)
+            loaded_rom = load_sms_rom(path)
+            machine = TemporalSMSMachine(loaded_rom.data, region=self._region)
         except (OSError, RuntimeError, ValueError, TypeError) as exc:
             QMessageBox.critical(self, "Falha ao abrir ROM", str(exc))
             return
 
+        display_name = loaded_rom.display_name
         audio_error = None
         try:
             machine.configure_audio_output(
@@ -152,14 +154,14 @@ class MinimalSmsWindow(QMainWindow):
         self._machine = machine
         self._rom_path = path
         self._pressed_actions.clear()
-        self.setWindowTitle(f"Sega Emulator — {path.name}")
+        self.setWindowTitle(f"Sega Emulator — {display_name}")
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
             "Pressione F5 ou Iniciar para executar a emulação.\n"
             f"{self._audio_status_text()}"
         )
         self.statusBar().showMessage(
-            f"{path.name} | {self._region} | {self._audio_status_text()}"
+            f"{display_name} | {self._region} | {self._audio_status_text()}"
         )
         self._start_video_output_if_visible()
         self._update_actions()
@@ -282,7 +284,8 @@ class MinimalSmsWindow(QMainWindow):
             )
         elif published:
             self.statusBar().showMessage(
-                f"D3D12: {published} frame(s) publicados; aguardando primeiro Present | "
+                f"D3D12: {published} frame(s) publicados; "
+                "aguardando primeiro Present | "
                 f"{audio_status}"
             )
         else:
