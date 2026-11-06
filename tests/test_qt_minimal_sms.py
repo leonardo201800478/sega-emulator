@@ -462,3 +462,26 @@ def test_sms_menu_opens_library_on_master_system_and_loads_selection(
 
     assert loaded == [selected_rom]
     window.close()
+
+
+def test_video_telemetry_logs_native_audio_endpoint_error(
+    qapplication: QApplication,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.audio_output_error = "default endpoint disconnected"
+    machine.audio_output_metrics = (3, 2)
+    machine.video_output_is_running = True
+    window._machine = machine
+    window._video_output_started = True
+    window._last_telemetry_log_time = -10.0
+
+    with caplog.at_level(logging.INFO):
+        window._refresh_video_telemetry()
+
+    assert "SMS native audio endpoint failed" in caplog.text
+    assert "audio_underruns=3" in caplog.text
+    assert "audio_dropped_blocks=2" in caplog.text
+    assert "default endpoint disconnected" in caplog.text
+    window.close()
