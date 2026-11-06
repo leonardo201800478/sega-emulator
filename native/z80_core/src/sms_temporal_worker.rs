@@ -11,9 +11,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::{MachineAudioSession, open_audio_session};
-use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
+use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
@@ -304,7 +304,10 @@ impl SmsTemporalWorker {
             .lock()
             .map_err(|_| "video session lock is poisoned".to_owned())?;
 
-        if session_guard.as_ref().is_some_and(D3d12MailboxSession::is_running) {
+        if session_guard
+            .as_ref()
+            .is_some_and(D3d12MailboxSession::is_running)
+        {
             return Ok(());
         }
 
@@ -312,8 +315,8 @@ impl SmsTemporalWorker {
             let _ = stale_session.shutdown();
         }
 
-        let session = D3d12MailboxSession::start(256, 192, 768, 576)
-            .map_err(|error| error.to_string())?;
+        let session =
+            D3d12MailboxSession::start(256, 192, 768, 576).map_err(|error| error.to_string())?;
         let mailbox = session.mailbox();
         if let Err(error) = self.set_video_mailbox(Some(mailbox)) {
             let _ = session.shutdown();
@@ -390,7 +393,11 @@ impl SmsTemporalWorker {
             self.video_session
                 .lock()
                 .ok()
-                .and_then(|session| session.as_ref().map(D3d12MailboxSession::last_presented_sequence))
+                .and_then(|session| {
+                    session
+                        .as_ref()
+                        .map(D3d12MailboxSession::last_presented_sequence)
+                })
                 .unwrap_or(0)
         }
         #[cfg(not(windows))]
@@ -405,7 +412,11 @@ impl SmsTemporalWorker {
             self.video_session
                 .lock()
                 .ok()
-                .and_then(|session| session.as_ref().map(D3d12MailboxSession::device_recovery_count))
+                .and_then(|session| {
+                    session
+                        .as_ref()
+                        .map(D3d12MailboxSession::device_recovery_count)
+                })
                 .unwrap_or(0)
         }
         #[cfg(not(windows))]
