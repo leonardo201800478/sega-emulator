@@ -8,7 +8,8 @@ Emulador Sega em desenvolvimento, com runtime e aplicação nativos em Rust. A p
 - O runtime usa sega-sms-core, sega-audio-runtime e sega-video-runtime; não depende de Python, PyO3, Qt ou Maturin.
 - A sessão de áudio física é criada por uma factory fornecida pelo host e executada na thread proprietária da máquina, preservando a afinidade dos objetos WASAPI/XAudio2.
 - native/sega_app ainda é somente um shell egui/eframe. A integração operacional entre GUI, worker SMS, viewport D3D12, áudio e input permanece pendente.
-- A migração dos crates para a raiz canônica rust/ e a separação dos módulos SMS temporais/atômicos ainda estão em andamento.
+- O SMS atômico antigo foi removido do core ativo; native/sms_core agora contém a máquina temporal e fachadas para o Z80/ALU e VDP compartilhados. A implementação temporal ainda é parcial (VDP por scanline, WAIT de fixture e sem Save States persistentes).
+- A migração dos crates restantes para a raiz canônica rust/ e a integração do runtime ao shell egui ainda estão em andamento.
 - O legado Python/PyO3 foi removido desta branch em vez de portado; não haverá fallback Python nem runtime alternativo.
 
 A existência do worker e dos crates temporais não comprova ainda que o emulador esteja pronto para gameplay real. Não declarar FPS, compatibilidade ou fidelidade final sem benchmarks e validação reproduzível.
