@@ -147,6 +147,50 @@ impl NativeSMSTemporalMachine {
             .map_err(PyRuntimeError::new_err)
     }
 
+    /// Open the native D3D12 presentation window; frame pixels remain in Rust.
+    fn open_video_output(&mut self) -> PyResult<()> {
+        self.worker
+            .open_video_output()
+            .map_err(PyRuntimeError::new_err)
+    }
+
+    /// Close the native video window and detach its completed-frame mailbox.
+    fn close_video_output(&mut self) -> PyResult<()> {
+        self.worker
+            .close_video_output()
+            .map_err(PyRuntimeError::new_err)
+    }
+
+    #[getter]
+    fn video_output_is_running(&self) -> bool {
+        self.worker.video_output_is_running()
+    }
+
+    #[getter]
+    fn video_output_error(&self) -> Option<String> {
+        self.worker.video_output_error()
+    }
+
+    #[getter]
+    fn video_last_published_sequence(&self) -> u64 {
+        self.worker.video_last_published_sequence()
+    }
+
+    #[getter]
+    fn video_last_presented_sequence(&self) -> u64 {
+        self.worker.video_last_presented_sequence()
+    }
+
+    #[getter]
+    fn video_replaced_frames(&self) -> u64 {
+        self.worker.video_replaced_frames()
+    }
+
+    #[getter]
+    fn video_device_recovery_count(&self) -> u64 {
+        self.worker.video_device_recovery_count()
+    }
+
     #[getter]
     fn audio_output_error(&self) -> Option<String> {
         self.worker.audio_output_error()

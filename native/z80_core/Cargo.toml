@@ -19,3 +19,4 @@ sega-sms-core = { path = "../sms_core" }
 sega-audio-runtime = { path = "../audio_runtime" }
 sega-audio-output = { path = "../audio_output" }
 sega-input-runtime = { path = "../input_runtime" }
+sega-video-runtime = { path = "../video_runtime" }

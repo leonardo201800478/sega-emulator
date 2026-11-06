@@ -15,6 +15,9 @@ use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
 };
+#[cfg(windows)]
+use sega_video_runtime::d3d12::D3d12MailboxSession;
+use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
 const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
@@ -68,6 +71,9 @@ struct WorkerTelemetry {
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
+    video_output_error: Mutex<Option<String>>,
+    video_last_published_sequence: AtomicU64,
+    video_replaced_frames: AtomicU64,
     runtime_error: Mutex<Option<String>>,
     frame_signal: (Mutex<u64>, Condvar),
 }
@@ -83,6 +89,12 @@ impl WorkerTelemetry {
 
     fn set_audio_error(&self, error: Option<String>) {
         if let Ok(mut current) = self.audio_output_error.lock() {
+            *current = error;
+        }
+    }
+
+    fn set_video_error(&self, error: Option<String>) {
+        if let Ok(mut current) = self.video_output_error.lock() {
             *current = error;
         }
     }
@@ -126,6 +138,7 @@ enum WorkerCommand {
     RequestNmi,
     ConfigureAudio(AudioOutputConfig, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
+    SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
 }
 
@@ -134,6 +147,8 @@ pub(super) struct SmsTemporalWorker {
     commands: Sender<WorkerCommand>,
     worker: Option<JoinHandle<()>>,
     telemetry: Arc<WorkerTelemetry>,
+    #[cfg(windows)]
+    video_session: Mutex<Option<D3d12MailboxSession>>,
 }
 
 impl SmsTemporalWorker {
@@ -168,6 +183,8 @@ impl SmsTemporalWorker {
                 commands,
                 worker: Some(worker),
                 telemetry,
+                #[cfg(windows)]
+                video_session: Mutex::new(None),
             }),
             Ok(Err(error)) => {
                 let _ = worker.join();
@@ -270,6 +287,144 @@ impl SmsTemporalWorker {
             .map_err(|error| format!("SMS machine worker did not close audio: {error}"))
     }
 
+    fn set_video_mailbox(&self, mailbox: Option<FrameMailbox>) -> Result<(), String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::SetVideoMailbox(mailbox, reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not configure video: {error}"))?
+    }
+
+    #[cfg(windows)]
+    pub(super) fn open_video_output(&self) -> Result<(), String> {
+        let mut session_guard = self
+            .video_session
+            .lock()
+            .map_err(|_| "video session lock is poisoned".to_owned())?;
+
+        if session_guard
+            .as_ref()
+            .is_some_and(D3d12MailboxSession::is_running)
+        {
+            return Ok(());
+        }
+
+        if let Some(stale_session) = session_guard.take() {
+            let _ = stale_session.shutdown();
+        }
+
+        let session =
+            D3d12MailboxSession::start(256, 192, 768, 576).map_err(|error| error.to_string())?;
+        let mailbox = session.mailbox();
+        if let Err(error) = self.set_video_mailbox(Some(mailbox)) {
+            let _ = session.shutdown();
+            return Err(error);
+        }
+
+        self.telemetry.set_video_error(None);
+        self.telemetry
+            .video_replaced_frames
+            .store(0, Ordering::Release);
+        *session_guard = Some(session);
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    pub(super) fn open_video_output(&self) -> Result<(), String> {
+        Err("D3D12 video output is available only on Windows".to_owned())
+    }
+
+    pub(super) fn close_video_output(&self) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            let mut session_guard = self
+                .video_session
+                .lock()
+                .map_err(|_| "video session lock is poisoned".to_owned())?;
+            if session_guard.is_none() {
+                return Ok(());
+            }
+            self.set_video_mailbox(None)?;
+            if let Some(session) = session_guard.take() {
+                session.shutdown().map_err(|error| error.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn video_output_is_running(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.video_session
+                .lock()
+                .ok()
+                .and_then(|session| session.as_ref().map(D3d12MailboxSession::is_running))
+                .unwrap_or(false)
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+
+    pub(super) fn video_output_error(&self) -> Option<String> {
+        self.telemetry
+            .video_output_error
+            .lock()
+            .ok()
+            .and_then(|error| error.clone())
+    }
+
+    pub(super) fn video_last_published_sequence(&self) -> u64 {
+        self.telemetry
+            .video_last_published_sequence
+            .load(Ordering::Acquire)
+    }
+
+    pub(super) fn video_replaced_frames(&self) -> u64 {
+        self.telemetry.video_replaced_frames.load(Ordering::Acquire)
+    }
+
+    pub(super) fn video_last_presented_sequence(&self) -> u64 {
+        #[cfg(windows)]
+        {
+            self.video_session
+                .lock()
+                .ok()
+                .and_then(|session| {
+                    session
+                        .as_ref()
+                        .map(D3d12MailboxSession::last_presented_sequence)
+                })
+                .unwrap_or(0)
+        }
+        #[cfg(not(windows))]
+        {
+            0
+        }
+    }
+
+    pub(super) fn video_device_recovery_count(&self) -> u64 {
+        #[cfg(windows)]
+        {
+            self.video_session
+                .lock()
+                .ok()
+                .and_then(|session| {
+                    session
+                        .as_ref()
+                        .map(D3d12MailboxSession::device_recovery_count)
+                })
+                .unwrap_or(0)
+        }
+        #[cfg(not(windows))]
+        {
+            0
+        }
+    }
+
     pub(super) fn is_running(&self) -> bool {
         self.telemetry.running.load(Ordering::Acquire)
     }
@@ -324,6 +479,7 @@ impl SmsTemporalWorker {
 
 impl Drop for SmsTemporalWorker {
     fn drop(&mut self) {
+        let _ = self.close_video_output();
         let _ = self.commands.send(WorkerCommand::Shutdown);
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -335,6 +491,8 @@ fn execute_frame(
     machine: &mut SmsTemporalMachine,
     max_instructions: usize,
     audio_session: &mut Option<MachineAudioSession>,
+    video_mailbox: &mut Option<FrameMailbox>,
+    video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
 ) -> Result<(usize, Duration), String> {
     let frame_started = Instant::now();
@@ -345,6 +503,42 @@ fn execute_frame(
         .total_instructions
         .fetch_add(instructions as u64, Ordering::AcqRel);
     telemetry.set_frame_number(machine.frame_number());
+
+    *video_sequence = video_sequence
+        .checked_add(1)
+        .ok_or_else(|| "SMS video frame sequence exhausted".to_owned())?;
+    let mut video_error = None;
+    if let Some(mailbox) = video_mailbox.as_ref() {
+        let frame = VideoFrame::new(
+            *video_sequence,
+            256,
+            192,
+            PixelFormat::Rgb888,
+            256 * 3,
+            machine.framebuffer().to_vec(),
+        )
+        .map_err(|error| error.to_string())
+        .and_then(|frame| mailbox.publish(frame).map_err(|error| error.to_string()));
+
+        match frame {
+            Ok(()) => {
+                telemetry
+                    .video_last_published_sequence
+                    .store(*video_sequence, Ordering::Release);
+                match mailbox.replaced_frames() {
+                    Ok(replaced) => telemetry
+                        .video_replaced_frames
+                        .store(replaced, Ordering::Release),
+                    Err(error) => video_error = Some(error.to_string()),
+                }
+            }
+            Err(error) => video_error = Some(error),
+        }
+    }
+    if let Some(error) = video_error {
+        telemetry.set_video_error(Some(error));
+        *video_mailbox = None;
+    }
 
     let samples = machine.drain_audio_samples(None);
     let audio_result = audio_session
@@ -383,6 +577,8 @@ fn worker_loop(
 ) {
     let mut running = false;
     let mut audio_session: Option<MachineAudioSession> = None;
+    let mut video_mailbox: Option<FrameMailbox> = None;
+    let mut video_sequence = 0_u64;
 
     loop {
         let command = if running {
@@ -406,6 +602,8 @@ fn worker_loop(
                 &region,
                 &mut running,
                 &mut audio_session,
+                &mut video_mailbox,
+                &mut video_sequence,
                 &telemetry,
             ) {
                 break;
@@ -417,6 +615,8 @@ fn worker_loop(
             &mut machine,
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
             &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
             &telemetry,
         ) {
             Ok((_, frame_wait)) => {
@@ -430,6 +630,8 @@ fn worker_loop(
                                 &region,
                                 &mut running,
                                 &mut audio_session,
+                                &mut video_mailbox,
+                                &mut video_sequence,
                                 &telemetry,
                             ) {
                                 break;
@@ -455,8 +657,16 @@ fn worker_loop(
     if let Some(mut session) = audio_session.take() {
         session.close();
     }
+    if let Some(mailbox) = video_mailbox.take() {
+        let _ = mailbox.close();
+    }
 }
 
+/// Dispatch one coarse worker command over the worker-owned machine and outputs.
+///
+/// The explicit state references keep machine, audio, video and timing ownership
+/// visible at this boundary instead of hiding them in shared mutable globals.
+#[allow(clippy::too_many_arguments)]
 fn handle_command(
     command: WorkerCommand,
     machine: &mut SmsTemporalMachine,
@@ -464,6 +674,8 @@ fn handle_command(
     region: &str,
     running: &mut bool,
     audio_session: &mut Option<MachineAudioSession>,
+    video_mailbox: &mut Option<FrameMailbox>,
+    video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
 ) -> bool {
     match command {
@@ -510,7 +722,14 @@ fn handle_command(
             } else if max_instructions == 0 {
                 let _ = reply.send(Err("max_instructions must be positive".to_owned()));
             } else {
-                match execute_frame(machine, max_instructions, audio_session, telemetry) {
+                match execute_frame(
+                    machine,
+                    max_instructions,
+                    audio_session,
+                    video_mailbox,
+                    video_sequence,
+                    telemetry,
+                ) {
                     Ok((instructions, _)) => {
                         let _ = reply.send(Ok(instructions));
                     }
@@ -559,11 +778,19 @@ fn handle_command(
             telemetry.set_audio_metrics((0, 0));
             let _ = reply.send(());
         }
+        WorkerCommand::SetVideoMailbox(mailbox, reply) => {
+            *video_mailbox = mailbox;
+            telemetry.set_video_error(None);
+            let _ = reply.send(Ok(()));
+        }
         WorkerCommand::Shutdown => {
             *running = false;
             telemetry.running.store(false, Ordering::Release);
             if let Some(mut session) = audio_session.take() {
                 session.close();
+            }
+            if let Some(mailbox) = video_mailbox.take() {
+                let _ = mailbox.close();
             }
             return false;
         }
@@ -575,6 +802,7 @@ fn handle_command(
 mod tests {
     use super::SmsTemporalWorker;
     use sega_sms_core::ControllerButtons;
+    use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::time::Duration;
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
@@ -640,5 +868,41 @@ mod tests {
                 .is_err()
         );
         assert!(!worker.is_running());
+    }
+
+    #[test]
+    fn completed_frames_publish_rgb888_and_keep_sequence_monotonic_across_reset() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let mailbox = FrameMailbox::new();
+        worker.set_video_mailbox(Some(mailbox.clone())).unwrap();
+
+        worker.step_frame(100_000).unwrap();
+        let first = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(first.sequence(), 1);
+        assert_eq!(first.width(), 256);
+        assert_eq!(first.height(), 192);
+        assert_eq!(first.pixel_format(), PixelFormat::Rgb888);
+        assert_eq!(first.stride_bytes(), 256 * 3);
+        assert_eq!(first.pixels().len(), 256 * 192 * 3);
+
+        worker.reset().unwrap();
+        worker.step_frame(100_000).unwrap();
+        let second = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(second.sequence(), 2);
+        assert_eq!(worker.video_last_published_sequence(), 2);
+    }
+
+    #[test]
+    fn closed_video_mailbox_does_not_stop_machine_execution() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let mailbox = FrameMailbox::new();
+        mailbox.close().unwrap();
+        worker.set_video_mailbox(Some(mailbox)).unwrap();
+
+        worker.step_frame(100_000).unwrap();
+
+        assert_eq!(worker.frame_number(), 1);
+        assert!(worker.video_output_error().is_some());
+        assert_eq!(worker.runtime_error(), None);
     }
 }
