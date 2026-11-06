@@ -132,7 +132,6 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     window.close()
 
 
-
 def test_video_telemetry_reports_published_and_presented_sequences(
     qapplication: QApplication,
 ) -> None:
