@@ -355,7 +355,9 @@ impl SmsTemporalMachine {
         high: bool,
         timestamp: MachineTime,
     ) -> Result<MachineTime, SmsTemporalMachineError> {
-        Ok(self.bus.schedule_external_th_transition(player, high, timestamp)?)
+        Ok(self
+            .bus
+            .schedule_external_th_transition(player, high, timestamp)?)
     }
 
     /// Start the next instruction and expose its first bus request.
@@ -998,22 +1000,25 @@ impl SmsTemporalMachine {
                 let external_events_valid = events.iter().all(|event| match event.payload {
                     crate::SmsTemporalEvent::ExternalThTransition { player, .. } => {
                         (player == 1 || player == 2)
-                            && event.timestamp
+                            && event
+                                .timestamp
                                 .checked_duration_since(state.bus.coordinator.scheduler.now)
                                 .is_some_and(|elapsed| {
                                     elapsed
-                                            % u128::from(state.bus.coordinator.master_ticks_per_tstate)
-                                            == 0
+                                        % u128::from(state.bus.coordinator.master_ticks_per_tstate)
+                                        == 0
                                 })
                     }
                     _ => true,
                 });
                 let m1_events: Vec<_> = events
                     .iter()
-                    .filter(|event| matches!(
-                        event.payload,
-                        crate::SmsTemporalEvent::M1TStateComplete { .. }
-                    ))
+                    .filter(|event| {
+                        matches!(
+                            event.payload,
+                            crate::SmsTemporalEvent::M1TStateComplete { .. }
+                        )
+                    })
                     .collect();
                 if !external_events_valid
                     || state.bus.pending_request.is_some()
@@ -1067,9 +1072,12 @@ impl SmsTemporalMachine {
                         .event_queue
                         .pending
                         .iter()
-                        .find(|event| event.payload == (
-                            crate::SmsTemporalEvent::BusCompletion { request_id: request.id }
-                        ))
+                        .find(|event| {
+                            event.payload
+                                == (crate::SmsTemporalEvent::BusCompletion {
+                                    request_id: request.id,
+                                })
+                        })
                         .map(|event| event.timestamp)
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
@@ -1115,10 +1123,12 @@ impl SmsTemporalMachine {
                         .event_queue
                         .pending
                         .iter()
-                        .find(|event| matches!(
-                            event.payload,
-                            crate::SmsTemporalEvent::InternalCycleComplete { .. }
-                        ))
+                        .find(|event| {
+                            matches!(
+                                event.payload,
+                                crate::SmsTemporalEvent::InternalCycleComplete { .. }
+                            )
+                        })
                         .map(|event| event.timestamp)
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
@@ -3035,13 +3045,11 @@ mod temporal_frame_tests {
     }
 }
 
-
 #[cfg(test)]
 mod external_th_machine_tests {
     use super::SmsTemporalMachine;
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::Z80MicroStep;
-
 
     #[test]
     fn external_th_event_and_pending_m1_tstate_restore_together() {
