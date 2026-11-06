@@ -276,5 +276,7 @@ Python/SG-1000 da issue #44.
 committed on the migration branch. Local Cargo validation is unavailable in
 this environment; formatting, Clippy, Linux unit tests and Windows target
 compilation are NOT RUN locally and remain dependent on CI for the PR head.
-The external Z80 conformance harness was removed with its Python runner and
-is NOT RUN until a Rust-native replacement exists.
+The Python orchestration for external Z80 conformance was removed. A low-level
+Rust runner remains under the SMS core but still depends on compatibility
+exports and lacks Rust-native suite acquisition/assembly orchestration; ZEXDOC/
+ZEXALL are NOT RUN until that harness is relocated and completed.
