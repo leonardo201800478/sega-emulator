@@ -951,7 +951,9 @@ mod tests {
         assert!(
             frame
                 .pixels()
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .any(|pixel| pixel.iter().any(|channel| *channel != 0))
         );
     }
