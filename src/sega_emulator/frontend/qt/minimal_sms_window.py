@@ -118,7 +118,7 @@ class MinimalSmsWindow(QMainWindow):
 
         if self._machine is not None:
             self._machine.stop()
-            self._machine.close_video_output()
+            self._close_video_output(self._machine)
             self._machine.close_audio_output()
 
         self._video_output_started = False
@@ -176,6 +176,15 @@ class MinimalSmsWindow(QMainWindow):
         self.setWindowTitle("Sega Emulator — Master System")
         self.statusBar().showMessage("ROM fechada")
         self._update_actions()
+
+    def _close_video_output(self, machine: TemporalSMSMachine) -> None:
+        """Release the D3D12 session without preventing the Qt window from closing."""
+        try:
+            machine.close_video_output()
+        except RuntimeError as exc:
+            self.statusBar().showMessage(
+                f"Host de vídeo encerrou com erro: {exc}"
+            )
 
     def _start_video_output_if_visible(self) -> None:
         """Attach the Rust D3D12 swap chain to the Qt-owned native viewport."""
