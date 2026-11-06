@@ -83,7 +83,7 @@ elseif ($Command -eq "locks") {
         $manifestPath = Join-Path $repoRoot $workspace.Manifest
         if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { continue }
         if ($RefreshOffline) {
-            $results += Invoke-ProjectCargo -Name "offline metadata $($workspace.Name)" -CargoArguments @("metadata", "--offline", "--no-deps", "--format-version", "1", "--manifest-path", $manifestPath)
+            $results += Invoke-ProjectCargo -Name "refresh lockfile offline $($workspace.Name)" -CargoArguments @("update", "--offline", "--manifest-path", $manifestPath)
         }
         $results += Invoke-ProjectCargo -Name "locked metadata $($workspace.Name)" -CargoArguments @("metadata", "--locked", "--no-deps", "--format-version", "1", "--manifest-path", $manifestPath)
     }
