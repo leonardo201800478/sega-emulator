@@ -147,10 +147,20 @@ impl NativeSMSTemporalMachine {
             .map_err(PyRuntimeError::new_err)
     }
 
-    /// Open the native D3D12 presentation window; frame pixels remain in Rust.
+    /// Open the standalone native D3D12 presentation window.
     fn open_video_output(&mut self) -> PyResult<()> {
         self.worker
             .open_video_output()
+            .map_err(PyRuntimeError::new_err)
+    }
+
+    /// Attach native D3D12 presentation to an existing GUI-owned HWND.
+    ///
+    /// The caller must invoke this on the HWND's owning thread and keep the
+    /// widget alive until close_video_output() has returned.
+    fn open_video_output_in_viewport(&mut self, window_handle: usize) -> PyResult<()> {
+        self.worker
+            .open_video_output_in_viewport(window_handle)
             .map_err(PyRuntimeError::new_err)
     }
 
