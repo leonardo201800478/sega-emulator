@@ -494,6 +494,7 @@ class MinimalSmsWindow(QMainWindow):
         recoveries = machine.video_device_recovery_count
         audio_error = machine.audio_output_error or self._audio_output_error
         audio_underruns, audio_dropped_blocks = machine.audio_output_metrics
+        signal_metrics = machine.runtime_signal_metrics
         if audio_error != self._last_audio_error_logged:
             if audio_error:
                 logger.error("SMS native audio endpoint failed: %s", audio_error)
@@ -506,7 +507,9 @@ class MinimalSmsWindow(QMainWindow):
             logger.info(
                 "SMS output telemetry: region=%s frame=%d fps=%s "
                 "published=%d presented=%d replaced=%d device_recoveries=%d "
-                "audio_underruns=%d audio_dropped_blocks=%d audio_error=%s",
+                "audio_underruns=%d audio_dropped_blocks=%d audio_error=%s "
+                "non_black_pixels=%d mode4=%d display=%d vram_nonzero=%d "
+                "cram_nonzero=%d psg_samples=%d psg_nonzero=%d psg_peak=%d",
                 self._active_region or self._region,
                 frame_number,
                 frame_rate,
@@ -517,6 +520,14 @@ class MinimalSmsWindow(QMainWindow):
                 audio_underruns,
                 audio_dropped_blocks,
                 audio_error or "none",
+                signal_metrics["non_black_pixels"],
+                signal_metrics["vdp_mode4_enabled"],
+                signal_metrics["vdp_display_enabled"],
+                signal_metrics["vdp_nonzero_vram_bytes"],
+                signal_metrics["vdp_nonzero_cram_bytes"],
+                signal_metrics["psg_samples"],
+                signal_metrics["psg_nonzero_samples"],
+                signal_metrics["psg_peak_amplitude_micros"],
             )
             self._last_telemetry_log_time = now
         if presented:
