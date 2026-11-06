@@ -35,7 +35,11 @@ impl NativeViewportState {
             "Aguardando janela nativa"
         } else if !self.ready {
             "Inicializando D3D12 em worker dedicado"
-        } else if self.session.as_ref().is_some_and(|session| session.is_running()) {
+        } else if self
+            .session
+            .as_ref()
+            .is_some_and(|session| session.is_running())
+        {
             "D3D12 ativo — padrão de diagnóstico"
         } else {
             "Worker D3D12 encerrado"
@@ -133,10 +137,8 @@ impl SegaApp {
             ui.add_space(8.0);
             let width = ui.available_width().max(1.0);
             let height = (width * 0.75).min(ui.available_height().max(1.0));
-            let (rect, _) =
-                ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-            ui.painter()
-                .rect_filled(rect, 0.0, egui::Color32::BLACK);
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+            ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
             viewport_rect = rect;
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
@@ -266,8 +268,7 @@ impl SegaApp {
             }
             Some(Err(error)) => {
                 self.native_viewport.shutdown();
-                self.native_viewport.error =
-                    Some(format!("Inicialização D3D12 falhou: {error}"));
+                self.native_viewport.error = Some(format!("Inicialização D3D12 falhou: {error}"));
             }
             None => {}
         }
@@ -315,15 +316,8 @@ fn diagnostic_frame() -> Result<VideoFrame, String> {
         }
     }
 
-    VideoFrame::new(
-        1,
-        WIDTH,
-        HEIGHT,
-        PixelFormat::Rgba8888,
-        STRIDE,
-        pixels,
-    )
-    .map_err(|error| format!("Não foi possível criar o frame diagnóstico: {error}"))
+    VideoFrame::new(1, WIDTH, HEIGHT, PixelFormat::Rgba8888, STRIDE, pixels)
+        .map_err(|error| format!("Não foi possível criar o frame diagnóstico: {error}"))
 }
 
 #[cfg(test)]
