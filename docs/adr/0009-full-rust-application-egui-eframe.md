@@ -245,3 +245,18 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 Esta entrega é uma decisão arquitetural e auditoria inicial. Não afirma que o frontend Rust já compila, que o renderer D3D12 está integrado ao eframe, que a biblioteca de ROM foi migrada ou que Python pode ser removido hoje. A implementação funcional começa em M1 após completar o grafo de dependências e contratos de sessão.
 
 **Baseline preservada:** `b82f748b83749eac2173ff86e535cc2a9e2ca862`.
+
+
+## 10. Política normativa de testes — retirada integral de Python
+
+O estado final do projeto não manterá testes Python ativos. Todo comportamento essencial coberto por testes Python deverá ser migrado para testes Rust no crate/camada responsável; testes de interface serão substituídos por testes da aplicação egui/eframe e integrações nativas Windows quando necessário.
+
+Regras:
+- Não adicionar novos testes Python.
+- Não remover um teste essencial antes de registrar seu equivalente Rust e executar os gates no SHA candidato.
+- Não tratar a simples existência de `#[test]` ou uma execução em SHA anterior como equivalência.
+- Classificar cada teste Python como migrado, substituído por teste de UI Rust ou obsoleto com justificativa.
+- Remover pytest, configuração e jobs de CI Python depois que todos os testes ativos forem migrados ou formalmente aposentados.
+- Remover Ruff e dependências de empacotamento Python quando não houver mais código Python ativo no produto/tooling.
+
+A primeira fotografia do inventário está em [Auditoria e plano de retirada dos testes Python](../architecture/python-test-retirement-inventory-2026-11-06.md). Ela registra 42 arquivos e 272 funções `test_*` declaradas na baseline consultada. A equivalência individual ainda não foi auditada; nenhum desses arquivos é considerado migrado apenas por este registro.
