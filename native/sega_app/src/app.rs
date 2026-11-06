@@ -481,8 +481,12 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
             let entry = archive
                 .by_index(index)
                 .map_err(|error| format!("Não foi possível inspecionar o ZIP: {error}"))?;
+            let entry_name = entry
+                .name()
+                .map_err(|error| format!("Não foi possível ler o nome de uma entrada ZIP: {error}"))?;
+
             !entry.is_dir()
-                && Path::new(entry.name())
+                && Path::new(entry_name.as_ref())
                     .extension()
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("sms"))
         };
