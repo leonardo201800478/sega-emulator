@@ -49,6 +49,7 @@ Essas limitações devem ser priorizadas por compatibilidade observada e testes 
 - R8 é copiado para a nova linha e pode atualizar o latch da linha corrente enquanto `HPos <= 21` (inclusive). Com 342 posições por linha e 228 Z80 T-states, o limite corresponde a T14. Escritas posteriores só afetam a próxima linha.
 - O port `$7F` retorna o último H-counter capturado, não um contador livre. A implementação atual detecta saída-baixa → entrada-alta no write do I/O control `$3F` para TH1/TH2. Eventos de borda TH externos provenientes de periféricos ainda não estão ligados ao barramento.
 - O Scheduler avança o VDP até o timestamp de conclusão do ciclo antes de aplicar o efeito da escrita de porta. Assim, os latches usam o instante real do boundary temporal, sem callbacks por instrução em Python.
+- Esse caminho cobre apenas a borda criada por software via `$3F`. Eventos TH externos de periféricos ainda não são eventos tipados do Scheduler. O Light Phaser do VDP legado calcula um H-counter sintético a partir de X por scanline; isso não equivale à captura temporal por borda TH. Ver [auditoria de eventos TH externos](../audits/sms-external-th-events-2026-11-06.md).
 - Evidências, derivação de HPos/T-state, vetores e limitações físicas: [auditoria R8/H-counter de 2026-11-06](../audits/sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md).
 
 ## Referências
