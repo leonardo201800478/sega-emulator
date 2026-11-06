@@ -298,7 +298,13 @@ impl SmsTemporalWorker {
     }
 
     #[cfg(windows)]
-    pub(super) fn open_video_output(&self) -> Result<(), String> {
+    fn start_video_session<E>(
+        &self,
+        start: impl FnOnce() -> Result<D3d12MailboxSession, E>,
+    ) -> Result<(), String>
+    where
+        E: std::fmt::Display,
+    {
         let mut session_guard = self
             .video_session
             .lock()
@@ -315,8 +321,7 @@ impl SmsTemporalWorker {
             let _ = stale_session.shutdown();
         }
 
-        let session =
-            D3d12MailboxSession::start(256, 192, 768, 576).map_err(|error| error.to_string())?;
+        let session = start().map_err(|error| error.to_string())?;
         let mailbox = session.mailbox();
         if let Err(error) = self.set_video_mailbox(Some(mailbox)) {
             let _ = session.shutdown();
@@ -331,8 +336,31 @@ impl SmsTemporalWorker {
         Ok(())
     }
 
+    #[cfg(windows)]
+    pub(super) fn open_video_output(&self) -> Result<(), String> {
+        self.start_video_session(|| D3d12MailboxSession::start(256, 192, 768, 576))
+    }
+
+    #[cfg(windows)]
+    pub(super) fn open_video_output_in_viewport(
+        &self,
+        window_handle: usize,
+    ) -> Result<(), String> {
+        self.start_video_session(|| {
+            D3d12MailboxSession::start_for_existing_window(256, 192, window_handle)
+        })
+    }
+
     #[cfg(not(windows))]
     pub(super) fn open_video_output(&self) -> Result<(), String> {
+        Err("D3D12 video output is available only on Windows".to_owned())
+    }
+
+    #[cfg(not(windows))]
+    pub(super) fn open_video_output_in_viewport(
+        &self,
+        _window_handle: usize,
+    ) -> Result<(), String> {
         Err("D3D12 video output is available only on Windows".to_owned())
     }
 
