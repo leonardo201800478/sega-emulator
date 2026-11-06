@@ -827,7 +827,7 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MAX_FRAME_INSTRUCTIONS, SMS_TEMPORAL_SAMPLE_RATE, Ordering, SmsTemporalWorker,
+        DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
@@ -1002,8 +1002,7 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink)
-            .unwrap();
+        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink).unwrap();
         let mut audio_session = Some(session);
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
@@ -1025,7 +1024,10 @@ mod tests {
         audio_session.as_mut().unwrap().close();
 
         let blocks = captured_blocks.lock().unwrap();
-        assert!(!blocks.is_empty(), "worker must submit PCM to the session sink");
+        assert!(
+            !blocks.is_empty(),
+            "worker must submit PCM to the session sink"
+        );
         assert!(
             blocks.iter().flatten().any(|sample| *sample != 0),
             "worker must submit non-silent PCM, not only initialize the sink"
