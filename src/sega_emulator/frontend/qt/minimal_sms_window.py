@@ -399,7 +399,8 @@ class MinimalSmsWindow(QMainWindow):
         self._settings.setValue("sms_region_preference", self._region)
         self.video_viewport.set_integer_scale(self._preferences.integer_scale)
         logger.info(
-            "SMS preferences saved: audio_backend=%s sample_rate=%d integer_scale=%s region=%s",
+            "SMS preferences saved: audio_backend=%s sample_rate=%d "
+            "integer_scale=%s region=%s",
             self._audio_backend,
             self._preferences.audio_sample_rate,
             self._preferences.integer_scale,
@@ -413,7 +414,8 @@ class MinimalSmsWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Região atualizada",
-                "A nova região será aplicada quando a ROM atual for carregada novamente.",
+                "A nova região será aplicada quando a ROM atual "
+                "for carregada novamente.",
             )
         else:
             self.statusBar().showMessage("Configurações SMS salvas")
