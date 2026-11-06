@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -272,4 +273,25 @@ def test_audio_output_failure_does_not_prevent_loading_rom(
     assert window._audio_output_error == "WASAPI endpoint unavailable"
     assert "Áudio WASAPI indisponível" in window.status_label.text()
     assert window.run_action.isEnabled()
+    window.close()
+
+
+def test_minimal_sms_window_loads_single_rom_from_zip(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    archive_path = tmp_path / "game.zip"
+    rom_bytes = b"valid-sms-rom"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("roms/game.sms", rom_bytes)
+
+    window = minimal_window.MinimalSmsWindow(region="usa")
+    window.load_rom(archive_path)
+
+    assert isinstance(window._machine, FakeTemporalSMSMachine)
+    assert window._machine.rom == rom_bytes
+    assert window._rom_path == archive_path
+    assert "game.sms" in window.windowTitle()
     window.close()
