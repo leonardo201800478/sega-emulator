@@ -284,7 +284,7 @@ class RomLibrary:
                     entry.path: entry
                     for entry in (RomEntry.from_dict(record) for record in records)
                 }
-        except OSError, ValueError, TypeError, KeyError, AttributeError:
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             # A missing/corrupt index is recoverable: the next scan rebuilds it.
             self._entries = {system: {} for system in SUPPORTED_SYSTEMS}
 
