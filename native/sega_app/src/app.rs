@@ -412,9 +412,9 @@ fn render_rom_controls(
         ui.label("Região:");
         egui::ComboBox::from_id_salt("sms_region")
             .selected_text(if region.is_empty() {
-                "USA / NTSC"
+                "USA / NTSC".to_owned()
             } else {
-                region
+                region.clone()
             })
             .show_ui(ui, |ui| {
                 ui.selectable_value(region, "usa".to_owned(), "USA / NTSC");
