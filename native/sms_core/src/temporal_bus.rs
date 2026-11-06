@@ -1558,7 +1558,6 @@ mod external_th_temporal_tests {
         assert_eq!(restored.io().read_port(0xDD) & 0xC0, 0x80);
     }
 
-
     #[test]
     fn same_timestamp_th1_and_th2_events_remain_restorable_after_first_dispatch() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
