@@ -366,10 +366,16 @@ def cargo_for(workspace: Workspace, *args: str) -> list[str]:
 
 
 def lock_check(workspaces: list[Workspace]) -> list[Result]:
-    """Verify each existing lockfile without allowing Cargo to modify it."""
+    """Verify lockfile resolution without compiling workspace packages."""
     results = []
     for workspace in workspaces:
-        results.append(run(cargo_for(workspace, "check", "--locked"), ROOT))
+        results.append(
+            run(
+                cargo_for(workspace, "metadata", "--locked", "--format-version", "1"),
+                ROOT,
+                output_limit=2000,
+            )
+        )
     return results
 
 
