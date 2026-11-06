@@ -129,10 +129,16 @@ jobs:
           toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Discover toolchains and Cargo workspaces
-        run: python tools/project_manager.py audit
-      - name: Verify every Cargo workspace lockfile
-        run: python tools/project_manager.py locks
+      - name: Discover and validate active Cargo workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 --no-deps
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
+          test -f Cargo.lock
+          test -f native/audio_output/Cargo.lock
+          test -f native/z80_core/Cargo.lock
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -161,8 +167,16 @@ jobs:
         run: cargo update --manifest-path native/audio_output/Cargo.toml
       - name: Refresh standalone PyO3 workspace
         run: cargo update --manifest-path native/z80_core/Cargo.toml
-      - name: Verify all lockfiles are consistent
-        run: python tools/project_manager.py locks
+      - name: Verify refreshed lockfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 --no-deps
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
+          test -f Cargo.lock
+          test -f native/audio_output/Cargo.lock
+          test -f native/z80_core/Cargo.lock
       - name: Upload generated Cargo lockfiles
         uses: actions/upload-artifact@v4
         with:
