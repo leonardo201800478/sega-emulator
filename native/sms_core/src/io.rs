@@ -102,11 +102,7 @@ impl SmsIo {
     ///
     /// A false level is the active-low assertion used by peripherals such as
     /// the Light Phaser. The return value is the previous electrical level.
-    pub fn set_external_th_level(
-        &mut self,
-        player: u8,
-        high: bool,
-    ) -> Result<bool, SmsIoError> {
+    pub fn set_external_th_level(&mut self, player: u8, high: bool) -> Result<bool, SmsIoError> {
         let line = match player {
             1 => &mut self.external_th1_high,
             2 => &mut self.external_th2_high,
