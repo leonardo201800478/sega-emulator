@@ -30,27 +30,33 @@ A lista é um resumo funcional, não uma certificação de todas as revisões de
 
 ## Granularidade temporal
 
-A composição continua scanline-level, mas o caminho temporal agora modela dois boundaries subline observáveis: o latch de R8 em HPos 21 e o latch de H-counter em transições TH ascendentes. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística para esses efeitos, mas não é dot-accurate, não arbitra fetches por dot e não reproduz todos os efeitos mid-scanline.
+A composição continua scanline-level. O caminho temporal modela o latch de R8 em HPos 21 e a captura H-counter provocada pela transição de controle TH via software em `$3F`. Eventos externos TH1/TH2 agora entram como eventos tipados do Scheduler, com timestamp absoluto futuro e alinhado à escala de T-state. O dispatch atualiza níveis elétricos independentes no `SmsIo`; não agenda ainda a captura H-counter associada ao Light Phaser.
+
+Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG em cada dispatch, inclusive nos eventos externos TH. Isso mantém a ordem causal e o estado das linhas no mesmo relógio da máquina, mas não é dot-accurate, não arbitra fetches por dot e não reproduz todos os efeitos mid-scanline.
 
 A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
 ## Limites conhecidos
 
-- R8 agora usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições) e o H-counter usa latch persistente por TH ascendente. O modelo é confrontado com MAME 315-5124 e a ROM de diagnóstico SmsVdpTest, mas ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
+- R8 usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições). O H-counter tem latch persistente para a transição de controle TH via software já implementada; o evento TH externo apenas atualiza os níveis de entrada e ainda não provoca captura do H-counter.
+- Eventos externos TH1/TH2 são independentes, ativos-baixos, versionados no snapshot do barramento e processados no Scheduler. O timestamp deve ser futuro e alinhado à escala de T-state configurada.
+- A evidência disponível diverge sobre o instante exato de captura externa: SMS Power descreve a captura enquanto TH está ativo-baixo; MAME arma no nível baixo e agenda o latch no retorno baixo→alto com offset configurável. Não escolher uma polaridade/atraso universal até reconciliar a evidência primária e a política de perfil/mídia.
+- O modelo atual ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.
-- Light Phaser e SegaScope usam adaptações de entrada/apresentação; não simulam integralmente sensores e temporização elétrica originais.
+- Light Phaser e SegaScope ainda não simulam integralmente sensores e temporização elétrica originais.
 
 Essas limitações devem ser priorizadas por compatibilidade observada e testes reproduzíveis, não pela busca abstrata de dot-accuracy.
 
 ## Latches horizontais R8 e H-counter
 
 - R8 é copiado para a nova linha e pode atualizar o latch da linha corrente enquanto `HPos <= 21` (inclusive). Com 342 posições por linha e 228 Z80 T-states, o limite corresponde a T14. Escritas posteriores só afetam a próxima linha.
-- O port `$7F` retorna o último H-counter capturado, não um contador livre. A implementação atual detecta saída-baixa → entrada-alta no write do I/O control `$3F` para TH1/TH2. Eventos de borda TH externos provenientes de periféricos ainda não estão ligados ao barramento.
-- O Scheduler avança o VDP até o timestamp de conclusão do ciclo antes de aplicar o efeito da escrita de porta. Assim, os latches usam o instante real do boundary temporal, sem callbacks por instrução em Python.
-- Esse caminho cobre apenas a borda criada por software via `$3F`. Eventos TH externos de periféricos ainda não são eventos tipados do Scheduler. O Light Phaser do VDP legado calcula um H-counter sintético a partir de X por scanline; isso não equivale à captura temporal por borda TH. Ver [auditoria de eventos TH externos](../audits/sms-external-th-events-2026-11-06.md).
-- Esse caminho cobre apenas a borda criada por software via `$3F`. Eventos TH externos de periféricos ainda não são eventos tipados do Scheduler. O Light Phaser do VDP legado calcula um H-counter sintético a partir de X por scanline; isso não equivale à captura temporal por borda TH. Ver [auditoria de eventos TH externos](../audits/sms-external-th-events-2026-11-06.md).
+- O port `$7F` retorna o último H-counter capturado, não um contador livre. A implementação atual mantém a captura por software no write do I/O control `$3F` (saída baixa → entrada alta) para TH1/TH2.
+- Eventos externos TH1/TH2 são agendados com timestamp absoluto por `SmsTemporalMachine::schedule_external_th_transition` e aplicados no dispatch do Scheduler. A atualização dos níveis externos é independente por porta e aparece em `$DD` quando TH está configurado como entrada. O estado dos níveis e os eventos pendentes sobrevivem a snapshot/restore.
+- A integração externa atualiza apenas a linha elétrica. Não dispara ainda o latch H-counter. A documentação SMS Power e o modelo MAME consultado não são suficientes para fixar um instante/polaridade/offset universal; a próxima etapa exige reconciliar essa evidência e configurar o atraso por perfil/mídia.
+- O Scheduler avança Z80, PSG e VDP até o timestamp do evento externo antes de aplicar o nível TH. Para escritas de porta, o VDP continua avançando até o boundary de conclusão do barramento. Nenhum callback por instrução em Python é usado.
+- O Light Phaser do VDP legado ainda calcula um H-counter sintético a partir de X por scanline; isso não equivale à captura temporal por borda TH. Ver [auditoria de eventos TH externos](../audits/sms-external-th-events-2026-11-06.md).
 - Evidências, derivação de HPos/T-state, vetores e limitações físicas: [auditoria R8/H-counter de 2026-11-06](../audits/sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md).
 
 ## Referências
