@@ -1,11 +1,11 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::atomic::AtomicI32;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 #[cfg(windows)]
 use std::thread::{self, JoinHandle};
 #[cfg(windows)]
@@ -244,7 +244,10 @@ impl NativeWasapiOutput {
 
     /// Last asynchronous error from the WASAPI worker; remains visible for this session.
     pub fn output_error(&self) -> Option<String> {
-        self.output_error.lock().ok().and_then(|error| error.clone())
+        self.output_error
+            .lock()
+            .ok()
+            .and_then(|error| error.clone())
     }
 
     pub fn close(&mut self) {
@@ -459,7 +462,7 @@ fn run_wasapi_worker(
                     Ok(block) => {
                         pending.extend(block);
                         supplied_pcm = true;
-                    },
+                    }
                     Err(rtrb::PopError::Empty) => {
                         if consumer.is_abandoned() {
                             disconnected = true;
@@ -474,9 +477,7 @@ fn run_wasapi_worker(
             if disconnected || shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if let Err(error) =
-                render_client.write_to_device_from_deque(frames, &mut pending, None)
-            {
+            if let Err(error) = render_client.write_to_device_from_deque(frames, &mut pending, None) {
                 set_worker_output_error(&output_error, Some(error.to_string()));
                 break;
             }
@@ -497,8 +498,7 @@ fn run_wasapi_worker(
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2EngineCallback, IXAudio2EngineCallback_Impl, IXAudio2MasteringVoice,
     IXAudio2SourceVoice, IXAudio2VoiceCallback, IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER,
-    XAUDIO2_DEFAULT_PROCESSOR,
-    XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
+    XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
