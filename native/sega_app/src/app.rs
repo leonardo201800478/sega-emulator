@@ -177,8 +177,10 @@ impl SegaApp {
     /// Open the native Windows file picker, parented to the main application window.
     fn open_rom_dialog(&mut self, frame: &eframe::Frame) {
         let Some(window) = frame.winit_window() else {
-            self.native_viewport.error =
-                Some("A janela principal ainda não está disponível para abrir o seletor de ROM".to_owned());
+            self.native_viewport.error = Some(
+                "A janela principal ainda não está disponível para abrir o seletor de ROM"
+                    .to_owned(),
+            );
             return;
         };
 
@@ -437,7 +439,6 @@ impl eframe::App for SegaApp {
     }
 }
 
-
 /// Read a raw SMS image or extract the single SMS image contained in a ZIP archive.
 fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
     let extension = path
@@ -446,8 +447,7 @@ fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
         .unwrap_or_default();
 
     if extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin") {
-        let rom = fs::read(path)
-            .map_err(|error| format!("Não foi possível ler a ROM: {error}"))?;
+        let rom = fs::read(path).map_err(|error| format!("Não foi possível ler a ROM: {error}"))?;
         if rom.is_empty() {
             return Err("O arquivo da ROM está vazio".to_owned());
         }
@@ -463,7 +463,10 @@ fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
         return read_sms_from_zip(file);
     }
 
-    Err("Formato não suportado. Selecione um arquivo .sms ou .zip (ou informe um .bin manualmente)".to_owned())
+    Err(
+        "Formato não suportado. Selecione um arquivo .sms ou .zip (ou informe um .bin manualmente)"
+            .to_owned(),
+    )
 }
 
 /// Extract the only non-directory .sms entry from a ZIP archive.
@@ -481,9 +484,9 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
             let entry = archive
                 .by_index(index)
                 .map_err(|error| format!("Não foi possível inspecionar o ZIP: {error}"))?;
-            let entry_name = entry
-                .name()
-                .map_err(|error| format!("Não foi possível ler o nome de uma entrada ZIP: {error}"))?;
+            let entry_name = entry.name().map_err(|error| {
+                format!("Não foi possível ler o nome de uma entrada ZIP: {error}")
+            })?;
 
             !entry.is_dir()
                 && Path::new(entry_name.as_ref())
@@ -802,7 +805,9 @@ mod tests {
             writer
                 .start_file(name, zip::write::SimpleFileOptions::default())
                 .expect("ZIP entry should be created");
-            writer.write_all(&[0x00]).expect("ROM byte should be written");
+            writer
+                .write_all(&[0x00])
+                .expect("ROM byte should be written");
         }
         let archive = writer.finish().expect("ZIP archive should be finalized");
 
