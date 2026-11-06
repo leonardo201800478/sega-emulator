@@ -1358,6 +1358,16 @@ mod tests {
     }
 
     #[test]
+    fn cpu_reset_rejects_an_in_flight_instruction_without_mutating_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        let before = machine.export_state();
+
+        assert_eq!(machine.reset_cpu(), Err(SmsTemporalMachineError::InvalidState));
+        assert_eq!(machine.export_state(), before);
+    }
+
+    #[test]
     fn nop_runs_on_the_scheduler_timeline_for_four_tstates() {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
         retired(machine.step_instruction(0).unwrap(), 0x00, 4);
