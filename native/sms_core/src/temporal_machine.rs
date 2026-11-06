@@ -1109,7 +1109,7 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalMachine, SmsTemporalMachineError};
+    use super::{SmsTemporalMachine, SmsTemporalMachineError, SmsVdpProfile, Territory};
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
