@@ -3042,6 +3042,40 @@ mod external_th_machine_tests {
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::Z80MicroStep;
 
+
+    #[test]
+    fn external_th_event_and_pending_m1_tstate_restore_together() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00], 3).unwrap();
+        assert!(matches!(
+            machine.begin_instruction().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+
+        let timestamp = MachineTime::from_ticks(6);
+        machine
+            .schedule_external_th_transition(2, false, timestamp)
+            .unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(
+            restored.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(restored.now(), MachineTime::from_ticks(12));
+        assert_eq!(restored.bus.io().read_port(0xDD) & 0x80, 0);
+    }
+
     #[test]
     fn external_th_event_restores_and_is_dispatched_during_cpu_execution() {
         let mut machine = SmsTemporalMachine::new(vec![0x00], 3).unwrap();
