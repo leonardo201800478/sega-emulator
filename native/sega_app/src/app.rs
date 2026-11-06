@@ -245,7 +245,10 @@ impl SegaApp {
                 ui,
                 &self.input_devices,
                 &mut self.selected_gamepad,
-                self.input_backend.as_ref().and_then(|state| state.as_ref().err()).map(String::as_str),
+                self.input_backend
+                    .as_ref()
+                    .and_then(|state| state.as_ref().err())
+                    .map(String::as_str),
             );
             render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui, self.aspect_ratio);
