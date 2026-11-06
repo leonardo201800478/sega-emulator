@@ -1,5 +1,7 @@
 # Auditoria de latches e raster do VDP SMS — 2026-10-30
 
+> **Atualização:** este documento é um registro histórico do estado de 2026-10-30. As decisões de R8 e H-counter foram refinadas e implementadas no caminho temporal em 2026-11-06. Para o modelo atual, evidências e limites, consulte [Auditoria SMS VDP — R8 e H-counter em boundaries temporais](sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md). As observações abaixo devem ser lidas como o estado anterior à nova auditoria.
+
 ## Estado e escopo
 
 - Base remota: `main` SHA `756666ae6216d8466f40259c11c345bbc1921848`.
