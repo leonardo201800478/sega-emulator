@@ -90,9 +90,7 @@ mod tests {
         let context = egui::Context::default();
         let mut app = SegaApp::default();
 
-        let output = context.run_ui(Default::default(), |context| {
-            egui::CentralPanel::default().show(context, |ui| app.render(ui));
-        });
+        let output = context.run_ui(Default::default(), |ui| app.render(ui));
 
         assert!(!output.shapes.is_empty());
     }
