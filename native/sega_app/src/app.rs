@@ -19,6 +19,7 @@ pub struct SegaApp {
     rom_path: String,
     region: String,
     last_rom_directory: Option<PathBuf>,
+    rom_dialog_requested: bool,
     native_viewport: NativeViewportState,
 }
 
@@ -28,6 +29,7 @@ impl Default for SegaApp {
             rom_path: String::new(),
             region: String::new(),
             last_rom_directory: load_last_rom_directory(),
+            rom_dialog_requested: false,
             native_viewport: NativeViewportState::default(),
         }
     }
@@ -145,7 +147,6 @@ impl SegaApp {
         let mut viewport_rect = egui::Rect::NOTHING;
         let mut command = None;
         let mut load_requested = false;
-        let mut browse_requested = false;
 
         ui.vertical(|ui| {
             render_header(ui);
@@ -153,7 +154,7 @@ impl SegaApp {
                 ui,
                 &mut self.rom_path,
                 &mut self.region,
-                &mut browse_requested,
+                &mut self.rom_dialog_requested,
                 &mut load_requested,
             );
             render_machine_controls(ui, &self.native_viewport, &mut command);
@@ -162,9 +163,6 @@ impl SegaApp {
             render_footer(ui);
         });
 
-        if browse_requested {
-            self.open_rom_dialog(frame);
-        }
         if load_requested {
             self.load_rom_from_path();
         }
@@ -430,6 +428,10 @@ impl SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let viewport_rect = self.render(ui);
+        if self.rom_dialog_requested {
+            self.rom_dialog_requested = false;
+            self.open_rom_dialog(frame);
+        }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
     }
 }
@@ -504,7 +506,9 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
         return Err("A ROM dentro do ZIP excede o limite de 16 MiB".to_owned());
     }
 
-    let mut rom = Vec::with_capacity(entry.size() as usize);
+    let capacity = usize::try_from(entry.size())
+        .map_err(|_| "O tamanho da ROM não cabe na memória deste processo".to_owned())?;
+    let mut rom = Vec::with_capacity(capacity);
     entry
         .take(MAX_ROM_SIZE_BYTES + 1)
         .read_to_end(&mut rom)
