@@ -56,7 +56,9 @@ class MinimalSmsWindow(QMainWindow):
         self._preferences = FrontendPreferences.from_store(self._settings)
         saved_region = str(self._settings.value("sms_region_preference", "usa"))
         self._region = region or (
-            saved_region if saved_region in {"usa", "brazil", "europe", "japan"} else "usa"
+            saved_region
+            if saved_region in {"usa", "brazil", "europe", "japan"}
+            else "usa"
         )
         self._audio_backend = str(self._settings.value("sms_audio_backend", "wasapi"))
         if self._audio_backend not in {"wasapi", "xaudio2", "disabled"}:
@@ -320,12 +322,18 @@ class MinimalSmsWindow(QMainWindow):
 
     def _audio_status_text(self) -> str:
         """Describe the selected native audio endpoint without exposing PCM."""
+        backend_label = {
+            "wasapi": "WASAPI",
+            "xaudio2": "XAudio2",
+        }.get(self._audio_backend, self._audio_backend)
         if self._audio_output_error:
-            return f"Áudio {self._audio_backend.upper()} indisponível: {self._audio_output_error}"
+            return f"Áudio {backend_label} indisponível: {self._audio_output_error}"
         if self._audio_backend == "disabled" or not self._preferences.audio_enabled:
             return "Áudio desativado"
         rate = self._preferences.audio_sample_rate
-        return f"Áudio {self._audio_backend.upper()} inicializado ({rate:,} Hz)".replace(",", ".")
+        return (
+            f"Áudio {backend_label} inicializado ({rate:,} Hz)".replace(",", ".")
+        )
 
     def _show_settings_dialog(self) -> None:
         """Edit and persist SMS host preferences; apply only supported settings."""
