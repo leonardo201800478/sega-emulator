@@ -25,7 +25,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 24;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 25;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +56,8 @@ pub enum SmsTemporalTraceEvent {
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
+    /// External INT source, kept separate from the VDP's wired-OR IRQ output.
+    pub external_int_line: Option<u8>,
     /// Absolute machine timestamp at which the active instruction began.
     pub instruction_started_at: Option<MachineTime>,
     pub bus: SmsTemporalBusState,
@@ -268,6 +270,7 @@ impl From<SmsTemporalM1Error> for SmsTemporalMachineError {
 pub struct SmsTemporalMachine {
     cpu: Z80MicroSequencer,
     bus: SmsTemporalBus,
+    external_int_line: Option<u8>,
     instruction_started_at: Option<MachineTime>,
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
@@ -287,6 +290,7 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            external_int_line: None,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -337,6 +341,7 @@ impl SmsTemporalMachine {
                 vdp_profile,
                 territory,
             )?,
+            external_int_line: None,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -587,6 +592,9 @@ impl SmsTemporalMachine {
             .bus
             .dispatch_next()?
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+        // Re-evaluate the wired-OR INT level after the VDP clock and any I/O
+        // side effect at this Scheduler boundary, before the next CPU sample.
+        self.sync_vdp_interrupt_line();
         match dispatch {
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
@@ -892,10 +900,19 @@ impl SmsTemporalMachine {
     /// the line is sampled at each completed M1 T4. None deasserts INT.
     /// Signal changes do not advance machine time.
     pub fn set_int_line(&mut self, vector: Option<u8>) {
-        self.cpu.set_int_line(vector);
+        self.external_int_line = vector;
         if let Some(vector) = vector {
             self.bus.set_interrupt_vector(vector);
         }
+        self.sync_vdp_interrupt_line();
+    }
+
+    /// Combine the independent external INT source with the VDP's level output.
+    /// The SMS VDP is wired onto the Z80 INT input; it must never deassert an
+    /// independently asserted source when its own request is inactive.
+    fn sync_vdp_interrupt_line(&mut self) {
+        let vdp_irq = self.bus.vdp().interrupt_pending().then_some(0xFF);
+        self.cpu.set_int_line(self.external_int_line.or(vdp_irq));
     }
 
     /// Current mapper-backed memory (read-only).
@@ -923,6 +940,7 @@ impl SmsTemporalMachine {
         SmsTemporalMachineState {
             format_version: SMS_TEMPORAL_MACHINE_STATE_VERSION,
             cpu: self.cpu.export_state(),
+            external_int_line: self.external_int_line,
             instruction_started_at: self.instruction_started_at,
             bus: self.bus.export_state(),
             next_internal_cycle_id: self.next_internal_cycle_id,
@@ -946,7 +964,11 @@ impl SmsTemporalMachine {
         } else {
             cpu.pending_request()
         };
-        if expected_bus_request != state.bus.pending_request
+        let expected_int_line = state
+            .external_int_line
+            .or_else(|| bus.vdp().interrupt_pending().then_some(0xFF));
+        if cpu.export_state().int_pending != expected_int_line
+            || expected_bus_request != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
             || state.pending_internal_tstates == Some(0)
@@ -1080,6 +1102,7 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu,
             bus,
+            external_int_line: state.external_int_line,
             instruction_started_at: state.instruction_started_at,
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
@@ -2976,5 +2999,46 @@ mod temporal_frame_tests {
         assert!(machine.step_frame(0).is_err());
         assert_eq!(machine.frame_number(), 0);
         assert!(!machine.framebuffer().is_empty());
+    }
+
+    #[test]
+    fn synthetic_rom_produces_visible_sms1_pixels_and_nonzero_psg_samples() {
+        let mut rom = vec![0; 0x4000];
+        let mut program = vec![
+            0xF3, // DI
+            0x31, 0xF0, 0xDF, // LD SP,$DFF0
+            // SMS Mode 4, display enabled, name table at $3800.
+            0x3E, 0x04, 0xD3, 0xBF, 0x3E, 0x80, 0xD3, 0xBF, // R0
+            0x3E, 0x40, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1
+            0x3E, 0x0E, 0xD3, 0xBF, 0x3E, 0x82, 0xD3, 0xBF, // R2
+            // CRAM entry 1 = white.
+            0x3E, 0x01, 0xD3, 0xBF, 0x3E, 0xC0, 0xD3, 0xBF, 0x3E, 0x3F, 0xD3, 0xBE,
+            // Tile zero: plane zero set for all eight rows (palette index 1).
+            0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF,
+        ];
+        program.extend([0x3E, 0xFF, 0xD3, 0xBE].repeat(8));
+        program.extend([
+            // Tone channel 0, period 4, maximum volume.
+            0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E,
+            0x18, 0xFE, // JR -2
+        ]);
+        rom[..program.len()].copy_from_slice(&program);
+
+        let mut machine = SmsTemporalMachine::new_with_hardware_profile(
+            rom,
+            1,
+            3_579_545,
+            44_100,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+        .unwrap();
+
+        machine.step_frame(100_000).unwrap();
+
+        assert!(machine.framebuffer().chunks_exact(3).any(|pixel| pixel != [0, 0, 0]));
+        let samples = machine.drain_audio_samples(None);
+        assert!(!samples.is_empty());
+        assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
     }
 }
