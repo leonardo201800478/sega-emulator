@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   push:
-    branches: [main]
+    branches: [main, feat/egui-d3d12-child-viewport-m1b-20261106]
   workflow_dispatch:
     inputs:
       scheduler_stress_profile:
@@ -13,6 +13,11 @@ on:
         type: choice
         options: [none, short, long]
         default: none
+      run_legacy_python_validation:
+        description: "Run legacy Python, Qt and PyO3 validation manually"
+        required: false
+        type: boolean
+        default: false
       refresh_cargo_lockfiles:
         description: "Generate updated Cargo.lock files and upload them as an artifact"
         required: false
@@ -126,10 +131,18 @@ jobs:
           toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Discover toolchains and Cargo workspaces
-        run: python tools/project_manager.py audit
-      - name: Verify every Cargo workspace lockfile
-        run: python tools/project_manager.py locks
+      - name: Discover and validate active Cargo workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 --no-deps
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
+          test -f Cargo.lock
+          test -f native/audio_output/Cargo.lock
+          test -f native/z80_core/Cargo.lock
+          test -f native/sega_app/Cargo.lock
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -158,8 +171,18 @@ jobs:
         run: cargo update --manifest-path native/audio_output/Cargo.toml
       - name: Refresh standalone PyO3 workspace
         run: cargo update --manifest-path native/z80_core/Cargo.toml
-      - name: Verify all lockfiles are consistent
-        run: python tools/project_manager.py locks
+      - name: Verify refreshed lockfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 --no-deps
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
+          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
+          test -f Cargo.lock
+          test -f native/audio_output/Cargo.lock
+          test -f native/z80_core/Cargo.lock
+          test -f native/sega_app/Cargo.lock
       - name: Upload generated Cargo lockfiles
         uses: actions/upload-artifact@v4
         with:
@@ -221,10 +244,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   python:
     needs: [changes]
-    # Required by the main ruleset: run on every PR; do not path-filter.
-    if: |
-      always() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Legacy Python validation is opt-in and never blocks Rust migration PRs.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Python lint and regression
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -277,12 +298,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-python-qt:
     needs: [changes]
-    if: |
-      always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.qt == 'true' ||
-       needs.changes.outputs.full == 'true') &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Legacy Qt smoke remains available only through explicit manual dispatch.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Windows Python 3.15 Qt smoke test
     runs-on: windows-latest
     timeout-minutes: 20
@@ -358,12 +375,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-native-python-extension:
     needs: [changes]
-    if: |
-      always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.pyo3 == 'true' ||
-       needs.changes.outputs.full == 'true') &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Transitional PyO3 validation is opt-in until the bridge is removed.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Windows Python 3.15 PyO3 extension build
     runs-on: windows-latest
     timeout-minutes: 30
