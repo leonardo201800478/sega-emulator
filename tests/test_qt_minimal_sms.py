@@ -179,6 +179,7 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     machine.video_device_recovery_count = 1
     window._machine = machine
     window._video_output_started = True
+    window._last_telemetry_log_time = -10.0
 
     with caplog.at_level(logging.INFO):
         window._refresh_video_telemetry()
