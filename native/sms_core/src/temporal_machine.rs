@@ -905,18 +905,20 @@ impl SmsTemporalMachine {
     /// Signal changes do not advance machine time.
     pub fn set_int_line(&mut self, vector: Option<u8>) {
         self.external_int_line = vector;
-        if let Some(vector) = vector {
-            self.bus.set_interrupt_vector(vector);
-        }
         self.sync_vdp_interrupt_line();
     }
 
     /// Combine the independent external INT source with the VDP's level output.
     /// The SMS VDP is wired onto the Z80 INT input; it must never deassert an
-    /// independently asserted source when its own request is inactive.
+    /// independently asserted source when its own request is inactive. During
+    /// VDP-only acknowledge, the undriven data bus resolves to the SMS pull-up
+    /// value ($FF), not a stale vector from a previously deasserted source.
     fn sync_vdp_interrupt_line(&mut self) {
         let vdp_irq = self.bus.vdp().interrupt_pending().then_some(0xFF);
-        self.cpu.set_int_line(self.external_int_line.or(vdp_irq));
+        let effective_line = self.external_int_line.or(vdp_irq);
+        self.bus
+            .set_interrupt_vector(effective_line.unwrap_or(0xFF));
+        self.cpu.set_int_line(effective_line);
     }
 
     /// Current mapper-backed memory (read-only).
@@ -2998,6 +3000,7 @@ mod temporal_interrupt_wiring_tests {
         assert_eq!(restored.cpu().export_state().int_pending, Some(0xCF));
 
         restored.set_int_line(None);
+        assert_eq!(restored.export_state().bus.interrupt_vector, 0xFF);
         restored.step_instruction(0).unwrap();
         assert_eq!(restored.cpu().export_state().int_pending, None);
     }
@@ -3037,6 +3040,11 @@ mod temporal_interrupt_wiring_tests {
             super::Territory::Export,
         )
         .unwrap();
+        // A previously asserted external vector must not leak into the VDP's
+        // interrupt-acknowledge data bus after that external source is removed.
+        machine.set_int_line(Some(0xCF));
+        machine.set_int_line(None);
+        assert_eq!(machine.export_state().bus.interrupt_vector, 0xFF);
 
         const FRAMES: u8 = 20;
         for _ in 0..FRAMES {
