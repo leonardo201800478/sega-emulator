@@ -52,7 +52,7 @@
 - Conflitos exigem reconciliação em branch própria, sem force-push ou reset destrutivo; todo novo HEAD precisa de CI novo.
 - PR #595 foi integrada como baseline automatizada A/V, não como conclusão funcional SMS.
 - PR #594 foi fechada como SUPERSEDED após comprovar que a #595 cobre a ligação IRQ e preserva o comportamento adicional da INT externa.
-- Nenhuma PR aberta nesta tabela deve ser mesclada sem reauditoria contra a main `733152f61b706b2243914ae017643cef949d4ae1`.
+- Nenhuma PR aberta nesta tabela deve ser mesclada sem reauditoria contra a `main` vigente. Na fotografia desta PR, o SHA remoto confirmado e `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`.
 
 ## 5. Próxima sequência de trabalho
 
