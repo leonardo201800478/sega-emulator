@@ -16,7 +16,8 @@ A `main` atual é `b82f748b83749eac2173ff86e535cc2a9e2ca862` (merge da PR #598).
 **PRs relevantes observadas nesta auditoria:**
 
 - PR #599: aberta, não integrada, HEAD `bb88e96cdb45d703f66d23acde42a2ead74fadd4`; CI #5206 SUCCESS, com Rust quality/tests, Python lint/regression, Windows PyO3 e D3D12 PASS. Scheduler stress, Qt smoke, PowerShell tooling e lock refresh SKIPPED. Os testes WASAPI/XAudio2 de endpoint real são ignorados por padrão e permanecem NOT RUN; A/V-04b/A/V-05 não estão fechados.
-- PR #600: aberta em Draft, não integrada; migração da aplicação para egui/eframe. O CI #5209 SUCCESS validou o HEAD documental anterior, com Rust quality/tests, Python lint/regression e D3D12 compile PASS; PyO3 build, Qt smoke, scheduler stress, PowerShell tooling e lock refresh SKIPPED. O inventário M0.2 e a reconciliação do roadmap foram adicionados depois desse run e aguardam CI no novo HEAD. Ainda não há runtime egui nessa PR.
+- PR #600: aberta em Draft, não integrada; migração da aplicação para egui/eframe. CI #5213 SUCCESS no HEAD `21b07803c748df6607c29cebe1090899393f29a4`: Rust quality/tests, Python lint/regression e D3D12 compile PASS; PyO3 build, Qt smoke, scheduler stress, PowerShell tooling e lock refresh SKIPPED. O inventário M0.2 e a reconciliação do roadmap foram validados nesse SHA documental; não contém runtime egui.
+- PR #601: aberta em Draft, empilhada sobre #600; primeiro shell nativo `sega-app` com eframe 0.37.0. HEAD `454bbbd473ae360e38d35c9384e530730beedce8`; workflow CI ainda não foi retornado para esse HEAD. O shell não inicia ROM/hardware e ainda não integra o viewport D3D12. Build, Clippy, teste Windows e execução física permanecem NOT RUN até evidência.
 
 Ordem vertical ativa:
 
