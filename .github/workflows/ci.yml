@@ -424,7 +424,7 @@ jobs:
     if: |
       always() &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
-    name: Windows x64 D3D12 and native app compile
+    name: Windows x64 D3D12 compile
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
