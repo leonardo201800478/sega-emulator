@@ -13,11 +13,6 @@ on:
         type: choice
         options: [none, short, long]
         default: none
-      run_legacy_python_validation:
-        description: "Run legacy Python, Qt and PyO3 validation manually"
-        required: false
-        type: boolean
-        default: false
       refresh_cargo_lockfiles:
         description: "Generate updated Cargo.lock files and upload them as an artifact"
         required: false
@@ -40,9 +35,6 @@ jobs:
     if: github.event_name == 'pull_request'
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
-      python: ${{ steps.filter.outputs.python }}
-      qt: ${{ steps.filter.outputs.qt }}
-      pyo3: ${{ steps.filter.outputs.pyo3 }}
       windows_native: ${{ steps.filter.outputs.windows_native }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
@@ -63,31 +55,6 @@ jobs:
               - '.cargo/**'
               - 'rust-toolchain*'
               - 'build.rs'
-            python:
-              - 'src/**/*.py'
-              - 'tests/**/*.py'
-              - 'tools/**/*.py'
-              - 'scripts/**/*.py'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'pytest.ini'
-              - 'ruff.toml'
-              - 'setup.cfg'
-              - 'requirements*.txt'
-            qt:
-              - 'src/sega_emulator/frontend/qt/**'
-              - 'tests/test_qt_*.py'
-              - 'tests/unit/test_vulkan_video_widget.py'
-              - 'tests/test_rom_library.py'
-              - 'tests/test_controller_profiles.py'
-              - 'tests/test_rust_controller_input.py'
-              - 'tests/test_native_input_runtime.py'
-              - 'pyproject.toml'
-              - 'uv.lock'
-            pyo3:
-              - 'native/z80_core/**'
-              - 'native/sg1000_core/**'
-              - 'native/sms_core/**'
             windows_native:
               - 'rust/runtime/sms-runtime/**'
               - 'native/video_runtime/**'
@@ -100,8 +67,6 @@ jobs:
               - 'native/temporal_core/**'
             tooling:
               - 'scripts/**/*.ps1'
-              - 'tools/project_manager.py'
-              - 'tests/tooling/**'
             full:
               - '.github/workflows/**'
               - 'Cargo.toml'
@@ -110,7 +75,6 @@ jobs:
               - 'uv.lock'
               - 'rust-toolchain*'
               - '.cargo/**'
-              - 'tools/project_manager.py'
               - 'scripts/common.ps1'
 
       - name: CI supervisor - cancel remaining jobs on failure
@@ -140,11 +104,9 @@ jobs:
           set -euo pipefail
           cargo metadata --locked --format-version 1 --no-deps
           cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
           cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
-          test -f native/z80_core/Cargo.lock
           test -f native/sega_app/Cargo.lock
       - name: Formatting
         run: cargo fmt --all -- --check
@@ -172,19 +134,15 @@ jobs:
         run: cargo update --workspace
       - name: Refresh standalone audio-output workspace
         run: cargo update --manifest-path native/audio_output/Cargo.toml
-      - name: Refresh standalone PyO3 workspace
-        run: cargo update --manifest-path native/z80_core/Cargo.toml
       - name: Verify refreshed lockfiles
         shell: bash
         run: |
           set -euo pipefail
           cargo metadata --locked --format-version 1 --no-deps
           cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/z80_core/Cargo.toml
           cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
-          test -f native/z80_core/Cargo.lock
           test -f native/sega_app/Cargo.lock
       - name: Upload generated Cargo lockfiles
         uses: actions/upload-artifact@v4
@@ -193,7 +151,6 @@ jobs:
           path: |
             Cargo.lock
             native/audio_output/Cargo.lock
-            native/z80_core/Cargo.lock
           if-no-files-found: error
           retention-days: 1
 
@@ -245,99 +202,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  python:
-    needs: [changes]
-    # Legacy Python validation is opt-in and never blocks Rust migration PRs.
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
-    name: Python lint and regression
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      QT_QPA_PLATFORM: offscreen
-      SDL_AUDIODRIVER: dummy
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.1.0
-        with:
-          python-version: "3.15.2"
-      - name: Install system libraries required by headless Qt
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libdbus-1-3 libxcb-cursor0
-      - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          version-file: "pyproject.toml"
-          checksum: "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - name: Install locked development and Qt dependencies
-        run: uv sync --locked --extra dev --extra qt
-      - name: Assert the pinned CPython runtime
-        run: uv run --locked python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
-      - name: Validate Qt and numerical runtime imports
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
-      - name: Validate tooling manager syntax
-        run: uv run --locked python -m py_compile tools/project_manager.py
-      - name: Ruff formatting
-        run: uv run --locked ruff format --check .
-      - name: Ruff lint
-        run: uv run --locked ruff check .
-      - name: Pytest collection diagnostics
-        run: timeout --signal=TERM --kill-after=15s 120s uv run --locked pytest --collect-only -q
-      - name: Python regression suite with per-test diagnostics
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: timeout --signal=TERM --kill-after=30s 12m uv run --locked pytest -vv -ra --durations=30 -o faulthandler_timeout=180
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  windows-python-qt:
-    needs: [changes]
-    # Legacy Qt smoke remains available only through explicit manual dispatch.
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
-    name: Windows Python 3.15 Qt smoke test
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.1.0
-        with:
-          python-version: "3.15.2"
-      - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          version-file: "pyproject.toml"
-          checksum: "0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - name: Install locked development and Qt dependencies
-        run: uv sync --locked --extra dev --extra qt
-      - name: Assert the pinned CPython runtime
-        run: uv run --locked python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
-      - name: Validate Windows Qt and NumPy runtime imports
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
-      - name: Smoke test minimal SMS Qt window
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: uv run --locked pytest -q tests/test_qt_minimal_sms.py
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-tooling:
     needs: [changes]
     if: |
@@ -370,64 +234,6 @@ jobs:
             }
             Write-Host "PASS $($file.FullName)"
           }
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  windows-native-python-extension:
-    needs: [changes]
-    # Transitional PyO3 validation is opt-in until the bridge is removed.
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
-    name: Windows Python 3.15 PyO3 extension build
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.1.0
-        with:
-          python-version: "3.15.2"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.99.1
-          components: rustfmt, clippy
-      - name: Assert the pinned CPython runtime
-        run: python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
-      - name: Create isolated Python build environment
-        run: |
-          python -m venv .venv
-          .\.venv\Scripts\python.exe -m pip install maturin==1.16.0
-          .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-      - name: Format the standalone PyO3 crate
-        working-directory: native/z80_core
-        run: cargo fmt --all -- --check
-      - name: Check PyO3 crate against the committed lockfile
-        run: cargo check --locked --all-targets --features python-extension --manifest-path native/z80_core/Cargo.toml
-      - name: Clippy the standalone PyO3 crate
-        run: cargo clippy --locked --all-targets --manifest-path native/z80_core/Cargo.toml -- -D warnings
-      - name: Test the standalone PyO3 crate
-        run: cargo test --locked --all-targets --manifest-path native/z80_core/Cargo.toml
-      - name: Build native extension with Maturin
-        working-directory: native/z80_core
-        run: |
-          $env:VIRTUAL_ENV = "$env:GITHUB_WORKSPACE\.venv"
-          $env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
-          & "$env:VIRTUAL_ENV\Scripts\maturin.exe" develop --release --features python-extension
-      - name: Import the native extension
-        run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
-      - name: Smoke test the temporal SMS binding with a synthetic ROM
-        run: |
-          .\.venv\Scripts\python.exe -c "from sega_z80_core import NativeSMSTemporalMachine; machine = NativeSMSTemporalMachine(bytes(0x4000), region='brazil'); assert machine.region == 'brazil'; assert machine.frame_number == 0; assert machine.step_frame() > 0; assert machine.frame_number == 1; assert not hasattr(machine, 'framebuffer'); machine.set_controller(1, True, False, False, False, True, False); machine.pause(); machine.reset(); assert machine.frame_number == 0"
-
-      - name: Install the pinned SDL3 runtime for native input tests
-        shell: pwsh
-        run: ./scripts/install_sdl3_runtime.ps1
-      - name: Run native SMS, SG-1000 and input Python integration tests
-        env:
-          SEGA_INPUT_REQUIRE_SDL3: "1"
-        run: |
-          .\.venv\Scripts\python.exe -m pytest -q tests/test_rust_runtime_selection.py tests/test_sms_native_audio.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py tests/test_native_input_runtime.py tests/test_rust_controller_input.py
 
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
