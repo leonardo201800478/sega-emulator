@@ -593,3 +593,8 @@ Próximo passo operacional:
 2. Criar branch nova a partir do SHA de main consultado novamente no momento da operação.
 3. Reaplicar integralmente as mudanças da PR divergente, resolver conflitos e testar.
 4. Abrir a PR substituta; só então fechar a antiga com referência cruzada.
+
+
+## Follow-up — cleanup audit 2026-11-06
+
+A revisão posterior do scaffold `native/sega_emu_core` confirmou que ele continha apenas reexports de `sega-z80-alu` e `sega-z80-bus`, sem consumidores no runtime, frontend, testes ou workflows ativos. O diretório, manifesto e lockfile foram removidos na PR #581. Os crates originais `native/z80_alu` e `native/z80_bus` foram preservados; a realocação arquitetural continua adiada e o diretório de destino deverá ser criado quando essa fase for iniciada.
