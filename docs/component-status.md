@@ -53,7 +53,7 @@ Os seguintes critérios devem ser tratados separadamente:
 |---|---|---|
 | A/V-01 | ROM sintética configura VDP/VRAM/CRAM e produz ao menos um pixel RGB não preto | NOT RUN / sem teste integrado que prove o sinal |
 | A/V-02 | ROM sintética programa o PSG e produz amostras PCM não silenciosas | NOT RUN / sem teste integrado que prove o sinal |
-| A/V-03 | Worker publica frame RGB888 real do VDP no mailbox e sequência avança | Parcial: contrato de publicação testado com ROM sintética sem configuração visual |
+| A/V-03 | Worker publica frame RGB888 real do VDP no mailbox e sequência avança | Teste de conteúdo não preto adicionado na branch; CI NOT RUN |
 | A/V-04 | Sessão de áudio recebe PCM não silencioso sem erro/underrun sustentado | NOT RUN em dispositivo físico |
 | A/V-05 | Janela Windows apresenta imagem de jogo em GPU física e áudio é audível | NOT RUN |
 | A/V-06 | ROM de jogo representativa executa além do boot e permite medir FPS/frametime | NOT RUN |
