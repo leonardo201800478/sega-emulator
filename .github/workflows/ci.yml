@@ -54,6 +54,8 @@ jobs:
         with:
           filters: |
             rust:
+              - 'rust/**/*.rs'
+              - 'rust/**/Cargo.toml'
               - 'native/**/*.rs'
               - 'native/sega_app/**'
               - '**/Cargo.toml'
@@ -87,6 +89,7 @@ jobs:
               - 'native/sg1000_core/**'
               - 'native/sms_core/**'
             windows_native:
+              - 'rust/runtime/sms-runtime/**'
               - 'native/video_runtime/**'
               - 'native/audio_output/**'
               - 'native/audio_runtime/**'
@@ -455,6 +458,10 @@ jobs:
         run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
       - name: Test native egui application headlessly
         run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Compile SMS temporal runtime with Windows D3D12
+        run: cargo check --locked --all-targets -p sega-sms-runtime --target x86_64-pc-windows-msvc
+      - name: Clippy SMS temporal runtime with Windows D3D12
+        run: cargo clippy --locked --all-targets -p sega-sms-runtime --target x86_64-pc-windows-msvc -- -D warnings
       - name: Compile native video runtime for Windows x64
         run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
       - name: Clippy native video runtime for Windows x64
