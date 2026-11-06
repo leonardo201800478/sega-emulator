@@ -6,8 +6,9 @@ Estas regras orientam agentes e revisores. As decisões normativas vigentes são
 
 - Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend Qt/PyO3 → P8 compatibilidade/auditoria → P9 validação sistêmica.
 - A prioridade imediata é consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
-- Todo hardware/runtime ativo pertence a Rust. Python/PySide6 fica restrito a GUI, launcher, biblioteca, configurações, logs, diagnóstico, telemetria e tooling.
-- PyO3 é coarse-grained. Não usar callbacks Python por instrução, pixel ou amostra.
+- Arquitetura-alvo: produto integralmente Rust, incluindo GUI egui/eframe, launcher, biblioteca, mídia, configurações, controles, áudio, vídeo, telemetria, diagnósticos e serviços.
+- Python, PySide6, PyO3 e Maturin são componentes transitórios do produto legado e devem ser eliminados somente após paridade funcional e validação dos equivalentes Rust.
+- Durante a transição, não remover módulos Python ativos nem quebrar a ponte PyO3 antes de migrar seus consumidores. Não introduzir novos recursos de produto em Python.
 - Não duplicar CPUs ou componentes compartilháveis por console.
 - Não adicionar JIT, frame skipping, hacks temporais ou otimizações especulativas.
 
@@ -46,17 +47,14 @@ A pesquisa não obriga implementar detalhes sem impacto no console.
 
 Criar testes de regressão para bugs quando viável. Priorizar estado arquitetural, memória/I/O, interrupções, framebuffer, áudio, comportamento de cartuchos e interações temporais relevantes. Não ajustar expectativas apenas para fazer CI passar.
 
-Gates:
+Gates obrigatórios do produto Rust:
 ```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-python -m pytest
-python -m ruff check .
-python -m ruff format --check .
 ```
 
-Executar os checks pertinentes e os gates exigidos pelo CI. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Vincular resultados ao SHA exato.
+Validar também workspaces independentes e os targets Windows/D3D12/WASAPI/XAudio2 aplicáveis. Python/Ruff/pytest, Qt e PyO3 permanecem validações legadas opt-in por dispatch manual durante a migração; não são gates obrigatórios de PR Rust. Sua ausência em um run normal deve ser registrada como NOT RUN, nunca PASS. Não remover código legado até a paridade funcional estar comprovada. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN e vincular resultados ao SHA exato.
 
 ## Workflows
 
