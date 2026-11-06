@@ -49,5 +49,8 @@ fn output_low_to_output_high_does_not_latch_hcounter() {
 fn falling_th_transition_does_not_replace_the_latched_hcounter() {
     // The first pair latches 0x03. Returning both TH pins to output-low is a
     // falling transition and must leave the captured value unchanged.
-    assert_eq!(read_h_counter_after_control_writes(&[0x55, 0xFF, 0x55]), 0x03);
+    assert_eq!(
+        read_h_counter_after_control_writes(&[0x55, 0xFF, 0x55]),
+        0x03
+    );
 }
