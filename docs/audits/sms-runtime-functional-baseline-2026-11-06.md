@@ -65,9 +65,61 @@ Testes adicionados na branch:
 
 A imagem gerada pelo core e o PCM não silencioso são condições necessárias, mas não suficientes, para provar que o D3D12 apresenta a imagem ou que o dispositivo reproduz som.
 
+## 4A. Revisão crítica da hipótese de HALT/IRQ e pacing (2026-11-06)
+
+A hipótese recebida do Gemini foi confrontada com o código da branch e com a referência técnica SMS Power. Resultado:
+
+### Cabeamento VDP → Z80
+
+- **Falha confirmada na baseline main:** o VDP expõe `interrupt_pending()`, mas a integração automática com a linha INT do Z80 não estava concluída.
+- **Correção na branch:** a linha efetiva combina a origem INT externa e a saída IRQ de nível do VDP; a sincronização ocorre depois de cada evento do Scheduler e agora também imediatamente antes de `SmsTemporalMachine::begin_instruction()`.
+- O segundo ponto de sincronização protege a fronteira de instrução/HALT contra estado INT obsoleto. Não substitui o sincronismo na fronteira temporal de cada evento.
+- **ACK/resume já existia:** `SmsTemporalMachine::step_frame()` identifica `Z80MicroStep::InterruptAcknowledge` e chama `resume_instruction(0)`. A API `step_instruction()` deliberadamente devolve o ACK ao chamador; não duplicar a retomada no worker nem esconder a fronteira pública.
+- A ISR deve ler `$BF` para limpar o status de VBlank antes de retornar, conforme o comportamento documentado do VDP.
+
+### Correção adicional encontrada na própria ROM de teste
+
+A ROM de teste original gravava `$A0` em VDP R1 e comentava que habilitava display. A referência SMS Power define R1 bit 6 como display enable e bit 5 como frame IRQ enable. Logo, `$A0` habilitava o IRQ, mas mantinha a imagem em branco. O teste foi corrigido para `$E0` (16 KB, display ligado, frame IRQ habilitado) e passou a verificar explicitamente os dois bits.
+
+Fonte primária: [SMS Power — VDP Registers](https://www.smspower.org/Development/VDPRegisters). A função local `SmsVdp::interrupt_pending()` usa R1 bit 5 para frame IRQ, consistente com a referência.
+
+Foi adicionado o exemplo reproduzível `native/sms_core/examples/irq_wiring_repro.rs`, executável da raiz com:
+
+```text
+cargo run --release -p sega-sms-core --example irq_wiring_repro
+```
+
+O exemplo exige que a ISR incremente `$C000` exatamente 20 vezes em 20 frames; resultado de execução ainda depende do CI/execução local e permanece NOT RUN até essa evidência.
+
+### HALT fast-forward
+
+Não aplicar o salto temporal proposto sem modelagem. O Z80 em HALT continua produzindo ciclos M1/refresh e amostrando INT em fronteiras T4. Pular diretamente ao próximo evento só é correto se preservar:
+- duração e índices de M-cycle/T-state;
+- refresh register e ciclos de barramento observáveis;
+- instante de amostragem e aceitação de INT/NMI;
+- causalidade com VDP, PSG, mapper e Scheduler;
+- export/restore no meio do intervalo e equivalência execução contínua/em blocos.
+
+Primeiro medir quantos dispatches/instruções HALT são executados por frame e quanto custam. Depois, se o custo for material, modelar um estado idle suspensível do Z80 no Scheduler com testes diferenciais/temporais. Não substituir ciclos reais por avanço de tempo opaco.
+
+### Pacing e timeBeginPeriod
+
+O worker calcula o prazo de frame a partir das amostras PCM e usa `recv_timeout(frame_wait)`. Isso justifica medir overshoot, jitter, frame pacing e underruns no Windows, mas não prova que a resolução padrão do timer seja a causa.
+
+A documentação oficial da Microsoft informa que `timeBeginPeriod(1)` pode melhorar a precisão de timeouts, mas:
+- a partir do Windows 10 2004 a configuração é por processo, não global;
+- no Windows 11 a resolução elevada não é garantida para processo com janela totalmente oculta/minimizada ou inaudível;
+- há custo de escalonamento/energia;
+- não melhora a precisão do high-resolution performance counter;
+- exige pareamento estrito com `timeEndPeriod(1)`.
+
+A própria Microsoft classifica Multimedia Timers como legado e recomenda MMCSS para novos cenários quando possível. Portanto, não adicionar FFI `timeBeginPeriod` como correção automática. Primeiro coletar histogramas de overshoot de `recv_timeout`, frametime, fila de áudio e underruns. Depois escolher mecanismo de espera apropriado e garantir aquisição/liberação RAII e testes Windows.
+
+Referências: [Microsoft — timeBeginPeriod](https://learn.microsoft.com/en-us/windows/win32/api/timeapi/nf-timeapi-timebeginperiod) e [Microsoft — Timer Resolution](https://learn.microsoft.com/en-us/windows/win32/multimedia/timer-resolution).
+
 ## 5. Plano de implementação incremental
 
-1. Fechar a correção de INT e os testes de regressão HALT/INT, VBlank e Line IRQ.
+1. Fechar a correção de INT e os testes de regressão HALT/INT, VBlank e Line IRQ, incluindo o exemplo `irq_wiring_repro`.
 2. Passar os gates A/V-01/A/V-02 com valores esperados independentes.
 3. Estender o teste do worker para publicar um frame não preto e confirmar a sequência do mailbox.
 4. Adicionar teste de integração da sessão de áudio com PCM conhecido, sem depender de dispositivo físico; preservar teste manual de endpoint.
