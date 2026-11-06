@@ -65,7 +65,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{Error, Interface, Result, w};
 
+mod mailbox_session;
 mod session;
+pub use mailbox_session::{D3d12MailboxSession, D3d12MailboxSessionError};
 pub use session::{D3d12Session, D3d12SessionError};
 
 const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
