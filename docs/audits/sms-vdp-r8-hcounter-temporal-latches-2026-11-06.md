@@ -75,9 +75,11 @@ O valor lido em `$7F` é o último valor capturado; não é um contador livre qu
 
 ### TH — condição de latch
 
-No caminho temporal, uma escrita ímpar em `$01..$3F` é aplicada depois de o Scheduler avançar o VDP até o timestamp de conclusão do ciclo de barramento. O barramento compara os níveis TH antes/depois e só chama `latch_h_counter()` quando:
-- houve uma transição ascendente em TH1/TH2; e
-- o respectivo pino está configurado como entrada no novo valor de I/O control.
+No caminho temporal, uma escrita ímpar em `$01..$3F` é aplicada depois de o Scheduler avançar o VDP até o timestamp de conclusão do ciclo de barramento. O barramento preserva o I/O control anterior e, após a escrita, verifica a direção e o nível resultantes. A captura por software ocorre somente quando:
+- TH1: os bits anteriores de direção/nível (`$22`) eram ambos zero, o novo bit de direção indica entrada e a leitura resultante de TH1 está alta;
+- TH2: os bits anteriores de direção/nível (`$88`) eram ambos zero, o novo bit de direção indica entrada e a leitura resultante de TH2 está alta.
+
+Essa regra evita inferir o nível elétrico anterior pelo readback de `$DD`, que não expõe os níveis TH dirigidos no perfil japonês.
 
 Assim, no caminho atualmente implementado:
 - saída baixa -> entrada alta por escrita em I/O control: captura;
@@ -87,7 +89,9 @@ Assim, no caminho atualmente implementado:
 
 A detecção compara explicitamente os bits anteriores de direção e nível de saída ($22 para TH1, $88 para TH2), e depois verifica se a entrada está alta. Ela não usa o readback de $DD para reconstruir o nível elétrico anterior, pois o perfil japonês oculta os níveis TH dirigidos em modo de saída. Testes temporais cobrem saída-alta -> entrada-alta sem latch falso para TH1/TH2 no perfil japonês e preservam a captura válida saída-baixa -> entrada-alta.
 
-A borda ascendente de uma entrada TH externa enquanto o pino já está configurado como entrada também é exigida pelo modelo MAME, mas ainda não possui um evento de periférico dedicado no `SmsIo/SmsTemporalBus`; permanece NOT RUN. O Light Phaser continua usando seu evento sintético interno para atualizar o latch.
+A borda ascendente de uma entrada TH externa enquanto o pino já está configurado como entrada também é modelada pelo MAME via callbacks do periférico, mas ainda não possui um evento de entrada dedicado no `SmsIo/SmsTemporalBus`; permanece NOT RUN. O Light Phaser continua usando seu evento sintético interno para atualizar o latch.
+
+O MAME também mantém um indicador separado de latch do H-counter, limpo por leitura de `$7F` e no fim de VBlank, usado na interação com a leitura de TH. O core atual preserva o valor capturado, mas ainda não modela esse indicador/efeito colateral porque a linha TH externa do periférico não está conectada. A equivalência desse comportamento permanece NOT RUN; não se afirma que a semântica de leitura do port DD esteja completa.
 
 A ROM de teste integrada executa o Z80 temporal real para TH1 e TH2 e lê o valor por `IN A,($7F)`. Também verifica que saída-alta e borda descendente não substituem o valor capturado.
 
