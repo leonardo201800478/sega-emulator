@@ -8,7 +8,7 @@
 
 Construir um emulador modular, determinístico, compatível e eficiente, reproduzindo o comportamento funcional e temporal observável dos consoles originais.
 
-Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend Qt/PyO3 → P8 compatibilidade/auditoria → P9 validação sistêmica.
+Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 frontend nativo egui/eframe em Rust → P8 compatibilidade/auditoria → P9 validação sistêmica.
 
 Prioridade imediata: consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
 
@@ -38,25 +38,27 @@ Para tarefas complexas, dividir pesquisa em três frentes: engenharia reversa, d
 
 ## 4. Linguagens e arquitetura
 
-- Rust é o runtime único de CPU, ALU, memória, barramento, mappers, VDP, áudio, interrupções, sincronização e estado.
-- Python/PySide6 é GUI, launcher, biblioteca, configurações, logs, telemetria, diagnóstico e tooling.
-- PyO3 é coarse-grained. Não usar callbacks Python por instrução, pixel ou amostra.
+- O produto final é integralmente Rust: runtime de hardware, GUI egui/eframe, launcher, biblioteca, mídia, configurações, controles, áudio, vídeo, telemetria, diagnósticos e serviços.
+- Python/PySide6, PyO3 e Maturin são legado transitório. Não introduzir novas funcionalidades de produto nesses componentes.
+- Preservar consumidores legados até que seus equivalentes Rust estejam implementados e validados; remover a ponte e o runtime Python somente após paridade funcional.
+- Durante a transição, não usar callbacks Python por instrução, pixel, amostra ou ciclo.
 - Reutilizar CPUs e componentes quando compatíveis; não duplicar core por console.
 - JIT, frame skipping, hacks temporais e otimizações especulativas são proibidos.
 - Otimizações devem ser medidas e preservar o resultado funcional/temporal.
 
 ## 5. Testes e gates
 
-Gates-base:
+Gates obrigatórios do produto Rust:
 ```text
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-python -m pytest
-python -m ruff check .
-python -m ruff format --check .
 ```
 
+- Validar também todos os workspaces independentes e os targets Windows nativos aplicáveis.
+- Python pytest/Ruff, Qt e PyO3 ficam disponíveis somente em validação legada manual durante a migração; não bloqueiam PRs Rust comuns.
+- Em execuções sem dispatch legado, classificar essas suítes como NOT RUN, nunca PASS.
+- Remover definitivamente essas validações somente quando o inventário confirmar que os consumidores Python ativos foram substituídos.
 - Criar teste de regressão que falhe antes da correção quando viável.
 - Usar ROMs sintéticas/homebrew, vetores fixos e oráculos independentes quando disponíveis.
 - Não ajustar expectativas para fazer CI passar.
