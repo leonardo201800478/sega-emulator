@@ -357,3 +357,18 @@ impl Drop for D3d12MailboxSession {
         let _ = self.join_worker();
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::{D3d12MailboxSession, D3d12MailboxSessionError};
+
+    #[test]
+    fn rejects_zero_external_hwnd_before_starting_worker() {
+        let result = D3d12MailboxSession::start_for_existing_window(256, 192, 0);
+        assert!(matches!(
+            result,
+            Err(D3d12MailboxSessionError::HostInitialization(_))
+        ));
+    }
+}
