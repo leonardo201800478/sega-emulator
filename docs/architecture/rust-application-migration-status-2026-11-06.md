@@ -1,7 +1,7 @@
 # Status da migração integral da aplicação para Rust — 2026-11-06
 
 - **Repositório:** https://github.com/leonardo201800478/sega-emulator
-- **ADR normativa:** [ADR 0009 — Aplicação integralmente Rust com egui/eframe](../adr/0009-full-rust-application-egui-eframe.md)
+- **ADR normativa:** [ADR 0009 — Aplicação integralmente Rust com egui/eframe](adr/0009-full-rust-application-egui-eframe.md)
 - **Inventário de origem:** [M0.2 — Inventário de migração](rust-application-migration-inventory.md)
 - **Roadmap normativo:** [Roadmap mestre](../project-roadmap.md)
 - **Main confirmada nesta atualização:** `333900ae35a87b2430caedd2edf26218f272c8a6`
