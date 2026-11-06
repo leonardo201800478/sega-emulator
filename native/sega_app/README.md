@@ -32,3 +32,12 @@ cargo test --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-p
 ## Ownership and timing
 
 The frontend sends coarse-grained commands to the SMS worker. The worker remains the sole owner of mutable machine state and emulated time. Completed RGB888 frames cross into the presentation thread through an immutable single-slot mailbox; replacing a pending presentation frame never skips CPU, VDP, PSG, Scheduler or audio work. The D3D12 host owns its presentation session and closes its mailbox only after the SMS worker has detached.
+
+
+## Aspect ratio
+
+The video viewport defaults to the SMS 4:3 presentation ratio. The UI exposes
+1:1, 4:3 and 16:9 display modes. The selected viewport is fitted inside the
+available client area with a uniform scale; it is never stretched to fill a
+window with a different ratio. The native child presentation window follows
+the fitted viewport rectangle.

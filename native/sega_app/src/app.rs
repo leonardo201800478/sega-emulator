@@ -736,21 +736,27 @@ fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> eg
     ui.add_space(6.0);
 
     let available = ui.available_size().max(egui::Vec2::splat(1.0));
-    let ratio = aspect_ratio.value();
-    let width = available.x.min(available.y * ratio).max(1.0);
-    let height = (width / ratio).min(available.y).max(1.0);
-    let horizontal_padding = ((available.x - width) * 0.5).max(0.0);
+    let viewport_size = fit_viewport_size(available, aspect_ratio.value());
+    let horizontal_padding = ((available.x - viewport_size.x) * 0.5).max(0.0);
 
     let mut viewport_rect = egui::Rect::NOTHING;
     ui.horizontal(|ui| {
         ui.add_space(horizontal_padding);
         let (rect, _) =
-            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+            ui.allocate_exact_size(viewport_size, egui::Sense::hover());
         viewport_rect = rect;
     });
     ui.painter()
         .rect_filled(viewport_rect, 0.0, egui::Color32::BLACK);
     viewport_rect
+}
+
+/// Fit the selected display aspect ratio inside the available viewport without distortion.
+fn fit_viewport_size(available: egui::Vec2, aspect_ratio: f32) -> egui::Vec2 {
+    let available = available.max(egui::Vec2::splat(1.0));
+    let width = available.x.min(available.y * aspect_ratio).max(1.0);
+    let height = (width / aspect_ratio).min(available.y).max(1.0);
+    egui::vec2(width, height)
 }
 
 fn render_footer(ui: &mut egui::Ui) {
@@ -819,6 +825,36 @@ mod tests {
         assert_eq!(super::AspectRatioMode::OneToOne.value(), 1.0);
         assert!((super::AspectRatioMode::FourThree.value() - 4.0 / 3.0).abs() < f32::EPSILON);
         assert!((super::AspectRatioMode::SixteenNine.value() - 16.0 / 9.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn viewport_fit_keeps_square_ratio_inside_wide_window() {
+        let available = egui::vec2(1600.0, 800.0);
+        let fitted = super::fit_viewport_size(available, 1.0);
+        assert_eq!(fitted, egui::vec2(800.0, 800.0));
+    }
+
+    #[test]
+    fn viewport_fit_keeps_four_three_ratio_inside_wide_window() {
+        let available = egui::vec2(1600.0, 800.0);
+        let fitted = super::fit_viewport_size(available, 4.0 / 3.0);
+        assert!((fitted.x / fitted.y - 4.0 / 3.0).abs() < 0.0001);
+        assert!(fitted.x <= available.x && fitted.y <= available.y);
+    }
+
+    #[test]
+    fn viewport_fit_keeps_sixteen_nine_ratio_inside_wide_window() {
+        let available = egui::vec2(1600.0, 800.0);
+        let fitted = super::fit_viewport_size(available, 16.0 / 9.0);
+        assert!((fitted.x / fitted.y - 16.0 / 9.0).abs() < 0.0001);
+        assert!(fitted.x <= available.x && fitted.y <= available.y);
+    }
+
+    #[test]
+    fn viewport_fit_uses_height_constraint_for_tall_window() {
+        let available = egui::vec2(800.0, 1000.0);
+        let fitted = super::fit_viewport_size(available, 16.0 / 9.0);
+        assert_eq!(fitted, egui::vec2(800.0, 450.0));
     }
 
     #[test]
