@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import zipfile
 from pathlib import Path
@@ -94,6 +95,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
     rom_path = tmp_path / "test.sms"
@@ -101,7 +103,8 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
 
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     window = minimal_window.MinimalSmsWindow(region="brazil", settings=settings)
-    window.load_rom(rom_path)
+    with caplog.at_level(logging.INFO):
+        window.load_rom(rom_path)
 
     machine = window._machine
     assert isinstance(machine, FakeTemporalSMSMachine)
@@ -112,6 +115,8 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert not hasattr(window, "_frame_timer")
     assert "F5" in window.status_label.text()
     assert "Áudio WASAPI inicializado" in window.status_label.text()
+    assert "SMS ROM carregada" in caplog.text
+    assert "SMS audio configured" in caplog.text
     assert window.run_action.isEnabled()
     assert [action.text() for action in window.menuBar().actions()] == [
         "Arquivo",
@@ -162,6 +167,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
 
 def test_video_telemetry_reports_published_and_presented_sequences(
     qapplication: QApplication,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     window = minimal_window.MinimalSmsWindow()
     machine = FakeTemporalSMSMachine(b"rom", region="usa")
@@ -174,8 +180,10 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     window._machine = machine
     window._video_output_started = True
 
-    window._refresh_video_telemetry()
+    with caplog.at_level(logging.INFO):
+        window._refresh_video_telemetry()
 
+    assert "SMS output telemetry" in caplog.text
     message = window.statusBar().currentMessage()
     assert "Frames 25" in message
     assert "apresentado 5/7" in message
