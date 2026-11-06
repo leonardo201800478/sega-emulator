@@ -14,6 +14,16 @@ pub trait PcmSink {
     /// Return (underruns, dropped blocks) observed by the sink.
     fn metrics(&self) -> (u64, u64);
 
+    /// Number of PCM-bearing buffers successfully submitted to the host endpoint.
+    fn endpoint_submission_count(&self) -> u64 {
+        0
+    }
+
+    /// Last asynchronous host-output error, if the backend worker reported one.
+    fn output_error(&self) -> Option<String> {
+        None
+    }
+
     /// Stop the host stream and release its resources.
     fn close(&mut self);
 }
@@ -71,6 +81,16 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Return backend underrun and dropped-block counters.
     pub fn metrics(&self) -> (u64, u64) {
         self.sink.metrics()
+    }
+
+    /// Return the number of PCM-bearing buffers accepted by the host endpoint.
+    pub fn endpoint_submission_count(&self) -> u64 {
+        self.sink.endpoint_submission_count()
+    }
+
+    /// Return the latest asynchronous error reported by the host-output worker.
+    pub fn output_error(&self) -> Option<String> {
+        self.sink.output_error()
     }
 
     /// Flush the resampler tail and close the selected native output once.
