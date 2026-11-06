@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline reconciliada:** `main` em `08d9fac1d30a659bde8298e7da2f8ae1d75510d1` (2026-11-06, após PRs #562, #563 e #584). As evidências específicas de cada gate permanecem vinculadas aos SHAs e workflows indicados nas auditorias.  
+**Baseline reconciliada:** `main` em `733152f61b706b2243914ae017643cef949d4ae1` (2026-11-06, após PRs #562, #563, #584 e #595). As evidências específicas de cada gate permanecem vinculadas aos SHAs e workflows indicados nas auditorias.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -26,7 +26,7 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 - E3A1/E3A2 e E4A/E4B/E4C constam como integradas nas auditorias recentes.
 - E5 DDCB/FDCB e E6 resolução geral de prefixos constam como integradas na main.
 - E7.3/HALT T4 consta como integrada.
-- A entrega de VBlank IRQ e Line IRQ do SMS ao Z80 está coberta pelos testes de integração da PR #531, integrada nesta baseline.
+- A entrega VBlank/Line IRQ do SMS convencional permanece coberta pelos testes integrados da PR #531. A ligação da IRQ de nível do VDP à INT do Z80 temporal foi integrada pela PR #595: combina a fonte do VDP com INT externa, preserva a fonte externa no snapshot e valida o vetor de acknowledge no restore. O CI #5178 passou nos testes VBlank/IM1/HALT e de preservação da fonte externa; isso não fecha a auditoria semântica global E7.7.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
 - A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
 - O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria complementar de I/O em bloco caracteriza as flags para o perfil Zilog NMOS e não encontrou divergência de runtime; CMOS/clones, validação direta em hardware SMS e `OUT (C),0` variante-dependente permanecem sem comprovação conclusiva. A auditoria semântica integral continua aberta.
@@ -87,3 +87,14 @@ Baseline: `main` = `08d9fac1d30a659bde8298e7da2f8ae1d75510d1`.
 - A matriz DD/FD deve ser lida em conjunto com as auditorias E7.7 mais recentes. Estados históricos que classificavam half-register LD/ALU/INC/DEC como FUNCTIONAL_UNVERIFIED foram complementados pelas matrizes integradas em #563; não promover esses resultados a DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 **Decisão:** E7.7 continua IN_PROGRESS e E8 continua BLOCKED. O próximo trabalho deve fechar as lacunas semânticas restantes com evidência específica por família, incluindo a variante de `OUT (C),0`, sem iniciar ZEXDOC/ZEXALL nem exigir microsequenciamento universal.
+
+
+## 8. Reconciliacao apos PR #595 — baseline main 2026-11-06
+
+A baseline atual da `main` e `733152f61b706b2243914ae017643cef949d4ae1`. A PR #595 alterou somente a integracao temporal SMS e seus testes/documentacao; nao alterou o decoder Z80, as familias DD/FD, os resultados E4C/E5/E6 ou as lacunas semanticas globais.
+
+- A conexao VDP IRQ → Z80 INT temporal foi integrada, com preservacao da fonte externa e validacao de snapshot/acknowledge. Os testes direcionados passaram no CI #5178 no HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
+- E7.7 permanece IN_PROGRESS. Nenhuma pendencia semantica do Z80 foi fechada por essa integracao de SMS.
+- E8 permanece BLOCKED. Nao iniciar ZEXDOC/ZEXALL antes de fechar E7.
+- Nao reabrir E4C/E5/E6 sem divergencia reproduzivel; nao atribuir a cobertura de IRQ SMS a fechamento geral de interrupcoes Z80.
+- O estado de SG-1000 deve continuar sendo verificado por regressao nos proximos merges compartilhados.
