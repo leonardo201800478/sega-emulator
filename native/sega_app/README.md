@@ -4,7 +4,9 @@
 
 ## Current vertical slice
 
-- Loads a raw SMS ROM from a user-provided `.sms` or `.bin` path.
+- Opens the native Windows file picker for `.sms` and `.zip` ROMs, while keeping the path field editable and paste-friendly.
+- Remembers the last selected ROM directory in `%APPDATA%\\Sega Emulator\\last_rom_directory.txt`.
+- Loads raw `.sms` files or the only `.sms` entry inside a ZIP archive; archives with zero or multiple SMS entries are rejected explicitly.
 - Selects the machine region (USA/NTSC, Brazil/PAL-M, Europe/PAL, Japan/NTSC).
 - Creates the existing `SmsTemporalWorker`; it does not implement a second machine or scheduler.
 - Exposes coarse-grained start, pause, stop, reset and single-frame commands.
@@ -14,7 +16,7 @@
 
 ## Current limitations
 
-- ROM input is a raw file path; ZIP/7z archives and library indexing are not implemented.
+- 7z archives, multi-ROM ZIP selection and library indexing are not implemented.
 - Audio output and physical controller input are not yet connected to the app.
 - The D3D12 viewport requires Windows x64 and a compatible graphics device.
 - CI compilation and headless tests do not prove physical GPU presentation or gameplay compatibility.
