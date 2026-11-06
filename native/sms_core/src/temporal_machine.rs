@@ -3130,9 +3130,9 @@ mod temporal_frame_tests {
         machine.step_frame(100_000).unwrap();
 
         assert_eq!(
-            &machine.framebuffer()[..3],
+            &machine.framebuffer()[32 * 256 * 3..32 * 256 * 3 + 3],
             &[255, 255, 255],
-            "the first Mode 4 background pixel must use CRAM entry 1"
+            "the Mode 4 background pixel at line 32 must use CRAM entry 1"
         );
         assert!(
             machine
