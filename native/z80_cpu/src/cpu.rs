@@ -3128,6 +3128,99 @@ mod tests {
     }
 
     #[test]
+    fn ed_absolute_word_transfers_wrap_at_ffff_for_all_register_pairs() {
+        for (store_opcode, load_opcode, pair) in [
+            (0x43, 0x4B, 0_u8), // BC
+            (0x53, 0x5B, 1_u8), // DE
+            (0x63, 0x6B, 2_u8), // HL
+            (0x73, 0x7B, 3_u8), // SP
+        ] {
+            let mut store_bus = TestBus([0; 0x10000]);
+            store_bus.0[0x8000..0x8004]
+                .copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
+            let mut store = Z80::default();
+            store.registers.pc = 0x8000;
+            store.registers.set_bc(0x1234);
+            store.registers.set_de(0x2345);
+            store.registers.set_hl(0x3456);
+            store.registers.sp = 0x4567;
+            let expected = [0x1234_u16, 0x2345, 0x3456, 0x4567][usize::from(pair)];
+
+            assert_eq!(
+                store.step(&mut store_bus),
+                Ok(20),
+                "store ED {store_opcode:02X}"
+            );
+            assert_eq!(
+                store_bus.0[0xFFFF],
+                expected as u8,
+                "store low byte ED {store_opcode:02X}"
+            );
+            assert_eq!(
+                store_bus.0[0x0000],
+                (expected >> 8) as u8,
+                "store high byte ED {store_opcode:02X}"
+            );
+            assert_eq!(store.wz, 0x0000, "store WZ ED {store_opcode:02X}");
+            assert_eq!(store.registers.pc, 0x8004);
+
+            let mut load_bus = TestBus([0; 0x10000]);
+            load_bus.0[0x8000..0x8004]
+                .copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
+            load_bus.0[0xFFFF] = 0xCD;
+            load_bus.0[0x0000] = 0xAB;
+            let mut load = Z80::default();
+            load.registers.pc = 0x8000;
+
+            assert_eq!(
+                load.step(&mut load_bus),
+                Ok(20),
+                "load ED {load_opcode:02X}"
+            );
+            let actual = match pair {
+                0 => load.registers.bc(),
+                1 => load.registers.de(),
+                2 => load.registers.hl(),
+                _ => load.registers.sp,
+            };
+            assert_eq!(actual, 0xABCD, "load pair ED {load_opcode:02X}");
+            assert_eq!(load.wz, 0x0000, "load WZ ED {load_opcode:02X}");
+            assert_eq!(load.registers.pc, 0x8004);
+        }
+    }
+
+    #[test]
+    fn ed_neg_aliases_cover_documented_operand_boundaries() {
+        let cases = [
+            (0x00, 0x00, 0x42),
+            (0x01, 0xFF, 0xBB),
+            (0x7F, 0x81, 0x93),
+            (0x80, 0x80, 0x87),
+            (0xFF, 0x01, 0x13),
+        ];
+
+        for opcode in [0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C] {
+            for (input, expected_a, expected_flags) in cases {
+                let mut bus = TestBus([0; 0x10000]);
+                bus.0[..2].copy_from_slice(&[0xED, opcode]);
+                let mut cpu = Z80::default();
+                cpu.registers.a = input;
+
+                assert_eq!(cpu.step(&mut bus), Ok(8), "NEG ED {opcode:02X}");
+                assert_eq!(
+                    cpu.registers.a, expected_a,
+                    "NEG ED {opcode:02X}, A={input:02X}"
+                );
+                assert_eq!(
+                    cpu.registers.f, expected_flags,
+                    "NEG flags ED {opcode:02X}, A={input:02X}"
+                );
+                assert_eq!(cpu.registers.pc, 2);
+            }
+        }
+    }
+
+    #[test]
     fn ed_adc_sbc_hl_vectors_cover_signed_overflow_half_carry_and_borrow() {
         let mut adc_bus = TestBus([0; 0x10000]);
         adc_bus.0[..2].copy_from_slice(&[0xED, 0x4A]); // ADC HL,BC
