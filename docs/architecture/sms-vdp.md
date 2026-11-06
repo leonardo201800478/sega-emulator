@@ -47,7 +47,7 @@ Essas limitações devem ser priorizadas por compatibilidade observada e testes 
 ## Latches horizontais R8 e H-counter
 
 - R8 é copiado para a nova linha e pode atualizar o latch da linha corrente enquanto `HPos <= 21` (inclusive). Com 342 posições por linha e 228 Z80 T-states, o limite corresponde a T14. Escritas posteriores só afetam a próxima linha.
-- O port `$7F` retorna o último H-counter capturado, não um contador livre. O latch é disparado pela borda ascendente TH 0→1 quando o pino está configurado como entrada; a transição saída-baixa → entrada-alta também é detectada no write do I/O control `$3F`.
+- O port `$7F` retorna o último H-counter capturado, não um contador livre. A implementação atual detecta saída-baixa → entrada-alta no write do I/O control `$3F` para TH1/TH2. Eventos de borda TH externos provenientes de periféricos ainda não estão ligados ao barramento.
 - O Scheduler avança o VDP até o timestamp de conclusão do ciclo antes de aplicar o efeito da escrita de porta. Assim, os latches usam o instante real do boundary temporal, sem callbacks por instrução em Python.
 - Evidências, derivação de HPos/T-state, vetores e limitações físicas: [auditoria R8/H-counter de 2026-11-06](../audits/sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md).
 
