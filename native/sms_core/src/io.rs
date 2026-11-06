@@ -32,6 +32,9 @@ pub struct SmsIo {
     input: SmsInputState,
     /// $3F: low nibble directions, high nibble driven levels for TR/TH.
     io_control: u8,
+    /// External TH levels are pulled high when no peripheral asserts the line.
+    external_th1_high: bool,
+    external_th2_high: bool,
 }
 
 impl Default for SmsIo {
@@ -47,6 +50,8 @@ impl SmsIo {
             input: SmsInputState::default(),
             // Compatible input-only startup state; passive controllers pull high.
             io_control: 0xFF,
+            external_th1_high: true,
+            external_th2_high: true,
         }
     }
 
@@ -91,6 +96,34 @@ impl SmsIo {
 
     pub fn io_control(&self) -> u8 {
         self.io_control
+    }
+
+    /// Set one externally driven TH input level at a Scheduler event boundary.
+    ///
+    /// A false level is the active-low assertion used by peripherals such as
+    /// the Light Phaser. The return value is the previous electrical level.
+    pub fn set_external_th_level(
+        &mut self,
+        player: u8,
+        high: bool,
+    ) -> Result<bool, SmsIoError> {
+        let line = match player {
+            1 => &mut self.external_th1_high,
+            2 => &mut self.external_th2_high,
+            other => return Err(SmsIoError::InvalidPlayer(other)),
+        };
+        let previous = *line;
+        *line = high;
+        Ok(previous)
+    }
+
+    /// Return the last externally driven TH level for one controller port.
+    pub fn external_th_level(&self, player: u8) -> Result<bool, SmsIoError> {
+        match player {
+            1 => Ok(self.external_th1_high),
+            2 => Ok(self.external_th2_high),
+            other => Err(SmsIoError::InvalidPlayer(other)),
+        }
     }
 
     /// Update the TH light-sensor line from the VDP's raster event.
@@ -186,8 +219,13 @@ impl SmsIo {
             let level = self.io_control & (1 << level_bit) != 0;
             let light_pulse = self.input.light_phaser_player == Some(player)
                 && self.input.light_phaser.light_pulse;
+            let external_th_high = if player == 1 {
+                self.external_th1_high
+            } else {
+                self.external_th2_high
+            };
             let read_high = if is_input {
-                !light_pulse
+                external_th_high && !light_pulse
             } else if self.territory == Territory::Japan {
                 // Japanese SMS does not expose driven TH levels in these bits.
                 false
@@ -275,6 +313,33 @@ mod tests {
         io.set_input(input).unwrap();
         io.set_light_phaser_player(Some(1)).unwrap();
         assert_eq!(io.read_port(0xDD) & (1 << 6), 0);
+    }
+
+    #[test]
+    fn external_th_lines_are_independent_active_low_inputs() {
+        let mut io = SmsIo::default();
+        assert_eq!(io.read_port(0xDD) & 0xC0, 0xC0);
+
+        assert_eq!(io.set_external_th_level(1, false), Ok(true));
+        assert_eq!(io.external_th_level(1), Ok(false));
+        assert_eq!(io.external_th_level(2), Ok(true));
+        assert_eq!(io.read_port(0xDD) & 0xC0, 0x80);
+
+        assert_eq!(io.set_external_th_level(2, false), Ok(true));
+        assert_eq!(io.read_port(0xDD) & 0xC0, 0x00);
+        assert_eq!(io.set_external_th_level(1, true), Ok(false));
+        assert_eq!(io.read_port(0xDD) & 0xC0, 0x40);
+    }
+
+    #[test]
+    fn external_th_does_not_override_a_cpu_driven_output() {
+        let mut io = SmsIo::default();
+        io.write_port(0x3F, 0xFD); // TH1 output-high, TH2 input.
+        io.set_external_th_level(1, false).unwrap();
+        assert_eq!(io.read_port(0xDD) & 0x40, 0x40);
+        io.write_port(0x3F, 0xDD); // TH1 output-low.
+        io.set_external_th_level(1, true).unwrap();
+        assert_eq!(io.read_port(0xDD) & 0x40, 0x00);
     }
 
     #[test]
