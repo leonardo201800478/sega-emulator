@@ -8,8 +8,11 @@
 //!
 //! Reference: https://www.smspower.org/Development/Mappers
 //! Reference: https://www.smspower.org/Development/MemoryMap
-//! This initial slice does not model cartridge SRAM or mapper variants. ROMs
-//! beyond the standard mapper's 256-bank range are rejected, never truncated.
+//! Standard cartridges retain the documented 6-bit bank-address limit (1 MiB).
+//! A distinct extended profile supports 8-bit bank addressing (4 MiB) for
+//! homebrew cartridges larger than 1 MiB with a TMR SEGA header. This models a
+//! custom mapper extension, not baseline hardware; non-power-of-two images do
+//! not gain implicit bank mirroring.
 
 use crate::{CartridgeImage, SmsCoreError};
 
@@ -19,6 +22,8 @@ const BANK_SIZE: usize = 0x4000;
 // merely from the width of the software-visible register.
 const MAX_BANKS: usize = 64;
 const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
+const MAX_EXTENDED_BANKS: usize = 256;
+const MAX_EXTENDED_ROM_SIZE: usize = BANK_SIZE * MAX_EXTENDED_BANKS;
 const RAM_SIZE: usize = 0x2000;
 const RAM_START: u16 = 0xC000;
 // SMS Plus GX initializes the BIOS slot with $E0: BIOS and work RAM enabled,
@@ -30,6 +35,7 @@ const CARTRIDGE_BOOT_CONTROL: u8 = 0xAB;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MapperKind {
     Sega,
+    SegaExtended,
     Codemasters,
 }
 
@@ -71,9 +77,20 @@ fn has_codemasters_header(rom: &[u8]) -> bool {
     checksum.wrapping_add(complement) == 0
 }
 
+fn has_sega_header(rom: &[u8]) -> bool {
+    rom.len() >= 0x8000 && &rom[0x7FF0..0x7FF8] == b"TMR SEGA"
+}
+
 fn detect_mapper(rom: &CartridgeImage) -> MapperKind {
     if has_codemasters_header(rom.bytes()) {
         MapperKind::Codemasters
+    } else if rom.len() > MAX_ROM_SIZE
+        && rom.len().is_multiple_of(BANK_SIZE)
+        && has_sega_header(rom.bytes())
+    {
+        // Homebrew 4 MiB cartridges can use an extended 8-bit bank latch.
+        // This is not the standard six-address-bit Sega mapper profile.
+        MapperKind::SegaExtended
     } else {
         MapperKind::Sega
     }
@@ -100,10 +117,15 @@ impl SmsMemory {
     /// Construct memory with an optional user-supplied 8 KiB SMS BIOS.
     /// The complete BIOS image is mapped at $0000-$1FFF while enabled.
     pub fn with_bios(rom: CartridgeImage, bios: Option<Vec<u8>>) -> Result<Self, SmsCoreError> {
-        if rom.len() > MAX_ROM_SIZE {
+        let mapper = detect_mapper(&rom);
+        let max_rom_size = match mapper {
+            MapperKind::SegaExtended => MAX_EXTENDED_ROM_SIZE,
+            MapperKind::Sega | MapperKind::Codemasters => MAX_ROM_SIZE,
+        };
+        if rom.len() > max_rom_size {
             return Err(SmsCoreError::RomTooLargeForSegaMapper {
                 size: rom.len(),
-                max_size: MAX_ROM_SIZE,
+                max_size: max_rom_size,
             });
         }
 
@@ -114,9 +136,8 @@ impl SmsMemory {
             });
         }
 
-        let mapper = detect_mapper(&rom);
         let bank_registers = match mapper {
-            MapperKind::Sega => [0, 1, 2],
+            MapperKind::Sega | MapperKind::SegaExtended => [0, 1, 2],
             MapperKind::Codemasters => [0, 1, 0],
         };
 
@@ -157,7 +178,9 @@ impl SmsMemory {
         // hardware profile modeled by this core.
         match address {
             0x0000..=0x3FFF => {
-                if self.mapper == MapperKind::Sega && address <= 0x03FF {
+                if matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
+                    && address <= 0x03FF
+                {
                     self.read_rom_offset(usize::from(address))
                 } else {
                     self.read_bank(self.bank_registers[0], usize::from(address))
@@ -191,7 +214,7 @@ impl SmsMemory {
         // power-on profile must not mutate a disabled cartridge mapper.
         if self.control_port & 0x40 == 0 {
             match self.mapper {
-                MapperKind::Sega => match address {
+                MapperKind::Sega | MapperKind::SegaExtended => match address {
                     0xFFFC => self.mapper_control = value,
                     0xFFFD => self.bank_registers[0] = value,
                     0xFFFE => self.bank_registers[1] = value,
@@ -206,7 +229,9 @@ impl SmsMemory {
                 },
             }
             #[cfg(test)]
-            if self.mapper == MapperKind::Sega && matches!(address, 0xFFFD..=0xFFFF) {
+            if matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
+                && matches!(address, 0xFFFD..=0xFFFF)
+            {
                 self.mapper_register_write_count += 1;
             }
         }
@@ -287,7 +312,10 @@ impl SmsMemory {
 
 #[cfg(test)]
 mod tests {
-    use super::{BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory};
+    use super::{
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE,
+        MapperKind, RAM_SIZE, SmsMemory,
+    };
     use crate::{CartridgeImage, SmsCoreError};
 
     fn patterned_rom(bank_count: usize) -> CartridgeImage {
@@ -403,6 +431,47 @@ mod tests {
             SmsCoreError::RomTooLargeForSegaMapper {
                 size: MAX_ROM_SIZE + 1,
                 max_size: MAX_ROM_SIZE,
+            }
+        );
+    }
+
+    fn extended_sega_rom() -> CartridgeImage {
+        let mut bytes = vec![0; MAX_EXTENDED_ROM_SIZE];
+        for bank in 0..MAX_EXTENDED_BANKS {
+            let start = bank * BANK_SIZE;
+            bytes[start..start + BANK_SIZE].fill(bank as u8);
+        }
+        bytes[0x7FF0..0x7FF8].copy_from_slice(b"TMR SEGA");
+        CartridgeImage::new(bytes).unwrap()
+    }
+
+    #[test]
+    fn extended_sega_mapper_addresses_all_256_banks() {
+        let mut memory = SmsMemory::new(extended_sega_rom()).unwrap();
+
+        assert_eq!(memory.mapper, MapperKind::SegaExtended);
+        assert_eq!(memory.read(0x0000), 0);
+        assert_eq!(memory.read(0x03FF), 0);
+        assert_eq!(memory.read(0x0400), 0);
+        assert_eq!(memory.read(0x8000), 2);
+
+        memory.write(0xFFFF, 0x80);
+        assert_eq!(memory.read(0x8000), 0x80);
+        memory.write(0xFFFF, 0xFF);
+        assert_eq!(memory.read(0x8000), 0xFF);
+    }
+
+    #[test]
+    fn extended_sega_mapper_rejects_images_above_four_mib() {
+        let mut bytes = vec![0xAA; MAX_EXTENDED_ROM_SIZE + BANK_SIZE];
+        bytes[0x7FF0..0x7FF8].copy_from_slice(b"TMR SEGA");
+        let image = CartridgeImage::new(bytes).unwrap();
+
+        assert_eq!(
+            SmsMemory::new(image).unwrap_err(),
+            SmsCoreError::RomTooLargeForSegaMapper {
+                size: MAX_EXTENDED_ROM_SIZE + BANK_SIZE,
+                max_size: MAX_EXTENDED_ROM_SIZE,
             }
         );
     }
