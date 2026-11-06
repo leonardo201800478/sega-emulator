@@ -232,7 +232,6 @@ impl SmsVdp {
         self.light_trigger = trigger_pressed;
         if !trigger_pressed {
             self.light_pulse = false;
-            self.light_h_counter = None;
         }
     }
 
@@ -283,6 +282,7 @@ impl SmsVdp {
     pub fn reset(&mut self, clear_vram: bool) {
         self.cram.fill(0);
         self.registers.fill(0);
+        self.latched_scroll_x = 0;
         self.latched_scroll_y = 0;
         self.pending_scroll_y = None;
         self.status = 0;
@@ -297,7 +297,7 @@ impl SmsVdp {
         self.line_counter = 0;
         self.line_irq_pending = false;
         self.light_pulse = false;
-        self.light_h_counter = None;
+        self.h_counter_latch = 0;
         self.framebuffer.fill(0);
         self.working_framebuffer.fill(0);
         self.left_frame.fill(0);
