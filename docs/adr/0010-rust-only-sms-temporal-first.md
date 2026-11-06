@@ -53,7 +53,7 @@ Eliminar do repositório e da distribuição, não apenas desativar na CI:
 - wheels, artefatos binários da extensão e workflows de Python/Qt/PyO3;
 - dependências, scripts, documentação de build e tarefas que exijam Python.
 
-Antes de apagar um componente compartilhado, extrair seu comportamento necessário para Rust puro. O worker SMS temporal atualmente localizado em `native/z80_core/src/sms_temporal_worker.rs` deve ser extraído para um crate Rust comum de runtime/aplicação. O backend de áudio e vídeo será consumido diretamente por esse runtime. Nenhum adapter PyO3 temporário será mantido.
+Antes de apagar um componente compartilhado, extrair seu comportamento necessário para Rust puro. No baseline, o worker SMS temporal estava localizado em `native/z80_core/src/sms_temporal_worker.rs`; na branch de migração ele foi extraído para `rust/runtime/sms-runtime`, sem PyO3. O runtime usa um contrato de sessão de áudio e recebe uma factory de host executada na thread da máquina; o vídeo continua integrado por `sega-video-runtime`. Nenhum adapter PyO3 temporário será mantido.
 
 A eliminação é completa: não manter Python sob `legacy/`, nem como suíte de testes, ferramenta de auditoria, benchmark, gerador, referência ou fallback. Dados e fixtures não executáveis podem permanecer quando tiverem licença e utilidade comprovadas.
 
