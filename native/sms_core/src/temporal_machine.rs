@@ -3035,3 +3035,35 @@ mod temporal_frame_tests {
         assert!(!machine.framebuffer().is_empty());
     }
 }
+
+
+#[cfg(test)]
+mod external_th_machine_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn external_th_event_restores_and_is_dispatched_during_cpu_execution() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00], 3).unwrap();
+        let timestamp = MachineTime::from_ticks(6);
+        machine
+            .schedule_external_th_transition(1, false, timestamp)
+            .unwrap();
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(
+            restored.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(restored.now(), MachineTime::from_ticks(12));
+        assert_eq!(restored.bus.io().external_th_level(1), Ok(false));
+        assert_eq!(restored.bus.io().read_port(0xDD) & 0x40, 0);
+        assert_eq!(restored.bus.io().external_th_level(2), Ok(true));
+    }
+}
