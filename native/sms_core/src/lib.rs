@@ -15,9 +15,7 @@ pub mod cpu;
 pub mod error;
 pub mod input;
 pub mod io;
-pub mod machine;
 pub mod memory;
-pub mod psg;
 pub mod temporal;
 pub mod temporal_bus;
 pub mod temporal_m1;
@@ -30,16 +28,14 @@ pub use bus::{
 };
 pub use cartridge::CartridgeImage;
 pub use config::{
-    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
-    Territory, VideoStandard,
+    SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
 pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;
 pub use input::{ControllerButtons, LightPhaserState, SmsInputState};
 pub use io::{SmsIo, SmsIoError};
-pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
-pub use psg::{PsgError, Sn76489};
+pub use sega_sn76489::PsgError;
 pub use temporal::{
     SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_VDP_CLOCK_DOMAIN_ID,
     SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
