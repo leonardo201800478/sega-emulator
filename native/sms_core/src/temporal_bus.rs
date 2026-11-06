@@ -578,6 +578,28 @@ impl SmsTemporalBus {
             _ if port_byte <= 0x3F && port_byte & 1 == 0 => {
                 self.memory.write_control_port(value);
             }
+            _ if port_byte <= 0x3F && port_byte & 1 == 1 => {
+                // The scheduler has advanced the VDP to this bus-completion
+                // boundary before the I/O side effect is applied. A TH rising
+                // edge latches H-counter only when the resulting pin is input.
+                let previous_control = self.io.io_control();
+                self.io.write_port(port, value);
+                let io_control = self.io.io_control();
+                let th_levels = self.io.read_port(0xDD);
+
+                // Match the SMS I/O-control condition: the TH pin must have
+                // been driven low (direction + output level both zero), then
+                // become an input whose external level is high. Do not infer
+                // the previous electrical level from port readback: Japanese
+                // SMS intentionally hides driven TH output levels on $DD.
+                let th1_rising =
+                    io_control & 0x02 != 0 && previous_control & 0x22 == 0 && th_levels & 0x40 != 0;
+                let th2_rising =
+                    io_control & 0x08 != 0 && previous_control & 0x88 == 0 && th_levels & 0x80 != 0;
+                if th1_rising || th2_rising {
+                    self.vdp.latch_h_counter();
+                }
+            }
             _ => self.io.write_port(port, value),
         }
         if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
@@ -1143,7 +1165,7 @@ mod tests {
 
 #[cfg(test)]
 mod immediate_port_transaction_tests {
-    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use super::{SmsTemporalBus, SmsTemporalDispatch, SmsVdpProfile};
     use crate::input::ControllerButtons;
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
@@ -1315,8 +1337,12 @@ mod temporal_vdp_tests {
         let v_counter = transact(&mut bus, 1, Z80BusOperation::PortRead, 0x127E);
         assert_eq!(v_counter.data, Some(0));
 
+        // H-counter is latched and remains at its reset value until TH rises.
         let h_counter = transact(&mut bus, 2, Z80BusOperation::PortRead, 0x127F);
-        assert_eq!(h_counter.data, Some(8));
+        assert_eq!(h_counter.data, Some(0));
+
+        let h_counter_after_more_cycles = transact(&mut bus, 3, Z80BusOperation::PortRead, 0x007F);
+        assert_eq!(h_counter_after_more_cycles.data, Some(0));
     }
 
     #[test]
@@ -1348,5 +1374,67 @@ mod temporal_vdp_tests {
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.export_state(), snapshot);
         assert_eq!(restored.vdp(), whole.vdp());
+    }
+    
+    #[test]
+    fn japanese_output_high_to_input_high_does_not_fake_a_th_rising_edge() {
+        fn japanese_bus() -> SmsTemporalBus {
+            SmsTemporalBus::new_with_hardware_profile(
+                vec![0; 0x4000],
+                3,
+                super::DEFAULT_SMS_PSG_CLOCK_HZ,
+                super::DEFAULT_AUDIO_SAMPLE_RATE,
+                SmsVdpProfile::sms1_t0_ntsc(),
+                super::Territory::Japan,
+            )
+            .unwrap()
+        }
+
+        let mut th1_bus = japanese_bus();
+        // TH1: output-high -> input-high. Japan hides the output-high readback.
+        transact(
+            &mut th1_bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xFD },
+            0x003F,
+        );
+        transact(
+            &mut th1_bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xFF },
+            0x003F,
+        );
+        assert_eq!(th1_bus.vdp().read_h_counter(), 0);
+
+        let mut th2_bus = japanese_bus();
+        // TH2: output-high -> input-high, with TH1 already left as input-high.
+        transact(
+            &mut th2_bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xF7 },
+            0x003F,
+        );
+        transact(
+            &mut th2_bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xFF },
+            0x003F,
+        );
+        assert_eq!(th2_bus.vdp().read_h_counter(), 0);
+
+        let mut valid_th1_bus = japanese_bus();
+        transact(
+            &mut valid_th1_bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xDD },
+            0x003F,
+        );
+        transact(
+            &mut valid_th1_bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xDF },
+            0x003F,
+        );
+        assert_ne!(valid_th1_bus.vdp().read_h_counter(), 0);
     }
 }
