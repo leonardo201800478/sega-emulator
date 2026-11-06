@@ -41,7 +41,9 @@ Não usar esta mudança como justificativa para reimplementar CPU, VDP, PSG, áu
 | Diagnóstico | `diagnostics.py`, logging e painéis Qt | `sega-diagnostics` / UI |
 | Testes e ferramentas | `tests/test_qt_*.py`, testes Python de serviços e ferramentas Python | migrar para testes Rust ou arquivar com justificativa; não manter runtime Python de produção |
 
-O caminho de UI ativo no baseline foi refinado nesta auditoria: `__main__.py` inicia por padrão `MinimalSmsWindow` (PySide6), que contém viewport nativo D3D12, barra/menu, abertura de ROM, biblioteca, configurações, captura de controles e telemetria. A janela importa `TemporalSMSMachine` e a fachada ainda carrega `NativeSMSTemporalMachine` via PyO3. O caminho SG-1000 chama `frontend/qt_frontend.py`, cujo `run()` está deliberadamente desativado e falha explicitamente conforme ADR-0012; portanto, não classificar a antiga janela SG-1000 como frontend operacional. Os demais módulos Qt e testes permanecem no repositório, mas sua participação no fluxo de produção precisa ser classificada individualmente no grafo de imports.\n\nO código de hardware histórico em `legacy/python_reference/` é arquivo histórico e não deve ser reativado, empacotado ou usado como fallback.
+O caminho de UI ativo no baseline foi refinado nesta auditoria: `__main__.py` inicia por padrão `MinimalSmsWindow` (PySide6), que contém viewport nativo D3D12, barra/menu, abertura de ROM, biblioteca, configurações, captura de controles e telemetria. A janela importa `TemporalSMSMachine` e a fachada ainda carrega `NativeSMSTemporalMachine` via PyO3. O caminho SG-1000 chama `frontend/qt_frontend.py`, cujo `run()` está deliberadamente desativado e falha explicitamente conforme ADR-0012; portanto, não classificar a antiga janela SG-1000 como frontend operacional. Os demais módulos Qt e testes permanecem no repositório, mas sua participação no fluxo de produção precisa ser classificada individualmente no grafo de imports.
+
+O código de hardware histórico em `legacy/python_reference/` é arquivo histórico e não deve ser reativado, empacotado ou usado como fallback.
 
 ### 3.2 Empacotamento e dependências Python
 
