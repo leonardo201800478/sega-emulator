@@ -406,3 +406,22 @@ def test_sms_video_viewport_supports_integer_scaling(
         4 / 3, abs=0.01
     )
     viewport.close()
+
+
+def test_sms_window_uses_saved_region_when_cli_does_not_override(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "region.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_region_preference", "europe")
+    rom_path = tmp_path / "region.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(settings=settings)
+    window.load_rom(rom_path)
+
+    assert isinstance(window._machine, FakeTemporalSMSMachine)
+    assert window._machine.region == "europe"
+    window.close()
