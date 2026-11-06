@@ -23,6 +23,13 @@ class FakeTemporalSMSMachine:
         self.frame_number = 0
         self.total_instructions = 0
         self.is_running = False
+        self.video_output_is_running = False
+        self.video_last_published_sequence = 0
+        self.video_last_presented_sequence = 0
+        self.video_replaced_frames = 0
+        self.video_device_recovery_count = 0
+        self.video_output_error: str | None = None
+        self.video_close_error: str | None = None
         self.calls: list[tuple[object, ...]] = []
 
     def configure_audio_output(self, backend: str) -> None:
@@ -57,6 +64,9 @@ class FakeTemporalSMSMachine:
 
     def close_video_output(self) -> None:
         self.calls.append(("close_video_output",))
+        if self.video_close_error is not None:
+            raise RuntimeError(self.video_close_error)
+        self.video_output_is_running = False
 
     def close_audio_output(self) -> None:
         self.calls.append(("close_audio_output",))
@@ -101,7 +111,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     ]
     assert len(video_calls) == 1
     assert video_calls[0][1] > 0
-    assert "D3D12 ativa" in window.status_label.text()
+    assert "aguardando o primeiro frame" in window.status_label.text()
 
     window._toggle_running()
     assert machine.is_running
@@ -119,6 +129,64 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert not any(call[0] == "step_frame" for call in machine.calls)
     window.close()
 
+
+
+def test_video_telemetry_reports_published_and_presented_sequences(
+    qapplication: QApplication,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.video_output_is_running = True
+    machine.video_last_published_sequence = 7
+    machine.video_last_presented_sequence = 5
+    machine.video_replaced_frames = 2
+    machine.video_device_recovery_count = 1
+    window._machine = machine
+    window._video_output_started = True
+
+    window._refresh_video_telemetry()
+
+    message = window.statusBar().currentMessage()
+    assert "apresentado 5/7" in message
+    assert "substituídos 2" in message
+    assert "recuperações 1" in message
+    window.close()
+
+
+def test_video_telemetry_reports_presentation_failure(
+    qapplication: QApplication,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.video_output_is_running = False
+    machine.video_output_error = "DXGI device removed"
+    window._machine = machine
+    window._video_output_started = True
+
+    window._refresh_video_telemetry()
+
+    assert "DXGI device removed" in window.status_label.text()
+    assert "falha" in window.statusBar().currentMessage()
+    window.close()
+
+
+def test_close_rom_completes_when_d3d12_shutdown_reports_error(
+    qapplication: QApplication,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.video_close_error = "presentation worker failed"
+    window._machine = machine
+    window._video_output_started = True
+    window._video_telemetry_timer.start()
+
+    window._close_rom()
+
+    assert window._machine is None
+    assert not window._video_telemetry_timer.isActive()
+    assert ("close_audio_output",) in machine.calls
+    assert "presentation worker failed" in window.statusBar().currentMessage()
+    window.close()
 
 def test_minimal_sms_window_maps_keyboard_levels_without_rendering_video(
     qapplication: QApplication,
