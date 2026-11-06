@@ -973,7 +973,9 @@ impl SmsTemporalMachine {
         let expected_int_line = state
             .external_int_line
             .or_else(|| bus.vdp().interrupt_pending().then_some(0xFF));
+        let expected_int_vector = expected_int_line.unwrap_or(0xFF);
         if cpu.export_state().int_pending != expected_int_line
+            || state.bus.interrupt_vector != expected_int_vector
             || expected_bus_request != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
