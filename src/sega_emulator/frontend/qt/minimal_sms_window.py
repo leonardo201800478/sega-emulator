@@ -73,6 +73,7 @@ class MinimalSmsWindow(QMainWindow):
         self._video_output_started = False
         self._last_frame_sample: tuple[float, int] | None = None
         self._last_telemetry_log_time = 0.0
+        self._last_audio_error_logged: str | None = None
         self._audio_output_error: str | None = None
         self._video_telemetry_timer = QTimer(self)
         self._video_telemetry_timer.setInterval(250)
@@ -221,6 +222,7 @@ class MinimalSmsWindow(QMainWindow):
         self._video_output_started = False
         self._last_frame_sample = None
         self._last_telemetry_log_time = 0.0
+        self._last_audio_error_logged = None
         self._audio_output_error = audio_error
         self._machine = machine
         self._rom_path = path
@@ -488,10 +490,15 @@ class MinimalSmsWindow(QMainWindow):
         presented = machine.video_last_presented_sequence
         replaced = machine.video_replaced_frames
         recoveries = machine.video_device_recovery_count
-        audio_error = machine.audio_output_error
+        audio_error = machine.audio_output_error or self._audio_output_error
         audio_underruns, audio_dropped_blocks = machine.audio_output_metrics
-        if audio_error:
-            logger.error("SMS native audio endpoint failed: %s", audio_error)
+        if audio_error != self._last_audio_error_logged:
+            if audio_error:
+                logger.error("SMS native audio endpoint failed: %s", audio_error)
+            elif self._last_audio_error_logged:
+                logger.info("SMS native audio endpoint recovered")
+            self._last_audio_error_logged = audio_error
+        audio_suffix = f" | Áudio: {audio_error}" if audio_error else ""
         now = time.monotonic()
         if now - self._last_telemetry_log_time >= 5.0:
             logger.info(
@@ -513,12 +520,12 @@ class MinimalSmsWindow(QMainWindow):
         if presented:
             self.statusBar().showMessage(
                 f"{prefix}D3D12: apresentado {presented}/{published} | "
-                f"substituídos {replaced} | recuperações {recoveries}"
+                f"substituídos {replaced} | recuperações {recoveries}{audio_suffix}"
             )
         elif published:
             self.statusBar().showMessage(
                 f"{prefix}D3D12: {published} frame(s) publicados; "
-                "aguardando primeiro Present"
+                f"aguardando primeiro Present{audio_suffix}"
             )
         else:
             self.statusBar().showMessage(
