@@ -30,6 +30,7 @@ class FakeTemporalSMSMachine:
         self.video_replaced_frames = 0
         self.video_device_recovery_count = 0
         self.video_output_error: str | None = None
+        self.runtime_error: str | None = None
         self.video_close_error: str | None = None
         self.audio_output_error: str | None = None
         self.audio_output_metrics = (0, 0)
@@ -156,6 +157,7 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     window = minimal_window.MinimalSmsWindow()
     machine = FakeTemporalSMSMachine(b"rom", region="usa")
     machine.video_output_is_running = True
+    machine.frame_number = 25
     machine.video_last_published_sequence = 7
     machine.video_last_presented_sequence = 5
     machine.video_replaced_frames = 2
@@ -166,6 +168,7 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     window._refresh_video_telemetry()
 
     message = window.statusBar().currentMessage()
+    assert "Frames 25" in message
     assert "apresentado 5/7" in message
     assert "substituídos 2" in message
     assert "recuperações 1" in message
@@ -294,4 +297,23 @@ def test_minimal_sms_window_loads_single_rom_from_zip(
     assert window._machine.rom == rom_bytes
     assert window._rom_path == archive_path
     assert "game.sms" in window.windowTitle()
+    window.close()
+
+
+def test_video_telemetry_reports_native_runtime_failure(
+    qapplication: QApplication,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.runtime_error = "FrameStepLimitReached"
+    machine.video_output_is_running = True
+    window._machine = machine
+    window._video_output_started = True
+    window._video_telemetry_timer.start()
+
+    window._refresh_video_telemetry()
+
+    assert "FrameStepLimitReached" in window.status_label.text()
+    assert "Execução SMS interrompida" in window.statusBar().currentMessage()
+    assert not window._video_telemetry_timer.isActive()
     window.close()
