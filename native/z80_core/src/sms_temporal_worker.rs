@@ -342,10 +342,7 @@ impl SmsTemporalWorker {
     }
 
     #[cfg(windows)]
-    pub(super) fn open_video_output_in_viewport(
-        &self,
-        window_handle: usize,
-    ) -> Result<(), String> {
+    pub(super) fn open_video_output_in_viewport(&self, window_handle: usize) -> Result<(), String> {
         self.start_video_session(|| {
             D3d12MailboxSession::start_for_existing_window(256, 192, window_handle)
         })
