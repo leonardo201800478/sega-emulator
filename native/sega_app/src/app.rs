@@ -96,6 +96,19 @@ impl NativeViewportState {
         self.start_requested = true;
         self.error = None;
     }
+
+    fn close_worker(&mut self) {
+        self.start_requested = false;
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.stop();
+            if self.video_attached {
+                let _ = worker.detach_video_mailbox();
+            }
+            drop(worker);
+        }
+        self.video_attached = false;
+        self.error = None;
+    }
 }
 
 impl Drop for NativeViewportState {
@@ -115,149 +128,12 @@ impl SegaApp {
         let mut load_requested = false;
 
         ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.heading("Sega Emulator");
-                ui.separator();
-                ui.label("Rust · egui/eframe");
-                if ui.button("Sair").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            });
-
-            ui.separator();
-            ui.heading("Sega Master System");
-            ui.horizontal(|ui| {
-                ui.label("ROM (.sms/.bin):");
-                ui.text_edit_singleline(&mut self.rom_path);
-                load_requested = ui.button("Carregar ROM").clicked();
-            });
-            ui.horizontal(|ui| {
-                ui.label("Região:");
-                egui::ComboBox::from_id_salt("sms_region")
-                    .selected_text(if self.region.is_empty() {
-                        "USA / NTSC"
-                    } else {
-                        &self.region
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.region, "usa".to_owned(), "USA / NTSC");
-                        ui.selectable_value(
-                            &mut self.region,
-                            "brazil".to_owned(),
-                            "Brasil / PAL-M",
-                        );
-                        ui.selectable_value(&mut self.region, "europe".to_owned(), "Europa / PAL");
-                        ui.selectable_value(&mut self.region, "japan".to_owned(), "Japão / NTSC");
-                    });
-            });
-
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        self.native_viewport
-                            .worker
-                            .as_ref()
-                            .is_some_and(|worker| !worker.is_running()),
-                        egui::Button::new("Iniciar"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::Start);
-                }
-                if ui
-                    .add_enabled(
-                        self.native_viewport
-                            .worker
-                            .as_ref()
-                            .is_some_and(SmsTemporalWorker::is_running),
-                        egui::Button::new("Pausar"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::Pause);
-                }
-                if ui
-                    .add_enabled(
-                        self.native_viewport.worker.is_some(),
-                        egui::Button::new("Parar"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::Stop);
-                }
-                if ui
-                    .add_enabled(
-                        self.native_viewport.worker.is_some(),
-                        egui::Button::new("Reset"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::Reset);
-                }
-                if ui
-                    .add_enabled(
-                        self.native_viewport
-                            .worker
-                            .as_ref()
-                            .is_some_and(|worker| !worker.is_running()),
-                        egui::Button::new("Avançar quadro"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::StepFrame);
-                }
-                if ui
-                    .add_enabled(
-                        self.native_viewport.worker.is_some(),
-                        egui::Button::new("Fechar ROM"),
-                    )
-                    .clicked()
-                {
-                    command = Some(UiCommand::CloseMachine);
-                }
-            });
-
-            ui.separator();
-            ui.label(format!("Estado: {}", self.native_viewport.status()));
-            if let Some(worker) = self.native_viewport.worker.as_ref() {
-                egui::Grid::new("sms_runtime_telemetry")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        ui.label("Frame");
-                        ui.label(worker.frame_number().to_string());
-                        ui.end_row();
-                        ui.label("Instruções Z80");
-                        ui.label(worker.total_instructions().to_string());
-                        ui.end_row();
-                        ui.label("Frames publicados");
-                        ui.label(worker.video_last_published_sequence().to_string());
-                        ui.end_row();
-                        ui.label("Frames substituídos na apresentação");
-                        ui.label(worker.video_replaced_frames().to_string());
-                        ui.end_row();
-                    });
-                if let Some(error) = worker.video_output_error() {
-                    ui.colored_label(egui::Color32::YELLOW, format!("Vídeo: {error}"));
-                }
-                if let Some(error) = worker.audio_output_error() {
-                    ui.colored_label(egui::Color32::YELLOW, format!("Áudio: {error}"));
-                }
-                if let Some(error) = worker.runtime_error() {
-                    ui.colored_label(egui::Color32::RED, format!("Runtime: {error}"));
-                }
-            }
-
-            ui.add_space(6.0);
-            let width = ui.available_width().max(1.0);
-            let height = (width * 0.75).min(ui.available_height().max(1.0));
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-            ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
-            viewport_rect = rect;
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                ui.separator();
-                ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · D3D12");
-            });
+            render_header(ui);
+            render_rom_controls(ui, &mut self.rom_path, &mut self.region, &mut load_requested);
+            render_machine_controls(ui, &self.native_viewport, &mut command);
+            render_runtime_status(ui, &self.native_viewport);
+            viewport_rect = render_video_viewport(ui);
+            render_footer(ui);
         });
 
         if load_requested {
@@ -298,23 +174,14 @@ impl SegaApp {
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => self.native_viewport.replace_worker(worker),
             Err(error) => {
-                self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"))
+                self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"));
             }
         }
     }
 
     fn apply_command(&mut self, command: UiCommand) {
         if matches!(command, UiCommand::CloseMachine) {
-            self.native_viewport.start_requested = false;
-            if let Some(worker) = self.native_viewport.worker.take() {
-                let _ = worker.stop();
-                if self.native_viewport.video_attached {
-                    let _ = worker.detach_video_mailbox();
-                }
-                drop(worker);
-            }
-            self.native_viewport.video_attached = false;
-            self.native_viewport.error = None;
+            self.native_viewport.close_worker();
             return;
         }
 
@@ -482,7 +349,7 @@ impl SegaApp {
                 context.request_repaint();
             }
             Err(error) => {
-                self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}"))
+                self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}"));
             }
         }
     }
@@ -510,6 +377,163 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
     }
+}
+
+fn render_header(ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        ui.heading("Sega Emulator");
+        ui.separator();
+        ui.label("Rust · egui/eframe");
+        if ui.button("Sair").clicked() {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    });
+    ui.separator();
+    ui.heading("Sega Master System");
+}
+
+fn render_rom_controls(
+    ui: &mut egui::Ui,
+    rom_path: &mut String,
+    region: &mut String,
+    load_requested: &mut bool,
+) {
+    ui.horizontal(|ui| {
+        ui.label("ROM (.sms/.bin):");
+        ui.text_edit_singleline(rom_path);
+        *load_requested = ui.button("Carregar ROM").clicked();
+    });
+    ui.horizontal(|ui| {
+        ui.label("Região:");
+        egui::ComboBox::from_id_salt("sms_region")
+            .selected_text(if region.is_empty() {
+                "USA / NTSC"
+            } else {
+                region
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(region, "usa".to_owned(), "USA / NTSC");
+                ui.selectable_value(region, "brazil".to_owned(), "Brasil / PAL-M");
+                ui.selectable_value(region, "europe".to_owned(), "Europa / PAL");
+                ui.selectable_value(region, "japan".to_owned(), "Japão / NTSC");
+            });
+    });
+}
+
+fn render_machine_controls(
+    ui: &mut egui::Ui,
+    viewport: &NativeViewportState,
+    command: &mut Option<UiCommand>,
+) {
+    ui.horizontal(|ui| {
+        let worker = viewport.worker.as_ref();
+        add_machine_button(
+            ui,
+            "Iniciar",
+            worker.is_some_and(|worker| !worker.is_running()),
+            UiCommand::Start,
+            command,
+        );
+        add_machine_button(
+            ui,
+            "Pausar",
+            worker.is_some_and(SmsTemporalWorker::is_running),
+            UiCommand::Pause,
+            command,
+        );
+        add_machine_button(
+            ui,
+            "Parar",
+            worker.is_some(),
+            UiCommand::Stop,
+            command,
+        );
+        add_machine_button(
+            ui,
+            "Reset",
+            worker.is_some(),
+            UiCommand::Reset,
+            command,
+        );
+        add_machine_button(
+            ui,
+            "Avançar quadro",
+            worker.is_some_and(|worker| !worker.is_running()),
+            UiCommand::StepFrame,
+            command,
+        );
+        add_machine_button(
+            ui,
+            "Fechar ROM",
+            worker.is_some(),
+            UiCommand::CloseMachine,
+            command,
+        );
+    });
+}
+
+fn add_machine_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    enabled: bool,
+    value: UiCommand,
+    command: &mut Option<UiCommand>,
+) {
+    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+        *command = Some(value);
+    }
+}
+
+fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
+    ui.separator();
+    ui.label(format!("Estado: {}", viewport.status()));
+    if let Some(worker) = viewport.worker.as_ref() {
+        egui::Grid::new("sms_runtime_telemetry")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Frame");
+                ui.label(worker.frame_number().to_string());
+                ui.end_row();
+                ui.label("Instruções Z80");
+                ui.label(worker.total_instructions().to_string());
+                ui.end_row();
+                ui.label("Frames publicados");
+                ui.label(worker.video_last_published_sequence().to_string());
+                ui.end_row();
+                ui.label("Frames substituídos na apresentação");
+                ui.label(worker.video_replaced_frames().to_string());
+                ui.end_row();
+            });
+        render_output_errors(ui, worker);
+    }
+}
+
+fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
+    if let Some(error) = worker.video_output_error() {
+        ui.colored_label(egui::Color32::YELLOW, format!("Vídeo: {error}"));
+    }
+    if let Some(error) = worker.audio_output_error() {
+        ui.colored_label(egui::Color32::YELLOW, format!("Áudio: {error}"));
+    }
+    if let Some(error) = worker.runtime_error() {
+        ui.colored_label(egui::Color32::RED, format!("Runtime: {error}"));
+    }
+}
+
+fn render_video_viewport(ui: &mut egui::Ui) -> egui::Rect {
+    ui.add_space(6.0);
+    let width = ui.available_width().max(1.0);
+    let height = (width * 0.75).min(ui.available_height().max(1.0));
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
+    rect
+}
+
+fn render_footer(ui: &mut egui::Ui) {
+    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+        ui.separator();
+        ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · D3D12");
+    });
 }
 
 fn resolve_parent_hwnd(
