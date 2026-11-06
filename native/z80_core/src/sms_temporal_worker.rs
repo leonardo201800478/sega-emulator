@@ -595,10 +595,14 @@ fn execute_frame<S: PcmSink>(
             }
         }
         Some(Err(error)) => {
+            let reported_error = audio_session
+                .as_ref()
+                .and_then(|session| session.output_error())
+                .unwrap_or(error);
             if let Some(mut failed_session) = audio_session.take() {
                 failed_session.close();
             }
-            telemetry.set_audio_error(Some(error));
+            telemetry.set_audio_error(Some(reported_error));
             telemetry.set_audio_metrics((0, 0));
             #[cfg(test)]
             telemetry.set_audio_endpoint_submissions(0);
