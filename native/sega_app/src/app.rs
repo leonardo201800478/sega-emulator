@@ -1133,6 +1133,7 @@ fn to_win32_pixel(value: f32) -> i32 {
 mod tests {
     use super::SegaApp;
     use eframe::egui;
+    use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
 
     #[test]
