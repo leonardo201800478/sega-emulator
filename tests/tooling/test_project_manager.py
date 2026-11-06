@@ -72,6 +72,65 @@ def test_lock_check_validates_metadata_without_compiling(monkeypatch) -> None:
     assert "check" not in commands[0]
 
 
+def test_lock_refresh_uses_offline_metadata_without_compiling(monkeypatch) -> None:
+    workspace = project_manager.Workspace(
+        manifest="native/audio_output/Cargo.toml",
+        root="native/audio_output",
+        lockfile="native/audio_output/Cargo.lock",
+        lockfile_exists=True,
+    )
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd, timeout=1800, output_limit=12000, stream=False):
+        commands.append(command)
+        return project_manager.Result("metadata", "PASS")
+
+    monkeypatch.setattr(project_manager, "run", fake_run)
+
+    results = project_manager.lock_refresh([workspace])
+
+    assert [result.status for result in results] == ["PASS", "PASS"]
+    assert len(commands) == 2
+    assert commands[0][:5] == [
+        "cargo",
+        "metadata",
+        "--offline",
+        "--format-version",
+        "1",
+    ]
+    assert commands[1][:5] == [
+        "cargo",
+        "metadata",
+        "--locked",
+        "--format-version",
+        "1",
+    ]
+    assert all("check" not in command for command in commands)
+
+
+def test_validation_skips_migration_scaffold_without_running_cargo(monkeypatch) -> None:
+    workspace = project_manager.Workspace(
+        manifest="native/sega_emu_core/Cargo.toml",
+        root="native/sega_emu_core",
+        lockfile="native/sega_emu_core/Cargo.lock",
+        lockfile_exists=True,
+    )
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd, timeout=1800, output_limit=12000, stream=False):
+        commands.append(command)
+        return project_manager.Result("unexpected", "PASS")
+
+    monkeypatch.setattr(project_manager, "run", fake_run)
+
+    results = project_manager.validate([workspace], include_python=False)
+
+    assert len(results) == 1
+    assert results[0].status == "NOT RUN"
+    assert "Migration scaffold only" in results[0].output
+    assert commands == []
+
+
 def test_inventory_reports_not_run_without_failing_audit(capsys) -> None:
     result = project_manager.Result(
         "unassigned manifest", "NOT RUN", output="outside active workspace"
