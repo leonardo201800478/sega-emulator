@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   push:
-    branches: [main, feat/egui-d3d12-child-viewport-m1b-20261106]
+    branches: [main]
   workflow_dispatch:
     inputs:
       scheduler_stress_profile:
