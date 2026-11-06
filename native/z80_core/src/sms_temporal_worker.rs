@@ -1021,17 +1021,22 @@ mod tests {
         assert!(instructions > 0);
         assert_eq!(telemetry.audio_underruns.load(Ordering::Acquire), 0);
         assert_eq!(telemetry.audio_dropped_blocks.load(Ordering::Acquire), 0);
-        audio_session.as_mut().unwrap().close();
 
-        let blocks = captured_blocks.lock().unwrap();
+        let blocks_before_close = captured_blocks.lock().unwrap();
         assert!(
-            !blocks.is_empty(),
-            "worker must submit PCM to the session sink"
+            !blocks_before_close.is_empty(),
+            "process_samples must submit a PCM block before the session is flushed"
         );
         assert!(
-            blocks.iter().flatten().any(|sample| *sample != 0),
+            blocks_before_close
+                .iter()
+                .flatten()
+                .any(|sample| *sample != 0),
             "worker must submit non-silent PCM, not only initialize the sink"
         );
+        drop(blocks_before_close);
+
+        audio_session.as_mut().unwrap().close();
     }
 
     #[test]
