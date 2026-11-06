@@ -332,7 +332,9 @@ class MinimalSmsWindow(QMainWindow):
             try:
                 machine.close_audio_output()
             except RuntimeError:
-                logger.exception("Falha ao encerrar áudio SMS após erro de configuração")
+                logger.exception(
+                    "Falha ao encerrar áudio SMS após erro de configuração"
+                )
             return str(exc)
         logger.info(
             "SMS audio configured: backend=%s sample_rate=%d buffer=%d queue=%d "
@@ -357,9 +359,7 @@ class MinimalSmsWindow(QMainWindow):
         if self._audio_backend == "disabled":
             return "Áudio desativado"
         rate = self._preferences.audio_sample_rate
-        return (
-            f"Áudio {backend_label} inicializado ({rate:,} Hz)".replace(",", ".")
-        )
+        return f"Áudio {backend_label} inicializado ({rate:,} Hz)".replace(",", ".")
 
     def _show_settings_dialog(self) -> None:
         """Edit and persist SMS host preferences; apply only supported settings."""
