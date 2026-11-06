@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -45,6 +45,9 @@ class MinimalSmsWindow(QMainWindow):
         self._rom_path: Path | None = None
         self._pressed_actions: set[str] = set()
         self._video_output_started = False
+        self._video_telemetry_timer = QTimer(self)
+        self._video_telemetry_timer.setInterval(250)
+        self._video_telemetry_timer.timeout.connect(self._refresh_video_telemetry)
 
         self.setWindowTitle("Sega Emulator — Master System")
         self.resize(960, 720)
@@ -163,25 +166,73 @@ class MinimalSmsWindow(QMainWindow):
         self._update_actions()
 
     def _close_rom(self) -> None:
-        if self._machine is not None:
-            self._machine.stop()
-            self._machine.close_video_output()
-            self._machine.close_audio_output()
+        machine = self._machine
+        self._video_telemetry_timer.stop()
+        video_error = None
+        audio_error = None
+        if machine is not None:
+            machine.stop()
+            video_error = self._close_video_output(machine)
+            try:
+                machine.close_audio_output()
+            except RuntimeError as exc:
+                audio_error = str(exc)
         self._video_output_started = False
         self._machine = None
         self._rom_path = None
         self._pressed_actions.clear()
         self.status_label.setText("Abra uma ROM do Master System")
         self.setWindowTitle("Sega Emulator — Master System")
-        self.statusBar().showMessage("ROM fechada")
+        if video_error:
+            self.statusBar().showMessage(f"ROM fechada; falha ao encerrar vídeo: {video_error}")
+        elif audio_error:
+            self.statusBar().showMessage(f"ROM fechada; falha ao encerrar áudio: {audio_error}")
+        else:
+            self.statusBar().showMessage("ROM fechada")
         self._update_actions()
 
-    def _close_video_output(self, machine: TemporalSMSMachine) -> None:
-        """Release the D3D12 session without preventing the Qt window from closing."""
+    def _close_video_output(self, machine: TemporalSMSMachine) -> str | None:
+        """Release D3D12 and return an error without interrupting Qt teardown."""
         try:
             machine.close_video_output()
         except RuntimeError as exc:
-            self.statusBar().showMessage(f"Host de vídeo encerrou com erro: {exc}")
+            return str(exc)
+        return None
+
+    def _refresh_video_telemetry(self) -> None:
+        """Poll coarse Rust/D3D12 counters without receiving or rendering pixels."""
+        machine = self._machine
+        if machine is None or not self._video_output_started:
+            self._video_telemetry_timer.stop()
+            return
+
+        error = machine.video_output_error
+        if error:
+            self.status_label.setText(f"Falha na apresentação D3D12: {error}")
+            self.statusBar().showMessage(f"Vídeo D3D12: falha — {error}")
+            return
+
+        if not machine.video_output_is_running:
+            self.statusBar().showMessage("Vídeo D3D12: worker de apresentação encerrado")
+            return
+
+        published = machine.video_last_published_sequence
+        presented = machine.video_last_presented_sequence
+        replaced = machine.video_replaced_frames
+        recoveries = machine.video_device_recovery_count
+        if presented:
+            self.statusBar().showMessage(
+                f"D3D12: apresentado {presented}/{published} | "
+                f"substituídos {replaced} | recuperações {recoveries}"
+            )
+        elif published:
+            self.statusBar().showMessage(
+                f"D3D12: {published} frame(s) publicados; aguardando primeiro Present"
+            )
+        else:
+            self.statusBar().showMessage(
+                "D3D12 inicializado; aguardando o primeiro frame da emulação"
+            )
 
     def _start_video_output_if_visible(self) -> None:
         """Attach the Rust D3D12 swap chain to the Qt-owned native viewport."""
@@ -203,12 +254,10 @@ class MinimalSmsWindow(QMainWindow):
         self._video_output_started = True
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            "Apresentação D3D12 ativa — pixels e filtros processados em Rust."
+            "Host D3D12 inicializado; aguardando o primeiro frame da emulação."
         )
-        self.statusBar().showMessage(
-            f"{self._rom_path.name if self._rom_path else 'SMS'} | "
-            "vídeo: D3D12 nativo | viewport 4:3"
-        )
+        self._video_telemetry_timer.start()
+        self._refresh_video_telemetry()
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt override name
         """Start native presentation after Qt has created the viewport HWND."""
@@ -260,10 +309,16 @@ class MinimalSmsWindow(QMainWindow):
         event.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override name
+        self._video_telemetry_timer.stop()
         if self._machine is not None:
             self._machine.stop()
-            self._machine.close_video_output()
-            self._machine.close_audio_output()
+            video_error = self._close_video_output(self._machine)
+            try:
+                self._machine.close_audio_output()
+            except RuntimeError as exc:
+                self.statusBar().showMessage(f"Falha ao encerrar áudio: {exc}")
+            if video_error:
+                self.statusBar().showMessage(f"Falha ao encerrar vídeo: {video_error}")
         self._video_output_started = False
         super().closeEvent(event)
 
