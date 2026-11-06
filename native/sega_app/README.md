@@ -41,3 +41,15 @@ The video viewport defaults to the SMS 4:3 presentation ratio. The UI exposes
 available client area with a uniform scale; it is never stretched to fill a
 window with a different ratio. The native child presentation window follows
 the fitted viewport rectangle.
+
+
+## Áudio e controles do SMS
+
+- WASAPI Shared é o backend de áudio padrão; XAudio2 pode ser selecionado como alternativa.
+- A sessão DSP/resampler e o envio PCM permanecem em Rust. A factory do sink é executada pelo worker SMS; o frontend não transporta amostras PCM.
+- O áudio pode ser habilitado/desabilitado e o volume ajustado entre 0 e 100. Underruns e blocos descartados são exibidos na telemetria.
+- Se a abertura do dispositivo falhar, a falha é reportada pelo subsistema de áudio; não deve interromper o runtime de vídeo/máquina.
+- Mapeamento inicial de teclado: setas direcionais, Z (Botão 1), X (Botão 2) e P (borda de Pause/NMI).
+- Polling do teclado ocorre na fronteira do frame da UI e somente envia snapshot quando o estado muda. O Pause é enviado como NMI de borda, não como pausa do worker.
+
+**Limite desta fatia:** gamepads SDL3, hotplug, perfis/remapeamento, analógicos, gyro e touchpad ainda não estão conectados ao shell. A integração física dos backends WASAPI/XAudio2 também requer validação em Windows com dispositivo real.
