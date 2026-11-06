@@ -1019,16 +1019,18 @@ fn configure_audio_output(
         move || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
             match backend {
                 AudioBackend::Wasapi => {
-            let sink = NativeWasapiOutput::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
-                .map_err(|error| error.to_string())?;
-            let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
-            Ok(Box::new(session))
-        }
-        AudioBackend::XAudio2 => {
-            let sink = NativeXAudio2Output::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
-                .map_err(|error| error.to_string())?;
-            let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
-            Ok(Box::new(session))
+                    let sink =
+                        NativeWasapiOutput::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
+                            .map_err(|error| error.to_string())?;
+                    let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
+                    Ok(Box::new(session))
+                }
+                AudioBackend::XAudio2 => {
+                    let sink =
+                        NativeXAudio2Output::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
+                            .map_err(|error| error.to_string())?;
+                    let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
+                    Ok(Box::new(session))
                 }
             }
         },
