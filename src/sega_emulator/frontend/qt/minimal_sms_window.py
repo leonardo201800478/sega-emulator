@@ -287,7 +287,8 @@ class MinimalSmsWindow(QMainWindow):
             )
         else:
             self.statusBar().showMessage(
-                "D3D12 inicializado; aguardando F5/Iniciar | "
+                "D3D12 inicializado; aguardando o primeiro frame da emulação "
+                "(F5/Iniciar) | "
                 f"{audio_status}"
             )
 
