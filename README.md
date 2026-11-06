@@ -50,7 +50,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-Workspaces standalone de áudio e aplicação ainda recebem validação separada até a consolidação final. Testes externos ZEXDOC/ZEXALL estão NOT RUN até a migração do runner para Rust; isso não equivale a PASS.
+Workspaces standalone de áudio e aplicação ainda recebem validação separada até a consolidação final. Testes externos ZEXDOC/ZEXALL estão NOT RUN: o executor Rust de baixo nível existe, mas a aquisição, montagem e orquestração da suíte ainda precisam ser portadas para Rust; isso não equivale a PASS.
 
 ## Segurança e licença
 
