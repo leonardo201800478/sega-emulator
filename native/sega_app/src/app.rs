@@ -390,11 +390,16 @@ impl SegaApp {
         if self.input_backend.is_some() {
             return;
         }
-        let backend_result = Sdl3Backend::new().and_then(|mut backend| {
-            backend
-                .enumerate(&mut self.input_devices)
-                .map(|()| backend)
-        });
+        let backend_result = match Sdl3Backend::new() {
+            Ok(mut backend) => match backend.enumerate(&mut self.input_devices) {
+                Ok(()) => Ok(backend),
+                Err(error) => {
+                    backend.shutdown();
+                    Err(error)
+                }
+            },
+            Err(error) => Err(error),
+        };
         match backend_result {
             Ok(backend) => {
                 self.selected_gamepad = self
@@ -414,15 +419,25 @@ impl SegaApp {
             return (ControllerButtons::default(), false);
         };
         self.input_buffers.clear();
-        if let Err(error) = backend.poll_into(&mut self.input_buffers) {
-            self.input_backend = Some(Err(error.to_string()));
+        let poll_result = backend.poll_into(&mut self.input_buffers);
+        if let Err(error) = poll_result {
+            let error = error.to_string();
+            if let Some(Ok(mut backend)) = self.input_backend.take() {
+                backend.shutdown();
+            }
+            self.input_backend = Some(Err(error));
             return (ControllerButtons::default(), false);
         }
-        if !self.input_buffers.events.is_empty()
-            && let Err(error) = backend.enumerate(&mut self.input_devices)
-        {
-            self.input_backend = Some(Err(error.to_string()));
-            return (ControllerButtons::default(), false);
+        if !self.input_buffers.events.is_empty() {
+            let enumerate_result = backend.enumerate(&mut self.input_devices);
+            if let Err(error) = enumerate_result {
+                let error = error.to_string();
+                if let Some(Ok(mut backend)) = self.input_backend.take() {
+                    backend.shutdown();
+                }
+                self.input_backend = Some(Err(error));
+                return (ControllerButtons::default(), false);
+            }
         }
         if self.selected_gamepad.is_none_or(|selected| {
             !self
