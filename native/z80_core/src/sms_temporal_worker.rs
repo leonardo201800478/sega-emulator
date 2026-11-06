@@ -354,15 +354,16 @@ impl SmsTemporalWorker {
     pub(super) fn video_output_is_running(&self) -> bool {
         #[cfg(windows)]
         {
-            return self
-                .video_session
+            self.video_session
                 .lock()
                 .ok()
                 .and_then(|session| session.as_ref().map(D3d12MailboxSession::is_running))
-                .unwrap_or(false);
+                .unwrap_or(false)
         }
         #[cfg(not(windows))]
-        false
+        {
+            false
+        }
     }
 
     pub(super) fn video_output_error(&self) -> Option<String> {
@@ -386,29 +387,31 @@ impl SmsTemporalWorker {
     pub(super) fn video_last_presented_sequence(&self) -> u64 {
         #[cfg(windows)]
         {
-            return self
-                .video_session
+            self.video_session
                 .lock()
                 .ok()
                 .and_then(|session| session.as_ref().map(D3d12MailboxSession::last_presented_sequence))
-                .unwrap_or(0);
+                .unwrap_or(0)
         }
         #[cfg(not(windows))]
-        0
+        {
+            0
+        }
     }
 
     pub(super) fn video_device_recovery_count(&self) -> u64 {
         #[cfg(windows)]
         {
-            return self
-                .video_session
+            self.video_session
                 .lock()
                 .ok()
                 .and_then(|session| session.as_ref().map(D3d12MailboxSession::device_recovery_count))
-                .unwrap_or(0);
+                .unwrap_or(0)
         }
         #[cfg(not(windows))]
-        0
+        {
+            0
+        }
     }
 
     pub(super) fn is_running(&self) -> bool {
