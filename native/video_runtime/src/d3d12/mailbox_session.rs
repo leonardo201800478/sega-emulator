@@ -47,12 +47,26 @@ impl fmt::Display for D3d12MailboxSessionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Mailbox(error) => write!(formatter, "video mailbox error: {error}"),
-            Self::WorkerStart(error) => write!(formatter, "could not start D3D12 mailbox worker: {error}"),
-            Self::HostInitialization(error) => write!(formatter, "could not initialize D3D12 host: {error}"),
-            Self::StartupChannelClosed => write!(formatter, "D3D12 mailbox startup channel closed unexpectedly"),
-            Self::Presentation(error) => write!(formatter, "D3D12 frame presentation failed: {error}"),
-            Self::DeviceLost(error) => write!(formatter, "non-recoverable D3D12 device loss: {error}"),
-            Self::DeviceRecoveryFailed { initial_reason, recovery_error } => write!(
+            Self::WorkerStart(error) => {
+                write!(formatter, "could not start D3D12 mailbox worker: {error}")
+            }
+            Self::HostInitialization(error) => {
+                write!(formatter, "could not initialize D3D12 host: {error}")
+            }
+            Self::StartupChannelClosed => write!(
+                formatter,
+                "D3D12 mailbox startup channel closed unexpectedly"
+            ),
+            Self::Presentation(error) => {
+                write!(formatter, "D3D12 frame presentation failed: {error}")
+            }
+            Self::DeviceLost(error) => {
+                write!(formatter, "non-recoverable D3D12 device loss: {error}")
+            }
+            Self::DeviceRecoveryFailed {
+                initial_reason,
+                recovery_error,
+            } => write!(
                 formatter,
                 "D3D12 device recovery failed after {initial_reason}: {recovery_error}"
             ),
@@ -204,17 +218,21 @@ impl D3d12MailboxSession {
                                 ) {
                                     Ok(host) => host,
                                     Err(recovery_error) => {
-                                        return Err(D3d12MailboxSessionError::DeviceRecoveryFailed {
-                                            initial_reason,
-                                            recovery_error: recovery_error.to_string(),
-                                        });
+                                        return Err(
+                                            D3d12MailboxSessionError::DeviceRecoveryFailed {
+                                                initial_reason,
+                                                recovery_error: recovery_error.to_string(),
+                                            },
+                                        );
                                     }
                                 };
                                 worker_device_recoveries.fetch_add(1, Ordering::AcqRel);
 
                                 if let Err(retry_error) = host.present_frame(&frame) {
                                     let recovery_error = match host.device_removed_reason() {
-                                        Err(reason) => format!("retry also lost the D3D12 device: {reason}"),
+                                        Err(reason) => {
+                                            format!("retry also lost the D3D12 device: {reason}")
+                                        }
                                         Ok(()) => retry_error.to_string(),
                                     };
                                     return Err(D3d12MailboxSessionError::DeviceRecoveryFailed {
