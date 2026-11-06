@@ -12,6 +12,7 @@ resolver = "3"
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "wgpu", "wayland", "x11"] }
 raw-window-handle = "=0.6.2"
 sega-video-runtime = { path = "../video_runtime" }
+sega-sms-runtime = { path = "../../rust/runtime/sms-runtime" }
 
 [lints.rust]
 unsafe_code = "deny"
