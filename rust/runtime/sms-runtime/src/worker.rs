@@ -131,6 +131,7 @@ enum WorkerCommand {
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
+    #[cfg(any(windows, test))]
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
 }
@@ -266,6 +267,7 @@ impl SmsTemporalWorker {
             .map_err(|error| format!("SMS machine worker did not close audio: {error}"))
     }
 
+    #[cfg(any(windows, test))]
     fn set_video_mailbox(&self, mailbox: Option<FrameMailbox>) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
         self.commands
@@ -770,6 +772,7 @@ fn handle_command(
             telemetry.set_audio_metrics((0, 0));
             let _ = reply.send(());
         }
+        #[cfg(any(windows, test))]
         WorkerCommand::SetVideoMailbox(mailbox, reply) => {
             *video_mailbox = mailbox;
             telemetry.set_video_error(None);
