@@ -1104,7 +1104,7 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalMachine, SmsTemporalMachineError, SmsVdpProfile, Territory};
+    use super::{SmsTemporalMachine, SmsTemporalMachineError};
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
@@ -2965,7 +2965,7 @@ mod base_immediate_io_temporal_tests {
 
 #[cfg(test)]
 mod temporal_frame_tests {
-    use super::SmsTemporalMachine;
+    use super::{SmsTemporalMachine, SmsVdpProfile, Territory};
 
     #[test]
     fn step_frame_wires_vdp_vblank_irq_to_z80_and_services_halt_loop() {
