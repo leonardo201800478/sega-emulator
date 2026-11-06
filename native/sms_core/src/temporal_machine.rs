@@ -581,12 +581,27 @@ impl SmsTemporalMachine {
         Ok(step)
     }
 
+    /// Refresh the Z80 INT input from the VDP's level-sensitive IRQ output.
+    ///
+    /// The VDP advances during Scheduler dispatch. Updating the CPU input
+    /// immediately after that dispatch makes a newly asserted VBlank visible
+    /// at the next Z80 interrupt sampling edge (including HALT M1 T4).
+    fn sync_vdp_interrupt_line(&mut self) {
+        self.set_int_line(
+            self.bus
+                .vdp()
+                .interrupt_pending()
+                .then_some(0xFF),
+        );
+    }
+
     /// Dispatch one event and resume the matching CPU continuation.
     pub fn dispatch_next(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         let dispatch = self
             .bus
             .dispatch_next()?
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+        self.sync_vdp_interrupt_line();
         match dispatch {
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
@@ -2956,6 +2971,50 @@ mod base_immediate_io_temporal_tests {
 #[cfg(test)]
 mod temporal_frame_tests {
     use super::SmsTemporalMachine;
+
+    #[test]
+    fn step_frame_wires_vdp_vblank_irq_to_z80_and_services_halt_loop() {
+        let mut rom = vec![0; 0x8000];
+        let main: [u8; 18] = [
+            0xF3, // DI
+            0x31, 0xF0, 0xDF, // LD SP,$DFF0
+            0xED, 0x56, // IM 1
+            0x3E, 0xA0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // VDP reg1 = $A0
+            0xFB, // EI
+            0x76, // HALT
+            0x18, 0xFD, // JR -3
+        ];
+        rom[..main.len()].copy_from_slice(&main);
+        let isr: [u8; 14] = [
+            0xF5, // PUSH AF
+            0xDB, 0xBF, // IN A,($BF): acknowledge VDP IRQ
+            0x3A, 0x00, 0xC0, // LD A,($C000)
+            0x3C, // INC A
+            0x32, 0x00, 0xC0, // LD ($C000),A
+            0xF1, // POP AF
+            0xFB, // EI
+            0xED, 0x4D, // RETI
+        ];
+        rom[0x38..0x38 + isr.len()].copy_from_slice(&isr);
+
+        let mut machine = SmsTemporalMachine::new_with_hardware_profile(
+            rom,
+            1,
+            3_579_545,
+            44_100,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+        .unwrap();
+
+        const FRAMES: u8 = 20;
+        for _ in 0..FRAMES {
+            machine.step_frame(100_000).unwrap();
+        }
+
+        assert_eq!(machine.memory().read(0xC000), FRAMES);
+        assert!(!machine.vdp().interrupt_pending());
+    }
 
     #[test]
     fn step_frame_returns_a_complete_sms1_rgb24_frame() {
