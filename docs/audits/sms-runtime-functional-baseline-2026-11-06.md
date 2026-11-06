@@ -164,3 +164,37 @@ Referências: [Microsoft — timeBeginPeriod](https://learn.microsoft.com/en-us/
 - [ ] SG-1000 regressions PASS
 
 A tarefa só pode ser declarada concluída após os gates aplicáveis e a validação manual A/V. `SKIPPED` e `NOT RUN` não são PASS.
+
+
+## 9. Atualização de validação e revisão — 2026-11-06
+
+Esta seção atualiza os estados provisórios acima, que foram escritos antes da conclusão do CI do candidato.
+
+**HEAD validado:** `c097c4d87907a5472f1e7c30e519ef78b1c05c05`  
+**Workflow:** [CI run #5177](https://github.com/leonardo201800478/sega-emulator/actions/runs/42195973805) — **SUCCESS**.
+
+| Suíte / gate | Classificação | Evidência / limite |
+|---|---|---|
+| Rust lockfiles | PASS | Verificação dos lockfiles concluída |
+| Rust fmt | PASS | `cargo fmt --all -- --check` |
+| Rust Clippy | PASS | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
+| Rust workspace tests | PASS | `cargo test --workspace --locked`; inclui assert RGB exato em linha 32 e testes VDP IRQ/INT |
+| Python lint e regressão | PASS | Ruff format/lint e pytest; 332 passed, 9 skipped no runner Linux por ausência da extensão PyO3 nesse ambiente |
+| PyO3 Windows | PASS | Maturin build, import, smoke temporal SMS sintético e integração SMS/SG-1000/input |
+| Windows x64 D3D12 e áudio nativo | PASS | Compilação e testes automatizados dos contratos de vídeo/áudio |
+| Scheduler deterministic stress | NOT RUN | Job SKIPPED pelo classificador de impacto; não equivale a PASS |
+| Windows Qt smoke | NOT RUN | Job SKIPPED pelo classificador de impacto |
+| Windows PowerShell tooling | NOT RUN | Job SKIPPED pelo classificador de impacto |
+| GPU física / janela D3D12 real | NOT RUN | CI não substitui teste em hardware |
+| Endpoint WASAPI/XAudio2 físico | NOT RUN | Não há prova de som audível em dispositivo real |
+| Gameplay com ROM real/homebrew | NOT RUN | A ROM sintética comprova somente os contratos testados |
+
+### Revisão estática adicional do diff
+
+Foi revisado o caminho de sincronização de INT, a preservação da fonte externa no snapshot, a validação do vetor de acknowledge no restore, o teste IM 1/HALT, a configuração de Mode 4 e a fixture de PCM. Não foi identificado bloqueador estático no diff revisado. Esta revisão não é uma aprovação independente de terceiro e não altera os estados NOT RUN acima.
+
+### Decisão de integração
+
+A PR #595 pode ser integrada como correção de baseline e regressão automatizada, sem declarar o Master System funcional em hardware real ou compatível com jogos em geral. A integração não encerra os gates A/V-04, A/V-05 ou A/V-06, não fecha a auditoria temporal do VDP e não altera o bloqueio E7.7 → E8.
+
+A próxima etapa permanece a comprovação da rota worker → sessão de áudio, seguida de teste manual Windows com GPU e endpoint físico e validação de uma ROM legal/homebrew.
