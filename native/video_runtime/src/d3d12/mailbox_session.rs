@@ -156,14 +156,13 @@ impl D3d12MailboxSession {
     ) -> Result<Self, D3d12MailboxSessionError> {
         NativeVideoWindow::validate_existing_handle(window_handle)
             .map_err(|error| D3d12MailboxSessionError::HostInitialization(error.to_string()))?;
-        let initialize_host =
-            move || D3d12Host::initialize_for_existing_window(render_width, render_height, window_handle);
+        let initialize_host = move || {
+            D3d12Host::initialize_for_existing_window(render_width, render_height, window_handle)
+        };
         Self::start_with_host_factory(initialize_host)
     }
 
-    fn start_with_host_factory<F>(
-        initialize_host: F,
-    ) -> Result<Self, D3d12MailboxSessionError>
+    fn start_with_host_factory<F>(initialize_host: F) -> Result<Self, D3d12MailboxSessionError>
     where
         F: Fn() -> windows::core::Result<D3d12Host> + Send + 'static,
     {
@@ -357,7 +356,6 @@ impl Drop for D3d12MailboxSession {
         let _ = self.join_worker();
     }
 }
-
 
 #[cfg(test)]
 mod tests {
