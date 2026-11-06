@@ -425,3 +425,29 @@ def test_sms_window_uses_saved_region_when_cli_does_not_override(
     assert isinstance(window._machine, FakeTemporalSMSMachine)
     assert window._machine.region == "europe"
     window.close()
+
+
+def test_sms_menu_opens_library_on_master_system_and_loads_selection(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    selected_rom = tmp_path / "library-game.sms"
+    loaded: list[Path] = []
+
+    class FakeLibraryDialog:
+        def __init__(self, settings, *, initial_system: str, parent=None) -> None:
+            assert initial_system == "master_system"
+            self.selected_rom = selected_rom
+
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(minimal_window, "RomLibraryDialog", FakeLibraryDialog)
+    window = minimal_window.MinimalSmsWindow()
+    monkeypatch.setattr(window, "load_rom", loaded.append)
+
+    window._open_library_dialog()
+
+    assert loaded == [selected_rom]
+    window.close()
