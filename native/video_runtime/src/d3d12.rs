@@ -1,6 +1,6 @@
 //! Native Direct3D 12 presentation host for Windows x64.
 //!
-//! This milestone owns the Win32 presentation window, DXGI factory/swap chain,
+//! This milestone manages the Win32 presentation HWND (owned or borrowed), DXGI factory/swap chain,
 //! D3D12 device, direct queue, command allocator/list, render-target views and
 //! fence lifecycle. It uploads immutable VideoFrame data from the presentation
 //! mailbox, converts RGB565/RGB888 to RGBA8888 when required, and presents through
@@ -14,6 +14,8 @@ use core::ffi::c_void;
 use core::fmt;
 use core::mem::ManuallyDrop;
 use core::ptr::null_mut;
+use std::marker::PhantomData;
+use std::rc::Rc;
 use std::slice;
 
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
@@ -52,7 +54,7 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObjectEx};
+use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, WaitForSingleObjectEx};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
@@ -60,9 +62,12 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
-    SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+    DispatchMessageW, GA_ROOT, GWL_STYLE, GetAncestor, GetWindowLongPtrW, GetWindowThreadProcessId,
+    IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW,
+    SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
+    WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
 use windows::core::{Error, Interface, Result, w};
 
@@ -119,24 +124,7 @@ impl NativeVideoWindow {
 
         let instance = unsafe { GetModuleHandleW(None)? };
         let class_name = w!("SegaEmulatorD3D12Window");
-        let class = WNDCLASSW {
-            style: CS_HREDRAW | CS_VREDRAW,
-            lpfnWndProc: Some(window_proc),
-            hInstance: HINSTANCE(instance.0),
-            lpszClassName: class_name,
-            ..Default::default()
-        };
-
-        let atom = unsafe { RegisterClassW(&class) };
-        if atom == 0 {
-            // A device-loss recovery may recreate the HWND on this same
-            // presentation thread. The process-wide window class remains
-            // registered after the old HWND is destroyed.
-            let last_error = unsafe { GetLastError() };
-            if last_error != ERROR_CLASS_ALREADY_EXISTS {
-                return Err(Error::from_thread());
-            }
-        }
+        register_d3d12_window_class(HINSTANCE(instance.0))?;
 
         let hwnd = unsafe {
             CreateWindowExW(
@@ -166,8 +154,10 @@ impl NativeVideoWindow {
         })
     }
 
-    /// Validate a Qt-owned HWND on the calling thread before handing it to
-    /// the dedicated D3D12 presentation worker.
+    /// Validate an external HWND and require its owning GUI thread.
+    ///
+    /// D3D12 session startup must be invoked on the HWND owner thread. The
+    /// presentation worker borrows the handle but never pumps or destroys it.
     pub(crate) fn validate_existing_handle(handle: usize) -> Result<()> {
         if handle == 0 {
             return Err(Error::new(
@@ -179,16 +169,25 @@ impl NativeVideoWindow {
         if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
             return Err(Error::new(
                 windows::core::HRESULT(0x8007_0057_u32 as i32),
-                "external HWND is not a valid window on the calling thread",
+                "external HWND is not a valid window",
+            ));
+        }
+
+        let owner_thread = unsafe { GetWindowThreadProcessId(hwnd, None) };
+        let current_thread = unsafe { GetCurrentThreadId() };
+        if owner_thread == 0 || owner_thread != current_thread {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "external HWND must be attached from its owning GUI thread",
             ));
         }
         Ok(())
     }
 
-    /// Wrap a Qt-owned HWND without taking ownership or destroying it.
+    /// Wrap an externally owned HWND without taking ownership or destroying it.
     ///
     /// The caller must validate the handle on its owning thread and keep the
-    /// widget alive until the D3D12 session has shut down.
+    /// native window alive until the D3D12 session has shut down.
     fn from_existing_handle(handle: usize) -> Self {
         Self {
             hwnd: HWND(handle as *mut c_void),
@@ -209,14 +208,15 @@ impl NativeVideoWindow {
         if self.owns_window {
             unsafe { IsIconic(self.hwnd).as_bool() }
         } else {
-            false
+            let root = unsafe { GetAncestor(self.hwnd, GA_ROOT) };
+            !root.0.is_null() && unsafe { IsIconic(root).as_bool() }
         }
     }
 
     /// Pump pending Win32 messages; return false after WM_QUIT.
     pub fn pump_messages(&self) -> bool {
         if !self.owns_window {
-            // The Qt GUI thread owns and pumps messages for this HWND.
+            // The parent GUI thread owns and pumps messages for this HWND.
             return true;
         }
         let mut message = MSG::default();
@@ -235,6 +235,174 @@ impl NativeVideoWindow {
 
         running && unsafe { IsWindow(Some(self.hwnd)).as_bool() }
     }
+}
+
+/// Rust-owned child HWND used as a native D3D12 viewport inside a GUI window.
+///
+/// This wrapper is deliberately thread-affine: create, resize, and drop it on
+/// the parent GUI thread. The D3D12 presentation session receives only the
+/// raw handle and borrows it from its dedicated worker thread.
+pub struct D3d12ChildWindow {
+    hwnd: HWND,
+    parent_hwnd: HWND,
+    added_parent_clip_children: bool,
+    _thread_affinity: PhantomData<Rc<()>>,
+}
+
+impl D3d12ChildWindow {
+    /// Create a visible child viewport under an existing GUI-owned parent HWND.
+    ///
+    /// The parent receives WS_CLIPCHILDREN while the viewport exists so its
+    /// client painting does not overwrite the independently presented child.
+    pub fn create(parent_handle: usize) -> Result<Self> {
+        NativeVideoWindow::validate_existing_handle(parent_handle)?;
+        let instance = unsafe { GetModuleHandleW(None)? };
+        register_d3d12_window_class(HINSTANCE(instance.0))?;
+
+        let parent = HWND(parent_handle as *mut c_void);
+        let parent_style = unsafe { GetWindowLongPtrW(parent, GWL_STYLE) };
+        let added_parent_clip_children = parent_style & (WS_CLIPCHILDREN.0 as isize) == 0;
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("SegaEmulatorD3D12Window"),
+                w!(""),
+                WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0 | WS_CLIPSIBLINGS.0),
+                0,
+                0,
+                1,
+                1,
+                Some(parent),
+                None,
+                Some(HINSTANCE(instance.0)),
+                None,
+            )?
+        };
+
+        if added_parent_clip_children {
+            let updated_style = parent_style | WS_CLIPCHILDREN.0 as isize;
+            unsafe {
+                SetWindowLongPtrW(parent, GWL_STYLE, updated_style);
+            }
+            let applied_style = unsafe { GetWindowLongPtrW(parent, GWL_STYLE) };
+            if applied_style & (WS_CLIPCHILDREN.0 as isize) == 0 {
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+                return Err(Error::new(
+                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    "could not enable WS_CLIPCHILDREN on the eframe parent HWND",
+                ));
+            }
+
+            if let Err(error) = unsafe {
+                SetWindowPos(
+                    parent,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                )
+            } {
+                unsafe {
+                    SetWindowLongPtrW(parent, GWL_STYLE, parent_style);
+                    let _ = DestroyWindow(hwnd);
+                }
+                return Err(error);
+            }
+        }
+
+        Ok(Self {
+            hwnd,
+            parent_hwnd: parent,
+            added_parent_clip_children,
+            _thread_affinity: PhantomData,
+        })
+    }
+
+    /// Return the child HWND without transferring ownership.
+    pub fn handle(&self) -> usize {
+        self.hwnd.0 as usize
+    }
+
+    /// Move and resize the child viewport in parent-client physical pixels.
+    pub fn set_bounds(&self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
+        if x < 0 || y < 0 || width <= 0 || height <= 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "child viewport bounds require non-negative origin and positive dimensions",
+            ));
+        }
+
+        unsafe {
+            SetWindowPos(
+                self.hwnd,
+                None,
+                x,
+                y,
+                width,
+                height,
+                SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for D3d12ChildWindow {
+    fn drop(&mut self) {
+        if !self.hwnd.0.is_null() {
+            unsafe {
+                let _ = DestroyWindow(self.hwnd);
+            }
+            self.hwnd = HWND::default();
+        }
+
+        if self.added_parent_clip_children && unsafe { IsWindow(Some(self.parent_hwnd)).as_bool() }
+        {
+            unsafe {
+                let current_style = GetWindowLongPtrW(self.parent_hwnd, GWL_STYLE);
+                SetWindowLongPtrW(
+                    self.parent_hwnd,
+                    GWL_STYLE,
+                    current_style & !(WS_CLIPCHILDREN.0 as isize),
+                );
+                let _ = SetWindowPos(
+                    self.parent_hwnd,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                );
+            }
+        }
+        self.parent_hwnd = HWND::default();
+    }
+}
+
+fn register_d3d12_window_class(instance: HINSTANCE) -> Result<()> {
+    let class_name = w!("SegaEmulatorD3D12Window");
+    let class = WNDCLASSW {
+        style: CS_HREDRAW | CS_VREDRAW,
+        lpfnWndProc: Some(window_proc),
+        hInstance: instance,
+        lpszClassName: class_name,
+        ..Default::default()
+    };
+
+    let atom = unsafe { RegisterClassW(&class) };
+    if atom == 0 {
+        // The process-wide class remains registered after its HWND is destroyed.
+        let last_error = unsafe { GetLastError() };
+        if last_error != ERROR_CLASS_ALREADY_EXISTS {
+            return Err(Error::from_thread());
+        }
+    }
+    Ok(())
 }
 
 impl Drop for NativeVideoWindow {
@@ -256,11 +424,13 @@ unsafe extern "system" fn window_proc(
 ) -> LRESULT {
     if message == WM_NCCREATE {
         // PMv2 scales non-client areas automatically. This call additionally
-        // enables that behavior for the PMv1 fallback context.
+        // enables that behavior for the PMv1 fallback context. Child viewports
+        // have no non-client area; the return value is intentionally ignored.
         let _ = unsafe { EnableNonClientDpiScaling(hwnd) };
     }
 
-    if message == WM_DPICHANGED && lparam.0 != 0 {
+    let is_root_window = unsafe { GetAncestor(hwnd, GA_ROOT) == hwnd };
+    if message == WM_DPICHANGED && is_root_window && lparam.0 != 0 {
         // Windows supplies the suggested outer-window rectangle for the new
         // monitor DPI. The swap-chain's logical SMS surface remains unchanged;
         // DXGI stretch scaling continues to map it to the resized client area.
@@ -1102,7 +1272,69 @@ impl Drop for D3d12Host {
 
 #[cfg(test)]
 mod tests {
-    use super::{PixelFormat, VideoFrame, convert_frame_row_to_rgba8888};
+    use std::thread;
+
+    use super::{
+        D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE, ShowWindow, WS_CLIPCHILDREN,
+    };
+
+    #[test]
+    fn child_viewport_is_created_and_resized_on_parent_gui_thread() {
+        let parent = NativeVideoWindow::create(640, 480).unwrap();
+        let child = D3d12ChildWindow::create(parent.hwnd().0 as usize).unwrap();
+
+        assert!(unsafe { IsWindow(Some(child.hwnd)).as_bool() });
+        child.set_bounds(8, 12, 256, 192).unwrap();
+    }
+
+    #[test]
+    fn child_viewport_enables_and_restores_parent_clip_children_style() {
+        let parent = NativeVideoWindow::create(640, 480).unwrap();
+        let parent_hwnd = parent.hwnd();
+        let original_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+        let originally_clipped = original_style & (WS_CLIPCHILDREN.0 as isize) != 0;
+
+        {
+            let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
+            let child_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+            assert_ne!(child_style & (WS_CLIPCHILDREN.0 as isize), 0);
+            drop(child);
+        }
+
+        let restored_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+        assert_eq!(
+            restored_style & (WS_CLIPCHILDREN.0 as isize) != 0,
+            originally_clipped
+        );
+    }
+
+    #[test]
+    fn external_hwnd_rejects_calls_from_non_owner_thread() {
+        let parent = NativeVideoWindow::create(320, 240).unwrap();
+        let handle = parent.hwnd().0 as usize;
+
+        let validation = thread::spawn(move || NativeVideoWindow::validate_existing_handle(handle))
+            .join()
+            .unwrap();
+
+        assert!(validation.is_err());
+    }
+
+    #[test]
+    fn borrowed_child_detects_minimized_root_window() {
+        let parent = NativeVideoWindow::create(320, 240).unwrap();
+        let child = D3d12ChildWindow::create(parent.hwnd().0 as usize).unwrap();
+        let borrowed = NativeVideoWindow::from_existing_handle(child.handle());
+
+        assert!(!borrowed.is_minimized());
+        unsafe {
+            let _ = ShowWindow(parent.hwnd(), SW_MINIMIZE);
+        }
+        assert!(borrowed.is_minimized());
+    }
 
     #[test]
     fn converts_rgb565_primary_colors_to_rgba8888() {
