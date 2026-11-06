@@ -827,7 +827,8 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        SmsTemporalWorker, WorkerTelemetry, av_test_rom, build_sms_temporal_machine, execute_frame,
+        DEFAULT_MAX_FRAME_INSTRUCTIONS, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
+        WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
