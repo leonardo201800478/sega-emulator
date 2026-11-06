@@ -1,9 +1,10 @@
 # Auditoria — eventos TH externos e Light Phaser no caminho temporal SMS
 
 **Data:** 2026-11-06  
-**Baseline:** `c2194cbf6e44d4fc1098d6cc3ddc82b160357439`  
+**Baseline da auditoria:** `c2194cbf6e44d4fc1098d6cc3ddc82b160357439`  
+**Atualização de implementação:** branch `feat/sms-scheduler-external-th-events`, baseada no merge #586.  
 **Escopo:** comportamento de bordas TH originadas por periféricos, caminho Light Phaser e lacunas de integração com `SmsTemporalMachine`.  
-**Natureza:** auditoria de arquitetura e evidências; nenhuma alteração de runtime.
+**Natureza:** auditoria inicial seguida pela primeira fatia de runtime: eventos TH externos tipados e níveis elétricos independentes.
 
 ## 1. Conclusão
 
@@ -13,9 +14,10 @@ A auditoria confirma três caminhos distintos que não devem ser confundidos:
 
 1. **Software / I/O control:** já integrado no `SmsTemporalBus::write_port`; a escrita é aplicada após o Scheduler avançar o VDP até o timestamp de conclusão do ciclo.
 2. **Light Phaser sintético legado:** `SmsVdp::set_light_phaser_input` e `complete_scanline` produzem um pulso aproximado por scanline e escrevem diretamente `h_counter_latch = 0x08 + x/2`. Isso não é uma captura do contador no timestamp de uma borda TH real.
-3. **Borda TH externa no caminho temporal:** não há evento tipado de entrada TH no `SmsTemporalEvent`, nem método de entrada temporal correspondente em `SmsTemporalMachine`; permanece ausente.
+3. **Nível TH externo no caminho temporal:** a implementação incremental agora agenda `ExternalThTransition` com timestamp absoluto em `SmsTemporalEvent`; o evento atualiza TH1/TH2 independentemente em `SmsIo`, no dispatch do Scheduler. O caminho já pode refletir o nível ativo-baixo em bits 6/7 de `$DD`.
+4. **Captura do H-counter por borda TH externa:** continua ausente. A transição elétrica ainda não agenda uma captura temporizada do H-counter.
 
-Portanto, não declarar a captura externa TH integrada. O estado da lacuna é **NOT IMPLEMENTED / NOT RUN** no caminho temporal.
+Portanto, a entrada elétrica TH está integrada no caminho temporal, mas a captura externa do H-counter e o Light Phaser completo permanecem **NOT IMPLEMENTED / NOT VERIFIED**.
 
 ## 2. Evidência documental — SMS Power
 
@@ -94,16 +96,20 @@ Uma alteração futura deve, no mínimo:
 | Item | Estado |
 |---|---|
 | Software TH output-low → input-high no temporal bus | IMPLEMENTED; testes da PR #584 |
-| TH externo baixo/alto com timestamp explícito | NOT IMPLEMENTED |
+| TH1/TH2 externo com timestamp explícito no Scheduler | IMPLEMENTED_INCREMENTAL; PR de runtime em validação |
+| Leitura ativa-baixa dos níveis TH externos em $DD | IMPLEMENTED_INCREMENTAL; testes SmsIo/bus |
+| Snapshot/restore de eventos TH externos pendentes | IMPLEMENTED_INCREMENTAL; testes de estado bus/machine |
 | Latch de H-counter disparado por borda externa TH | NOT IMPLEMENTED |
 | Atraso/offset de Light Phaser por mídia | NOT VERIFIED |
 | Light Phaser sintético por scanline no VDP legado | IMPLEMENTED_APPROXIMATE |
-| Light Phaser integrado ao SmsTemporalMachine | NOT IMPLEMENTED |
-| Snapshot/restore de transição TH externa pendente | NOT RUN |
+| Light Phaser completo integrado ao SmsTemporalMachine | NOT IMPLEMENTED |
+| Validação em SMS físico | NOT RUN |
 | Validação em SMS físico | NOT RUN |
 
 ## 7. Decisão
 
-Não adicionar callback imediato em `set_controller` ou `set_input`: isso violaria a propriedade temporal do Scheduler. Não copiar o offset MAME de 19 HPos para uma regra universal. A próxima implementação deve começar pelo contrato de eventos externos tipados e serializados, e só depois ligar o modelo de Light Phaser ao raster com política de offset explícita.
+Não adicionar callback imediato em `set_controller` ou `set_input`: a transição deve ser enfileirada com timestamp explícito e consumida pelo Scheduler. A primeira fatia implementa esse contrato e mantém os níveis TH1/TH2 no estado de `SmsIo`, incluindo snapshot/restore. O timestamp deve ser futuro e alinhado à escala de T-state configurada; timestamps passados, imediatos ou desalinhados são rejeitados.
 
-Esta auditoria fecha apenas a identificação da lacuna e seus critérios; não fecha a implementação.
+A captura H-counter ainda não foi ligada à transição externa. SMS Power descreve a captura quando TH está ativo-baixo; o modelo MAME consultado arma no nível baixo e agenda o latch no retorno baixo→alto com offset configurável. Como essas descrições não estabelecem por si só uma regra física universal nem o atraso exato, a implementação não escolhe uma das duas hipóteses. O próximo incremento deve reconciliar a polaridade/instante de captura com evidência primária e introduzir um perfil de atraso explícito, sem transformar 19 HPos em constante global.
+
+A auditoria original permanece como trilha de evidência; esta atualização registra apenas a integração da linha elétrica TH e não declara Light Phaser completo, captura externa do H-counter, dot-accuracy ou validação física.
