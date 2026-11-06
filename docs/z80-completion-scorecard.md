@@ -29,7 +29,7 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 - A entrega VBlank/Line IRQ do SMS convencional permanece coberta pelos testes integrados da PR #531. A ligação da IRQ de nível do VDP à INT do Z80 temporal foi integrada pela PR #595: combina a fonte do VDP com INT externa, preserva a fonte externa no snapshot e valida o vetor de acknowledge no restore. O CI #5178 passou nos testes VBlank/IM1/HALT e de preservação da fonte externa; isso não fecha a auditoria semântica global E7.7.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
 - A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
-- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria complementar de I/O em bloco caracteriza as flags para o perfil Zilog NMOS e não encontrou divergência de runtime; CMOS/clones, validação direta em hardware SMS e `OUT (C),0` variante-dependente permanecem sem comprovação conclusiva. A auditoria semântica integral continua aberta.
+- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria complementar de I/O em bloco caracteriza as flags para o perfil Zilog NMOS e não encontrou divergência de runtime. `OUT (C),0` está agora delimitado ao perfil NMOS documentado para SMS1 (NEC D780C-1 / Zilog Z0840004PSC); CMOS/clones permanecem fora do perfil suportado e sem comprovação conclusiva. A validação direta em hardware SMS e a auditoria semântica integral continuam abertas.
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
 Esta lista é uma fotografia histórica. Antes de alterar código ou declarar qualquer critério concluído, confirmar os arquivos, testes, PRs e workflows no SHA atual da `main`. PR aberta ou Draft não equivale a implementação integrada.
@@ -86,7 +86,7 @@ Baseline: `main` = `08d9fac1d30a659bde8298e7da2f8ae1d75510d1`.
 - A identificação de um Z80 NMOS em documentação de uma revisão do SMS sustenta essa baseline de compatibilidade, mas não prova todas as revisões de placa. Diferenças CMOS/clones permanecem NOT VERIFIED; a suíte de hardware citada não foi executada em um Master System físico.
 - A matriz DD/FD deve ser lida em conjunto com as auditorias E7.7 mais recentes. Estados históricos que classificavam half-register LD/ALU/INC/DEC como FUNCTIONAL_UNVERIFIED foram complementados pelas matrizes integradas em #563; não promover esses resultados a DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
-**Decisão:** E7.7 continua IN_PROGRESS e E8 continua BLOCKED. O próximo trabalho deve fechar as lacunas semânticas restantes com evidência específica por família, incluindo a variante de `OUT (C),0`, sem iniciar ZEXDOC/ZEXALL nem exigir microsequenciamento universal.
+**Decisão:** E7.7 continua IN_PROGRESS e E8 continua BLOCKED. O próximo trabalho deve fechar as lacunas semânticas restantes com evidência específica por família; a escolha NMOS para `OUT (C),0` vale para o perfil SMS1 documentado e não deve ser generalizada para CMOS/clones. Não iniciar ZEXDOC/ZEXALL nem exigir microsequenciamento universal.
 
 
 ## 8. Registro historico apos PR #595 — fotografia de 2026-11-06
@@ -109,3 +109,15 @@ A main atual e `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. A PR #597 alterou ape
 - E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL antes do fechamento documentado de E7.
 - Nenhuma pendência Z80 foi encerrada por PR #597. Não reabrir E4C/E5/E6 sem divergência reproduzível.
 - Regressão SG-1000 continua obrigatória em mudanças compartilhadas; dois testes de pipeline de áudio SMS/SG-1000 passaram no CI #5185.
+
+
+## 10. Reconciliação incremental — 2026-11-06
+
+**Baseline remota consultada:** `main` = `333900ae35a87b2430caedd2edf26218f272c8a6`.
+
+- A integração egui/eframe da PR #601 e a CI subsequente não alteraram o núcleo Z80. As matrizes DD/FD e E7.7 devem ser lidas contra o código atual, não contra SHAs históricos isolados.
+- A auditoria do opcode ED 71 foi delimitada ao perfil NMOS de SMS1: SMS Power identifica NEC D780C-1 ou Zilog Z0840004PSC em placas SMS1 consultadas; as folhas de dados dos fabricantes classificam essas famílias como NMOS. O comportamento adotado é saída `0x00`.
+- Zilog CMOS Z84C00 pode produzir `0xFF` em ED 71 segundo referências técnicas secundárias. Não existe seleção de variante CMOS no runtime atual; CMOS/clones permanecem NOT VERIFIED e fora do perfil de compatibilidade atual.
+- A implementação atômica e o microsequenciador compartilham a semântica NMOS de ED 71 e os testes integrados comparam a saída e o estado nos caminhos correspondentes.
+- O candidato de testes E7.7 acrescenta cobertura de wraparound para LD (nn),rr / LD rr,(nn) em `nn=FFFF` e casos de fronteira para NEG e seus aliases. O resultado desses testes permanece PENDING CI até execução no HEAD exato da PR.
+- E7.7 permanece IN_PROGRESS. E8 permanece BLOCKED. Nenhum resultado local sem SHA identificado, hardware físico não executado ou job SKIPPED deve ser promovido a PASS.
