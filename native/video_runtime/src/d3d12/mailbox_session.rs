@@ -442,8 +442,7 @@ mod tests {
 
     #[test]
     fn rejects_zero_external_hwnd_before_starting_async_worker() {
-        let result =
-            D3d12MailboxSession::start_for_existing_window_async(256, 192, 0);
+        let result = D3d12MailboxSession::start_for_existing_window_async(256, 192, 0);
         assert!(matches!(
             result,
             Err(D3d12MailboxSessionError::HostInitialization(_))
