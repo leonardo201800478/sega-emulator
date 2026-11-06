@@ -2978,7 +2978,7 @@ mod base_immediate_io_temporal_tests {
 
 #[cfg(test)]
 mod temporal_frame_tests {
-    use super::SmsTemporalMachine;
+    use super::{SmsTemporalMachine, SmsVdpProfile, Territory};
 
     #[test]
     fn step_frame_returns_a_complete_sms1_rgb24_frame() {
