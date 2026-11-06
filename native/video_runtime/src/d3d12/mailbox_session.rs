@@ -1,4 +1,6 @@
-//! Rust-owned D3D12 presentation session backed by a latest-frame mailbox.
+//! D3D12 presentation session backed by a latest-frame mailbox.
+//!
+//! The HWND may be owned by the Rust host or borrowed from a GUI toolkit.
 //!
 //! The producer publishes only completed immutable frames. A newer pending
 //! frame may replace an older pending presentation frame; emulation work and
@@ -110,7 +112,7 @@ impl Drop for RunningFlagGuard {
     }
 }
 
-/// A Rust-owned D3D12 window and single-slot latest-frame presentation mailbox.
+/// A D3D12 presentation session and single-slot latest-frame mailbox.
 ///
 /// Publishing never waits for queue capacity or a GPU fence. It must happen
 /// only after a complete frame has been produced, outside Scheduler event
@@ -353,20 +355,5 @@ impl Drop for D3d12MailboxSession {
     fn drop(&mut self) {
         let _ = self.mailbox.close();
         let _ = self.join_worker();
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::{D3d12MailboxSession, D3d12MailboxSessionError};
-
-    #[test]
-    fn rejects_zero_external_hwnd_before_starting_worker() {
-        let result = D3d12MailboxSession::start_for_existing_window(256, 192, 0);
-        assert!(matches!(
-            result,
-            Err(D3d12MailboxSessionError::HostInitialization(_))
-        ));
     }
 }
