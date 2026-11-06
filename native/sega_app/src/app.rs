@@ -188,19 +188,16 @@ impl SegaApp {
             }
         };
 
-        let session = match D3d12MailboxSession::start_for_existing_window_async(
-            256,
-            192,
-            child.handle(),
-        ) {
-            Ok(session) => session,
-            Err(error) => {
-                self.native_viewport.error =
-                    Some(format!("Falha ao iniciar worker D3D12: {error}"));
-                drop(child);
-                return false;
-            }
-        };
+        let session =
+            match D3d12MailboxSession::start_for_existing_window_async(256, 192, child.handle()) {
+                Ok(session) => session,
+                Err(error) => {
+                    self.native_viewport.error =
+                        Some(format!("Falha ao iniciar worker D3D12: {error}"));
+                    drop(child);
+                    return false;
+                }
+            };
 
         self.native_viewport.parent_hwnd = Some(parent_hwnd);
         self.native_viewport.child = Some(child);
