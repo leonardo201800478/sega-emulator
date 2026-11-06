@@ -11,6 +11,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::{MachineAudioSession, open_audio_session};
+use sega_audio_runtime::{NativeAudioSession, PcmSink};
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
@@ -512,10 +513,10 @@ impl Drop for SmsTemporalWorker {
     }
 }
 
-fn execute_frame(
+fn execute_frame<S: PcmSink>(
     machine: &mut SmsTemporalMachine,
     max_instructions: usize,
-    audio_session: &mut Option<MachineAudioSession>,
+    audio_session: &mut Option<NativeAudioSession<S>>,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
@@ -825,10 +826,34 @@ fn handle_command(
 
 #[cfg(test)]
 mod tests {
-    use super::SmsTemporalWorker;
+    use super::{
+        DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
+        WorkerTelemetry, build_sms_temporal_machine, execute_frame,
+    };
+    use sega_audio_runtime::{NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[derive(Clone, Default)]
+    struct RecordingSink(Arc<Mutex<Vec<Vec<u8>>>>);
+
+    impl PcmSink for RecordingSink {
+        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+            self.0
+                .lock()
+                .map_err(|_| "recording sink lock poisoned".to_owned())?
+                .push(pcm);
+            Ok(())
+        }
+
+        fn metrics(&self) -> (u64, u64) {
+            (0, 0)
+        }
+
+        fn close(&mut self) {}
+    }
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
 
@@ -970,6 +995,48 @@ mod tests {
                 .iter()
                 .any(|pixel| pixel.iter().any(|channel| *channel != 0))
         );
+    }
+
+    #[test]
+    fn worker_frame_submits_non_silent_pcm_to_native_audio_session_sink() {
+        let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
+        let sink = RecordingSink::default();
+        let captured_blocks = Arc::clone(&sink.0);
+        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let mut audio_session = Some(session);
+        let telemetry = WorkerTelemetry::default();
+        let mut video_mailbox = None;
+        let mut video_sequence = 0;
+
+        let (instructions, _) = execute_frame(
+            &mut machine,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert!(instructions > 0);
+        assert_eq!(telemetry.audio_underruns.load(Ordering::Acquire), 0);
+        assert_eq!(telemetry.audio_dropped_blocks.load(Ordering::Acquire), 0);
+
+        let blocks_before_close = captured_blocks.lock().unwrap();
+        assert!(
+            !blocks_before_close.is_empty(),
+            "process_samples must submit a PCM block before the session is flushed"
+        );
+        assert!(
+            blocks_before_close
+                .iter()
+                .flatten()
+                .any(|sample| *sample != 0),
+            "worker must submit non-silent PCM, not only initialize the sink"
+        );
+        drop(blocks_before_close);
+
+        audio_session.as_mut().unwrap().close();
     }
 
     #[test]
