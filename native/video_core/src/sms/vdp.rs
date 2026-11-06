@@ -1899,6 +1899,84 @@ mod tests {
     }
 
     #[test]
+    fn mode4_r0_sprite_shift_and_left_column_mask_cover_all_combinations_for_sms1_and_sms2() {
+        let revisions = [
+            (SmsVdpRevision::Sega3155124, "SMS1", 0x7F),
+            (SmsVdpRevision::Sega3155246, "SMS2", 0x7E),
+        ];
+        let cases = [
+            (false, false, 0_u8),
+            (false, false, 8),
+            (true, false, 0),
+            (true, false, 1),
+            (false, true, 0),
+            (false, true, 4),
+            (true, true, 1),
+            (true, true, 16),
+        ];
+
+        for (revision, revision_name, register5) in revisions {
+            for (sprite_shift, left_mask, sprite_x) in cases {
+                let mut v = SmsVdp::default();
+                v.registers[0] =
+                    0x04 | if sprite_shift { 0x08 } else { 0 } | if left_mask { 0x20 } else { 0 };
+                v.registers[1] = 0x40;
+                v.registers[2] = 0x0E;
+                v.registers[5] = register5;
+                v.cram[2] = 0x0C;
+                v.cram[17] = 0x03;
+
+                // Fill the background with palette color 2 (green).
+                for column in 0..32 {
+                    let entry = 0x3800 + column * 2;
+                    v.vram[entry] = 1;
+                    v.vram[entry + 1] = 0;
+                }
+                for row in 0..8 {
+                    v.vram[0x20 + row * 4 + 1] = 0xFF;
+                }
+
+                // Sprite tile 2 is opaque in palette color 1 (red).
+                v.vram[0x40] = 0xFF;
+                v.vram[0x3F00] = 0;
+                v.vram[0x3F01] = 0xD0;
+                v.vram[0x3F80] = sprite_x;
+                v.vram[0x3F81] = 2;
+
+                let mut status = 0x1F;
+                render_scanline_for_revision(
+                    &v.vram,
+                    &v.cram,
+                    &v.registers,
+                    &mut status,
+                    &mut v.working_framebuffer,
+                    1,
+                    true,
+                    revision,
+                );
+
+                let sprite_shift_pixels: i16 = if sprite_shift { 8 } else { 0 };
+                let sprite_start = i16::from(sprite_x) - sprite_shift_pixels;
+                for x in 0..SMS_VDP_WIDTH {
+                    let expected = if left_mask && x < 8 {
+                        [0, 0, 0]
+                    } else if (sprite_start..sprite_start + 8).contains(&(x as i16)) {
+                        [255, 0, 0]
+                    } else {
+                        [0, 255, 0]
+                    };
+                    let offset = (SMS_VDP_WIDTH + x) * 3;
+                    assert_eq!(
+                        &v.working_framebuffer[offset..offset + 3],
+                        &expected,
+                        "{revision_name}: R0 bit3={sprite_shift}, bit5={left_mask}, sprite X={sprite_x:#04x}, pixel X={x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn sms_mode4_r9_written_during_active_display_latches_after_active_period() {
         let mut v = SmsVdp::default();
         v.registers[0] = 0x04;
