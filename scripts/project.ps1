@@ -74,7 +74,7 @@ if ($Command -eq "audit") {
     foreach ($manifest in $allManifests) {
         $fullPath = [System.IO.Path]::GetFullPath($manifest.FullName)
         if ($knownManifestPaths -contains $fullPath) { continue }
-        $relativePath = $manifest.FullName.Substring($repoRoot.Length).TrimStart([char[]]@('\\', '/'))
+        $relativePath = $manifest.FullName.Substring($repoRoot.Length).TrimStart([char[]]@([char]92, [char]47))
         $results += [pscustomobject]@{ Name = "unassigned manifest $relativePath"; Status = "NOT RUN"; ExitCode = $null; Output = "Crate fora dos workspaces ativos; nao compilado nesta fase." }
     }
 }
