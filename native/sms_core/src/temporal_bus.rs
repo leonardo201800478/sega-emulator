@@ -286,7 +286,9 @@ impl SmsTemporalBus {
         high: bool,
         timestamp: MachineTime,
     ) -> Result<MachineTime, SmsTemporalBusError> {
-        Ok(self.coordinator.schedule_external_th_transition(player, high, timestamp)?)
+        Ok(self
+            .coordinator
+            .schedule_external_th_transition(player, high, timestamp)?)
     }
 
     /// Begin one memory or port request and schedule its completion deadline.
@@ -697,9 +699,10 @@ impl SmsTemporalBus {
         let external_events_valid = pending_events.iter().all(|event| match event.payload {
             SmsTemporalEvent::ExternalThTransition { player, .. } => {
                 (player == 1 || player == 2)
-                    && event.timestamp.checked_duration_since(now).is_some_and(|elapsed| {
-                        elapsed % u128::from(scale) == 0
-                    })
+                    && event
+                        .timestamp
+                        .checked_duration_since(now)
+                        .is_some_and(|elapsed| elapsed % u128::from(scale) == 0)
             }
             _ => true,
         });
@@ -719,24 +722,26 @@ impl SmsTemporalBus {
                 if external_events_valid
                     && (non_external_event_count == 0
                         || (non_external_event_count == 1
-                            && pending_events.iter().any(|event| matches!(
-                                event.payload,
-                                SmsTemporalEvent::M1TStateComplete { .. }
-                            )))) => {}
+                            && pending_events.iter().any(|event| {
+                                matches!(event.payload, SmsTemporalEvent::M1TStateComplete { .. })
+                            }))) => {}
             (Some(request), Some(started_at), None, None, None, None)
                 if external_events_valid
                     && non_external_event_count == 1
                     && started_at <= now
                     && pending_events.iter().any(|event| {
-                        event.payload == (SmsTemporalEvent::BusCompletion {
-                            request_id: request.id,
-                        }) && event.timestamp >= now
+                        event.payload
+                            == (SmsTemporalEvent::BusCompletion {
+                                request_id: request.id,
+                            })
+                            && event.timestamp >= now
                             && valid_bus_deadline(
                                 started_at,
                                 event.timestamp,
                                 scale,
                                 u16::from(request.base_tstates)
-                                    + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                    + if request.operation == Z80BusOperation::InterruptAcknowledge
+                                    {
                                         u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                                     } else {
                                         0
@@ -1522,7 +1527,6 @@ mod temporal_vdp_tests {
     }
 }
 
-
 #[cfg(test)]
 mod external_th_temporal_tests {
     use super::{SmsTemporalBus, SmsTemporalDispatch};
@@ -1532,7 +1536,8 @@ mod external_th_temporal_tests {
     fn external_th_event_updates_the_selected_input_at_its_scheduler_timestamp() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let timestamp = MachineTime::from_ticks(12);
-        bus.schedule_external_th_transition(1, false, timestamp).unwrap();
+        bus.schedule_external_th_transition(1, false, timestamp)
+            .unwrap();
 
         let snapshot = bus.export_state();
         let mut restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
@@ -1558,8 +1563,10 @@ mod external_th_temporal_tests {
     fn same_timestamp_th1_and_th2_events_remain_restorable_after_first_dispatch() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let timestamp = MachineTime::from_ticks(9);
-        bus.schedule_external_th_transition(1, false, timestamp).unwrap();
-        bus.schedule_external_th_transition(2, false, timestamp).unwrap();
+        bus.schedule_external_th_transition(1, false, timestamp)
+            .unwrap();
+        bus.schedule_external_th_transition(2, false, timestamp)
+            .unwrap();
 
         assert!(matches!(
             bus.dispatch_next().unwrap(),
@@ -1589,7 +1596,8 @@ mod external_th_temporal_tests {
         };
         let bus_deadline = bus.begin_request(request, 0).unwrap();
         let th_timestamp = MachineTime::from_ticks(6);
-        bus.schedule_external_th_transition(2, false, th_timestamp).unwrap();
+        bus.schedule_external_th_transition(2, false, th_timestamp)
+            .unwrap();
 
         let snapshot = bus.export_state();
         let mut restored = SmsTemporalBus::restore_state(snapshot).unwrap();
@@ -1604,11 +1612,13 @@ mod external_th_temporal_tests {
         assert_eq!(restored.now(), th_timestamp);
         assert_eq!(
             restored.dispatch_next().unwrap(),
-            Some(SmsTemporalDispatch::BusCompletion(super::SmsBusCompletion {
-                request_id: 41,
-                data: Some(0x7F),
-                completed_at: bus_deadline,
-            }))
+            Some(SmsTemporalDispatch::BusCompletion(
+                super::SmsBusCompletion {
+                    request_id: 41,
+                    data: Some(0x7F),
+                    completed_at: bus_deadline,
+                }
+            ))
         );
     }
 }
