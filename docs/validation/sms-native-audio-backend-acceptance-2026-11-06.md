@@ -13,7 +13,7 @@ Separar a evidência de PCM entregue à sessão de DSP da evidência de aceitaç
 - `PcmSink` e `NativeAudioSession` expõem contagem de submissões de buffers PCM ao endpoint e o último erro assíncrono do backend.
 - WASAPI incrementa a contagem somente após uma escrita de render buffer bem-sucedida que recebeu PCM da fila.
 - XAudio2 incrementa a contagem somente após `SubmitSourceBuffer` retornar sucesso.
-- Falhas assíncronas do worker WASAPI/XAudio2 ficam disponíveis à sessão e à telemetria do worker SMS. Erros WASAPI permanecem registrados durante a sessão, inclusive se o worker tentar reconectar. XAudio2 registra também `IXAudio2EngineCallback::OnCriticalError`; o callback apenas grava um HRESULT em atômico e o worker realiza o tratamento fora da thread de áudio.
+- Falhas assíncronas do worker WASAPI/XAudio2 ficam disponíveis à sessão e à telemetria do worker SMS. Erros WASAPI permanecem registrados durante a sessão, inclusive se o worker tentar reconectar. XAudio2 registra `IXAudio2EngineCallback::OnCriticalError` e `IXAudio2VoiceCallback::OnVoiceError`; ambos os callbacks apenas gravam o HRESULT em atômicos, e o worker realiza o tratamento fora da thread de áudio.
 - Dois testes Windows `#[ignore]` exercitam o caminho de frame SMS → NativeAudioSession → backend real, um para WASAPI e outro para XAudio2.
 - Nenhum clock, Scheduler, PSG, formato de estado, CPU ou caminho Python de PCM foi alterado.
 
