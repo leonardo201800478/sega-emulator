@@ -928,7 +928,7 @@ mod tests {
         });
 
         assert_eq!(result, Err("audio host unavailable".to_owned()));
-        assert_ne!(*observed_thread.lock().unwrap(), Some(caller_thread));
+        assert_ne!(observed_thread.lock().unwrap().as_ref(), Some(&caller_thread));
         assert_eq!(worker.audio_output_error().as_deref(), Some("audio host unavailable"));
         assert!(!worker.is_running());
     }
