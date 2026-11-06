@@ -6,7 +6,7 @@
 
 ## Objetivo
 
-Separar a evidência de PCM entregue à sessão de DSP da evidência de aceitação pelo endpoint de áudio nativo. O teste usa a função `execute_frame` do worker SMS e a ROM diagnóstica sintética já usada pela baseline A/V; não contém ROM comercial.
+Separar a evidência de PCM entregue à sessão de DSP da evidência de aceitação pelo endpoint de áudio nativo. Os testes iniciam uma instância real de `SmsTemporalWorker`, cujo loop executa `execute_frame`, usando a ROM diagnóstica sintética já usada pela baseline A/V; não contêm ROM comercial.
 
 ## Mudanças desta fatia
 
