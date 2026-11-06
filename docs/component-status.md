@@ -22,7 +22,8 @@
 - On SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, run `42255686065` reported **success** for the required jobs: `cargo fmt --all -- --check`, workspace Clippy with `-D warnings`, workspace tests, Scheduler deterministic stress, Windows PowerShell tooling syntax and Windows x64/D3D12 compile/tests.
 - The workflow aggregate conclusion was `cancelled`, even though those required jobs each concluded `success`; the manual lockfile-refresh job was `skipped`. Treat the individual required-job conclusions as PASS for that SHA, not as a fully successful aggregate workflow.
 - After the validated candidate SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, the branch received formatting-only corrections and a temporal CPU RESET implementation with tests for peripheral/timeline preservation and rejection during an in-flight instruction.
-- Those later commits have no confirmed CI result in this audit. Formatting, Clippy, workspace tests, Scheduler stress and Windows/D3D12 on the exact latest HEAD remain NOT RUN until a run is observed.
+- Those later commits have no confirmed CI result in this audit. Formatting, Clippy, workspace tests, Scheduler stress and Windows/D3D12 on the exact latest HEAD remain NOT RUN until a run is observed. A later run `42263870310` was observed as pending for an earlier branch commit (`8f43fb166f1ddb14b33245edf0802b61297f3f44`); it is not proof for the subsequent HEAD.
+- `scripts/project.ps1 locks -RefreshOffline` now performs `cargo update --offline` for each active workspace and validates the resulting lockfile with locked Cargo metadata.
 - Physical D3D12 presentation, WASAPI/XAudio2 output and input latency: NOT RUN.
 - Local Cargo validation: NOT RUN because the local environment has no Rust toolchain.
 
