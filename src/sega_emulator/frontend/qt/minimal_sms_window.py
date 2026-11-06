@@ -14,6 +14,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
 from sega_emulator.frontend.qt.sms_settings_dialog import SmsSettingsDialog
 from sega_emulator.machine.sms import load_sms_rom
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
@@ -118,6 +120,9 @@ class MinimalSmsWindow(QMainWindow):
 
         file_menu = self.menuBar().addMenu("Arquivo")
         file_menu.addAction(self.open_action)
+        self.library_action = QAction("Biblioteca de ROMs…", self)
+        self.library_action.triggered.connect(self._open_library_dialog)
+        file_menu.addAction(self.library_action)
         file_menu.addAction(self.close_rom_action)
         file_menu.addSeparator()
         exit_action = QAction("Sair", self)
@@ -153,6 +158,19 @@ class MinimalSmsWindow(QMainWindow):
         )
         if filename:
             self.load_rom(Path(filename))
+
+    def _open_library_dialog(self) -> None:
+        """Open the existing ROM browser directly on the Master System catalog."""
+        dialog = RomLibraryDialog(
+            self._settings,
+            initial_system="master_system",
+            parent=self,
+        )
+        if (
+            dialog.exec() == QDialog.DialogCode.Accepted
+            and dialog.selected_rom is not None
+        ):
+            self.load_rom(dialog.selected_rom)
 
     def load_rom(self, path: Path) -> None:
         """Load a cartridge and create the Rust temporal machine."""
