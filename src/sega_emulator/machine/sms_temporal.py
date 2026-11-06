@@ -45,6 +45,12 @@ class TemporalSMSMachine:
         return int(self.native_machine.total_instructions)
 
     @property
+    def runtime_error(self) -> str | None:
+        """Return the last native execution error, if the worker stopped."""
+        error = self.native_machine.runtime_error
+        return str(error) if error is not None else None
+
+    @property
     def is_running(self) -> bool:
         """Return whether the session is marked as running."""
         return bool(self.native_machine.is_running)
