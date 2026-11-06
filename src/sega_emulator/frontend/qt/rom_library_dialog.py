@@ -178,7 +178,9 @@ class RomLibraryDialog(QDialog):
         self._show_splash()
         if initial_system is not None:
             if initial_system not in SUPPORTED_SYSTEMS:
-                raise ValueError(f"Sistema não suportado pela biblioteca: {initial_system}")
+                raise ValueError(
+                    f"Sistema não suportado pela biblioteca: {initial_system}"
+                )
             self._open_library(initial_system)
 
     @staticmethod
