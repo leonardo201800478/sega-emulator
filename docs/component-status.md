@@ -19,11 +19,14 @@
 
 ## PR #609 validation
 
-- `Windows PowerShell tooling syntax`: PASS on initial PR candidate.
-- `Scheduler deterministic stress`: PASS on initial PR candidate.
-- `cargo fmt --all -- --check`: initially FAIL due to formatting in the extracted worker; formatting was corrected and a new CI run was queued.
-- Clippy and workspace tests: NOT RUN in the failed initial run because formatting failed first.
-- Windows x64/D3D12: initial run was still in progress when this snapshot was written; latest-head validation remains pending.
-- Physical D3D12, WASAPI/XAudio2 and input: NOT RUN.
+- `cargo fmt --all -- --check`: PASS on SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13` after correcting the initial formatting failure.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS on that SHA after correcting the audio-session thread-ownership contract and target-gating the Windows mailbox command.
+- `cargo test --workspace --locked`: PASS on that SHA.
+- `Scheduler deterministic stress`: PASS on that SHA.
+- `Windows PowerShell tooling syntax`: PASS on that SHA.
+- `Windows x64/D3D12 compile`: PASS on that SHA, including the native egui shell, SMS runtime target check/Clippy, and PowerShell workspace audit/lock validation.
+- The branch subsequently received documentation-only commits; exact latest-head CI is queued and must complete before review/merge.
+- Physical D3D12 presentation, WASAPI/XAudio2 output and input latency: NOT RUN.
+- Local Cargo validation: NOT RUN because the local environment has no Rust toolchain.
 
 No component in this table is declared functionally complete solely because its crate compiles.
