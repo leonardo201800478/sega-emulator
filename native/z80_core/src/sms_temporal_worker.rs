@@ -574,6 +574,7 @@ fn execute_frame<S: PcmSink>(
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
                 telemetry.set_audio_metrics(session.metrics());
+                telemetry.set_audio_error(session.output_error());
             }
         }
         Some(Err(error)) => {
@@ -831,6 +832,7 @@ mod tests {
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
+    use super::open_audio_session;
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
@@ -1037,6 +1039,62 @@ mod tests {
         drop(blocks_before_close);
 
         audio_session.as_mut().unwrap().close();
+    }
+
+    #[cfg(windows)]
+    fn run_real_audio_backend_smoke(backend: &str) {
+        let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
+        let mut audio_session = Some(
+            open_audio_session(backend, SMS_TEMPORAL_SAMPLE_RATE as u32, 512, 16, 100, 0)
+                .unwrap_or_else(|error| panic!("{backend} endpoint initialization failed: {error}")),
+        );
+        let telemetry = WorkerTelemetry::default();
+        let mut video_mailbox = None;
+        let mut video_sequence = 0;
+
+        for _ in 0..120 {
+            let (_, frame_wait) = execute_frame(
+                &mut machine,
+                DEFAULT_MAX_FRAME_INSTRUCTIONS,
+                &mut audio_session,
+                &mut video_mailbox,
+                &mut video_sequence,
+                &telemetry,
+            )
+            .expect("SMS worker frame must complete");
+            if !frame_wait.is_zero() {
+                std::thread::sleep(frame_wait);
+            }
+        }
+
+        let session = audio_session.as_mut().expect("audio session remains active");
+        let (underruns, dropped_blocks) = session.metrics();
+        let endpoint_submissions = session.endpoint_submission_count();
+        let output_error = session.output_error();
+        session.close();
+
+        eprintln!(
+            "backend={backend} endpoint_submissions={endpoint_submissions} underruns={underruns} dropped_blocks={dropped_blocks} output_error={output_error:?}"
+        );
+        assert!(endpoint_submissions > 0, "{backend} accepted no PCM-bearing endpoint buffers");
+        assert_eq!(dropped_blocks, 0, "{backend} dropped queued PCM blocks");
+        assert_eq!(output_error, None, "{backend} reported an asynchronous output error");
+    }
+
+    /// Requires a Windows render endpoint. Run explicitly with the ignored-test flag.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a configured Windows WASAPI render endpoint and manual listening"]
+    fn worker_frames_reach_real_wasapi_endpoint() {
+        run_real_audio_backend_smoke("wasapi");
+    }
+
+    /// Requires a Windows render endpoint. Run explicitly with the ignored-test flag.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a configured Windows XAudio2 render endpoint and manual listening"]
+    fn worker_frames_reach_real_xaudio2_endpoint() {
+        run_real_audio_backend_smoke("xaudio2");
     }
 
     #[test]
