@@ -488,11 +488,16 @@ class MinimalSmsWindow(QMainWindow):
         presented = machine.video_last_presented_sequence
         replaced = machine.video_replaced_frames
         recoveries = machine.video_device_recovery_count
+        audio_error = machine.audio_output_error
+        audio_underruns, audio_dropped_blocks = machine.audio_output_metrics
+        if audio_error:
+            logger.error("SMS native audio endpoint failed: %s", audio_error)
         now = time.monotonic()
         if now - self._last_telemetry_log_time >= 5.0:
             logger.info(
                 "SMS output telemetry: region=%s frame=%d fps=%s "
-                "published=%d presented=%d replaced=%d device_recoveries=%d",
+                "published=%d presented=%d replaced=%d device_recoveries=%d "
+                "audio_underruns=%d audio_dropped_blocks=%d audio_error=%s",
                 self._active_region or self._region,
                 frame_number,
                 frame_rate,
@@ -500,6 +505,9 @@ class MinimalSmsWindow(QMainWindow):
                 presented,
                 replaced,
                 recoveries,
+                audio_underruns,
+                audio_dropped_blocks,
+                audio_error or "none",
             )
             self._last_telemetry_log_time = now
         if presented:
