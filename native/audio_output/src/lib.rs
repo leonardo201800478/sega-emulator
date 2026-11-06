@@ -511,6 +511,8 @@ pub struct NativeXAudio2Output {
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
     dropped_blocks: Arc<AtomicU64>,
+    endpoint_submissions: Arc<AtomicU64>,
+    output_error: Arc<Mutex<Option<String>>>,
     sample_rate: u32,
     buffer_size: u32,
     balance: i8,
@@ -551,8 +553,12 @@ impl NativeXAudio2Output {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let endpoint_submissions = Arc::new(AtomicU64::new(0));
+            let output_error = Arc::new(Mutex::new(None));
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_endpoint_submissions = Arc::clone(&endpoint_submissions);
+            let worker_output_error = Arc::clone(&output_error);
             let worker = thread::Builder::new()
                 .name("sega-xaudio2-output".to_owned())
                 .spawn(move || {
@@ -561,6 +567,8 @@ impl NativeXAudio2Output {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_endpoint_submissions,
+                        worker_output_error,
                         sample_rate,
                         queue_blocks,
                     );
@@ -574,6 +582,8 @@ impl NativeXAudio2Output {
                     shutdown,
                     underruns,
                     dropped_blocks,
+                    endpoint_submissions,
+                    output_error,
                     sample_rate,
                     buffer_size,
                     balance,
@@ -660,6 +670,16 @@ impl NativeXAudio2Output {
         self.dropped_blocks.load(Ordering::Relaxed)
     }
 
+    /// Number of PCM buffers successfully submitted to the XAudio2 source voice.
+    pub fn endpoint_submission_count(&self) -> u64 {
+        self.endpoint_submissions.load(Ordering::Acquire)
+    }
+
+    /// Last asynchronous error from the XAudio2 worker.
+    pub fn output_error(&self) -> Option<String> {
+        self.output_error.lock().ok().and_then(|error| error.clone())
+    }
+
     pub fn close(&mut self) {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
@@ -684,6 +704,8 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    endpoint_submissions: Arc<AtomicU64>,
+    output_error: Arc<Mutex<Option<String>>>,
     sample_rate: u32,
     max_queued_buffers: usize,
 ) {
@@ -764,11 +786,12 @@ fn run_xaudio2_worker(
             return;
         }
     };
+    set_worker_output_error(&output_error, None);
     let _ = ready.send(Ok(()));
 
     let mut submitted = VecDeque::<Vec<u8>>::with_capacity(max_queued_buffers);
     let mut was_underrun = false;
-    loop {
+    'worker: loop {
         if shutdown.load(Ordering::Acquire) {
             break;
         }
@@ -792,11 +815,14 @@ fn run_xaudio2_worker(
                         pAudioData: block.as_ptr(),
                         ..Default::default()
                     };
-                    let result = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) };
-                    if result.is_err() {
+                    if let Err(error) =
+                        unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }
+                    {
                         submitted.pop_back();
-                        break;
+                        set_worker_output_error(&output_error, Some(error.to_string()));
+                        break 'worker;
                     }
+                    endpoint_submissions.fetch_add(1, Ordering::Release);
                     submitted_new = true;
                 }
                 Err(_) => break,
@@ -867,6 +893,14 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
 
     fn metrics(&self) -> (u64, u64) {
         (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn endpoint_submission_count(&self) -> u64 {
+        NativeXAudio2Output::endpoint_submission_count(self)
+    }
+
+    fn output_error(&self) -> Option<String> {
+        NativeXAudio2Output::output_error(self)
     }
 
     fn close(&mut self) {
