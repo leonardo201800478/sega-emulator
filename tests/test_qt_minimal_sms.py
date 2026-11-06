@@ -350,7 +350,9 @@ def test_sms_window_applies_persisted_audio_preferences(
 
     machine = window._machine
     assert isinstance(machine, FakeTemporalSMSMachine)
-    audio_call = next(call for call in machine.calls if call[0] == "configure_audio_output")
+    audio_call = next(
+        call for call in machine.calls if call[0] == "configure_audio_output"
+    )
     assert audio_call[1] == "xaudio2"
     assert audio_call[2] == {
         "sample_rate": 44_100,
