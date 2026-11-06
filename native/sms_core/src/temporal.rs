@@ -35,6 +35,11 @@ pub enum SmsTemporalEvent {
     M1TStateComplete {
         continuation_id: u64,
     },
+    /// External active-low TH line transition from a normalized peripheral event.
+    ExternalThTransition {
+        player: u8,
+        high: bool,
+    },
 }
 
 /// Versioned in-memory state for the coordinator and its scheduler timeline.
@@ -52,6 +57,8 @@ pub enum SmsTemporalCoordinatorError {
     ZeroBusCycleDuration,
     DurationOverflow,
     DeadlineOverflow,
+    InvalidExternalThPlayer(u8),
+    InvalidExternalThTimestamp,
     InvalidState,
     Scheduler(SchedulerError),
 }
@@ -65,6 +72,12 @@ impl fmt::Display for SmsTemporalCoordinatorError {
             }
             Self::DurationOverflow => f.write_str("bus cycle duration overflow"),
             Self::DeadlineOverflow => f.write_str("bus completion deadline overflow"),
+            Self::InvalidExternalThPlayer(player) => {
+                write!(f, "SMS external TH player must be 1 or 2, got {player}")
+            }
+            Self::InvalidExternalThTimestamp => f.write_str(
+                "SMS external TH timestamp must be a future, T-state-aligned machine time",
+            ),
             Self::InvalidState => f.write_str("SMS temporal coordinator state is inconsistent"),
             Self::Scheduler(error) => write!(f, "SMS machine scheduler failed: {error}"),
         }
@@ -212,6 +225,34 @@ impl SmsTemporalCoordinator {
             SmsTemporalEvent::M1TStateComplete { continuation_id },
         )?;
         Ok(deadline)
+    }
+
+    /// Schedule an external TH line transition at an absolute machine timestamp.
+    ///
+    /// The timestamp must be strictly in the future and aligned to the configured
+    /// Z80 T-state scale so all registered SMS clock domains advance together.
+    /// `high = false` represents the active-low peripheral assertion.
+    pub fn schedule_external_th_transition(
+        &mut self,
+        player: u8,
+        high: bool,
+        timestamp: MachineTime,
+    ) -> Result<MachineTime, SmsTemporalCoordinatorError> {
+        if player != 1 && player != 2 {
+            return Err(SmsTemporalCoordinatorError::InvalidExternalThPlayer(player));
+        }
+        let elapsed = timestamp
+            .checked_duration_since(self.now())
+            .filter(|elapsed| *elapsed > 0 && *elapsed % u128::from(self.master_ticks_per_tstate) == 0)
+            .ok_or(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)?;
+        let _ = elapsed;
+        self.scheduler.schedule_at_with_phase(
+            timestamp,
+            HardwarePhase::new(0),
+            PlatformPriority::new(0),
+            SmsTemporalEvent::ExternalThTransition { player, high },
+        )?;
+        Ok(timestamp)
     }
 
     /// Dispatch the next boundary after advancing the registered clock domain.
@@ -441,6 +482,53 @@ mod tests {
             assert_eq!(machine.now(), deadline);
         }
         assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 4);
+    }
+
+    #[test]
+    fn external_th_transition_is_timestamped_and_restores_with_shared_clock_phase() {
+        let mut machine = SmsTemporalCoordinator::new(3).unwrap();
+        let timestamp = MachineTime::from_ticks(15);
+        assert_eq!(
+            machine.schedule_external_th_transition(1, false, timestamp),
+            Ok(timestamp)
+        );
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalCoordinator::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        let dispatch = restored.dispatch_next().unwrap().unwrap();
+        assert_eq!(dispatch.event.timestamp, timestamp);
+        assert_eq!(
+            dispatch.event.payload,
+            SmsTemporalEvent::ExternalThTransition {
+                player: 1,
+                high: false
+            }
+        );
+        for domain in [
+            SMS_Z80_CLOCK_DOMAIN_ID,
+            SMS_PSG_CLOCK_DOMAIN_ID,
+            SMS_VDP_CLOCK_DOMAIN_ID,
+        ] {
+            let advance = dispatch.clock_advances.iter().find(|advance| advance.domain == domain).unwrap();
+            assert_eq!(advance.elapsed_cycles, 5);
+        }
+    }
+
+    #[test]
+    fn external_th_transition_rejects_invalid_player_and_unaligned_or_past_time() {
+        let mut machine = SmsTemporalCoordinator::new(3).unwrap();
+        assert_eq!(
+            machine.schedule_external_th_transition(0, false, MachineTime::from_ticks(3)),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThPlayer(0))
+        );
+        assert_eq!(
+            machine.schedule_external_th_transition(1, false, MachineTime::from_ticks(2)),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)
+        );
+        assert_eq!(
+            machine.schedule_external_th_transition(2, true, MachineTime::ZERO),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)
+        );
     }
 
     #[test]
