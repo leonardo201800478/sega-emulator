@@ -1,4 +1,6 @@
-//! Rust-owned D3D12 presentation session backed by a latest-frame mailbox.
+//! D3D12 presentation session backed by a latest-frame mailbox.
+//!
+//! The HWND may be owned by the Rust host or borrowed from a GUI toolkit.
 //!
 //! The producer publishes only completed immutable frames. A newer pending
 //! frame may replace an older pending presentation frame; emulation work and
@@ -14,7 +16,7 @@ use std::time::Duration;
 
 use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
 
-use super::D3d12Host;
+use super::{D3d12Host, NativeVideoWindow};
 use crate::{FrameMailbox, FrameMailboxError, VideoFrame};
 
 /// Errors reported by a D3D12 mailbox presentation session.
@@ -110,7 +112,7 @@ impl Drop for RunningFlagGuard {
     }
 }
 
-/// A Rust-owned D3D12 window and single-slot latest-frame presentation mailbox.
+/// A D3D12 presentation session and single-slot latest-frame mailbox.
 ///
 /// Publishing never waits for queue capacity or a GPU fence. It must happen
 /// only after a complete frame has been produced, outside Scheduler event
@@ -124,13 +126,46 @@ pub struct D3d12MailboxSession {
 }
 
 impl D3d12MailboxSession {
-    /// Start the native window and presentation worker.
+    /// Start the standalone native window and presentation worker.
     pub fn start(
         render_width: u32,
         render_height: u32,
         window_width: u32,
         window_height: u32,
     ) -> Result<Self, D3d12MailboxSessionError> {
+        let initialize_host = move || {
+            D3d12Host::initialize_with_window_size(
+                render_width,
+                render_height,
+                window_width,
+                window_height,
+            )
+        };
+        Self::start_with_host_factory(initialize_host)
+    }
+
+    /// Start presentation on an existing HWND owned by the calling GUI thread.
+    ///
+    /// The caller must invoke this method on the HWND's owning thread and keep
+    /// the associated widget alive until shutdown() has completed. The D3D12
+    /// worker never pumps or destroys this external window.
+    pub fn start_for_existing_window(
+        render_width: u32,
+        render_height: u32,
+        window_handle: usize,
+    ) -> Result<Self, D3d12MailboxSessionError> {
+        NativeVideoWindow::validate_existing_handle(window_handle)
+            .map_err(|error| D3d12MailboxSessionError::HostInitialization(error.to_string()))?;
+        let initialize_host = move || {
+            D3d12Host::initialize_for_existing_window(render_width, render_height, window_handle)
+        };
+        Self::start_with_host_factory(initialize_host)
+    }
+
+    fn start_with_host_factory<F>(initialize_host: F) -> Result<Self, D3d12MailboxSessionError>
+    where
+        F: Fn() -> windows::core::Result<D3d12Host> + Send + 'static,
+    {
         let mailbox = FrameMailbox::new();
         let worker_mailbox = mailbox.clone();
         let running = Arc::new(AtomicBool::new(false));
@@ -144,12 +179,7 @@ impl D3d12MailboxSession {
         let worker = thread::Builder::new()
             .name("sega-d3d12-mailbox-presentation".to_owned())
             .spawn(move || {
-                let mut host = match D3d12Host::initialize_with_window_size(
-                    render_width,
-                    render_height,
-                    window_width,
-                    window_height,
-                ) {
+                let mut host = match initialize_host() {
                     Ok(host) => host,
                     Err(error) => {
                         let message = error.to_string();
@@ -174,8 +204,6 @@ impl D3d12MailboxSession {
                         }
 
                         if host.is_minimized() {
-                            // Do not consume while minimized. The single-slot
-                            // mailbox naturally retains only the newest frame.
                             if worker_mailbox.is_closed()? {
                                 break;
                             }
@@ -196,8 +224,6 @@ impl D3d12MailboxSession {
                             continue;
                         };
 
-                        // Close the minimize race after dequeue. Retain this
-                        // completed frame until the window becomes visible.
                         if host.is_minimized() {
                             pending_frame = Some(frame);
                             continue;
@@ -210,12 +236,7 @@ impl D3d12MailboxSession {
                             if is_recoverable_device_loss(classification_reason) {
                                 let initial_reason = device_reason.unwrap_or(error);
                                 drop(host);
-                                host = match D3d12Host::initialize_with_window_size(
-                                    render_width,
-                                    render_height,
-                                    window_width,
-                                    window_height,
-                                ) {
+                                host = match initialize_host() {
                                     Ok(host) => host,
                                     Err(recovery_error) => {
                                         return Err(
@@ -333,5 +354,19 @@ impl Drop for D3d12MailboxSession {
     fn drop(&mut self) {
         let _ = self.mailbox.close();
         let _ = self.join_worker();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{D3d12MailboxSession, D3d12MailboxSessionError};
+
+    #[test]
+    fn rejects_zero_external_hwnd_before_starting_worker() {
+        let result = D3d12MailboxSession::start_for_existing_window(256, 192, 0);
+        assert!(matches!(
+            result,
+            Err(D3d12MailboxSessionError::HostInitialization(_))
+        ));
     }
 }
