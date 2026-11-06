@@ -7,6 +7,7 @@ Framebuffer storage, pixel conversion, filters and presentation remain in Rust.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -150,6 +151,7 @@ class MinimalSmsWindow(QMainWindow):
                 pass
 
         self._video_output_started = False
+        self._last_frame_sample = None
         self._audio_output_error = audio_error
         self._machine = machine
         self._rom_path = path
@@ -210,6 +212,7 @@ class MinimalSmsWindow(QMainWindow):
             except RuntimeError as exc:
                 audio_error = str(exc)
         self._video_output_started = False
+        self._last_frame_sample = None
         self._machine = None
         self._rom_path = None
         self._pressed_actions.clear()
@@ -246,17 +249,34 @@ class MinimalSmsWindow(QMainWindow):
             return str(exc)
         return None
 
+    def _sample_frame_rate(self, frame_number: int) -> str:
+        """Measure host-observed frame throughput without controlling emulation."""
+        now = time.monotonic()
+        previous = self._last_frame_sample
+        self._last_frame_sample = (now, frame_number)
+        if previous is None:
+            return "FPS: calculando"
+        elapsed = now - previous[0]
+        if elapsed <= 0:
+            return "FPS: indisponível"
+        frames = max(0, frame_number - previous[1])
+        return f"FPS: {frames / elapsed:.1f}"
+
     def _refresh_video_telemetry(self) -> None:
-        """Poll coarse Rust/D3D12 counters without receiving or rendering pixels."""
+        """Poll native execution and presentation counters without touching pixels."""
         machine = self._machine
         if machine is None or not self._video_output_started:
             self._video_telemetry_timer.stop()
             return
 
-        audio_error = machine.audio_output_error
-        if audio_error:
-            self._audio_output_error = audio_error
-        audio_status = self._audio_status_text()
+        runtime_error = machine.runtime_error
+        if runtime_error:
+            self._video_telemetry_timer.stop()
+            self.status_label.setText(
+                f"Falha de execução do núcleo Rust: {runtime_error}"
+            )
+            self.statusBar().showMessage(f"Execução SMS interrompida: {runtime_error}")
+            return
 
         error = machine.video_output_error
         if error:
@@ -272,27 +292,26 @@ class MinimalSmsWindow(QMainWindow):
             )
             return
 
+        frame_number = machine.frame_number
+        frame_rate = self._sample_frame_rate(frame_number)
+        prefix = f"Frames {frame_number} | {frame_rate} | "
         published = machine.video_last_published_sequence
         presented = machine.video_last_presented_sequence
         replaced = machine.video_replaced_frames
         recoveries = machine.video_device_recovery_count
         if presented:
             self.statusBar().showMessage(
-                f"D3D12: apresentado {presented}/{published} | "
-                f"substituídos {replaced} | recuperações {recoveries} | "
-                f"{audio_status}"
+                f"{prefix}D3D12: apresentado {presented}/{published} | "
+                f"substituídos {replaced} | recuperações {recoveries}"
             )
         elif published:
             self.statusBar().showMessage(
-                f"D3D12: {published} frame(s) publicados; "
-                "aguardando primeiro Present | "
-                f"{audio_status}"
+                f"{prefix}D3D12: {published} frame(s) publicados; "
+                "aguardando primeiro Present"
             )
         else:
             self.statusBar().showMessage(
-                "D3D12 inicializado; aguardando o primeiro frame da emulação "
-                "(F5/Iniciar) | "
-                f"{audio_status}"
+                f"{prefix}D3D12 inicializado; aguardando o primeiro frame da emulação"
             )
 
     def _start_video_output_if_visible(self) -> None:
