@@ -84,8 +84,7 @@ fn detect_mapper(rom: &CartridgeImage) -> MapperKind {
     if has_codemasters_header(rom.bytes()) {
         MapperKind::Codemasters
     } else if rom.len() > MAX_ROM_SIZE
-        && rom.len() <= MAX_EXTENDED_ROM_SIZE
-        && rom.len().is_power_of_two()
+        && rom.len().is_multiple_of(BANK_SIZE)
         && has_sega_header(rom.bytes())
     {
         // Homebrew 4 MiB cartridges can use an extended 8-bit bank latch.
