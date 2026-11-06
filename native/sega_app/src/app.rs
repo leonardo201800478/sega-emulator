@@ -344,7 +344,7 @@ impl SegaApp {
         let result = match command {
             AudioCommand::Configure => {
                 configure_audio_output(worker, self.audio_backend, self.audio_volume)
-            },
+            }
             AudioCommand::Disable => worker.close_audio_output(),
         };
         if let Err(error) = result {
