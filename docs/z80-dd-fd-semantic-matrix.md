@@ -1,7 +1,7 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, após PR #531; parent de PR #536).  
+**Baseline auditada:** `main` — `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (2026-11-06, após PRs #595–#597).  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
@@ -282,9 +282,9 @@ As flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR ficam **caracterizadas para o 
 
 ---
 
-## Aditivo de baseline apos PR #595 — 2026-11-06
+## Registro historico apos PR #595 — fotografia de 2026-11-06
 
-A `main` atual e `733152f61b706b2243914ae017643cef949d4ae1`. A PR #595 integrou a conexao da IRQ do VDP SMS temporal a entrada INT do Z80 e preserva a fonte INT externa em snapshot/restore. A alteracao ocorreu em `native/sms_core/src/temporal_machine.rs`; nao modificou o decoder DD/FD, o microsequenciador Z80 ou os resultados registrados para E4C, E5 e E6.
+Na fotografia imediatamente apos a PR #595, a `main` estava em `733152f61b706b2243914ae017643cef949d4ae1`. A baseline posterior, apos a PR #597, esta registrada no aditivo seguinte. A PR #595 integrou a conexao da IRQ do VDP SMS temporal a entrada INT do Z80 e preserva a fonte INT externa em snapshot/restore. A alteracao ocorreu em `native/sms_core/src/temporal_machine.rs`; nao modificou o decoder DD/FD, o microsequenciador Z80 ou os resultados registrados para E4C, E5 e E6.
 
 O CI #5178 passou no HEAD de codigo `69ca40ab29c486f26852adb7536a04f95f9dd7ae`, incluindo testes SMS de IRQ/INT e regressao do workspace. Essa evidencia e especifica a integracao de IRQ SMS e nao altera a classificacao das familias semanticas DD/FD.
 
@@ -292,3 +292,16 @@ O CI #5178 passou no HEAD de codigo `69ca40ab29c486f26852adb7536a04f95f9dd7ae`, 
 - E8 continua BLOCKED ate o fechamento documentado de E7; nao iniciar ZEXDOC/ZEXALL.
 - Nao reabrir E4C/E5/E6 sem divergencia semantica reproduzivel.
 - Nao promover testes de IRQ SMS a DIFFERENTIAL_PASS, TEMPORAL_PASS ou fechamento global do Z80.
+
+
+---
+
+## Aditivo de baseline apos PR #597 — 2026-11-06
+
+A main atual e `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. A PR #597 adicionou teste da fronteira SMS worker → `NativeAudioSession` → `PcmSink` com sink em memória. Nenhuma instrução, prefixo DD/FD, flag, WZ/MEMPTR, fase M-cycle/T-state ou lógica do microsequenciador foi alterada.
+
+O CI #5185 passou no HEAD `30554cc6642dd49d06adf495dca3e80f4822b081`. O teste de áudio SMS/SG-1000 foi executado; esta evidência não é diferencial de CPU nem temporal Z80.
+
+- E7.7 permanece IN_PROGRESS.
+- E8 permanece BLOCKED até o fechamento documentado de E7; não iniciar ZEXDOC/ZEXALL.
+- Não promover a integração de áudio SMS a DIFFERENTIAL_PASS, TEMPORAL_PASS ou fechamento global do Z80.

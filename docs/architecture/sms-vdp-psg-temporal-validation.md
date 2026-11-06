@@ -1,6 +1,6 @@
 # Matriz de validação temporal — SMS VDP 315-5124/315-5246 e PSG SN76489
 
-**Status:** ACCEPTANCE BASELINE — testes propostos, ainda não executados.  
+**Status:** ACCEPTANCE BASELINE — gates A/V-01/02/03/04a automatizados PASS; backend físico e gameplay ainda NOT RUN.  
 **ADR:** [Reconstrução Qt Temporal e fechamento vertical do Master System](ADR-sms-temporal-machine-qt-rebuild.md)  
 **Base inicial:** `b0bda60e3fbfa56f820fe77d3098f8b82b5af69d`  
 **Regra:** nenhuma linha desta matriz é PASS até existir teste executado no código integrado e evidência reproduzível.
@@ -14,32 +14,34 @@
 | A/V-01 | VDP / core | ROM sintética programa Mode 4, VRAM/name table e CRAM; frame concluído contém pixels RGB não pretos em coordenadas esperadas | Teste Rust determinístico com expected values; dimensão do frame isoladamente não basta |
 | A/V-02 | PSG / core | ROM sintética escreve registradores SN76489 e a timeline gera amostras PCM não silenciosas | Teste Rust determinístico: quantidade de amostras e amplitude não nula; estado de registrador isolado não basta |
 | A/V-03 | Worker / vídeo | O worker publica o framebuffer produzido pela máquina no mailbox como RGB888, com sequência crescente e pixels preservados | Teste do worker/mailbox com conteúdo conhecido |
-| A/V-04 | Worker / áudio | O PCM gerado chega à sessão nativa WASAPI/XAudio2 sem erro; underruns/dropped blocks são observados separadamente | Teste de integração da sessão e métricas; endpoint físico ainda requer teste manual |
-| A/V-05 | Host Windows | A janela D3D12 apresenta uma ROM de diagnóstico/jogo com imagem visível e o endpoint selecionado reproduz som audível | Teste manual em GPU e dispositivo de áudio reais; CI de compilação não substitui esta evidência |
-| A/V-06 | Gameplay | ROM legal/homebrew ou dump local fornecido pelo usuário ultrapassa o boot e permite interação reproduzível | Nome/região/configuração e SHA-256 apenas local; não versionar ROM comercial |
+| A/V-04a | Worker / NativeAudioSession | O worker drena PCM e `NativeAudioSession` entrega PCM16 não silencioso ao `PcmSink` antes do flush | Teste `worker_frame_submits_non_silent_pcm_to_native_audio_session_sink` com `RecordingSink`; CI #5185 PASS |
+| A/V-04b | Backend nativo | `NativeAudioBackend` WASAPI/XAudio2 aceita PCM sem erro e sem underrun sustentado | NOT RUN; sink em memória não comprova aceitação pelo backend real |
+| A/V-05 | Host Windows | A janela D3D12 apresenta uma ROM de diagnóstico/jogo com imagem visível e o endpoint selecionado reproduz som audível | NOT RUN; teste manual em GPU e dispositivo de áudio reais |
+| A/V-06 | Gameplay | ROM legal/homebrew ou dump local fornecido pelo usuário ultrapassa o boot e permite interação reproduzível | NOT RUN; registrar nome/região/configuração e SHA-256 apenas local; não versionar ROM comercial |
 
 Classificar cada critério separadamente como PASS, FAIL, BLOCKED ou NOT RUN. A ausência de teste ou a execução somente de smoke test com frame sintético é NOT RUN para a geração de imagem de jogo. A geração de PCM no core não é prova de saída física; inicializar WASAPI não é prova de áudio audível.
 
 A análise de desempenho real começa somente após A/V-01 a A/V-05 estarem comprovados. Registrar resolução, região, FPS, frametime por frame, frames publicados/apresentados, áudio underruns/dropped blocks e configuração do host. Telemetria que percorre framebuffer/VRAM/CRAM deve ser desativável ou ter seu overhead medido antes de comparar desempenho.
 
-## 0.1 Resultados integrados — PR #595
+## 0.1 Resultados integrados — PRs #595 e #597
 
-**Main após integração:** `733152f61b706b2243914ae017643cef949d4ae1`  
-**Código validado:** HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`  
-**CI:** [run #5178](https://github.com/leonardo201800478/sega-emulator/actions/runs/42196938080) — SUCCESS.
+**Main atual:** `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`  
+**PR #595:** HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`; [CI #5178](https://github.com/leonardo201800478/sega-emulator/actions/runs/42196938080) — SUCCESS.  
+**PR #597:** HEAD `30554cc6642dd49d06adf495dca3e80f4822b081`; [CI #5185](https://github.com/leonardo201800478/sega-emulator/actions/runs/42201475412) — SUCCESS; merge SHA `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`.
 
 | Gate | Estado | Evidência / limite |
 |---|---|---|
 | A/V-01 — VDP/core | PASS | ROM sintética Mode 4; RGB `[255,255,255]` exigido na linha 32 |
 | A/V-02 — PSG/core | PASS | ROM sintética programa SN76489; timeline produz PCM não silencioso |
 | A/V-03 — worker/mailbox | PASS | Worker publica RGB888 e preserva o pixel esperado no mailbox |
-| A/V-04 — worker/NativeAudioSession | NOT RUN | Falta teste integrado que prove PCM não silencioso recebido/aceito pela sessão |
+| A/V-04a — worker/NativeAudioSession/PcmSink | PASS | `RecordingSink` recebeu bloco PCM não silencioso antes do flush; CI #5185 |
+| A/V-04b — NativeAudioBackend/WASAPI/XAudio2 | NOT RUN | Sink em memória não comprova aceitação pelo backend nativo real |
 | A/V-05 — host físico | NOT RUN | GPU física, janela D3D12 e áudio audível em WASAPI/XAudio2 não foram testados |
 | A/V-06 — gameplay | NOT RUN | Nenhuma ROM real/homebrew foi comprovada nesta etapa |
 
 Jobs Rust, Python, Windows D3D12 e PyO3/Maturin passaram no HEAD exato. Scheduler deterministic stress, Windows Qt smoke e PowerShell tooling foram SKIPPED e permanecem NOT RUN. Nenhum SKIPPED foi contabilizado como PASS.
 
-A correção VDP IRQ → Z80 INT da PR #595 preserva a INT externa, sincroniza após dispatch e antes de iniciar instrução, e inclui validação do vetor/linha no restore. O teste sintético VBlank/IM1/HALT exige 20 reconhecimentos em 20 frames. Isso comprova o cenário automatizado específico, não Line IRQ em todos os modos, gameplay real ou precisão dot-level.
+A correção VDP IRQ → Z80 INT da PR #595 preserva a INT externa, sincroniza após dispatch e antes de iniciar instrução, e inclui validação do vetor/linha no restore. O teste sintético VBlank/IM1/HALT exige 20 reconhecimentos em 20 frames. A PR #597 generaliza `execute_frame` sobre `PcmSink` e verifica PCM não silencioso submetido pelo worker à `NativeAudioSession` antes do flush. Isso não comprova aceitação por WASAPI/XAudio2 real, áudio audível, Line IRQ em todos os modos, gameplay real ou precisão dot-level.
 
 ## 1. Classificação de evidência
 
