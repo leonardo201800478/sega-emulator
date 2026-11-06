@@ -183,9 +183,7 @@ class MinimalSmsWindow(QMainWindow):
         if machine is None or self._video_output_started or not self.isVisible():
             return
         try:
-            machine.open_video_output_in_viewport(
-                self.video_viewport.native_handle()
-            )
+            machine.open_video_output_in_viewport(self.video_viewport.native_handle())
         except (AttributeError, OSError, RuntimeError, ValueError) as exc:
             self.status_label.setText(
                 f"ROM carregada: {self._rom_path.name if self._rom_path else 'SMS'}\n"
