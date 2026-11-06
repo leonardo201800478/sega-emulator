@@ -311,7 +311,8 @@ class MinimalSmsWindow(QMainWindow):
         self._video_output_started = True
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            "Host D3D12 inicializado; pressione F5/Iniciar para executar.\n"
+            "Host D3D12 inicializado; aguardando o primeiro frame. "
+            "Pressione F5/Iniciar para executar.\n"
             f"{self._audio_status_text()}"
         )
         self._video_telemetry_timer.start()
