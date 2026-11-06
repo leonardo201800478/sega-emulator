@@ -58,7 +58,7 @@ Testes adicionados na branch:
 |---|---|---|
 | A/V-01 | Core VDP produz pixels RGB não pretos com ROM sintética | TESTE ADICIONADO; CI NOT RUN |
 | A/V-02 | PSG produz PCM não silencioso na timeline do Scheduler | TESTE ADICIONADO; CI NOT RUN |
-| A/V-03 | Worker publica frame produzido pelo VDP no mailbox RGB888 | Teste de publicação existente usa ROM sem configuração gráfica; novo teste de conteúdo do worker ainda necessário |
+| A/V-03 | Worker publica frame produzido pelo VDP no mailbox RGB888 | TESTE ADICIONADO: exige pixels não pretos no frame do mailbox; CI NOT RUN |
 | A/V-04 | Sessão WASAPI/XAudio2 recebe PCM não silencioso sem erro/underrun persistente | NOT RUN em endpoint físico |
 | A/V-05 | Janela D3D12 apresenta imagem em GPU física e áudio é audível | NOT RUN |
 | A/V-06 | Jogo representativo ultrapassa boot e permite gameplay | NOT RUN |
