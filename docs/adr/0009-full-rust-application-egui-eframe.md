@@ -138,14 +138,13 @@ A thread egui não pode bloquear em I/O, varredura, hashing, scraping, carregame
 
 O `MachineScheduler` permanece a única autoridade dos clocks/eventos emulados. O loop de repaint do eframe, VSync, timer do host e taxa do monitor não avançam nem corrigem clocks do console.
 
-A integração de vídeo precisa respeitar `VideoFrame`, mailbox e metadados de geometria/raster existentes. Não introduzir cópias de framebuffer por frame sem medição e sem necessidade. O protótipo deve verificar DX12, seleção de adapter, textura de frame, resize, VSync, recuperação de device e custo de upload.
+A integração de vídeo deve preservar a decisão já aceita na ADR-0012: o host de vídeo e o caminho de pixels permanecem Rust/D3D12, com HWND, swap chain, recursos, fences e apresentação sob ownership nativo. Esta ADR muda a tecnologia da interface de controle; não revoga a escolha do backend de vídeo.
 
-O renderer atual em `native/video_runtime` usa D3D12 diretamente. Não presumir que recursos D3D12 existentes podem ser compartilhados com o device wgpu do eframe: são abstrações/device ownership diferentes até prova em contrário. A primeira prova técnica deverá comparar:
-1. eframe + wgpu/DX12, com upload de frame por contrato explícito;
-2. integração customizada egui no renderer host existente, se tecnicamente sustentável;
-3. migração controlada da apresentação host para wgpu, mantendo o contrato de frame e os pixels produzidos pelo VDP.
+`eframe` usa seu próprio renderer de UI (por padrão wgpu, com opção Glow). Isso não autoriza transportar o framebuffer para uma textura wgpu nem substituir o renderer D3D12 do emulador. A hipótese inicial a provar é uma janela eframe como shell de aplicação e a superfície D3D12 como viewport nativo filho, controlado por Rust e posicionado a partir do layout da UI. O protótipo deve confirmar se a API pública do eframe/winit permite obter o HWND pai de forma suportada, criar/gerir a janela filha e sincronizar resize/DPI/foco/teclado sem depender de APIs privadas.
 
-Nenhuma opção poderá alterar VDP, clocks, raster, pixels ou Scheduler. A decisão do renderer será fechada após benchmark e teste de compatibilidade, não apenas por compilação.
+Se a integração em janela única não for suportável sem hacks, bloquear a migração do viewport e avaliar uma integração customizada do egui/event loop com o host D3D12. Não aceitar duas janelas independentes como arquitetura final sem decisão explícita. Não criar um segundo caminho de apresentação de vídeo.
+
+O protótipo deve verificar DX12, adapter, ownership do HWND, foco/captura de input, resize, DPI, minimize/restore, VSync, recuperação de device, shutdown e custo de UI. Nenhuma opção poderá alterar VDP, clocks, raster, pixels ou Scheduler. A decisão será fechada por prova funcional e medição, não apenas por compilação.
 
 ### 5.3 Áudio e input
 
@@ -167,6 +166,7 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 ### M1 — Aplicação Rust mínima
 - Criar binário `sega-app` e camada de aplicação independente da UI.
 - Abrir janela eframe com navegação mínima, estado da sessão e painel de diagnóstico.
+- Provar integração com o HWND do host D3D12 (parent/child, DPI, resize, foco e shutdown), sem mover pixels para o renderer wgpu.
 - Adicionar smoke tests headless do controller e teste de inicialização/encerramento da janela no Windows.
 - Não carregar ROM nem iniciar hardware até o contrato de sessão estar pronto.
 
@@ -174,7 +174,7 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 
 ### M2 — Integração vertical SG-1000/SMS
 - Integrar máquina Rust por API Rust direta, sem PyO3.
-- Migrar ciclo de vida coarse-grained, input, mailbox e apresentação de frame.
+- Migrar ciclo de vida coarse-grained, input, mailbox e apresentação D3D12 dentro da janela eframe, mantendo o renderer de vídeo Rust já aceito.
 - Preservar SG-1000 e SMS; comparar resultados com a baseline atual e fixtures determinísticas.
 - Provar execução contínua versus execução em blocos e encerramento sem deadlock.
 
