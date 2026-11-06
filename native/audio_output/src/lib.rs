@@ -1,7 +1,7 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
 #[cfg(windows)]
@@ -491,15 +491,16 @@ fn run_wasapi_worker(
 
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
-    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER,
-    XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
+    IXAudio2, IXAudio2EngineCallback, IXAudio2EngineCallback_Impl, IXAudio2MasteringVoice,
+    IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR,
+    XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
 #[cfg(windows)]
 use windows::Win32::System::SystemInformation::NTDDI_WIN10_RS5;
 #[cfg(windows)]
-use windows::core::PCWSTR;
+use windows::core::{HRESULT, PCWSTR};
 
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
@@ -698,6 +699,23 @@ impl Drop for NativeXAudio2Output {
 }
 
 #[cfg(windows)]
+struct XAudio2EngineCallbackState {
+    critical_error: Arc<AtomicI32>,
+}
+
+#[cfg(windows)]
+impl IXAudio2EngineCallback_Impl for XAudio2EngineCallbackState {
+    fn OnProcessingPassStart(&self) {}
+
+    fn OnProcessingPassEnd(&self) {}
+
+    fn OnCriticalError(&self, error: HRESULT) {
+        // XAudio2 callbacks run on the audio processing thread: signal only.
+        self.critical_error.store(error.0, Ordering::Release);
+    }
+}
+
+#[cfg(windows)]
 fn run_xaudio2_worker(
     mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
@@ -713,6 +731,11 @@ fn run_xaudio2_worker(
         return;
     }
     let _com_apartment = ComApartment;
+    let critical_error = Arc::new(AtomicI32::new(0));
+    let callback_state = XAudio2EngineCallbackState {
+        critical_error: Arc::clone(&critical_error),
+    };
+    let engine_callback = IXAudio2EngineCallback::new(&callback_state);
 
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
@@ -726,6 +749,11 @@ fn run_xaudio2_worker(
             .map_err(|error| error.to_string())?;
         }
         let engine = engine.ok_or_else(|| "XAudio2Create returned no engine".to_owned())?;
+        unsafe {
+            engine
+                .RegisterForCallbacks(&*engine_callback)
+                .map_err(|error| error.to_string())?;
+        }
         let mut mastering_voice: Option<IXAudio2MasteringVoice> = None;
         // The source voice is stereo PCM16. Keep the mastering voice stereo too;
         // declaring it mono forces a downmix and defeats the output balance control.
@@ -793,6 +821,14 @@ fn run_xaudio2_worker(
         if shutdown.load(Ordering::Acquire) {
             break;
         }
+        let critical_error_code = critical_error.load(Ordering::Acquire);
+        if critical_error_code != 0 {
+            set_worker_output_error(
+                &output_error,
+                Some(format!("XAudio2 critical engine error: 0x{:08X}", critical_error_code as u32)),
+            );
+            break;
+        }
 
         let mut state = XAUDIO2_VOICE_STATE::default();
         unsafe {
@@ -840,6 +876,7 @@ fn run_xaudio2_worker(
     }
 
     unsafe {
+        engine.UnregisterForCallbacks(&*engine_callback);
         let _ = source_voice.Stop(0, 0);
         let _ = source_voice.FlushSourceBuffers();
         source_voice.DestroyVoice();
