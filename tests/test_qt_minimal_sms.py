@@ -190,6 +190,7 @@ def test_close_rom_completes_when_d3d12_shutdown_reports_error(
     assert "presentation worker failed" in window.statusBar().currentMessage()
     window.close()
 
+
 def test_minimal_sms_window_maps_keyboard_levels_without_rendering_video(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
