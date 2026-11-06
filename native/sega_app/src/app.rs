@@ -93,5 +93,6 @@ mod tests {
         let output = context.run_ui(egui::RawInput::default(), |ui| app.render(ui));
 
         assert_ne!(output.shapes, [] as [eframe::epaint::ClippedShape; 0]);
+        output.drop_without_applying_deltas();
     }
 }
