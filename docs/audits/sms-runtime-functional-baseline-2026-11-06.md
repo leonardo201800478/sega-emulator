@@ -2,8 +2,9 @@
 
 **Data:** 2026-11-06  
 **Repositório:** `leonardo201800478/sega-emulator`  
-**Baseline remota:** `main` — `8bd7f6c78cacd247736268d141e4cc7e30805ccd`  
-**Branch de correção:** `fix/sms-functional-av-baseline-20261106`  
+**Baseline inicial:** `main` — `8bd7f6c78cacd247736268d141e4cc7e30805ccd`  
+**Main após integração:** `733152f61b706b2243914ae017643cef949d4ae1` (PR #595)  
+**HEAD de código validado:** `69ca40ab29c486f26852adb7536a04f95f9dd7ae`  
 **Escopo:** estabelecer e validar o primeiro caminho funcional de imagem e áudio no runtime temporal SMS, sem alterar o runtime SG-1000.
 
 ## 1. Resumo executivo
@@ -22,18 +23,17 @@ A prioridade foi alterada para: provar sinal gráfico e sonoro no core, provar t
 
 | Item | Estado observado |
 |---|---|
-| `main` | `8bd7f6c78cacd247736268d141e4cc7e30805ccd` |
-| PR #594 — ligação VDP IRQ → Z80 INT | Aberta, não integrada |
-| PR #593 — telemetria de VDP/PSG | Draft, não integrada |
-| CI do HEAD #594 (`9fc6a669`) | Run `42170676418`: CANCELLED; não é aprovação |
-| CI do HEAD #593 (`ee5ba892`) | Run `42170191385`: CANCELLED; não é aprovação |
-| Teste Windows com GPU/áudio físicos | NOT RUN |
+| `main` após merge #595 | `733152f61b706b2243914ae017643cef949d4ae1` |
+| PR #595 — baseline A/V + IRQ | MERGED; CI #5178 SUCCESS no HEAD exato `69ca40a` |
+| PR #594 — ligação VDP IRQ → Z80 INT | CLOSED como SUPERSEDED; sem alteração exclusiva útil não portada |
+| PR #593 — telemetria VDP/PSG | OPEN / DRAFT; CI #5176 CANCELLED no HEAD `ee5ba892` |
+| GPU/áudio físicos e gameplay real | NOT RUN |
 
 A PR #594 identificou corretamente a ausência de atualização automática da entrada INT a partir de `SmsVdp::interrupt_pending()`. Porém, a proposta inicial chamava `set_int_line(None)` sempre que o VDP não estivesse pendente. Isso sobrescreve uma linha INT externa independente, quebrando testes de HALT/INT existentes. A correção não deve tratar a saída do VDP como proprietária exclusiva do pino INT.
 
 A PR #593 adiciona telemetria por frame, mas seus scans de framebuffer/VRAM/CRAM introduzem trabalho adicional no worker. Essa telemetria pode ajudar a depurar a primeira ROM real, porém o overhead precisa ser medido ou a coleta deve ser desativável antes de usar o mesmo build para benchmark.
 
-## 3. Correção de IRQ em desenvolvimento
+## 3. Correção de IRQ integrada pela PR #595
 
 A branch de correção separa a fonte externa da saída IRQ do VDP:
 
@@ -53,15 +53,15 @@ Testes adicionados na branch:
 4. A mesma ROM programa o SN76489 e exige amostras PCM não silenciosas.
 5. O teste de interrupção usa R0 `$06` (Mode 4) e R1 `$E0` (16 KB, display ligado e frame IRQ ligado), verificando explicitamente os bits BLK/IE0.
 
-**Validação desta branch:** NOT RUN até que os workflows sejam executados no HEAD final. Nenhum resultado de PR #594 ou #593 é transferido para este candidato.
+**Validação integrada:** CI #5178 SUCCESS no HEAD exato `69ca40ab29c486f26852adb7536a04f95f9dd7ae`. A implementação e os testes descritos nesta seção estão integrados na `main` pelo merge SHA `733152f61b706b2243914ae017643cef949d4ae1`. Resultados de PR #594/#593 não foram transferidos; a #594 foi supersedida e a #593 continua Draft.
 
 ## 4. Gate A/V
 
 | Gate | Critério | Estado |
 |---|---|---|
-| A/V-01 | Core VDP produz pixels RGB não pretos com ROM sintética | TESTE ADICIONADO; CI NOT RUN |
-| A/V-02 | PSG produz PCM não silencioso na timeline do Scheduler | TESTE ADICIONADO; CI NOT RUN |
-| A/V-03 | Worker publica frame produzido pelo VDP no mailbox RGB888 | TESTE ADICIONADO: exige pixels não pretos no frame do mailbox; CI NOT RUN |
+| A/V-01 | Core VDP produz pixels RGB não pretos com ROM sintética | PASS — teste sintético Rust no CI #5178 |
+| A/V-02 | PSG produz PCM não silencioso na timeline do Scheduler | PASS — teste sintético Rust no CI #5178 |
+| A/V-03 | Worker publica frame produzido pelo VDP no mailbox RGB888 | PASS — pixel esperado RGB preservado no mailbox no CI #5178 |
 | A/V-04 | Sessão WASAPI/XAudio2 recebe PCM não silencioso sem erro/underrun persistente | NOT RUN em endpoint físico |
 | A/V-05 | Janela D3D12 apresenta imagem em GPU física e áudio é audível | NOT RUN |
 | A/V-06 | Jogo representativo ultrapassa boot e permite gameplay | NOT RUN |
@@ -166,35 +166,42 @@ Referências: [Microsoft — timeBeginPeriod](https://learn.microsoft.com/en-us/
 A tarefa só pode ser declarada concluída após os gates aplicáveis e a validação manual A/V. `SKIPPED` e `NOT RUN` não são PASS.
 
 
-## 9. Atualização de validação e revisão — 2026-11-06
+## 9. Estado final após integração — 2026-11-06
 
-Esta seção atualiza os estados provisórios acima, que foram escritos antes da conclusão do CI do candidato.
-
-**HEAD validado:** `c097c4d87907a5472f1e7c30e519ef78b1c05c05`  
-**Workflow:** [CI run #5177](https://github.com/leonardo201800478/sega-emulator/actions/runs/42195973805) — **SUCCESS**.
+**Main:** `733152f61b706b2243914ae017643cef949d4ae1` (merge commit da PR #595).  
+**HEAD validado pelo CI:** `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.  
+**Workflow:** [CI run #5178](https://github.com/leonardo201800478/sega-emulator/actions/runs/42196938080) — **SUCCESS**.
 
 | Suíte / gate | Classificação | Evidência / limite |
 |---|---|---|
-| Rust lockfiles | PASS | Verificação dos lockfiles concluída |
+| Rust lockfiles | PASS | Lockfiles verificados |
 | Rust fmt | PASS | `cargo fmt --all -- --check` |
 | Rust Clippy | PASS | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
-| Rust workspace tests | PASS | `cargo test --workspace --locked`; inclui assert RGB exato em linha 32 e testes VDP IRQ/INT |
-| Python lint e regressão | PASS | Ruff format/lint e pytest; 332 passed, 9 skipped no runner Linux por ausência da extensão PyO3 nesse ambiente |
-| PyO3 Windows | PASS | Maturin build, import, smoke temporal SMS sintético e integração SMS/SG-1000/input |
-| Windows x64 D3D12 e áudio nativo | PASS | Compilação e testes automatizados dos contratos de vídeo/áudio |
-| Scheduler deterministic stress | NOT RUN | Job SKIPPED pelo classificador de impacto; não equivale a PASS |
+| Rust workspace tests | PASS | `cargo test --workspace --locked`; inclui pixels RGB, PSG, IRQ e snapshots |
+| Python lint/regressão | PASS | Ruff e pytest; 332 passed, 9 skipped no runner Linux pela ausência da extensão PyO3 nesse ambiente |
+| PyO3 Windows | PASS | Build Maturin, import, smoke SMS e integração SMS/SG-1000/input |
+| Windows x64 D3D12/áudio nativo | PASS | Compilação e testes automatizados dos contratos |
+| Scheduler deterministic stress | NOT RUN | Job SKIPPED pelo classificador de impacto |
 | Windows Qt smoke | NOT RUN | Job SKIPPED pelo classificador de impacto |
 | Windows PowerShell tooling | NOT RUN | Job SKIPPED pelo classificador de impacto |
-| GPU física / janela D3D12 real | NOT RUN | CI não substitui teste em hardware |
-| Endpoint WASAPI/XAudio2 físico | NOT RUN | Não há prova de som audível em dispositivo real |
-| Gameplay com ROM real/homebrew | NOT RUN | A ROM sintética comprova somente os contratos testados |
+| A/V-01 — pixels no core | PASS | RGB `[255,255,255]` esperado na linha 32 |
+| A/V-02 — PCM no core | PASS | Amostras não silenciosas produzidas pelo SN76489 |
+| A/V-03 — worker/mailbox vídeo | PASS | Pixel esperado preservado em RGB888 no mailbox |
+| A/V-04 — worker/NativeAudioSession | NOT RUN | Não existe ainda teste integrado que comprove PCM recebido/aceito pela sessão |
+| GPU física / janela D3D12 | NOT RUN | CI não substitui teste em hardware |
+| Endpoint WASAPI/XAudio2 audível | NOT RUN | Não há evidência de som audível em dispositivo real |
+| Gameplay com ROM real/homebrew | NOT RUN | ROM sintética não comprova boot/gameplay de jogo |
 
-### Revisão estática adicional do diff
+### Revisão técnica estática
 
-Foi revisado o caminho de sincronização de INT, a preservação da fonte externa no snapshot, a validação do vetor de acknowledge no restore, o teste IM 1/HALT, a configuração de Mode 4 e a fixture de PCM. Não foi identificado bloqueador estático no diff revisado. Esta revisão não é uma aprovação independente de terceiro e não altera os estados NOT RUN acima.
+O diff de código e documentação foi revisado nesta sessão. Não foi identificado bloqueador estático na combinação da INT externa com IRQ do VDP, no schema 24→25, na validação de restore, no acknowledge, na ROM Mode 4/PSG ou na publicação RGB888. A revisão é estática; não equivale a validação física nem a aprovação formal de terceiro.
 
-### Decisão de integração
+### Decisões de integração
 
-A PR #595 pode ser integrada como correção de baseline e regressão automatizada, sem declarar o Master System funcional em hardware real ou compatível com jogos em geral. A integração não encerra os gates A/V-04, A/V-05 ou A/V-06, não fecha a auditoria temporal do VDP e não altera o bloqueio E7.7 → E8.
+- **PR #595:** MERGED em `733152f61b706b2243914ae017643cef949d4ae1`, usando expected HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
+- **PR #594:** CLOSED como SUPERSEDED após comparação; sua ligação IRQ foi substituída pela implementação que preserva INT externa, e o relatório específico foi absorvido nesta auditoria.
+- **PR #593:** permanece OPEN / DRAFT; scans de framebuffer/VRAM/CRAM podem introduzir overhead. Medir custo e tornar coleta desativável antes de benchmarks.
 
-A próxima etapa permanece a comprovação da rota worker → sessão de áudio, seguida de teste manual Windows com GPU e endpoint físico e validação de uma ROM legal/homebrew.
+### Próxima etapa
+
+Implementar e testar o caminho worker → `NativeAudioSession` com PCM conhecido. Separar as provas de PCM gerado, drenado, recebido, aceito pelo backend e audível. Depois validar vídeo/áudio no Windows físico e gameplay com ROM legal/homebrew. E7.7 permanece IN_PROGRESS e E8 BLOCKED; SG-1000 continua sujeito a regressão.

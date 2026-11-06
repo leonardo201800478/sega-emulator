@@ -278,3 +278,17 @@ As flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR ficam **caracterizadas para o 
 - E7/E9 não exigem traces elétricos universais nem microsequenciamento de instruções puramente internas; aplicar ADR-0016 e priorizar efeitos observáveis pelo SMS/SG-1000.
 
 **Status:** evidência atualizada; E7.7 ainda não encerrada.
+
+
+---
+
+## Aditivo de baseline apos PR #595 — 2026-11-06
+
+A `main` atual e `733152f61b706b2243914ae017643cef949d4ae1`. A PR #595 integrou a conexao da IRQ do VDP SMS temporal a entrada INT do Z80 e preserva a fonte INT externa em snapshot/restore. A alteracao ocorreu em `native/sms_core/src/temporal_machine.rs`; nao modificou o decoder DD/FD, o microsequenciador Z80 ou os resultados registrados para E4C, E5 e E6.
+
+O CI #5178 passou no HEAD de codigo `69ca40ab29c486f26852adb7536a04f95f9dd7ae`, incluindo testes SMS de IRQ/INT e regressao do workspace. Essa evidencia e especifica a integracao de IRQ SMS e nao altera a classificacao das familias semanticas DD/FD.
+
+- E7.7 continua IN_PROGRESS.
+- E8 continua BLOCKED ate o fechamento documentado de E7; nao iniciar ZEXDOC/ZEXALL.
+- Nao reabrir E4C/E5/E6 sem divergencia semantica reproduzivel.
+- Nao promover testes de IRQ SMS a DIFFERENTIAL_PASS, TEMPORAL_PASS ou fechamento global do Z80.
