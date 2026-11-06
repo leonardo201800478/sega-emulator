@@ -201,3 +201,52 @@ sufficient by themselves to prove the public crate boundary.
 
 This is a source-level dependency audit only. The crate has not been created,
 the worker has not been moved, and no compilation or tests have been run.
+
+
+## 9. Única correção funcional autorizada durante a migração: desempenho
+
+A migração pode conter **uma única frente de correção funcional além da reorganização**:
+resolver o desempenho insuficiente já identificado, porque a lentidão impede
+validar o emulador com ROMs e dispositivos reais em condições úteis.
+
+Essa exceção tem escopo estrito:
+
+- Corrigir somente a causa-raiz de desempenho já identificada e documentada
+  pelo projeto; não abrir uma campanha genérica de otimização.
+- Antes de alterar código, vincular a causa a evidência reproduzível
+  (benchmark/profiling, caminho de execução e commit/issue de origem). Se a
+  evidência histórica se referir ao runtime Python/SG-1000 legado, ela não
+  pode ser presumida como causa do runtime SMS temporal Rust atual.
+- A correção deve ocorrer no caminho Rust ativo e na nova estrutura
+  `rust/`, sem reintroduzir Python, PyO3, JIT, frame skipping, hacks de
+  temporização ou paralelismo especulativo.
+- Não alterar a semântica de CPU, M-cycles/T-states, barramento, Scheduler,
+  ordem causal, VDP, PSG, input ou sincronização A/V para obter FPS.
+- Não misturar essa correção com refatorações oportunistas, mudanças gráficas,
+  alterações de áudio/input ou features novas.
+- Manter benchmark comparável antes/depois com a mesma ROM identificada por
+  hash, configuração, máquina/runner e build; reportar FPS/tempo por frame,
+  p50/p95, uso de CPU e resultados funcionais relevantes.
+- Aceitar a correção somente se o ganho for mensurável e não houver regressão
+  em determinismo, hashes de framebuffer/áudio, input, precisão temporal ou
+  lifecycle.
+
+### Gate de validação real
+
+O objetivo da correção é tornar possível executar os testes reais de:
+
+1. qualidade e estabilidade gráfica (frames/pixels e apresentação);
+2. latência e comportamento de input;
+3. geração, continuidade e saída física de áudio;
+4. gameplay contínuo em ROM sintética/homebrew apropriada.
+
+O desempenho mínimo necessário será definido pelo benchmark de referência e
+pelo alvo de vídeo do hardware; não inventar um número de FPS sem fixar a
+carga e o ambiente. Testes físicos Windows permanecem distintos dos testes
+headless. Nenhuma correção de desempenho será declarada concluída só porque
+o shell ou a janela abre.
+
+**Status:** exceção de escopo aprovada pelo usuário; causa-raiz específica
+ainda precisa ser ligada à evidência correta do runtime SMS temporal atual
+antes da alteração de código. Não confundir com a auditoria histórica
+Python/SG-1000 da issue #44.
