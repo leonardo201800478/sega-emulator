@@ -25,7 +25,7 @@ Esta página é a fotografia do SHA indicado. PRs abertas ou Draft não integram
 | Z80 E7 | Parcial; HALT T4, reset e testes de interrupção SMS possuem cobertura direcionada | Auditoria semântica global ainda aberta |
 | Memória / mapper SMS | Integrados ao `SmsTemporalBus` | Compatibilidade de cartuchos deve ser validada com ROMs legais/homebrew e metadados locais |
 | VDP SMS | `SmsVdp` compartilhado em `sega_video::sms`, conectado ao barramento temporal; portas, VRAM/CRAM, Mode 4 e composição por scanline | Não é pipeline dot/fetch; pixels de jogos reais ainda precisam de comprovação ponta a ponta |
-| IRQ do VDP → INT do Z80 | O VDP calcula VBlank/Line IRQ; a ligação automática não está integrada na main deste SHA | PR #594 propôs a ligação, mas sua primeira implementação sobrescreve INT externo; correção preservando fontes independentes está em desenvolvimento |
+| IRQ do VDP → INT do Z80 | O VDP calcula VBlank/Line IRQ; a ligação automática não está integrada na main deste SHA | PR #595 liga a linha em dispatch e antes de cada instrução, preserva INT externo e vetor de acknowledge `$FF`; testes/example ainda aguardam CI |
 | PSG SN76489 | Integrado ao `SmsTemporalBus` via `ScheduledPsg`; escritas de porta e geração de amostras seguem avanço do Scheduler | Geração de amostras não prova saída física audível |
 | Scheduler SMS | `SmsTemporalMachine` despacha eventos e o barramento aplica efeitos nas fronteiras programadas | VDP ainda avança em modelo scanline; WAIT físico, fetch arbitration e precisão intralinha não estão comprovados |
 | Vídeo / mailbox | Worker Rust publica frames RGB888 de 256×192 no `FrameMailbox` | Testes de contrato do mailbox não provam que o framebuffer de uma ROM tenha pixels visíveis |
