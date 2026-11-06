@@ -978,7 +978,11 @@ mod tests {
         worker.step_frame(100_000).unwrap();
         assert!(
             mailbox.take_latest().unwrap().is_none(),
-            "detaching must stop frame publication without closing the owner mailbox"
+            "detaching must stop frame publication"
+        );
+        assert!(
+            !mailbox.is_closed().unwrap(),
+            "detaching must not close the externally owned mailbox"
         );
     }
 
