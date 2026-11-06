@@ -1375,7 +1375,7 @@ mod temporal_vdp_tests {
         assert_eq!(restored.export_state(), snapshot);
         assert_eq!(restored.vdp(), whole.vdp());
     }
-    
+
     #[test]
     fn japanese_output_high_to_input_high_does_not_fake_a_th_rising_edge() {
         fn japanese_bus() -> SmsTemporalBus {
