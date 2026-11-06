@@ -9,15 +9,19 @@ mod audio;
 mod input;
 mod machine;
 mod sms_machine;
+mod sms_temporal_machine;
+mod sms_temporal_worker;
 
 use input::NativeInputManager;
 use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
 use sms_machine::NativeSMSMachine;
+use sms_temporal_machine::NativeSMSTemporalMachine;
 
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeSG1000Machine>()?;
     module.add_class::<NativeSMSMachine>()?;
+    module.add_class::<NativeSMSTemporalMachine>()?;
     module.add_class::<NativeInputManager>()?;
     module.add_class::<NativeCpuSnapshot>()?;
     module.add_class::<NativeVdpSnapshot>()?;

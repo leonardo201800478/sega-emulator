@@ -18,7 +18,7 @@ Transferir para Rust o caminho completo de vídeo: contrato de frame, recursos, 
 - **Master Scheduler:** único proprietário de MachineTime e da ordenação temporal dos dispositivos. Não espera GPU/fences e não ajusta ciclos ao refresh da tela.
 - **VideoFrame:** frame imutável com dimensões, formato, pitch/stride e sequência. Formatos iniciais: RGB565 e RGBA8888. Ownership e backpressure explícitos.
 - **Rust video host:** proprietário do HWND, D3D12 device, direct queue, command allocators/lists, resources, descriptors, shaders/PSO, upload, DXGI swap chain, fences e apresentação.
-- **Python/PySide6:** launcher, menus, configuração, comandos coarse-grained, logs e telemetria. Não recebe pixels por frame, não cria QImage/QPixmap por frame, não participa do stepping nem do frame pacing e não possui recursos gráficos do caminho principal.
+- **Python/PySide6:** launcher, menus, configuração, comandos coarse-grained, logs e telemetria. Não recebe pixels por frame, não cria QImage/QPixmap por frame, não participa do stepping nem do frame pacing e não possui recursos gráficos do caminho principal. A janela Qt mínima é somente de controle; não oferece viewport, não chama `step_frame` e não executa loops/timers de emulação.
 
 O renderer apenas apresenta um frame já produzido. Nenhum shader pode implementar registradores, fetch, sprite evaluation, colisão, IRQ, H/V counters ou timing do VDP. O runtime da máquina deve continuar testável headless, sem device gráfico.
 
@@ -50,6 +50,19 @@ A janela de apresentação é criada/gerenciada pelo host Rust. O frontend pode 
 5. **Integração SMS1:** conectar máquina → VideoFrame → DX12 sem Python/PyO3 no caminho.
 6. **Validação Windows:** resize/DPI/fullscreen windowed/minimize/restore/shutdown, device loss, fences, frame pacing, replay e regressão SG-1000.
 7. **Remoção do legado:** somente após equivalência funcional/temporal demonstrada e gates aprovados.
+
+## HDR, VRR, G-Sync e latência de entrada
+
+Esses recursos são critérios de aceitação do host nativo, não capacidades presumidas por usar D3D12:
+
+- **HDR10:** validar formato/bit depth, espaço de cor DXGI, metadata HDR estática, cadeia de apresentação e monitor HDR real.
+- **HDR10+:** exige suporte explícito à metadata dinâmica HDR10+ no caminho de apresentação e compatibilidade do display. HDR10 estático não comprova HDR10+.
+- **VRR:** comprovar a apresentação variável com monitor, cabo, driver, modo de janela e configuração suportados; VSync desligado por si só não comprova VRR.
+- **G-Sync:** validar em hardware NVIDIA compatível, com indicador/telemetria do driver e medições. Não inferir G-Sync apenas de VRR/DXGI.
+- **Input lag:** não prometer custo zero. O objetivo é latência baixa e mensurável, com fila limitada, frames-in-flight controlados e timestamps de input → emulação → Present. A medição deve usar hardware físico e metodologia repetível.
+- Nenhum desses recursos pode alterar o relógio lógico da máquina, acelerar/atrasar o Scheduler ou descartar trabalho de emulação.
+
+A Qt/Python não participa desses caminhos. Até que os gates acima estejam comprovados, a apresentação permanece desabilitada na camada Python e nenhuma alegação de HDR10+, VRR, G-Sync ou input lag zero é permitida.
 
 ## Requisitos D3D12
 
@@ -89,4 +102,15 @@ A janela de apresentação é criada/gerenciada pelo host Rust. O frontend pode 
 
 ## Situação
 
-**DOCUMENTAÇÃO / DECISÃO ARQUITETURAL.** Nenhum backend D3D12 foi implementado por esta atualização. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
+**Estado na publicação original desta proposta:** DOCUMENTAÇÃO / DECISÃO ARQUITETURAL; o backend D3D12 ainda não estava implementado. O histórico posterior está registrado na seção Implementação publicada abaixo. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
+
+
+## Implementação publicada — 2026-11-05
+
+A implementação do host D3D12 avançou e foi integrada à `main` pelas PRs #546, #547, #550, #553, #555 e #558. O contrato funcional público do novo VDP SMS1 recebeu testes externos na #560. As entregas incluem fila FIFO lossless com backpressure, sessão Rust-owned em worker dedicado, retenção de frames durante minimize/restore, DPI por janela PMv2/PMv1, waits finitos com detecção de device loss e recuperação one-shot para `DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET`.
+
+A recuperação retenta uma única vez o mesmo frame imutável; não avança nem reinicia o Scheduler. Falha de recuperação é reportada explicitamente. A recriação também substitui o HWND, portanto a preservação exata de posição ainda requer validação.
+
+**Estado atualizado:** o host/sessão de apresentação está implementado e CI passou nos HEADs integrados. Ainda não há wiring da máquina SMS1 ativa para `VideoFrame`/D3D12. `SmsMachine` continua usando o VDP legado e `SmsTemporalMachine` não conecta VDP/PSG ao Scheduler. O VDP SMS1 permanece scanline-functional; fase, H-counter, fetch schedule, arbitragem, WAIT e IRQ temporal continuam bloqueados pela evidência T0/T0.1. GPU física, device-loss forçado, mixed-DPI real e replay headless-vs-GPU permanecem `NOT RUN`.
+
+Registro detalhado: [auditoria de merges e validação de 2026-11-05](../../audits/video-runtime-d3d12-session-merge-audit-2026-11-05.md).

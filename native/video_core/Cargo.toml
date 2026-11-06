@@ -1,0 +1,11 @@
+[package]
+name = "sega-video"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_video"
+path = "src/lib.rs"
+
+[dependencies]

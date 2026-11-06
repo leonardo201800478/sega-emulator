@@ -3,13 +3,14 @@
 //! This milestone owns the Win32 presentation window, DXGI factory/swap chain,
 //! D3D12 device, direct queue, command allocator/list, render-target views and
 //! fence lifecycle. It uploads immutable VideoFrame data from the presentation
-//! mailbox, converts RGB565 to RGBA8888 when required, and presents through
+//! mailbox, converts RGB565/RGB888 to RGBA8888 when required, and presents through
 //! DXGI. The synthetic color-bar path remains available as a host diagnostic.
 //!
-//! Resize handling, device-loss recovery, and physical-GPU validation remain
-//! outside this milestone. GPU waits are restricted to the presentation thread
-//! and must never gate emulation or Scheduler advancement.
+//! Window resize/DPI handling is owned by Win32/DXGI. Device-loss recovery and
+//! physical-GPU validation remain pending. GPU waits use finite polling on the
+//! presentation thread and must never gate emulation or Scheduler advancement.
 
+use core::ffi::c_void;
 use core::fmt;
 use core::mem::ManuallyDrop;
 use core::ptr::null_mut;
@@ -18,7 +19,8 @@ use std::slice;
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
 use windows::Win32::Foundation::{
-    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
+    CloseHandle, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HANDLE, HINSTANCE, HWND, LPARAM,
+    LRESULT, RECT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
 };
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
@@ -50,20 +52,42 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
+use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObjectEx};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
+    SetThreadDpiAwarenessContext,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
-    WS_OVERLAPPEDWINDOW,
+    DispatchMessageW, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
 
-const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
+mod mailbox_session;
+mod session;
+pub use mailbox_session::{D3d12MailboxSession, D3d12MailboxSessionError};
+pub use session::{D3d12Session, D3d12SessionError};
 
-/// Native Win32 window owned by the Rust video host.
+const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
+const PRESENTATION_WAIT_POLL_MS: u32 = 16;
+
+struct ThreadDpiAwarenessGuard(DPI_AWARENESS_CONTEXT);
+
+impl Drop for ThreadDpiAwarenessGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = SetThreadDpiAwarenessContext(self.0);
+        }
+    }
+}
+
+/// Native HWND wrapper; the host tracks whether it owns or borrows the window.
 pub struct NativeVideoWindow {
     hwnd: HWND,
+    owns_window: bool,
 }
 
 impl NativeVideoWindow {
@@ -75,6 +99,23 @@ impl NativeVideoWindow {
                 "window dimensions must be in the non-zero i32 range",
             ));
         }
+
+        // Assign DPI awareness to this HWND only. Restore the worker thread's
+        // prior context immediately after CreateWindowExW so the host does not
+        // mutate the process-wide or long-lived thread policy.
+        let previous_context = unsafe {
+            let per_monitor_v2 =
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            if per_monitor_v2.is_invalid() {
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE)
+            } else {
+                per_monitor_v2
+            }
+        };
+        if previous_context.is_invalid() {
+            return Err(Error::from_thread());
+        }
+        let dpi_guard = ThreadDpiAwarenessGuard(previous_context);
 
         let instance = unsafe { GetModuleHandleW(None)? };
         let class_name = w!("SegaEmulatorD3D12Window");
@@ -88,7 +129,13 @@ impl NativeVideoWindow {
 
         let atom = unsafe { RegisterClassW(&class) };
         if atom == 0 {
-            return Err(Error::from_thread());
+            // A device-loss recovery may recreate the HWND on this same
+            // presentation thread. The process-wide window class remains
+            // registered after the old HWND is destroyed.
+            let last_error = unsafe { GetLastError() };
+            if last_error != ERROR_CLASS_ALREADY_EXISTS {
+                return Err(Error::from_thread());
+            }
         }
 
         let hwnd = unsafe {
@@ -108,11 +155,45 @@ impl NativeVideoWindow {
             )?
         };
 
+        drop(dpi_guard);
+
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOW);
         }
+        Ok(Self {
+            hwnd,
+            owns_window: true,
+        })
+    }
 
-        Ok(Self { hwnd })
+    /// Validate a Qt-owned HWND on the calling thread before handing it to
+    /// the dedicated D3D12 presentation worker.
+    pub(crate) fn validate_existing_handle(handle: usize) -> Result<()> {
+        if handle == 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "external HWND must be non-zero",
+            ));
+        }
+        let hwnd = HWND(handle as *mut c_void);
+        if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "external HWND is not a valid window on the calling thread",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Wrap a Qt-owned HWND without taking ownership or destroying it.
+    ///
+    /// The caller must validate the handle on its owning thread and keep the
+    /// widget alive until the D3D12 session has shut down.
+    fn from_existing_handle(handle: usize) -> Self {
+        Self {
+            hwnd: HWND(handle as *mut c_void),
+            owns_window: false,
+        }
     }
 
     /// Return the native HWND without transferring its ownership.
@@ -120,8 +201,24 @@ impl NativeVideoWindow {
         self.hwnd
     }
 
+    /// Return whether Windows currently considers this window minimized.
+    ///
+    /// The caller must avoid dequeuing completed frames while minimized so
+    /// presentation suspension cannot silently discard accepted frames.
+    pub fn is_minimized(&self) -> bool {
+        if self.owns_window {
+            unsafe { IsIconic(self.hwnd).as_bool() }
+        } else {
+            false
+        }
+    }
+
     /// Pump pending Win32 messages; return false after WM_QUIT.
     pub fn pump_messages(&self) -> bool {
+        if !self.owns_window {
+            // The Qt GUI thread owns and pumps messages for this HWND.
+            return true;
+        }
         let mut message = MSG::default();
         let mut running = true;
 
@@ -136,18 +233,18 @@ impl NativeVideoWindow {
             }
         }
 
-        running
+        running && unsafe { IsWindow(Some(self.hwnd)).as_bool() }
     }
 }
 
 impl Drop for NativeVideoWindow {
     fn drop(&mut self) {
-        if !self.hwnd.0.is_null() {
+        if self.owns_window && !self.hwnd.0.is_null() {
             unsafe {
                 let _ = DestroyWindow(self.hwnd);
             }
-            self.hwnd = HWND::default();
         }
+        self.hwnd = HWND::default();
     }
 }
 
@@ -157,8 +254,39 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message == WM_NCCREATE {
+        // PMv2 scales non-client areas automatically. This call additionally
+        // enables that behavior for the PMv1 fallback context.
+        let _ = unsafe { EnableNonClientDpiScaling(hwnd) };
+    }
+
+    if message == WM_DPICHANGED && lparam.0 != 0 {
+        // Windows supplies the suggested outer-window rectangle for the new
+        // monitor DPI. The swap-chain's logical SMS surface remains unchanged;
+        // DXGI stretch scaling continues to map it to the resized client area.
+        let suggested = unsafe { &*(lparam.0 as *const RECT) };
+        let width = suggested.right - suggested.left;
+        let height = suggested.bottom - suggested.top;
+        let resized = unsafe {
+            SetWindowPos(
+                hwnd,
+                None,
+                suggested.left,
+                suggested.top,
+                width,
+                height,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+        if resized.is_ok() {
+            return LRESULT(0);
+        }
+    }
+
     if message == WM_DESTROY {
-        unsafe { PostQuitMessage(0) };
+        // Do not post WM_QUIT here: a device-loss recovery can destroy and
+        // recreate this HWND on the same worker thread. pump_messages() checks
+        // whether its own HWND still exists to detect user closure.
         return LRESULT(0);
     }
 
@@ -268,6 +396,33 @@ impl D3d12Host {
             ));
         }
         let window = NativeVideoWindow::create(window_width, window_height)?;
+        Self::initialize_with_window(render_width, render_height, window)
+    }
+
+    /// Initialize a swap chain for an HWND borrowed from a GUI toolkit.
+    ///
+    /// The HWND must be validated on its owning GUI thread before this call
+    /// and remain alive until the presentation session has shut down.
+    pub(crate) fn initialize_for_existing_window(
+        render_width: u32,
+        render_height: u32,
+        window_handle: usize,
+    ) -> Result<Self> {
+        if render_width == 0 || render_height == 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "render dimensions must be non-zero",
+            ));
+        }
+        let window = NativeVideoWindow::from_existing_handle(window_handle);
+        Self::initialize_with_window(render_width, render_height, window)
+    }
+
+    fn initialize_with_window(
+        render_width: u32,
+        render_height: u32,
+        window: NativeVideoWindow,
+    ) -> Result<Self> {
         let factory: IDXGIFactory2 =
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
@@ -492,16 +647,43 @@ impl D3d12Host {
         unsafe { self.swap_chain2.GetMaximumFrameLatency() }
     }
 
+    /// Return whether the native window is minimized.
+    ///
+    /// The logical swap-chain dimensions remain fixed; DXGI stretch scaling
+    /// adapts presentation to the client area without changing emulated pixels.
+    pub fn is_minimized(&self) -> bool {
+        self.window.is_minimized()
+    }
+
     /// Block the presentation thread until DXGI allows another frame.
     ///
     /// Call this only from the host/render thread. It must never gate machine
     /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
-        let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
-        if result.0 == 0 {
-            Ok(())
-        } else {
-            Err(Error::from_thread())
+        loop {
+            let result = unsafe {
+                WaitForSingleObjectEx(self.frame_latency_handle, PRESENTATION_WAIT_POLL_MS, false)
+            };
+
+            if result == WAIT_OBJECT_0 {
+                return Ok(());
+            }
+            if result == WAIT_TIMEOUT {
+                if !self.window.pump_messages() {
+                    return Err(Error::new(
+                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        "native presentation window closed while waiting for a frame slot",
+                    ));
+                }
+
+                // The frame-latency handle is not guaranteed to signal after
+                // adapter removal. Poll the D3D12 device reason on each finite
+                // wait so the worker can fail fast instead of blocking forever.
+                self.device_removed_reason()?;
+                continue;
+            }
+
+            return Err(Error::from_thread());
         }
     }
 
@@ -616,8 +798,8 @@ impl D3d12Host {
     /// Upload and present one immutable emulator frame.
     ///
     /// The host's swap-chain dimensions must match the frame dimensions.
-    /// RGB565 is expanded to RGBA8888 in the mapped upload buffer; RGBA8888
-    /// rows are copied directly. D3D12's GetCopyableFootprints supplies the
+    /// RGB565 and RGB888 are expanded to RGBA8888 in the mapped upload buffer;
+    /// RGBA8888 rows are copied directly. D3D12's GetCopyableFootprints supplies the
     /// required row pitch, so the source frame stride is never assumed to be
     /// GPU-aligned.
     pub fn present_frame(&mut self, frame: &VideoFrame) -> Result<()> {
@@ -763,28 +945,57 @@ impl D3d12Host {
 
     fn wait_for_gpu(&self) -> Result<()> {
         let completed_value = unsafe { self.fence.GetCompletedValue() };
-        // D3D12 returns UINT64_MAX when the device has been removed. Do not
-        // mistake that sentinel for successful completion of every fence.
+        // D3D12 returns UINT64_MAX when the device has been removed. Preserve
+        // the driver's actual removal reason instead of flattening it to a
+        // generic timeout or successful fence completion.
         if completed_value == u64::MAX {
-            return Err(Error::new(
-                windows::core::HRESULT(0x887A_0005_u32 as i32),
-                "D3D12 device was removed while waiting for the GPU fence",
-            ));
+            return match self.device_removed_reason() {
+                Err(reason) => Err(reason),
+                Ok(()) => Err(Error::new(
+                    windows::core::HRESULT(0x887A_0005_u32 as i32),
+                    "D3D12 fence returned the device-removed sentinel",
+                )),
+            };
         }
         if self.last_submitted_fence == 0 || completed_value >= self.last_submitted_fence {
-            return Ok(());
+            return self.device_removed_reason();
         }
 
         unsafe {
             self.fence
                 .SetEventOnCompletion(self.last_submitted_fence, self.fence_event)?;
-            let result = WaitForSingleObjectEx(self.fence_event, INFINITE, false);
-            if result.0 == 0 {
-                Ok(())
-            } else {
-                Err(Error::from_thread())
-            }
         }
+
+        loop {
+            let result = unsafe {
+                WaitForSingleObjectEx(self.fence_event, PRESENTATION_WAIT_POLL_MS, false)
+            };
+
+            if result == WAIT_OBJECT_0 {
+                return self.device_removed_reason();
+            }
+            if result == WAIT_TIMEOUT {
+                if !self.window.pump_messages() {
+                    return Err(Error::new(
+                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        "native presentation window closed while waiting for the GPU",
+                    ));
+                }
+                self.device_removed_reason()?;
+                continue;
+            }
+
+            return Err(Error::from_thread());
+        }
+    }
+
+    /// Query the original D3D12 device-removal reason.
+    ///
+    /// Returns Ok only while the device remains valid. When the adapter is
+    /// removed/reset or the driver reports another device-loss condition, the
+    /// returned Windows error preserves the original HRESULT for the session.
+    pub fn device_removed_reason(&self) -> Result<()> {
+        unsafe { self._device.GetDeviceRemovedReason() }
     }
 }
 
@@ -810,6 +1021,30 @@ fn convert_frame_row_to_rgba8888(frame: &VideoFrame, y: u32, destination: &mut [
                 return false;
             }
             destination.copy_from_slice(source);
+        }
+        PixelFormat::Rgb888 => {
+            let Some(expected_source_len) = (frame.width() as usize).checked_mul(3) else {
+                return false;
+            };
+            if source.len() != expected_source_len {
+                return false;
+            }
+
+            let (source_pixels, []) = source.as_chunks::<3>() else {
+                return false;
+            };
+            let (destination_pixels, []) = destination.as_chunks_mut::<4>() else {
+                return false;
+            };
+
+            for (source_pixel, destination_pixel) in
+                source_pixels.iter().zip(destination_pixels.iter_mut())
+            {
+                destination_pixel[0] = source_pixel[0];
+                destination_pixel[1] = source_pixel[1];
+                destination_pixel[2] = source_pixel[2];
+                destination_pixel[3] = u8::MAX;
+            }
         }
         PixelFormat::Rgb565Le => {
             let Some(expected_source_len) = (frame.width() as usize).checked_mul(2) else {
@@ -906,6 +1141,33 @@ mod tests {
 
         assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
         assert_eq!(output, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn converts_rgb888_primary_colors_to_rgba8888() {
+        let frame = VideoFrame::new(
+            2,
+            3,
+            1,
+            PixelFormat::Rgb888,
+            9,
+            vec![255, 0, 0, 0, 255, 0, 0, 0, 255],
+        )
+        .unwrap();
+        let mut output = [0; 12];
+
+        assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
+        assert_eq!(output, [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn converts_rgb888_active_row_without_padding() {
+        let frame =
+            VideoFrame::new(3, 1, 1, PixelFormat::Rgb888, 5, vec![12, 34, 56, 90, 91]).unwrap();
+        let mut output = [0; 4];
+
+        assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
+        assert_eq!(output, [12, 34, 56, 255]);
     }
 
     #[test]

@@ -1,28 +1,31 @@
-//! First scheduler-driven SMS Z80/memory vertical slice.
+//! First scheduler-driven SMS Z80/memory/PSG vertical slice.
 //!
-//! This composition uses the resumable Z80 subset, the mapper-backed SMS
-//! memory/I/O adapter, and one machine scheduler. Immediate port transactions
-//! support controller and memory-control effects; VDP/PSG devices remain
-//! unconnected (open-bus reads and bounded write diagnostics). NMI is integrated
-//! and INT acknowledge is being added incrementally; DMA and physical WAIT
-//! wiring remain outside this temporal slice.
+//! This composition uses the resumable Z80 subset, mapper-backed SMS memory/I/O,
+//! the shared scheduler-driven PSG, SMS1 VDP ports, and one machine timeline.
+//! PSG and VDP writes commit at scheduled I/O boundaries; their clocks advance
+//! from Scheduler dispatches. The VDP renderer remains scanline-based, so
+//! dot/fetch arbitration and mid-scanline effects are not claimed as complete.
+//! NMI and INT acknowledge are integrated; DMA and physical WAIT wiring remain
+//! outside this temporal slice.
 
 use core::fmt;
 
 use crate::{
-    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
-    SmsTemporalM1Error, SmsTemporalM1State,
+    ControllerButtons, SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState,
+    SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
 };
+use sega_sn76489::Sn76489Core;
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
+use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{
     Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer,
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 24;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +52,7 @@ pub enum SmsTemporalTraceEvent {
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
@@ -217,6 +220,7 @@ pub enum SmsTemporalMachineError {
     Cpu(Z80MicroSequencerError),
     InvalidState,
     NoScheduledEvent,
+    FrameStepLimitReached,
     InternalCycleIdExhausted,
     M1(SmsTemporalM1Error),
 }
@@ -228,6 +232,9 @@ impl fmt::Display for SmsTemporalMachineError {
             Self::Cpu(error) => write!(f, "SMS resumable Z80 failed: {error:?}"),
             Self::InvalidState => f.write_str("SMS temporal machine snapshot is inconsistent"),
             Self::NoScheduledEvent => f.write_str("SMS temporal machine has no event to dispatch"),
+            Self::FrameStepLimitReached => f.write_str(
+                "SMS temporal machine did not complete a frame within the instruction limit",
+            ),
             Self::InternalCycleIdExhausted => {
                 f.write_str("SMS internal-cycle continuation ID exhausted")
             }
@@ -280,6 +287,56 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            instruction_started_at: None,
+            next_internal_cycle_id: 0,
+            pending_internal_cycle_id: None,
+            pending_internal_tstates: None,
+            m1: None,
+            m1_fixture_wait_tstates: None,
+            trace_enabled: false,
+            trace_events: Vec::new(),
+        })
+    }
+
+    /// Construct the temporal SMS slice with an explicit PSG clock and output rate.
+    ///
+    /// The PSG clock must match the selected SMS CPU/PSG hardware profile.
+    /// The sample rate controls resampling only; scheduler time owns chip clocks.
+    pub fn new_with_psg_config(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+    ) -> Result<Self, SmsTemporalMachineError> {
+        Self::new_with_hardware_profile(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+    }
+
+    /// Construct the temporal machine with explicit SMS VDP and territory profiles.
+    pub fn new_with_hardware_profile(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+    ) -> Result<Self, SmsTemporalMachineError> {
+        Ok(Self {
+            cpu: Z80MicroSequencer::default(),
+            bus: SmsTemporalBus::new_with_hardware_profile(
+                rom,
+                master_ticks_per_tstate,
+                psg_clock_hz,
+                sample_rate,
+                vdp_profile,
+                territory,
+            )?,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -664,6 +721,45 @@ impl SmsTemporalMachine {
         }
     }
 
+    /// Read-only access to the SMS VDP owned by the temporal bus.
+    pub const fn vdp(&self) -> &SmsVdp {
+        self.bus.vdp()
+    }
+
+    /// Current completed-frame counter from the temporal VDP.
+    pub fn frame_number(&self) -> u64 {
+        self.bus.vdp().frame_number()
+    }
+
+    /// Current RGB24 frame from the temporal VDP.
+    pub fn framebuffer(&self) -> &[u8] {
+        self.bus.vdp().framebuffer()
+    }
+
+    /// Advance the machine until one VDP frame completes.
+    ///
+    /// The instruction limit is a safety bound, not a timing source. Hardware
+    /// time advances only through the Scheduler while the CPU executes.
+    pub fn step_frame(
+        &mut self,
+        max_instructions: usize,
+    ) -> Result<usize, SmsTemporalMachineError> {
+        if max_instructions == 0 {
+            return Err(SmsTemporalMachineError::FrameStepLimitReached);
+        }
+        let initial_frame = self.frame_number();
+        for instructions in 1..=max_instructions {
+            let step = self.step_instruction(0)?;
+            if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+                let _ = self.resume_instruction(0)?;
+            }
+            if self.frame_number() != initial_frame {
+                return Ok(instructions);
+            }
+        }
+        Err(SmsTemporalMachineError::FrameStepLimitReached)
+    }
+
     /// Run the next instruction to retirement, using deterministic fixture WAIT.
     pub fn step_instruction(
         &mut self,
@@ -768,6 +864,16 @@ impl SmsTemporalMachine {
         &mut self.cpu
     }
 
+    /// Update the controller input levels without advancing machine time.
+    pub fn set_controller(
+        &mut self,
+        player: u8,
+        buttons: ControllerButtons,
+    ) -> Result<(), SmsTemporalMachineError> {
+        self.bus.set_controller(player, buttons)?;
+        Ok(())
+    }
+
     /// Latch an NMI input edge. Outside HALT it is accepted at the next
     /// instruction boundary; during HALT it is sampled at the next completed
     /// M1 T4. This signal update does not advance machine time.
@@ -795,6 +901,16 @@ impl SmsTemporalMachine {
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
+    }
+
+    /// Inspect the SMS-profile PSG without advancing machine time.
+    pub fn psg(&self) -> &Sn76489Core {
+        self.bus.psg()
+    }
+
+    /// Drain audio samples already produced by scheduler-owned PSG clocks.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.bus.drain_audio_samples(max_samples)
     }
 
     /// Current absolute machine time.
@@ -2774,6 +2890,29 @@ mod base_immediate_io_temporal_tests {
     }
 
     #[test]
+    fn immediate_out_to_psg_commits_at_the_io_boundary_and_restores() {
+        let mut machine = SmsTemporalMachine::new(vec![0xD3, 0x7E], 3).unwrap();
+        machine.cpu_mut().registers.a = 0x85;
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+        assert_eq!(machine.psg().latched_register(), 0);
+        assert_eq!(machine.psg().tone_periods()[0], 5);
+        assert_eq!(machine.psg().clock_divider_phase(), 11);
+        assert_eq!(machine.now(), MachineTime::from_ticks(33));
+
+        let snapshot = machine.export_state();
+        let restored = SmsTemporalMachine::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(restored.psg().tone_periods()[0], 5);
+        assert_eq!(restored.psg().clock_divider_phase(), 11);
+    }
+
+    #[test]
     fn immediate_in_port_read_pending_state_restores_with_io_context() {
         let mut machine = SmsTemporalMachine::new(vec![0xDB, 0xDC], 3).unwrap();
         machine.cpu_mut().registers.a = 0x12;
@@ -2811,5 +2950,31 @@ mod base_immediate_io_temporal_tests {
         );
         assert_eq!(restored.cpu().registers.a, 0xFE);
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
+    }
+}
+
+#[cfg(test)]
+mod temporal_frame_tests {
+    use super::SmsTemporalMachine;
+
+    #[test]
+    fn step_frame_returns_a_complete_sms1_rgb24_frame() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
+
+        let instructions = machine.step_frame(100_000).unwrap();
+
+        assert!(instructions > 0);
+        assert_eq!(machine.frame_number(), 1);
+        assert_eq!(machine.framebuffer().len(), 256 * 192 * 3);
+        assert_eq!(machine.vdp().frame_number(), 1);
+    }
+
+    #[test]
+    fn frame_step_limit_is_reported_without_faking_vdp_progress() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
+
+        assert!(machine.step_frame(0).is_err());
+        assert_eq!(machine.frame_number(), 0);
+        assert!(!machine.framebuffer().is_empty());
     }
 }

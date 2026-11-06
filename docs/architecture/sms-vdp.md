@@ -2,6 +2,20 @@
 
 O Master System possui um VDP próprio, distinto do TMS9918A do SG-1000. O runtime Rust mantém estado de VRAM/CRAM, portas, registradores, modos de vídeo, scroll, sprites, status e interrupções conforme as funcionalidades implementadas.
 
+## Arquitetura-alvo e migração
+
+O pacote compartilhado `sega-video` reside em `native/video_core`. Ele hospeda módulos separados por ASIC/família: SMS VDP em `sega_video::sms`; o TMS9918A do SG-1000 permanece um chip distinto e não compartilha estado, registradores ou pipeline com o SMS VDP. Utilitários comuns só serão extraídos quando a equivalência estiver demonstrada.
+
+`sega-video-runtime` continua responsável pelo transporte de frames e integração com apresentação host; não contém a lógica do chip. O contrato de vídeo não passa pela Qt/Python: o framebuffer permanece no backend Rust e a apresentação futura deve usar um host gráfico nativo. O contrato de frame carrega geometria/timestamps descritivos quando conhecidos, sem se tornar autoridade temporal.
+
+A sequência de migração é:
+1. SMS1/315-5124 como primeiro perfil de hardware, com gates T0/T0.1.
+2. SMS2/315-5246 como perfil comparativo posterior.
+3. Migrar o renderer funcional existente para o crate compartilhado, preservando seus testes como regressão; não manter dois engines SMS paralelos.
+4. Integrar o dispositivo ao Scheduler por spans/eventos na menor granularidade observável comprovada.
+
+Estado desta migração: os tipos de perfil e o renderer funcional foram movidos para `sega-video::sms`; `sms_core::vdp` agora é uma camada de reexportação compatível. A fundação duplicada `vdp_sms1.rs` foi arquivada em `legacy/rust/sms_vdp1_prototype.rs`; seus vetores exclusivos de máscaras R5/R6, zoom, colisão e prioridade foram migrados para os testes do engine compartilhado. O PSG temporal e o VDP SMS1 scanline-level estão conectados à `SmsTemporalMachine`: o VDP tem domínio próprio no Scheduler, as portas de dados/controle/status e H/V counter passam pelo barramento temporal, e o estado do VDP acompanha snapshot/restore em memória. Essa integração entrega frames funcionais, mas não conclui o VDP temporal: a granularidade interna continua scanline-level, e o timing legado não foi validado fisicamente.
+
 ## Comportamento implementado
 
 - VRAM de 16 KiB e CRAM com paleta SMS.
@@ -16,13 +30,13 @@ A lista é um resumo funcional, não uma certificação de todas as revisões de
 
 ## Granularidade temporal
 
-A implementação atual usa o modelo de raster e os pontos de integração que estão presentes no runtime. Isso não é dot-accurate nem pretende ser uma simulação elétrica do ASIC.
+A implementação atual usa o modelo de raster scanline-level. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística e frames funcionais, mas não é dot-accurate, não arbitra fetches por dot e não reproduz efeitos mid-scanline.
 
 A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
 ## Limites conhecidos
 
-- Efeitos de registrador no meio da scanline e certas fases do H-counter ainda podem ser aproximados.
+- Efeitos de registrador no meio da scanline e certas fases do H-counter ainda podem ser aproximados. A constante legada `LINE_TSTATES = 228` e a fórmula atual de H-counter são aproximações de compatibilidade, não fatos físicos validados para SMS1/315-5124; não usar como oracle temporal.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.

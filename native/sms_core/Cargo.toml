@@ -12,5 +12,7 @@ path = "src/lib.rs"
 sega-z80-bus = { path = "../z80_bus" }
 sega-z80-cpu = { path = "../z80_cpu" }
 sega-sn76489 = { path = "../sn76489" }
+sega-audio-runtime = { path = "../audio_runtime" }
 sega-temporal-core = { path = "../temporal_core" }
 sega-machine-scheduler = { path = "../machine_scheduler" }
+sega-video = { path = "../video_core" }

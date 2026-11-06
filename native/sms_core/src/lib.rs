@@ -1,10 +1,11 @@
 //! Standalone, Python-independent Sega Master System core.
 //!
-//! The SMS-owned Z80 instruction engine, standard cartridge mapper/work RAM,
-//! initial CPU-to-memory/I/O integration, and first scheduler-driven Z80/memory
-//! vertical slice are present. The temporal slice is deliberately separate from
-//! the legacy machine path; VDP, audio, full interrupt behavior and complete
-//! console scheduling remain pending, so this crate is not a complete console.
+//! The Scheduler-driven SMS path now combines the shared Z80 microsequencer,
+//! mapper-backed memory, controller I/O, SN76489, and the shared SMS1 VDP with
+//! scanline/frame output. It remains a staged temporal implementation: dot-level
+//! raster/fetch arbitration, physical WAIT wiring, complete machine interrupt
+//! integration, host audio output, and persistent serialized save states remain
+//! separate acceptance gates. The legacy machine is retained during migration.
 
 pub mod alu;
 pub mod bus;
@@ -22,7 +23,6 @@ pub mod temporal_bus;
 pub mod temporal_m1;
 pub mod temporal_machine;
 pub mod vdp;
-pub mod vdp_sms1;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
@@ -30,8 +30,8 @@ pub use bus::{
 };
 pub use cartridge::CartridgeImage;
 pub use config::{
-    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
-    VideoStandard,
+    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
+    Territory, VideoStandard,
 };
 pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;
@@ -41,8 +41,9 @@ pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
 pub use psg::{PsgError, Sn76489};
 pub use temporal::{
-    SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_VDP_CLOCK_DOMAIN_ID,
+    SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
+    SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 pub use temporal_bus::{
     SMS_TEMPORAL_BUS_STATE_VERSION, SmsBusCompletion, SmsInternalCycleCompletion, SmsTemporalBus,

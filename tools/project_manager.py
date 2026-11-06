@@ -9,8 +9,10 @@ import os
 import shutil
 import subprocess
 import sys
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from threading import Thread
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,36 +55,94 @@ def run(
     cwd: Path,
     timeout: int = 1800,
     output_limit: int | None = 12000,
+    stream: bool = False,
 ) -> Result:
-    """Run one command and preserve its output and explicit result classification."""
+    """Run a command, optionally streaming output while retaining a bounded tail."""
+    command_name = " ".join(command)
     try:
-        proc = subprocess.run(
+        if not stream:
+            proc = subprocess.run(
+                command,
+                cwd=cwd,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                check=False,
+            )
+            output = proc.stdout
+            if output_limit is not None:
+                output = output[-output_limit:]
+            return Result(
+                command_name,
+                "PASS" if proc.returncode == 0 else "FAIL",
+                command,
+                proc.returncode,
+                output,
+            )
+
+        proc = subprocess.Popen(
             command,
             cwd=cwd,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=timeout,
-            check=False,
+            bufsize=1,
         )
-        output = proc.stdout
-        if output_limit is not None:
-            output = output[-output_limit:]
+        output_tail: deque[str] = deque()
+        output_size = 0
+
+        def forward_output() -> None:
+            nonlocal output_size
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                output_tail.append(line)
+                output_size += len(line)
+                if output_limit is not None:
+                    while output_tail and output_size > output_limit:
+                        output_size -= len(output_tail.popleft())
+
+        reader = Thread(
+            target=forward_output,
+            name="project-command-output",
+            daemon=True,
+        )
+        reader.start()
+        timed_out = False
+        try:
+            returncode = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            proc.terminate()
+            try:
+                returncode = proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                returncode = proc.wait(timeout=10)
+        reader.join(timeout=10)
+        output = "".join(output_tail)
+        if timed_out:
+            output += f"\nTimed out after {timeout} seconds."
+            return Result(command_name, "FAIL", command, 124, output)
         return Result(
-            " ".join(command),
-            "PASS" if proc.returncode == 0 else "FAIL",
+            command_name,
+            "PASS" if returncode == 0 else "FAIL",
             command,
-            proc.returncode,
+            returncode,
             output,
         )
     except FileNotFoundError as exc:
-        return Result(" ".join(command), "BLOCKED", command, None, str(exc))
+        return Result(command_name, "BLOCKED", command, None, str(exc))
     except subprocess.TimeoutExpired as exc:
         output = exc.stdout or ""
         if isinstance(output, bytes):
             output = output.decode(errors="replace")
         return Result(
-            " ".join(command),
+            command_name,
             "FAIL",
             command,
             124,
@@ -366,7 +426,27 @@ def validate(workspaces: list[Workspace], include_python: bool) -> list[Result]:
             [
                 run([python, "-m", "ruff", "format", "--check", "."], ROOT),
                 run([python, "-m", "ruff", "check", "."], ROOT),
-                run([python, "-m", "pytest"], ROOT),
+                run(
+                    [python, "-m", "pytest", "--collect-only", "-q"],
+                    ROOT,
+                    timeout=120,
+                    stream=True,
+                ),
+                run(
+                    [
+                        python,
+                        "-m",
+                        "pytest",
+                        "-vv",
+                        "-ra",
+                        "--durations=30",
+                        "-o",
+                        "faulthandler_timeout=180",
+                    ],
+                    ROOT,
+                    timeout=900,
+                    stream=True,
+                ),
             ]
         )
     return results
