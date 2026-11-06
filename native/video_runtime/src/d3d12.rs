@@ -1290,7 +1290,9 @@ mod tests {
         D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame,
         convert_frame_row_to_rgba8888,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{IsWindow, SW_MINIMIZE, ShowWindow};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE, ShowWindow, WS_CLIPCHILDREN,
+    };
 
     #[test]
     fn child_viewport_is_created_and_resized_on_parent_gui_thread() {
@@ -1299,6 +1301,28 @@ mod tests {
 
         assert!(unsafe { IsWindow(Some(child.hwnd)).as_bool() });
         child.set_bounds(8, 12, 256, 192).unwrap();
+    }
+
+    #[test]
+    fn child_viewport_enables_and_restores_parent_clip_children_style() {
+        let parent = NativeVideoWindow::create(640, 480).unwrap();
+        let parent_hwnd = parent.hwnd();
+        let original_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+        let originally_clipped =
+            original_style & (WS_CLIPCHILDREN.0 as isize) != 0;
+
+        {
+            let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
+            let child_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+            assert_ne!(child_style & (WS_CLIPCHILDREN.0 as isize), 0);
+            drop(child);
+        }
+
+        let restored_style = unsafe { GetWindowLongPtrW(parent_hwnd, GWL_STYLE) };
+        assert_eq!(
+            restored_style & (WS_CLIPCHILDREN.0 as isize) != 0,
+            originally_clipped
+        );
     }
 
     #[test]
