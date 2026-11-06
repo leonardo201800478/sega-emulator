@@ -140,9 +140,9 @@ O `MachineScheduler` permanece a única autoridade dos clocks/eventos emulados. 
 
 A integração de vídeo deve preservar a decisão já aceita na ADR-0012: o host de vídeo e o caminho de pixels permanecem Rust/D3D12, com HWND, swap chain, recursos, fences e apresentação sob ownership nativo. Esta ADR muda a tecnologia da interface de controle; não revoga a escolha do backend de vídeo.
 
-`eframe` usa seu próprio renderer de UI (por padrão wgpu, com opção Glow). Isso não autoriza transportar o framebuffer para uma textura wgpu nem substituir o renderer D3D12 do emulador. A hipótese inicial a provar é uma janela eframe como shell de aplicação e a superfície D3D12 como viewport nativo filho, controlado por Rust e posicionado a partir do layout da UI. O protótipo deve confirmar se a API pública do eframe/winit permite obter o HWND pai de forma suportada, criar/gerir a janela filha e sincronizar resize/DPI/foco/teclado sem depender de APIs privadas.
+`eframe` usa seu próprio renderer de UI (por padrão wgpu, com opção Glow). Isso não autoriza transportar o framebuffer para uma textura wgpu nem substituir o renderer D3D12 do emulador. O eframe 0.37 expõe `Frame::winit_window()` e a janela Winit implementa `HasWindowHandle`, permitindo obter o `RawWindowHandle::Win32` da janela raiz por API pública. O `D3d12MailboxSession::start_for_existing_window` já aceita um HWND externo, validado na thread proprietária, e mantém a janela sob ownership do chamador até `shutdown()`. A arquitetura candidata é criar um HWND filho Win32 (`WS_CHILD`) dentro da área reservada pelo egui, iniciar o D3D12 mailbox sobre esse HWND e reposicioná-lo com `SetWindowPos` conforme o retângulo egui e o fator DPI. O HWND filho será criado/destruído pela camada host Rust, não pelo egui painter.
 
-Se a integração em janela única não for suportável sem hacks, bloquear a migração do viewport e avaliar uma integração customizada do egui/event loop com o host D3D12. Não aceitar duas janelas independentes como arquitetura final sem decisão explícita. Não criar um segundo caminho de apresentação de vídeo.
+Essa integração ainda precisa ser comprovada em Windows físico: child HWND, clipping/z-order, foco e captura de teclado/gamepad, resize/DPI, minimize/restore, shutdown ordenado e recuperação de device. Se a integração em janela única não for suportável sem hacks, bloquear a migração do viewport e avaliar uma integração customizada do egui/event loop com o host D3D12. Não aceitar duas janelas independentes como arquitetura final sem decisão explícita. Não criar um segundo caminho de apresentação de vídeo.
 
 O protótipo deve verificar DX12, adapter, ownership do HWND, foco/captura de input, resize, DPI, minimize/restore, VSync, recuperação de device, shutdown e custo de UI. Nenhuma opção poderá alterar VDP, clocks, raster, pixels ou Scheduler. A decisão será fechada por prova funcional e medição, não apenas por compilação.
 
@@ -159,7 +159,8 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 - [x] Identificar famílias de módulos Python ativos.
 - [x] Identificar dependências de build/runtime e pontos de acoplamento.
 - [x] Adotar egui/eframe e registrar riscos do renderer.
-- [ ] Completar matriz de imports, consumidores, dados persistidos, recursos e cobertura por módulo.
+- [x] Completar inventário de primeiro passe de imports, consumidores, dados persistidos, recursos e famílias de testes; ver [inventário M0.2](../architecture/rust-application-migration-inventory.md).
+- [ ] Confirmar consumidores residuais em tools/workflows e executar a auditoria no checkout Windows.
 
 **Gate:** arquitetura aprovada e baseline registrada; nenhuma remoção de código.
 
