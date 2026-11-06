@@ -38,9 +38,31 @@ def test_sms_loader_rejects_zip_with_multiple_candidates(tmp_path):
         load_sms_rom(archive_path)
 
 
-def test_sms_loader_rejects_oversized_rom(tmp_path):
+def test_sms_loader_accepts_four_mib_extended_rom(tmp_path):
+    rom = tmp_path / "extended.sms"
+    rom.write_bytes(bytes([0x00]) * 0x400000)
+
+    loaded = load_sms_rom(rom)
+
+    assert len(loaded.data) == 0x400000
+    assert loaded.display_name == "extended.sms"
+
+
+def test_sms_loader_accepts_four_mib_rom_from_zip(tmp_path):
+    archive_path = tmp_path / "extended.zip"
+    rom_bytes = bytes([0x00]) * 0x400000
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("extended.sms", rom_bytes)
+
+    loaded = load_sms_rom(archive_path)
+
+    assert loaded.data == rom_bytes
+    assert loaded.member_name == "extended.sms"
+
+
+def test_sms_loader_rejects_rom_above_four_mib(tmp_path):
     rom = tmp_path / "oversized.sms"
-    rom.write_bytes(bytes([0x00]) * (0x100000 + 1))
+    rom.write_bytes(bytes([0x00]) * (0x400000 + 1))
 
     with pytest.raises(ValueError, match="excede o limite"):
         load_sms_rom(rom)
