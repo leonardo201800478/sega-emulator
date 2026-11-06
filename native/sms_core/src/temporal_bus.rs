@@ -726,23 +726,23 @@ impl SmsTemporalBus {
             (Some(request), Some(started_at), None, None, None, None)
                 if external_events_valid
                     && non_external_event_count == 1
-                    && pending_events.iter().any(|event| event.payload
-                        == (SmsTemporalEvent::BusCompletion {
-                            request_id: request.id,
-                        }))
                     && started_at <= now
-                    && pending_events[0].timestamp >= now
-                    && valid_bus_deadline(
-                        started_at,
-                        pending_events[0].timestamp,
-                        scale,
-                        u16::from(request.base_tstates)
-                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                            } else {
-                                0
-                            },
-                    ) => {}
+                    && pending_events.iter().any(|event| {
+                        event.payload == (SmsTemporalEvent::BusCompletion {
+                            request_id: request.id,
+                        }) && event.timestamp >= now
+                            && valid_bus_deadline(
+                                started_at,
+                                event.timestamp,
+                                scale,
+                                u16::from(request.base_tstates)
+                                    + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                        u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                                    } else {
+                                        0
+                                    },
+                            )
+                    }) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if external_events_valid
                     && request.id == completion.request_id
@@ -763,11 +763,13 @@ impl SmsTemporalBus {
             (None, None, None, Some(continuation_id), Some(started_at), None)
                 if external_events_valid
                     && non_external_event_count == 1
-                    && pending_events.iter().any(|event| event.payload
-                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id }))
                     && started_at <= now
-                    && pending_events[0].timestamp >= now
-                    && valid_internal_deadline(started_at, pending_events[0].timestamp, scale) => {}
+                    && pending_events.iter().any(|event| {
+                        event.payload
+                            == (SmsTemporalEvent::InternalCycleComplete { continuation_id })
+                            && event.timestamp >= now
+                            && valid_internal_deadline(started_at, event.timestamp, scale)
+                    }) => {}
             (None, None, None, Some(continuation_id), Some(started_at), Some(completion))
                 if external_events_valid
                     && continuation_id == completion.continuation_id
