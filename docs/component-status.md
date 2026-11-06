@@ -1,10 +1,10 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Fotografia reconciliada:** `main` em `733152f61b706b2243914ae017643cef949d4ae1` (2026-11-06; PR #595 integrada).  
+**Fotografia reconciliada:** `main` em `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (2026-11-06; PRs #595, #596 e #597 integradas).  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Prioridade:** comprovar o caminho de áudio nativo e recuperar gameplay SMS, preservando o SG-1000.
 
-Esta página é a fotografia do SHA indicado. A PR #595 está integrada; a PR #594 foi fechada como SUPERSEDED. PRs abertas ou Draft continuam fora da baseline.
+Esta página é a fotografia do SHA indicado. PRs #595 e #597 estão integradas; #596 reconciliou documentação. A PR #594 foi fechada como SUPERSEDED. PRs abertas ou Draft continuam fora da baseline.
 
 ## 1. Plataformas
 
@@ -30,7 +30,7 @@ Esta página é a fotografia do SHA indicado. A PR #595 está integrada; a PR #5
 | Scheduler SMS | `SmsTemporalMachine` despacha eventos e o barramento aplica efeitos nas fronteiras programadas | VDP ainda avança em modelo scanline; WAIT físico, fetch arbitration e precisão intralinha não estão comprovados |
 | Vídeo / mailbox | Worker Rust publica frames RGB888 de 256×192 no `FrameMailbox` | Teste sintético exige RGB `[255,255,255]` na linha 32 tanto no core quanto no mailbox: PASS no CI #5178; D3D12 físico ainda NOT RUN |
 | D3D12 | Sessão nativa Rust pode anexar ao HWND do viewport Qt e consumir frames do mailbox | CI Windows compila/testa contratos; GPU física, imagem de jogo e device-loss real permanecem NOT RUN |
-| Áudio host | Worker drena PCM do PSG e encaminha à sessão nativa WASAPI/XAudio2 configurada pelo frontend | PCM não silencioso no core PASS; integração worker → NativeAudioSession, aceitação do backend e audição física permanecem NOT RUN |
+| Áudio host | Worker drena PCM do PSG e encaminha à `NativeAudioSession`; sessão mistura/resample e entrega a `PcmSink` | Worker → sessão → `RecordingSink` com PCM não silencioso PASS no CI #5185; `NativeAudioBackend` real/WASAPI/XAudio2 e audição física permanecem NOT RUN |
 | PyO3 / Qt | API coarse-grained; comandos de ciclo de vida e configurações permanecem no frontend | Não transportar pixels/PCM nem temporizar hardware em Python |
 
 ## 3. Caminho efetivo do runtime SMS
@@ -54,11 +54,11 @@ Os seguintes critérios devem ser tratados separadamente:
 | A/V-01 | ROM sintética configura VDP/VRAM/CRAM e produz pixel RGB esperado | PASS — teste Rust sintético no CI #5178 |
 | A/V-02 | ROM sintética programa o PSG e produz amostras PCM não silenciosas | PASS — teste Rust sintético no CI #5178 |
 | A/V-03 | Worker publica frame RGB888 real do VDP no mailbox e sequência avança | PASS — pixel esperado preservado no mailbox no CI #5178 |
-| A/V-04 | Sessão de áudio recebe PCM não silencioso sem erro/underrun sustentado | NOT RUN — falta teste worker → NativeAudioSession; endpoint físico também NOT RUN |
+| A/V-04a | Worker → `NativeAudioSession` → sink recebe PCM não silencioso antes do flush | PASS — teste `worker_frame_submits_non_silent_pcm_to_native_audio_session_sink` no CI #5185; 0 underruns/blocks dropped no sink determinístico |
+| A/V-04b | `NativeAudioBackend` WASAPI/XAudio2 real aceita PCM do worker sem erro/underrun sustentado | NOT RUN — sink em memória não prova aceitação do backend nativo |
 | A/V-05 | Janela Windows apresenta imagem de jogo em GPU física e áudio é audível | NOT RUN — sem evidência de GPU/endpoint físicos |
-| A/V-06 | ROM de jogo representativa executa além do boot e permite medir FPS/frametime | NOT RUN — sem gameplay real/homebrew reproduzido |
 
-A PR #595 (`fix/sms-functional-av-baseline-20261106`) foi integrada no merge SHA `733152f61b706b2243914ae017643cef949d4ae1`. O CI #5178 validou o HEAD exato `69ca40ab29c486f26852adb7536a04f95f9dd7ae`; A/V-01/02/03 são PASS automatizados, sem promover A/V-04/05/06 a PASS.
+A PR #595 foi integrada no merge SHA `733152f61b706b2243914ae017643cef949d4ae1`; a PR #597 foi integrada no merge SHA `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. CI #5178 valida o HEAD #595 `69ca40ab29c486f26852adb7536a04f95f9dd7ae`; CI #5185 valida o HEAD #597 `30554cc6642dd49d06adf495dca3e80f4822b081`. A/V-01/02/03/04a são PASS automatizados; A/V-04b/05/06 permanecem NOT RUN.
 
 ## 5. Prioridades de correção
 
