@@ -10,6 +10,7 @@
 //! physical-GPU validation remain pending. GPU waits use finite polling on the
 //! presentation thread and must never gate emulation or Scheduler advancement.
 
+use core::ffi::c_void;
 use core::fmt;
 use core::mem::ManuallyDrop;
 use core::ptr::null_mut;
@@ -86,6 +87,7 @@ impl Drop for ThreadDpiAwarenessGuard {
 /// Native HWND wrapper; the host tracks whether it owns or borrows the window.
 pub struct NativeVideoWindow {
     hwnd: HWND,
+    owns_window: bool,
 }
 
 impl NativeVideoWindow {
@@ -158,7 +160,40 @@ impl NativeVideoWindow {
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOW);
         }
-        Ok(Self { hwnd })
+        Ok(Self {
+            hwnd,
+            owns_window: true,
+        })
+    }
+
+    /// Validate a Qt-owned HWND on the calling thread before handing it to
+    /// the dedicated D3D12 presentation worker.
+    pub(crate) fn validate_existing_handle(handle: usize) -> Result<()> {
+        if handle == 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "external HWND must be non-zero",
+            ));
+        }
+        let hwnd = HWND(handle as *mut c_void);
+        if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "external HWND is not a valid window on the calling thread",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Wrap a Qt-owned HWND without taking ownership or destroying it.
+    ///
+    /// The caller must validate the handle on its owning thread and keep the
+    /// widget alive until the D3D12 session has shut down.
+    fn from_existing_handle(handle: usize) -> Self {
+        Self {
+            hwnd: HWND(handle as *mut c_void),
+            owns_window: false,
+        }
     }
 
     /// Return the native HWND without transferring its ownership.
@@ -171,11 +206,19 @@ impl NativeVideoWindow {
     /// The caller must avoid dequeuing completed frames while minimized so
     /// presentation suspension cannot silently discard accepted frames.
     pub fn is_minimized(&self) -> bool {
-        unsafe { IsIconic(self.hwnd).as_bool() }
+        if self.owns_window {
+            unsafe { IsIconic(self.hwnd).as_bool() }
+        } else {
+            false
+        }
     }
 
     /// Pump pending Win32 messages; return false after WM_QUIT.
     pub fn pump_messages(&self) -> bool {
+        if !self.owns_window {
+            // The Qt GUI thread owns and pumps messages for this HWND.
+            return true;
+        }
         let mut message = MSG::default();
         let mut running = true;
 
@@ -196,12 +239,12 @@ impl NativeVideoWindow {
 
 impl Drop for NativeVideoWindow {
     fn drop(&mut self) {
-        if !self.hwnd.0.is_null() {
+        if self.owns_window && !self.hwnd.0.is_null() {
             unsafe {
                 let _ = DestroyWindow(self.hwnd);
             }
-            self.hwnd = HWND::default();
         }
+        self.hwnd = HWND::default();
     }
 }
 
@@ -353,6 +396,33 @@ impl D3d12Host {
             ));
         }
         let window = NativeVideoWindow::create(window_width, window_height)?;
+        Self::initialize_with_window(render_width, render_height, window)
+    }
+
+    /// Initialize a swap chain for an HWND borrowed from a GUI toolkit.
+    ///
+    /// The HWND must be validated on its owning GUI thread before this call
+    /// and remain alive until the presentation session has shut down.
+    pub(crate) fn initialize_for_existing_window(
+        render_width: u32,
+        render_height: u32,
+        window_handle: usize,
+    ) -> Result<Self> {
+        if render_width == 0 || render_height == 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "render dimensions must be non-zero",
+            ));
+        }
+        let window = NativeVideoWindow::from_existing_handle(window_handle);
+        Self::initialize_with_window(render_width, render_height, window)
+    }
+
+    fn initialize_with_window(
+        render_width: u32,
+        render_height: u32,
+        window: NativeVideoWindow,
+    ) -> Result<Self> {
         let factory: IDXGIFactory2 =
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
