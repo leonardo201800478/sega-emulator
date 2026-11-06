@@ -1,4 +1,4 @@
-//! Standalone, Python-independent Sega Master System core.
+//! Scheduler-driven temporal Sega Master System core.
 //!
 //! The Scheduler-driven SMS path now combines the shared Z80 microsequencer,
 //! mapper-backed memory, controller I/O, SN76489, and the shared SMS1 VDP with
