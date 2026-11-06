@@ -371,9 +371,7 @@ def lock_check(workspaces: list[Workspace]) -> list[Result]:
     for workspace in workspaces:
         results.append(
             run(
-                cargo_for(
-                    workspace, "metadata", "--locked", "--format-version", "1"
-                ),
+                cargo_for(workspace, "metadata", "--locked", "--format-version", "1"),
                 ROOT,
                 output_limit=2000,
             )
