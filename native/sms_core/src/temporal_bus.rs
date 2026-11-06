@@ -1401,7 +1401,8 @@ mod temporal_vdp_tests {
         );
 
         let captured = bus.vdp().read_h_counter();
-        assert_eq!(captured, 0x03);
+        // Two direct four-T-state bus writes complete at T8 (HPos 12).
+        assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
         assert_eq!(snapshot.format_version, 11);
 
