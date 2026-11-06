@@ -7,18 +7,20 @@
 
 ## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 foi ajustada: **estabilizar uma baseline funcional de imagem e som no runtime SMS antes de ampliar a precisão temporal ou iniciar análise de desempenho real**.
+A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**.
 
-A `main` em `8bd7f6c78cacd247736268d141e4cc7e30805ccd` já contém a máquina temporal SMS, o worker Rust, o PSG agendado, o framebuffer RGB888, o mailbox e a sessão de apresentação D3D12. O frontend Qt/PyO3 já configura a saída de áudio nativa. Isso comprova a existência dos caminhos de integração, mas não comprova que uma ROM real produza pixels visíveis, áudio não silencioso ou gameplay funcional em GPU/endpoint físicos.
+A `main` atual é `733152f61b706b2243914ae017643cef949d4ae1` (merge da PR #595). Ela contém a ligação VDP IRQ → Z80 INT com preservação da INT externa, testes de restauração do estado, uma ROM sintética Mode 4 que exige pixels RGB conhecidos, geração de PCM não silencioso pelo SN76489 e publicação do pixel esperado pelo worker no mailbox RGB888. Esses testes passaram no CI #5178 no HEAD exato `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
+
+**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core) e A/V-03 (worker/mailbox de vídeo) = PASS automatizado. A/V-04 (worker → sessão de áudio nativa) = NOT RUN. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling também ficaram NOT RUN no CI #5178.
 
 Ordem vertical ativa:
 
-1. **Interrupções:** conectar a saída IRQ de nível do VDP à entrada INT do Z80 sem sobrescrever fontes externas independentes; preservar o estado das linhas em export/restore.
-2. **Sinal de vídeo no core:** usar ROM sintética determinística para configurar Mode 4, VRAM/name table e CRAM e comprovar pixels RGB não pretos no frame produzido pelo VDP.
-3. **Sinal de áudio no core:** programar o SN76489 por I/O e comprovar que o PSG gera amostras PCM não silenciosas na timeline do Scheduler.
-4. **Saídas nativas:** comprovar que o worker publica o frame real no mailbox consumido pelo D3D12 e encaminha amostras PCM à sessão WASAPI/XAudio2, sem erro ou underrun persistente.
-5. **Validação Windows:** executar uma ROM de diagnóstico e um jogo representativo em GPU e dispositivo de áudio reais; registrar região, resolução, FPS, frametime, sequência de frames, underruns e erros. A validação manual não pode ser substituída por CI de compilação.
-6. **Desempenho e compatibilidade:** somente após imagem e som comprovados, medir o custo do runtime sem instrumentação intrusiva, identificar gargalos e ampliar a matriz de jogos. Corrigir a primeira divergência reproduzível, sem presumir que a IRQ seja a única causa de falhas de boot.
+1. **Áudio nativo:** comprovar separadamente PCM gerado, PCM drenado pelo worker, PCM recebido pela `NativeAudioSession`, PCM aceito pelo backend e saída audível. Criar teste de integração worker → sessão com PCM conhecido e métricas de erro/underrun.
+2. **Vídeo/host físico:** executar ROM de diagnóstico em janela D3D12 real, verificar pixels apresentados e estabilidade da sequência de frames em GPU Windows.
+3. **Gameplay:** executar ROM legal/homebrew e jogo representativo, registrando região, hash local, boot, input e comportamento observável. Não versionar ROM comercial.
+4. **Controles e IRQ:** validar VBlank/Line IRQ, input, HALT e restauração de snapshots em cenários integrados; preservar o SG-1000.
+5. **Determinismo:** provar execução contínua versus em blocos, save/restore e replay no runtime SMS sem pular ciclos nem eventos.
+6. **Desempenho e compatibilidade:** somente após os gates A/V de host, medir o caminho crítico sem telemetria intrusiva e ampliar a matriz de jogos.
 
 A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). Os gates A/V são distintos dos gates de precisão temporal: pixels e amostras não silenciosas são pré-condições para o teste de saída, mas não comprovam compatibilidade geral, áudio físico ou TEMPORAL_PASS.
 
