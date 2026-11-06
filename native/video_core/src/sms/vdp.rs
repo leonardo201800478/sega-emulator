@@ -1934,7 +1934,7 @@ mod tests {
                     v.vram[entry + 1] = 0;
                 }
                 for row in 0..8 {
-                    v.vram[row * 4 + 1] = 0xFF;
+                    v.vram[0x20 + row * 4 + 1] = 0xFF;
                 }
 
                 // Sprite tile 2 is opaque in palette color 1 (red).
