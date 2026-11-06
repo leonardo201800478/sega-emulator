@@ -122,6 +122,8 @@ mod tests {
         blocks: Vec<Vec<u8>>,
         underruns: u64,
         dropped: u64,
+        endpoint_submissions: u64,
+        output_error: Option<String>,
         closed: bool,
     }
 
@@ -136,6 +138,14 @@ mod tests {
 
         fn metrics(&self) -> (u64, u64) {
             (self.underruns, self.dropped)
+        }
+
+        fn endpoint_submission_count(&self) -> u64 {
+            self.endpoint_submissions
+        }
+
+        fn output_error(&self) -> Option<String> {
+            self.output_error.clone()
         }
 
         fn close(&mut self) {
@@ -174,6 +184,22 @@ mod tests {
         let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
         assert_eq!(session.metrics(), (3, 2));
     }
+    #[test]
+    fn session_exposes_endpoint_submissions_and_async_sink_errors() {
+        let sink = RecordingSink {
+            endpoint_submissions: 7,
+            output_error: Some("endpoint disconnected".to_owned()),
+            ..RecordingSink::default()
+        };
+        let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
+
+        assert_eq!(session.endpoint_submission_count(), 7);
+        assert_eq!(
+            session.output_error(),
+            Some("endpoint disconnected".to_owned())
+        );
+    }
+
     #[test]
     fn invalid_dsp_configuration_does_not_construct_the_host_sink() {
         let mut sink_created = false;
