@@ -129,7 +129,12 @@ impl SegaApp {
 
         ui.vertical(|ui| {
             render_header(ui);
-            render_rom_controls(ui, &mut self.rom_path, &mut self.region, &mut load_requested);
+            render_rom_controls(
+                ui,
+                &mut self.rom_path,
+                &mut self.region,
+                &mut load_requested,
+            );
             render_machine_controls(ui, &self.native_viewport, &mut command);
             render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui);
@@ -441,20 +446,8 @@ fn render_machine_controls(
             UiCommand::Pause,
             command,
         );
-        add_machine_button(
-            ui,
-            "Parar",
-            worker.is_some(),
-            UiCommand::Stop,
-            command,
-        );
-        add_machine_button(
-            ui,
-            "Reset",
-            worker.is_some(),
-            UiCommand::Reset,
-            command,
-        );
+        add_machine_button(ui, "Parar", worker.is_some(), UiCommand::Stop, command);
+        add_machine_button(ui, "Reset", worker.is_some(), UiCommand::Reset, command);
         add_machine_button(
             ui,
             "Avançar quadro",
