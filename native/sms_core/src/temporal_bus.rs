@@ -1333,8 +1333,7 @@ mod temporal_vdp_tests {
         let h_counter = transact(&mut bus, 2, Z80BusOperation::PortRead, 0x127F);
         assert_eq!(h_counter.data, Some(0));
 
-        let h_counter_after_more_cycles =
-            transact(&mut bus, 3, Z80BusOperation::PortRead, 0x007F);
+        let h_counter_after_more_cycles = transact(&mut bus, 3, Z80BusOperation::PortRead, 0x007F);
         assert_eq!(h_counter_after_more_cycles.data, Some(0));
     }
 
