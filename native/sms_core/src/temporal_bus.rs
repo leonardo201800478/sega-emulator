@@ -1452,7 +1452,7 @@ mod temporal_vdp_tests {
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
 
-        snapshot.format_version = 10;
+        snapshot.format_version = 11;
         assert!(matches!(
             SmsTemporalBus::restore_state(snapshot),
             Err(super::SmsTemporalBusError::InvalidState)
