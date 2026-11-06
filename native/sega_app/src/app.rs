@@ -865,8 +865,10 @@ fn configure_audio_output(
     const OUTPUT_SAMPLE_RATE: u32 = 44_100;
     const BUFFER_FRAMES: u32 = 512;
     const QUEUE_BLOCKS: usize = 8;
-    worker.configure_audio_output(move || match backend {
-        AudioBackend::Wasapi => {
+    worker.configure_audio_output(
+        move || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
+            match backend {
+                AudioBackend::Wasapi => {
             let sink = NativeWasapiOutput::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
                 .map_err(|error| error.to_string())?;
             let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
@@ -877,8 +879,10 @@ fn configure_audio_output(
                 .map_err(|error| error.to_string())?;
             let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
             Ok(Box::new(session))
-        }
-    })
+                }
+            }
+        },
+    )
 }
 
 fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
