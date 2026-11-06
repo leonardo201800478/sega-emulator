@@ -587,12 +587,7 @@ impl SmsTemporalMachine {
     /// immediately after that dispatch makes a newly asserted VBlank visible
     /// at the next Z80 interrupt sampling edge (including HALT M1 T4).
     fn sync_vdp_interrupt_line(&mut self) {
-        self.set_int_line(
-            self.bus
-                .vdp()
-                .interrupt_pending()
-                .then_some(0xFF),
-        );
+        self.set_int_line(self.bus.vdp().interrupt_pending().then_some(0xFF));
     }
 
     /// Dispatch one event and resume the matching CPU continuation.
