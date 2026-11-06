@@ -1,1 +1,0 @@
-"""Frontends opcionais do emulador."""
