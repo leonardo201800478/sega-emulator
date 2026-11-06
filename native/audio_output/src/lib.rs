@@ -682,7 +682,10 @@ impl NativeXAudio2Output {
 
     /// Last asynchronous error from the XAudio2 worker.
     pub fn output_error(&self) -> Option<String> {
-        self.output_error.lock().ok().and_then(|error| error.clone())
+        self.output_error
+            .lock()
+            .ok()
+            .and_then(|error| error.clone())
     }
 
     pub fn close(&mut self) {
