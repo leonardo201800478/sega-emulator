@@ -116,7 +116,8 @@ impl WorkerTelemetry {
 
     #[cfg(test)]
     fn set_audio_endpoint_submissions(&self, count: u64) {
-        self.audio_endpoint_submissions.store(count, Ordering::Release);
+        self.audio_endpoint_submissions
+            .store(count, Ordering::Release);
     }
 
     fn reset_machine_counters(&self) {
@@ -854,13 +855,13 @@ fn handle_command(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use super::open_audio_session;
     use super::{
         DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
-    #[cfg(windows)]
-    use super::open_audio_session;
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
@@ -1092,9 +1093,18 @@ mod tests {
         eprintln!(
             "backend={backend} endpoint_submissions={endpoint_submissions} underruns={underruns} dropped_blocks={dropped_blocks} output_error={output_error:?}"
         );
-        assert!(endpoint_submissions > 0, "{backend} accepted no PCM-bearing endpoint buffers");
-        assert_eq!(dropped_blocks, 0, "{backend} dropped queued PCM blocks");
-        assert_eq!(output_error, None, "{backend} reported an asynchronous output error");
+        assert!(
+            endpoint_submissions > 0,
+            "{backend} accepted no PCM-bearing endpoint buffers"
+        );
+        assert_eq!(
+            dropped_blocks, 0,
+            "{backend} dropped queued PCM blocks"
+        );
+        assert_eq!(
+            output_error, None,
+            "{backend} reported an asynchronous output error"
+        );
     }
 
     /// Requires a Windows render endpoint. Run explicitly with the ignored-test flag.
