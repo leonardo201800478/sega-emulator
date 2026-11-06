@@ -355,6 +355,10 @@ impl SmsTemporalMachine {
 
     /// Start the next instruction and expose its first bus request.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
+        // Sample the VDP's level IRQ at the CPU instruction boundary. The
+        // dispatch path also synchronizes after each scheduled hardware event;
+        // this second boundary check prevents stale INT state before HALT M1.
+        self.sync_vdp_interrupt_line();
         let step = self.cpu.begin_instruction()?;
         self.instruction_started_at = Some(self.bus.now());
         Ok(step)
@@ -2976,7 +2980,6 @@ mod base_immediate_io_temporal_tests {
     }
 }
 
-
 #[cfg(test)]
 mod temporal_interrupt_wiring_tests {
     use super::SmsTemporalMachine;
@@ -3006,7 +3009,7 @@ mod temporal_interrupt_wiring_tests {
             0xF3, // DI
             0x31, 0xF0, 0xDF, // LD SP,$DFF0
             0xED, 0x56, // IM 1
-            0x3E, 0xA0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // VDP R1 = $A0
+            0x3E, 0xE0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, // R1: 16 KB, display on, VBlank IRQ
             0xFB, // EI
             0x76, // HALT
             0x18, 0xFD, // JR -3
@@ -3039,6 +3042,7 @@ mod temporal_interrupt_wiring_tests {
             machine.step_frame(100_000).unwrap();
         }
 
+        assert_eq!(machine.vdp().registers()[1] & 0x60, 0x60);
         assert_eq!(machine.memory().read(0xC000), FRAMES);
         assert!(!machine.vdp().interrupt_pending());
     }
@@ -3087,8 +3091,8 @@ mod temporal_frame_tests {
         program.extend([0x3E, 0xFF, 0xD3, 0xBE].repeat(8));
         program.extend([
             // Tone channel 0, period 4, maximum volume.
-            0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E,
-            0x18, 0xFE, // JR -2
+            0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E, 0x18,
+            0xFE, // JR -2
         ]);
         rom[..program.len()].copy_from_slice(&program);
 
