@@ -11,6 +11,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 import sega_emulator.frontend.qt.minimal_sms_window as minimal_window
@@ -98,7 +99,8 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     rom_path = tmp_path / "test.sms"
     rom_path.write_bytes(b"test-rom")
 
-    window = minimal_window.MinimalSmsWindow(region="brazil")
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    window = minimal_window.MinimalSmsWindow(region="brazil", settings=settings)
     window.load_rom(rom_path)
 
     machine = window._machine
@@ -111,6 +113,13 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert "F5" in window.status_label.text()
     assert "Áudio WASAPI inicializado" in window.status_label.text()
     assert window.run_action.isEnabled()
+    assert [action.text() for action in window.menuBar().actions()] == [
+        "Arquivo",
+        "Emulação",
+        "Configurações",
+        "Ajuda",
+    ]
+    assert window.settings_action.shortcut().toString() == "Ctrl+,"
     audio_calls = [
         call for call in machine.calls if call[0] == "configure_audio_output"
     ]
@@ -317,3 +326,83 @@ def test_video_telemetry_reports_native_runtime_failure(
     assert "Execução SMS interrompida" in window.statusBar().currentMessage()
     assert not window._video_telemetry_timer.isActive()
     window.close()
+
+
+
+def test_sms_window_applies_persisted_audio_preferences(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "audio.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_audio_backend", "xaudio2")
+    settings.setValue("audio_sample_rate", 44_100)
+    settings.setValue("audio_buffer_size", 1024)
+    settings.setValue("audio_queue_blocks", 8)
+    settings.setValue("audio_volume", 55)
+    settings.setValue("audio_balance", -30)
+    rom_path = tmp_path / "configured.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(region="usa", settings=settings)
+    window.load_rom(rom_path)
+
+    machine = window._machine
+    assert isinstance(machine, FakeTemporalSMSMachine)
+    audio_call = next(call for call in machine.calls if call[0] == "configure_audio_output")
+    assert audio_call[1] == "xaudio2"
+    assert audio_call[2] == {
+        "sample_rate": 44_100,
+        "buffer_size": 1024,
+        "queue_blocks": 8,
+        "volume": 55,
+        "balance": -30,
+    }
+    assert "XAudio2 inicializado" in window.status_label.text()
+    window.close()
+
+
+def test_sms_window_can_disable_native_audio_from_preferences(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    settings = QSettings(str(tmp_path / "disabled.ini"), QSettings.Format.IniFormat)
+    settings.setValue("sms_audio_backend", "disabled")
+    rom_path = tmp_path / "silent.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(region="usa", settings=settings)
+    window.load_rom(rom_path)
+
+    machine = window._machine
+    assert isinstance(machine, FakeTemporalSMSMachine)
+    assert ("close_audio_output",) in machine.calls
+    assert not any(call[0] == "configure_audio_output" for call in machine.calls)
+    assert "Áudio desativado" in window.status_label.text()
+    window.close()
+
+
+def test_sms_video_viewport_supports_integer_scaling(
+    qapplication: QApplication,
+) -> None:
+    viewport = SmsVideoViewport()
+    viewport.resize(1000, 700)
+    viewport.set_integer_scale(True)
+    qapplication.processEvents()
+
+    surface = viewport.surface_widget.geometry()
+    assert surface.width() == 768
+    assert surface.height() == 576
+    assert surface.width() % 256 == 0
+    assert surface.height() % 192 == 0
+
+    viewport.set_integer_scale(False)
+    qapplication.processEvents()
+    fractional_surface = viewport.surface_widget.geometry()
+    assert fractional_surface.width() / fractional_surface.height() == pytest.approx(
+        4 / 3, abs=0.01
+    )
+    viewport.close()
