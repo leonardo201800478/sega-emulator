@@ -38,13 +38,6 @@ class SmsVideoViewport(QWidget):
             Qt.WidgetAttribute.WA_NoSystemBackground,
             True,
         )
-        self.surface_widget.setAttribute(
-            Qt.WidgetAttribute.WA_PaintOnScreen,
-            True,
-        )
-        self.surface_widget.setStyleSheet(
-            "QWidget#smsD3d12Surface { background: #000000; }"
-        )
         self._layout_surface()
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt override name
