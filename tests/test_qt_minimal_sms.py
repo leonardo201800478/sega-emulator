@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -29,11 +30,17 @@ class FakeTemporalSMSMachine:
         self.video_replaced_frames = 0
         self.video_device_recovery_count = 0
         self.video_output_error: str | None = None
+        self.runtime_error: str | None = None
         self.video_close_error: str | None = None
+        self.audio_output_error: str | None = None
+        self.audio_output_metrics = (0, 0)
+        self.audio_configure_error: str | None = None
         self.calls: list[tuple[object, ...]] = []
 
-    def configure_audio_output(self, backend: str) -> None:
-        self.calls.append(("configure_audio_output", backend))
+    def configure_audio_output(self, backend: str, **kwargs: object) -> None:
+        self.calls.append(("configure_audio_output", backend, kwargs))
+        if self.audio_configure_error is not None:
+            raise RuntimeError(self.audio_configure_error)
 
     def start(self) -> None:
         self.calls.append(("start",))
@@ -101,9 +108,21 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert window.reset_action.isEnabled()
     assert window.close_rom_action.isEnabled()
     assert not hasattr(window, "_frame_timer")
-    assert "Preparando" in window.status_label.text()
+    assert "F5" in window.status_label.text()
+    assert "Áudio WASAPI inicializado" in window.status_label.text()
     assert window.run_action.isEnabled()
-    assert not any(call[0] == "configure_audio_output" for call in machine.calls)
+    audio_calls = [
+        call for call in machine.calls if call[0] == "configure_audio_output"
+    ]
+    assert len(audio_calls) == 1
+    assert audio_calls[0][1] == "wasapi"
+    assert audio_calls[0][2] == {
+        "sample_rate": 48_000,
+        "buffer_size": 512,
+        "queue_blocks": 4,
+        "volume": 80,
+        "balance": 0,
+    }
 
     window.show()
     qapplication.processEvents()
@@ -138,6 +157,7 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     window = minimal_window.MinimalSmsWindow()
     machine = FakeTemporalSMSMachine(b"rom", region="usa")
     machine.video_output_is_running = True
+    machine.frame_number = 25
     machine.video_last_published_sequence = 7
     machine.video_last_presented_sequence = 5
     machine.video_replaced_frames = 2
@@ -148,6 +168,7 @@ def test_video_telemetry_reports_published_and_presented_sequences(
     window._refresh_video_telemetry()
 
     message = window.statusBar().currentMessage()
+    assert "Frames 25" in message
     assert "apresentado 5/7" in message
     assert "substituídos 2" in message
     assert "recuperações 1" in message
@@ -232,3 +253,67 @@ def test_sms_video_viewport_keeps_a_centered_four_by_three_surface(
     assert surface.right() < viewport.width()
     assert surface.bottom() < viewport.height()
     viewport.close()
+
+
+def test_audio_output_failure_does_not_prevent_loading_rom(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FailingAudioMachine(FakeTemporalSMSMachine):
+        def configure_audio_output(self, backend: str, **kwargs: object) -> None:
+            self.calls.append(("configure_audio_output", backend, kwargs))
+            raise RuntimeError("WASAPI endpoint unavailable")
+
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FailingAudioMachine)
+    rom_path = tmp_path / "audio-fallback.sms"
+    rom_path.write_bytes(b"test-rom")
+
+    window = minimal_window.MinimalSmsWindow(region="usa")
+    window.load_rom(rom_path)
+
+    assert isinstance(window._machine, FailingAudioMachine)
+    assert window._audio_output_error == "WASAPI endpoint unavailable"
+    assert "Áudio WASAPI indisponível" in window.status_label.text()
+    assert window.run_action.isEnabled()
+    window.close()
+
+
+def test_minimal_sms_window_loads_single_rom_from_zip(
+    qapplication: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
+    archive_path = tmp_path / "game.zip"
+    rom_bytes = b"valid-sms-rom"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("roms/game.sms", rom_bytes)
+
+    window = minimal_window.MinimalSmsWindow(region="usa")
+    window.load_rom(archive_path)
+
+    assert isinstance(window._machine, FakeTemporalSMSMachine)
+    assert window._machine.rom == rom_bytes
+    assert window._rom_path == archive_path
+    assert "game.sms" in window.windowTitle()
+    window.close()
+
+
+def test_video_telemetry_reports_native_runtime_failure(
+    qapplication: QApplication,
+) -> None:
+    window = minimal_window.MinimalSmsWindow()
+    machine = FakeTemporalSMSMachine(b"rom", region="usa")
+    machine.runtime_error = "FrameStepLimitReached"
+    machine.video_output_is_running = True
+    window._machine = machine
+    window._video_output_started = True
+    window._video_telemetry_timer.start()
+
+    window._refresh_video_telemetry()
+
+    assert "FrameStepLimitReached" in window.status_label.text()
+    assert "Execução SMS interrompida" in window.statusBar().currentMessage()
+    assert not window._video_telemetry_timer.isActive()
+    window.close()
