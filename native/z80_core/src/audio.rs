@@ -54,6 +54,20 @@ impl PcmSink for NativeAudioBackend {
         }
     }
 
+    fn endpoint_submission_count(&self) -> u64 {
+        match self {
+            Self::Wasapi(output) => output.endpoint_submission_count(),
+            Self::XAudio2(output) => output.endpoint_submission_count(),
+        }
+    }
+
+    fn output_error(&self) -> Option<String> {
+        match self {
+            Self::Wasapi(output) => output.output_error(),
+            Self::XAudio2(output) => output.output_error(),
+        }
+    }
+
     fn close(&mut self) {
         match self {
             Self::Wasapi(output) => output.close(),
