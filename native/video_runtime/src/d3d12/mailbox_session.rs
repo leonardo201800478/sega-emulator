@@ -146,9 +146,9 @@ impl D3d12MailboxSession {
 
     /// Start presentation on an existing HWND owned by the calling GUI thread.
     ///
-    /// The caller must invoke this method on the HWND's owning thread and keep
-    /// the associated widget alive until shutdown() has completed. The D3D12
-    /// worker never pumps or destroys this external window.
+    /// The caller must invoke this method on the HWND's owning GUI thread and
+    /// keep the external window alive until the session has been dropped. The
+    /// D3D12 worker never pumps or destroys this borrowed window.
     pub fn start_for_existing_window(
         render_width: u32,
         render_height: u32,
