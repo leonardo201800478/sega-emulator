@@ -70,6 +70,14 @@ struct WorkerTelemetry {
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
+    framebuffer_non_black_pixels: AtomicU64,
+    vdp_mode4_enabled: AtomicU64,
+    vdp_display_enabled: AtomicU64,
+    vdp_nonzero_vram_bytes: AtomicU64,
+    vdp_nonzero_cram_bytes: AtomicU64,
+    psg_samples_total: AtomicU64,
+    psg_nonzero_samples: AtomicU64,
+    psg_peak_amplitude_micros: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
     video_last_published_sequence: AtomicU64,
@@ -485,6 +493,20 @@ impl SmsTemporalWorker {
         )
     }
 
+    /// Return hardware-output signal metrics sampled at the last completed frame.
+    pub(super) fn runtime_signal_metrics(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
+        (
+            self.telemetry.framebuffer_non_black_pixels.load(Ordering::Acquire),
+            self.telemetry.vdp_mode4_enabled.load(Ordering::Acquire),
+            self.telemetry.vdp_display_enabled.load(Ordering::Acquire),
+            self.telemetry.vdp_nonzero_vram_bytes.load(Ordering::Acquire),
+            self.telemetry.vdp_nonzero_cram_bytes.load(Ordering::Acquire),
+            self.telemetry.psg_samples_total.load(Ordering::Acquire),
+            self.telemetry.psg_nonzero_samples.load(Ordering::Acquire),
+            self.telemetry.psg_peak_amplitude_micros.load(Ordering::Acquire),
+        )
+    }
+
     #[cfg(test)]
     fn wait_for_frame_after(&self, frame_number: u64, timeout: Duration) -> bool {
         let Ok(observed) = self.telemetry.frame_signal.0.lock() else {
@@ -565,7 +587,28 @@ fn execute_frame(
         *video_mailbox = None;
     }
 
+    // Sample the actual VDP output before handing the immutable frame to the host.
+    // These counters distinguish a black hardware framebuffer from a failed presenter.
+    let framebuffer = machine.framebuffer();
+    let non_black_pixels = framebuffer
+        .chunks_exact(3)
+        .filter(|pixel| pixel.iter().any(|channel| *channel != 0))
+        .count() as u64;
+    let registers = machine.vdp().registers();
+    let vram_nonzero = machine.vdp().vram().iter().filter(|byte| **byte != 0).count() as u64;
+    let cram_nonzero = machine.vdp().cram().iter().filter(|byte| **byte != 0).count() as u64;
+    telemetry.framebuffer_non_black_pixels.store(non_black_pixels, Ordering::Release);
+    telemetry.vdp_mode4_enabled.store(u64::from(registers[0] & 0x04 != 0), Ordering::Release);
+    telemetry.vdp_display_enabled.store(u64::from(registers[1] & 0x40 != 0), Ordering::Release);
+    telemetry.vdp_nonzero_vram_bytes.store(vram_nonzero, Ordering::Release);
+    telemetry.vdp_nonzero_cram_bytes.store(cram_nonzero, Ordering::Release);
+
     let samples = machine.drain_audio_samples(None);
+    let nonzero_samples = samples.iter().filter(|sample| sample.abs() > 1.0e-9).count() as u64;
+    let peak = samples.iter().fold(0.0_f64, |peak, sample| peak.max(sample.abs()));
+    telemetry.psg_samples_total.store(samples.len() as u64, Ordering::Release);
+    telemetry.psg_nonzero_samples.store(nonzero_samples, Ordering::Release);
+    telemetry.psg_peak_amplitude_micros.store((peak * 1_000_000.0).round() as u64, Ordering::Release);
     let audio_result = audio_session
         .as_mut()
         .map(|session| session.process_samples(&samples));
