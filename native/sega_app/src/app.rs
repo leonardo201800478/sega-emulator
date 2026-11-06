@@ -6,6 +6,8 @@ use std::time::Duration;
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
+use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
+use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
@@ -22,6 +24,11 @@ pub struct SegaApp {
     last_rom_directory: Option<PathBuf>,
     rom_dialog_requested: bool,
     aspect_ratio: AspectRatioMode,
+    audio_enabled: bool,
+    audio_backend: AudioBackend,
+    audio_volume: u8,
+    last_controller: Option<ControllerButtons>,
+    pause_key_down: bool,
     native_viewport: NativeViewportState,
 }
 
@@ -33,6 +40,11 @@ impl Default for SegaApp {
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
             aspect_ratio: AspectRatioMode::FourThree,
+            audio_enabled: true,
+            audio_backend: AudioBackend::Wasapi,
+            audio_volume: 100,
+            last_controller: None,
+            pause_key_down: false,
             native_viewport: NativeViewportState::default(),
         }
     }
@@ -61,6 +73,27 @@ impl AspectRatioMode {
             Self::SixteenNine => "16:9",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioBackend {
+    Wasapi,
+    XAudio2,
+}
+
+impl AudioBackend {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Wasapi => "WASAPI Shared",
+            Self::XAudio2 => "XAudio2",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AudioCommand {
+    Configure,
+    Disable,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -174,6 +207,7 @@ impl SegaApp {
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
         let mut command = None;
+        let mut audio_command = None;
         let mut load_requested = false;
 
         ui.vertical(|ui| {
@@ -187,6 +221,14 @@ impl SegaApp {
                 &mut load_requested,
             );
             render_machine_controls(ui, &self.native_viewport, &mut command);
+            render_audio_controls(
+                ui,
+                &self.native_viewport,
+                &mut self.audio_enabled,
+                &mut self.audio_backend,
+                &mut self.audio_volume,
+                &mut audio_command,
+            );
             render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui, self.aspect_ratio);
             render_footer(ui);
@@ -197,6 +239,9 @@ impl SegaApp {
         }
         if let Some(command) = command {
             self.apply_command(command);
+        }
+        if let Some(audio_command) = audio_command {
+            self.apply_audio_command(audio_command);
         }
 
         viewport_rect
@@ -256,10 +301,32 @@ impl SegaApp {
             &self.region
         };
         match SmsTemporalWorker::new(rom, region) {
-            Ok(worker) => self.native_viewport.replace_worker(worker),
+            Ok(worker) => {
+                self.native_viewport.replace_worker(worker);
+                self.last_controller = None;
+                self.pause_key_down = false;
+                if self.audio_enabled {
+                    self.apply_audio_command(AudioCommand::Configure);
+                }
+            }
             Err(error) => {
                 self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"));
             }
+        }
+    }
+
+    fn apply_audio_command(&mut self, command: AudioCommand) {
+        let Some(worker) = self.native_viewport.worker.as_ref() else {
+            return;
+        };
+        let result = match command {
+            AudioCommand::Configure => configure_audio_output(worker, self.audio_backend, self.audio_volume),
+            AudioCommand::Disable => worker.close_audio_output(),
+        };
+        if let Err(error) = result {
+            self.native_viewport.error = Some(format!("Configuração de áudio falhou: {error}"));
+        } else {
+            self.native_viewport.error = None;
         }
     }
 
@@ -297,6 +364,31 @@ impl SegaApp {
         } else if !matches!(command, UiCommand::Start) {
             self.native_viewport.error = None;
         }
+    }
+
+    fn update_keyboard_input(&mut self, context: &egui::Context) {
+        let (buttons, pause_down) = context.input(|input| {
+            (
+                ControllerButtons {
+                    up: input.key_down(egui::Key::ArrowUp),
+                    down: input.key_down(egui::Key::ArrowDown),
+                    left: input.key_down(egui::Key::ArrowLeft),
+                    right: input.key_down(egui::Key::ArrowRight),
+                    button_1: input.key_down(egui::Key::Z),
+                    button_2: input.key_down(egui::Key::X),
+                },
+                input.key_down(egui::Key::P),
+            )
+        });
+        if let Some(worker) = self.native_viewport.worker.as_ref() {
+            if self.last_controller != Some(buttons) && worker.set_controller(1, buttons).is_ok() {
+                self.last_controller = Some(buttons);
+            }
+            if pause_down && !self.pause_key_down {
+                let _ = worker.request_nmi();
+            }
+        }
+        self.pause_key_down = pause_down;
     }
 
     fn update_native_viewport(
@@ -459,6 +551,7 @@ impl SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let viewport_rect = self.render(ui);
+        self.update_keyboard_input(ui.ctx());
         if self.rom_dialog_requested {
             self.rom_dialog_requested = false;
             self.open_rom_dialog(frame);
@@ -696,6 +789,43 @@ fn add_machine_button(
     }
 }
 
+fn render_audio_controls(
+    ui: &mut egui::Ui,
+    viewport: &NativeViewportState,
+    enabled: &mut bool,
+    backend: &mut AudioBackend,
+    volume: &mut u8,
+    command: &mut Option<AudioCommand>,
+) {
+    ui.horizontal(|ui| {
+        if ui.checkbox(enabled, "Áudio ativo").changed() {
+            *command = Some(if *enabled { AudioCommand::Configure } else { AudioCommand::Disable });
+        }
+        ui.label("Saída:");
+        egui::ComboBox::from_id_salt("sms_audio_backend")
+            .selected_text(backend.label())
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(backend, AudioBackend::Wasapi, "WASAPI Shared").changed()
+                    || ui.selectable_value(backend, AudioBackend::XAudio2, "XAudio2").changed()
+                {
+                    *command = Some(AudioCommand::Configure);
+                    *enabled = true;
+                }
+            });
+        ui.label("Volume:");
+        if ui.add(egui::Slider::new(volume, 0..=100)).changed() && *enabled {
+            *command = Some(AudioCommand::Configure);
+        }
+    });
+    ui.small("Teclado: setas = direcional · Z/X = Botões 1/2 · P = Pause (NMI)");
+    if let Some(worker) = viewport.worker.as_ref() {
+        let (underruns, dropped) = worker.audio_output_metrics();
+        ui.small(format!("Áudio: {underruns} underruns · {dropped} blocos descartados"));
+    } else {
+        ui.small("Áudio: aguardando ROM");
+    }
+}
+
 fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
     ui.separator();
     ui.label(format!("Estado: {}", viewport.status()));
@@ -715,9 +845,40 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.label("Frames substituídos na apresentação");
                 ui.label(worker.video_replaced_frames().to_string());
                 ui.end_row();
+                let (underruns, dropped) = worker.audio_output_metrics();
+                ui.label("Áudio — underruns");
+                ui.label(underruns.to_string());
+                ui.end_row();
+                ui.label("Áudio — blocos descartados");
+                ui.label(dropped.to_string());
+                ui.end_row();
             });
         render_output_errors(ui, worker);
     }
+}
+
+fn configure_audio_output(
+    worker: &SmsTemporalWorker,
+    backend: AudioBackend,
+    volume: u8,
+) -> Result<(), String> {
+    const OUTPUT_SAMPLE_RATE: u32 = 44_100;
+    const BUFFER_FRAMES: u32 = 512;
+    const QUEUE_BLOCKS: usize = 8;
+    worker.configure_audio_output(move || match backend {
+        AudioBackend::Wasapi => {
+            let sink = NativeWasapiOutput::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
+                .map_err(|error| error.to_string())?;
+            let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
+            Ok(Box::new(session))
+        }
+        AudioBackend::XAudio2 => {
+            let sink = NativeXAudio2Output::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
+                .map_err(|error| error.to_string())?;
+            let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
+            Ok(Box::new(session))
+        }
+    })
 }
 
 fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
