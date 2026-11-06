@@ -25,7 +25,8 @@
 - `Scheduler deterministic stress`: PASS on that SHA.
 - `Windows PowerShell tooling syntax`: PASS on that SHA.
 - `Windows x64/D3D12 compile`: PASS on that SHA, including the native egui shell, SMS runtime target check/Clippy, and PowerShell workspace audit/lock validation.
-- The branch subsequently received documentation-only commits; exact latest-head CI is queued and must complete before review/merge.
+- After the validated candidate SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, the branch received formatting-only corrections and a temporal CPU RESET implementation with tests for peripheral/timeline preservation and rejection during an in-flight instruction.
+- Those later commits have no confirmed CI result in this audit. Formatting, Clippy, workspace tests, Scheduler stress and Windows/D3D12 on the exact latest HEAD remain NOT RUN until a run is observed.
 - Physical D3D12 presentation, WASAPI/XAudio2 output and input latency: NOT RUN.
 - Local Cargo validation: NOT RUN because the local environment has no Rust toolchain.
 
