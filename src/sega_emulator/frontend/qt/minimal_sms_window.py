@@ -1,8 +1,7 @@
-"""Minimal Qt control panel for the Rust Master System runtime.
+"""Qt control panel for the Rust Master System runtime and native D3D12 viewport.
 
-Qt owns only menus, controls, status and input capture. It never receives,
-converts, scales or presents video frames. Video presentation is deferred to a
-separate native graphics host with explicit latency and display-feature gates.
+Qt owns menus, controls, status, input capture and viewport geometry only.
+Framebuffer storage, pixel conversion, filters and presentation remain in Rust.
 """
 
 from __future__ import annotations
@@ -19,7 +18,11 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
+
+from sega_emulator.frontend.qt.native_video_viewport import SmsVideoViewport
 
 from sega_emulator.machine.sms_temporal import TemporalSMSMachine
 
@@ -34,7 +37,7 @@ _KEY_ACTIONS = {
 
 
 class MinimalSmsWindow(QMainWindow):
-    """Small SMS control panel; video presentation is intentionally absent."""
+    """SMS control panel with a native Rust-owned D3D12 presentation surface."""
 
     def __init__(self, *, region: str = "usa", parent=None) -> None:
         super().__init__(parent)
@@ -42,19 +45,28 @@ class MinimalSmsWindow(QMainWindow):
         self._machine: TemporalSMSMachine | None = None
         self._rom_path: Path | None = None
         self._pressed_actions: set[str] = set()
+        self._video_output_started = False
 
         self.setWindowTitle("Sega Emulator — Master System")
-        self.resize(560, 220)
-        self.setMinimumSize(480, 180)
+        self.resize(960, 720)
+        self.setMinimumSize(640, 480)
+
+        central_widget = QWidget(self)
+        central_layout = QVBoxLayout(central_widget)
+        central_layout.setContentsMargins(12, 12, 12, 12)
+        central_layout.setSpacing(8)
+        self.video_viewport = SmsVideoViewport(central_widget)
+        central_layout.addWidget(self.video_viewport, 1)
 
         self.status_label = QLabel("Abra uma ROM do Master System")
         self.status_label.setObjectName("smsSessionStatus")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet(
-            "QLabel { padding: 24px; color: palette(text); }"
+            "QLabel { padding: 8px; color: palette(text); }"
         )
-        self.setCentralWidget(self.status_label)
+        central_layout.addWidget(self.status_label)
+        self.setCentralWidget(central_widget)
 
         toolbar = QToolBar("Emulação", self)
         toolbar.setObjectName("minimalSmsToolbar")
@@ -81,7 +93,7 @@ class MinimalSmsWindow(QMainWindow):
         toolbar.addAction(self.close_rom_action)
 
         self.statusBar().showMessage(
-            "Interface de controle — apresentação de vídeo ainda não habilitada"
+            "Viewport 4:3 nativo — apresentação D3D12 ativada ao carregar uma ROM"
         )
         self._update_actions()
 
@@ -106,21 +118,22 @@ class MinimalSmsWindow(QMainWindow):
 
         if self._machine is not None:
             self._machine.stop()
+            self._machine.close_video_output()
             self._machine.close_audio_output()
 
+        self._video_output_started = False
         self._machine = machine
         self._rom_path = path
         self._pressed_actions.clear()
         self.setWindowTitle(f"Sega Emulator — {path.name}")
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
-            "Vídeo desabilitado nesta interface.\n"
-            "Use Iniciar/Pausar para controlar a sessão nativa."
+            "Preparando a apresentação nativa D3D12 no viewport 4:3."
         )
         self.statusBar().showMessage(
-            f"{path.name} | {self._region} | áudio: aguardando host nativo | "
-            "vídeo: desabilitado"
+            f"{path.name} | {self._region} | vídeo: inicializando host D3D12"
         )
+        self._start_video_output_if_visible()
         self._update_actions()
 
     def _toggle_running(self) -> None:
@@ -135,8 +148,7 @@ class MinimalSmsWindow(QMainWindow):
             state = "iniciada"
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            f"Comando de sessão {state} enviado. A execução contínua ainda depende "
-            "do host nativo Rust; a Qt não executa ciclos nem apresenta vídeo."
+            f"Sessão {state}. Execução, vídeo e áudio permanecem no backend Rust."
         )
         self._update_actions()
 
@@ -147,14 +159,16 @@ class MinimalSmsWindow(QMainWindow):
         machine.reset()
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            "Máquina reiniciada. Vídeo não é renderizado pela Qt."
+            "Máquina reiniciada; o host D3D12 continua apresentando frames nativos."
         )
         self._update_actions()
 
     def _close_rom(self) -> None:
         if self._machine is not None:
             self._machine.stop()
+            self._machine.close_video_output()
             self._machine.close_audio_output()
+        self._video_output_started = False
         self._machine = None
         self._rom_path = None
         self._pressed_actions.clear()
@@ -162,6 +176,40 @@ class MinimalSmsWindow(QMainWindow):
         self.setWindowTitle("Sega Emulator — Master System")
         self.statusBar().showMessage("ROM fechada")
         self._update_actions()
+
+    def _start_video_output_if_visible(self) -> None:
+        """Attach the Rust D3D12 swap chain to the Qt-owned native viewport."""
+        machine = self._machine
+        if machine is None or self._video_output_started or not self.isVisible():
+            return
+        try:
+            machine.open_video_output_in_viewport(
+                self.video_viewport.native_handle()
+            )
+        except (AttributeError, OSError, RuntimeError, ValueError) as exc:
+            self.status_label.setText(
+                f"ROM carregada: {self._rom_path.name if self._rom_path else 'SMS'}\n"
+                f"Vídeo D3D12 indisponível: {exc}"
+            )
+            self.statusBar().showMessage(
+                "Emulação disponível; falha ao inicializar o host de vídeo nativo"
+            )
+            return
+
+        self._video_output_started = True
+        self.status_label.setText(
+            f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
+            "Apresentação D3D12 ativa — pixels e filtros processados em Rust."
+        )
+        self.statusBar().showMessage(
+            f"{self._rom_path.name if self._rom_path else 'SMS'} | "
+            "vídeo: D3D12 nativo | viewport 4:3"
+        )
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt override name
+        """Start native presentation after Qt has created the viewport HWND."""
+        super().showEvent(event)
+        self._start_video_output_if_visible()
 
     def _update_actions(self) -> None:
         loaded = self._machine is not None
@@ -210,7 +258,9 @@ class MinimalSmsWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override name
         if self._machine is not None:
             self._machine.stop()
+            self._machine.close_video_output()
             self._machine.close_audio_output()
+        self._video_output_started = False
         super().closeEvent(event)
 
 
