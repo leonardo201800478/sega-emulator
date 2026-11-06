@@ -165,13 +165,22 @@ Input físico e periféricos lógicos permanecem separados. O host coleta teclad
 **Gate:** arquitetura aprovada e baseline registrada; nenhuma remoção de código.
 
 ### M1 — Aplicação Rust mínima
-- Criar binário `sega-app` e camada de aplicação independente da UI.
-- Abrir janela eframe com navegação mínima, estado da sessão e painel de diagnóstico.
-- Provar integração com o HWND do host D3D12 (parent/child, DPI, resize, foco e shutdown), sem mover pixels para o renderer wgpu.
-- Adicionar smoke tests headless do controller e teste de inicialização/encerramento da janela no Windows.
-- Não carregar ROM nem iniciar hardware até o contrato de sessão estar pronto.
 
-**Gate:** `cargo run --release` abre/fecha de forma limpa no Windows; UI não bloqueia; nenhum Python/PyO3 é necessário para esse binário.
+**M1a — shell inicial (implementado em branch, validação pendente):**
+- [x] Criar `native/sega_app` com binário `sega-app`, workspace Cargo isolado e lockfile próprio; a consolidação no workspace raiz fica para a fase de integração de crates.
+- [x] Adotar efixamente `eframe = 0.37.0` no alvo Windows x64.
+- [x] Implementar janela egui com estado explícito de subsistemas, opção de exibir arquitetura e encerramento da janela.
+- [x] Adicionar teste headless usando `egui::Context`, sem janela nativa nem hardware.
+- [x] Incluir fmt, check, Clippy e teste headless no job Windows da CI.
+- [ ] Confirmar `cargo metadata --locked`, build, Clippy e teste Windows no SHA da PR #601.
+
+**M1b — host e contrato de aplicação (pendente):**
+- [ ] Criar camada de aplicação independente de egui, com comandos/snapshots tipados.
+- [ ] Provar HWND filho Win32 no shell eframe e integração com `D3d12MailboxSession::start_for_existing_window`, cobrindo DPI, resize, foco, z-order e shutdown.
+- [ ] Implementar teste/smoke Windows e validar apresentação D3D12 real.
+- [ ] Não carregar ROM nem iniciar hardware até o contrato de sessão estar pronto.
+
+**Gate M1:** ainda NÃO PASS. O shell está implementado em fonte, mas CI e execução manual Windows ainda precisam confirmar compilação e inicialização. A integração D3D12 e a camada de aplicação permanecem pendentes. Nenhuma operação de hardware é executada pelo shell M1a.
 
 ### M2 — Integração vertical SG-1000/SMS
 - Integrar máquina Rust por API Rust direta, sem PyO3.
