@@ -1,7 +1,9 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(windows)]
+use std::sync::atomic::AtomicI32;
 #[cfg(windows)]
 use std::sync::mpsc;
 #[cfg(windows)]
@@ -39,7 +41,7 @@ impl std::fmt::Display for AudioOutputError {
             Self::InvalidBalance => write!(f, "balance must be between -100 and 100"),
             Self::InvalidPcmBlock => write!(f, "PCM16 blocks must contain an even byte count"),
             Self::Device(message) => write!(f, "native audio output failed: {message}"),
-            Self::WorkerStopped => write!(f, "WASAPI output worker has stopped"),
+            Self::WorkerStopped => write!(f, "native audio output worker has stopped"),
         }
     }
 }
