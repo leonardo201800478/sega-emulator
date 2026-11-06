@@ -855,8 +855,6 @@ fn handle_command(
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
-    use super::open_audio_session;
     use super::{
         DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
