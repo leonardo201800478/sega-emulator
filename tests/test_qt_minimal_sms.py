@@ -439,6 +439,7 @@ def test_sms_menu_opens_library_on_master_system_and_loads_selection(
         def __init__(self, settings, *, initial_system: str, parent=None) -> None:
             assert initial_system == "master_system"
             self.selected_rom = selected_rom
+            self.selected_system = initial_system
 
         def exec(self) -> int:
             return 1
