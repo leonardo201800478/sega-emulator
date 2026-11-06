@@ -149,3 +149,8 @@ Este incremento corrige os dois limites temporais sem introduzir eventos por dot
 - H-counter possui latch persistente disparado por TH ascendente no boundary de barramento.
 
 Não altera o limite físico de sprites, o pipeline de pixels, a temporização do Scheduler ou a lógica de CPU. A validação física continua explicitamente pendente.
+
+
+## Integration baseline — 2026-11-06
+
+The Qt/D3D12 presentation telemetry change from PR #580 was merged into `main` at `a9ef9b255f40923c23c1db12f10c3a914a02ab63` while this PR remained open. This audit increment is intentionally documentation-only and records that the R8/TH implementation is being revalidated against that updated integration baseline. No hardware behavior or physical GPU validation is inferred from the merge.
