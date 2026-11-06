@@ -79,11 +79,12 @@ No caminho temporal, uma escrita ímpar em `$01..$3F` é aplicada depois de o Sc
 - houve uma transição ascendente em TH1/TH2; e
 - o respectivo pino está configurado como entrada no novo valor de I/O control.
 
-Assim:
-- saída baixa -> entrada alta: captura;
-- entrada baixa -> entrada alta: captura quando a entrada é representada pelo estado de I/O;
+Assim, no caminho atualmente implementado:
+- saída baixa -> entrada alta por escrita em I/O control: captura;
 - saída baixa -> saída alta: não captura;
 - transição descendente: não captura.
+
+A borda ascendente de uma entrada TH externa enquanto o pino já está configurado como entrada também é exigida pelo modelo MAME, mas ainda não possui um evento de periférico dedicado no `SmsIo/SmsTemporalBus`; permanece NOT RUN. O Light Phaser continua usando seu evento sintético interno para atualizar o latch.
 
 A ROM de teste integrada executa o Z80 temporal real para TH1 e TH2 e lê o valor por `IN A,($7F)`. Também verifica que saída-alta e borda descendente não substituem o valor capturado.
 
