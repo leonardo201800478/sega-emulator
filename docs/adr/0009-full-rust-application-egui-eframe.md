@@ -1,3 +1,5 @@
+> **SUPERSEDED — 2026-11-06:** esta ADR foi substituída pela [ADR 0010 — Produto 100% Rust, SMS temporal como único runtime inicial](0010-rust-only-sms-temporal-first.md). A decisão anterior de manter Python/Qt/PyO3 como baseline de rollback não está mais vigente. Nenhum código Python, teste Python ou binding PyO3 será preservado no produto nem em legacy. Consulte a ADR 0010 e o roadmap mestre para a sequência atual.
+
 # ADR 0009 — Aplicação integralmente Rust com egui/eframe
 
 - **Status:** ACCEPTED — decisão de destino; migração incremental e ainda não concluída.

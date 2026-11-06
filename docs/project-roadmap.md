@@ -1,240 +1,50 @@
 # Roadmap mestre — Sega Emulator
 
-**Status:** única rota normativa de implementação.  
-**Regra de atualização:** este documento define a sequência normativa, não uma fotografia de branches/PRs. Antes de cada tarefa, auditar o SHA corrente da `main`, código, PRs e workflows.  
-**Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
+**Status:** única rota normativa de implementação.
+**Regra de atualização:** este documento define a sequência normativa, não uma fotografia de branches/PRs. Antes de cada tarefa, auditar o SHA corrente da `main`, código, PRs e workflows.
+**Prioridade imediata:** migração integral para Rust/egui e SMS temporal como único runtime inicial.
+**Política de arquitetura:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
 ## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela, formalizada pela [ADR 0009](adr/0009-full-rust-application-egui-eframe.md), e não substitui nem reordena os gates de hardware.
+A decisão arquitetural é definitiva: o produto não manterá Python, Qt/PySide6, PyO3 ou Maturin. A aplicação será nativa Rust com egui/eframe. Nesta etapa, a UI terá somente menus operacionais; biblioteca visual, frontend rico e serviços não essenciais ficam fora do escopo.
 
-**Estado remoto confirmado nesta atualização:** `main` em `333900ae35a87b2430caedd2edf26218f272c8a6`, merge da PR #601. A PR #602 (CI Rust-first/Python legado opt-in) foi integrada anteriormente em `1a10779a37cf4da512186104bb5041552559a000`. O relatório detalhado da migração, incluindo escopo integrado, limites e próximos gates, está em [status da migração Rust — 2026-11-06](architecture/rust-application-migration-status-2026-11-06.md).
+O único runtime ativo inicial será o Master System temporal, usando o Z80 compartilhado, PSG temporal, VDP temporal e MachineScheduler. O SMS atômico antigo e o SG-1000 atômico serão desconectados do workspace/runtime e arquivados temporariamente como referência Rust. O SG-1000 legado será eliminado depois que o SMS estiver executável; uma implementação SG-1000 nova será iniciada posteriormente sobre o Z80 compartilhado. Nenhum código Python será preservado, inclusive em diretórios legacy.
 
-**Gates A/V do runtime SMS:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → `NativeAudioSession` → sink em memória, PCM não silencioso) = PASS automatizado conforme baseline integrada. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN até execução dos testes físicos ignorados da PR #599. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Jobs SKIPPED ou não executados nunca são PASS.
+A migração de aplicação deixa de ser paralela aos gates do SMS: ela é a prioridade atual. Não ampliar funcionalidades do frontend Qt/Python nem investir em paridade visual. Preservar somente contratos funcionais relevantes e reimplementá-los/testá-los em Rust.
 
-**Estado da migração da aplicação:**
-- M0 — decisão arquitetural e inventário M0.2: documentados e integrados na PR #601.
-- M1a — shell nativo `native/sega_app` com egui/eframe 0.37.0: integrado na PR #601; CI #5262 PASS no HEAD `86a51e1217aa588764c1559152765d0931beccb7`. O shell ainda não carrega ROM nem inicia hardware.
-- Política CI Rust-first e execução manual/opt-in dos gates Python/Qt/PyO3: integrada pela PR #602.
-- M1b — viewport D3D12 filho: PR #603 aberta; CI #5259 PASS no HEAD `d591c1648dd13bb384ae07cf3e2b8c9842202cec`, mas validação em Windows físico/GPU real permanece NOT RUN e o contrato latest-frame ainda precisa ser reconciliado com o FIFO lossless da ADR-0012. Não integrar ainda.
-- Aceitação de áudio em endpoint Windows: PR #599 aberta; CI #5206 PASS no HEAD `bb88e96cdb45d703f66d23acde42a2ead74fadd4`, mas testes físicos WASAPI/XAudio2 permanecem NOT RUN. Não integrar como prova de áudio físico.
+## Sequência normativa
 
-**Ordem vertical ativa do runtime SMS:**
+1. Inventariar e congelar dependências Python/Qt/PyO3, crates e módulos SMS temporais versus atômicos.
+2. Extrair worker SMS temporal e serviços de host para bibliotecas Rust puras.
+3. Isolar o SMS atômico antigo e remover a duplicidade de CPU/PSG/VDP do caminho ativo.
+4. Integrar o runtime SMS temporal ao binário egui/eframe com menus mínimos e comandos coarse-grained.
+5. Retirar o SG-1000 atômico do workspace; eliminá-lo após SMS executável. Criar SG-1000 novo somente em etapa posterior.
+6. Excluir integralmente fontes, testes, tooling, empacotamento, artefatos e CI Python/Qt/PyO3.
+7. Validar o produto exclusivamente com Cargo, testes Rust e gates físicos Windows aplicáveis.
 
-1. **Áudio nativo:** comprovar PCM aceito pelo NativeAudioBackend WASAPI/XAudio2 e depois saída audível em dispositivo físico, sem confundir sink de teste com endpoint real.
-2. **Vídeo/host físico:** executar ROM de diagnóstico em janela D3D12 real, verificar pixels apresentados e estabilidade da sequência de frames em GPU Windows.
-3. **Gameplay:** executar ROM legal/homebrew e jogo representativo, registrando região, hash local, boot, input e comportamento observável. Não versionar ROM comercial.
-4. **Controles e IRQ:** validar VBlank/Line IRQ, input, HALT e restauração de snapshots em cenários integrados; preservar o SG-1000.
-5. **Determinismo:** provar execução contínua versus em blocos, save/restore e replay no runtime SMS sem pular ciclos nem eventos.
-6. **Desempenho e compatibilidade:** somente após os gates A/V de host, medir o caminho crítico sem telemetria intrusiva e ampliar a matriz de jogos.
+A implementação deve ocorrer em PRs pequenas, compiláveis e com CI verde no HEAD exato. Não fazer merge com jobs obrigatórios SKIPPED, FAIL, BLOCKED ou NOT RUN.
 
-A VDP atual produz composição por scanline; fetch arbitration, WAIT físico e efeitos intralinha continuam limitados/pendentes. Não bloquear a primeira baseline funcional por precisão elétrica ou por T-state que ainda não tenha consumidor demonstrado. A ADR-0016 permanece normativa: temporalidade prioritária nos caminhos de gameplay e execução atômica determinística no restante.
+## Gates do SMS executável
 
-O fechamento semântico global E7.7 do Z80 continua sendo uma frente independente. Não reiniciar E4C/E5/E6 nem promover E8 antes de fechar E7. A correção de IRQ do SMS deve preservar o núcleo compartilhado e não criar uma CPU por console.
+- Carregamento de ROM sintética/homebrew.
+- Z80 compartilhado como única CPU.
+- Scheduler único coordenando CPU, PSG e VDP.
+- Framebuffer real apresentado pelo host D3D12.
+- PCM não silencioso entregue a WASAPI/XAudio2.
+- Input nativo e comandos coarse-grained.
+- Start/pause/resume/stop/reset/close sem threads órfãs.
+- Execução contínua versus em blocos e snapshot/restore determinísticos.
+- Validação física Windows separada de testes headless.
 
-Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes. O estado da migração deve ser atualizado no relatório vinculado acima, sem duplicar sua linha de execução nesta rota normativa.
+O fechamento semântico global do Z80 continua obrigatório conforme o scorecard e a matriz semântica. Não promover E8 antes do fechamento de E7.
 
-## Contrato da primeira interface operacional — SMS e SG-1000
+## Regras de arquitetura
 
-A primeira entrega utilizável não exige biblioteca visual completa nem todos os recursos avançados do frontend P7. Exige, porém, uma interface nativa **egui/eframe** coerente para selecionar sistema, abrir jogos, controlar a sessão e configurar os recursos básicos de vídeo, áudio, controles e região. A UI Rust é camada de apresentação e configuração; execução, entrada de gameplay, vídeo, áudio e temporização pertencem aos runtimes/hosts nativos em Rust. Esta tecnologia substitui Qt/PySide6, sem alterar os critérios funcionais abaixo.
-
-### Sistemas e modelos
-
-- Seletor de sistema: **Master System** e **SG-1000**. A troca de sistema seleciona o runtime correspondente e não reutiliza indevidamente o mapa de memória, VDP ou perfil de hardware do outro console.
-- No Master System, seletor de modelo com **SMS1 disponível**. **SMS2** aparece como opção futura/desabilitada até existir perfil e validação próprios. Não criar uma segunda implementação de CPU ou máquina sem diferença real de hardware; preferir perfis/adaptadores sobre componentes compartilhados.
-- SG-1000 continua selecionável e seus testes/regressões permanecem obrigatórios durante a migração.
-
-### ROMs, histórico e região
-
-- Ação **Abrir ROM**, com histórico persistente das **15 ROMs abertas mais recentemente**. Cada entrada identifica o caminho e, quando aplicável, o membro interno de um ZIP.
-- Suporte a arquivos ZIP: enumerar apenas entradas compatíveis, permitir seleção explícita quando houver mais de uma ROM suportada e carregar o conteúdo selecionado sem extração automática insegura. Validar tamanho descompactado, integridade e caminhos; rejeitar entradas inválidas e arquivos compactados abusivos.
-- O histórico não copia ROMs para o repositório nem as distribui. Caminhos inexistentes devem ser sinalizados e removidos/limpos de forma controlada.
-- Menu de região: **Auto, Brasil, USA, Europa, Japão, Coreia e UNL**. Auto usa identificação confiável da ROM/perfil e apresenta fallback explícito quando não houver dados suficientes. UNL força execução sem BIOS, independentemente da configuração global. A seleção de região é independente do modelo SMS1/SMS2.
-- Opções gerais incluem, no mínimo, diretórios de ROMs e BIOS e caminhos de dados do usuário. BIOS é opcional conforme o sistema/jogo; nunca embutir ou versionar BIOS proprietária.
-
-### Transporte da emulação
-
-- Comandos visíveis com ícones: **Play/Iniciar, Pause e Stop**, além de Reset e Fechar ROM no fluxo de sessão.
-- Pause congela a máquina; Play inicia ou retoma; Stop encerra a sessão e libera recursos nativos; Reset reinicia a máquina mantendo a ROM carregada. O fechamento libera worker, áudio e recursos gráficos sem deixar threads órfãs.
-- Atalhos de controle da emulação são separados dos botões enviados ao jogo. O comando Pause do emulador não pode ser confundido com o botão físico Pause/NMI do Master System.
-
-### Vídeo e apresentação
-
-- API selecionável: **Direct3D 12 (única API disponível inicialmente)**. Não exibir Vulkan/OpenGL como opções funcionais antes de implementá-las.
-- Modos: janela, tela cheia e tela cheia sem bordas. Em D3D12, “tela cheia” deve seguir o modelo de apresentação suportado pelo DXGI/Windows; não prometer fullscreen exclusive, que não é suportado pelo D3D12.
-- Aspecto selecionável: **1:1 (pixels quadrados)** e **4:3 (apresentação de TV)**, preservando a geometria do frame e sem alterar o VDP.
-- Sincronização: Mailbox como política padrão de apresentação; VSync configurável; VRR e G-Sync expostos somente quando o host/driver/display confirmarem suporte. G-Sync é uma capacidade do conjunto GPU/driver/display, não uma API gráfica independente.
-- Mailbox deve atuar somente na fila de apresentação: o Scheduler continua processando todos os ciclos e frames emulados, sem frame skipping, aceleração ou alteração do tempo da máquina. Se a apresentação substituir frames pendentes, isso precisa ser identificado como descarte de apresentação, nunca como descarte de trabalho de emulação.
-- Filtros executados exclusivamente no host D3D12, em passes HLSL de pós-processamento sobre o frame imutável: **NTSC Blended/Composite** e **Horizontal Blend** (interpolação/blur gaussiano 1D no eixo X). A saída nativa do VDP permanece intacta. Shaders de terceiros (por exemplo, famílias CRT/NTSC) só entram após auditoria de licença e portabilidade; arquivos .slang não são tratados como shaders HLSL executáveis diretamente.
-
-### Áudio
-
-- Backend selecionável: **XAudio2** ou **WASAPI**. Disponibilizar volume geral, balanço, latência/buffer e opções DSP que tenham implementação e testes reais.
-- Controles de DSP devem ser aplicados no caminho nativo de áudio; não processar áudio de gameplay em Python. Preferências não suportadas pelo dispositivo/backend devem aparecer indisponíveis, não simular funcionamento.
-
-### Controles e entrada
-
-- Mapeamento de controles via **SDL3**, com configuração por dispositivo e preservação dos mapeamentos padrão.
-- Deadzone analógica configurável, padrão **15%** para sticks; triggers/eixos unipolares usam limiar próprio, evitando aplicar uma zona radial inadequada.
-- A captura e normalização de gameplay ficam no runtime nativo de entrada. A UI egui/eframe pode configurar mapeamentos e atalhos, mas não faz polling por instrução nem decide quando o Scheduler avança.
-- Pause do emulador é ação de host, separada do Pause/NMI do console. Eventos de botão devem ser tratados por transição (edge-trigger), sem repetição enquanto o botão permanecer pressionado. Validar especificamente a sequência de boot/introdução de **Road Rash**: uma pressão não pode gerar uma série de NMI nem manter o jogo preso no logotipo. Inputs devem ser amostrados/latchados em fronteiras determinísticas, sem ler estado antigo antes de o novo input ser aplicado.
-
-### Limite real de sprites
-
-Não remover nem desativar por padrão os limites reais de sprites do VDP SMS1/SG-1000: eles fazem parte do comportamento do hardware e afetam prioridade, overflow e flicker. Não existe “desbloqueio” que preserve fidelidade se ele altera essa regra. O requisito é remover qualquer limite artificial da interface/renderer; qualquer modo de compatibilidade que altere o limite real exigiria decisão explícita separada e não faria parte do perfil fiel.
-
-### Critérios de aceite da interface inicial
-
-1. Selecionar SMS/SG-1000 e carregar ROM local ou membro selecionado de ZIP.
-2. Reabrir qualquer uma das 15 entradas recentes e restaurar sistema, modelo e região compatíveis.
-3. SMS1 operacional; SMS2 claramente marcado como futuro até validação.
-4. Play/Pause/Stop/Reset/Fechar ROM com ciclo de vida nativo completo.
-5. Menus de vídeo, áudio, controles, região e opções persistem preferências e refletem capacidades realmente disponíveis.
-6. Nenhum pixel, PCM de gameplay, ciclo de hardware ou stepping por frame atravessa Python.
-7. Testes de SDL3 para deadzone, transições de botão, hotkey Pause versus NMI e regressão Road Rash; regressões SG-1000 obrigatórias.
-8. Testes de apresentação para resize, janela/tela cheia/borderless, aspecto, sincronização, encerramento e fallback explícito quando VRR/G-Sync não estiverem disponíveis.
-9. Filtros HLSL determinísticos, com comparação de frames de referência e sem modificar o frame produzido pelo VDP.
-
-## 1. Princípios de execução
-
-1. Rust é o único runtime do produto, incluindo hardware, aplicação, frontend, launcher, configuração e diagnóstico. O produto final não depende de interpretador Python.
-2. A UI Rust chama APIs de aplicação e runtime diretamente, por comandos coarse-grained. PyO3 é somente uma fronteira transitória enquanto o frontend legado existir e será removido no gate de migração integral; sem callbacks por instrução em qualquer etapa.
-3. Reutilizar componentes compartilhados quando representarem hardware compatível; manter diferenças reais por plataforma.
-4. Corrigir primeiro comportamento funcional e compatibilidade; adicionar precisão temporal onde uma interação real exigir.
-5. Um Scheduler por máquina composta coordena os eventos relevantes, sem impor atualização de cada pino/tick de cada componente.
-6. Não implementar detalhes de barramento, WAIT, arbitragem, M-cycle/T-state ou pinos sem identificar o console e o comportamento que dependem deles.
-7. Desempenho deve ser medido; não usar JIT, frame skipping, hacks de timing ou otimizações especulativas.
-8. Mudanças não triviais seguem branch + PR. Sem commit direto na main, force-push ou merge sem gates verdes no HEAD final.
-9. ROMs comerciais, BIOS proprietárias e dumps protegidos não entram no Git.
-
-## Regra normativa de granularidade — prioridade temporal e execução atômica
-
-O projeto adota dois níveis complementares, sem reduzir a correção funcional:
-
-1. **Precisão temporal prioritária para gameplay:** instruções, sequências e processos cuja ordem ou duração possa alterar a execução de jogos ou a interação entre CPU, memória/barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos. Nesses caminhos, preservar clocks, ordem causal, pontos de interação e a menor resolução temporal que reproduza o efeito observado. Usar M-cycles, T-states, WAIT, suspensão/retomada ou fases de transação somente quando testes, documentação ou divergência reproduzível demonstrarem essa necessidade.
-2. **Precisão funcional atômica como padrão para o restante:** executar a operação em uma unidade atômica definida pela interface (instrução, acesso, escrita de registrador, avanço de scanline/bloco ou amostra), com resultado, flags, memória, efeitos colaterais, estado e duração nominal corretos quando conhecidos. Não criar micro-operações, fases internas, safe points ou eventos por tick apenas para espelhar a estrutura elétrica do chip.
-
-A semântica funcional de toda instrução e operação suportada continua obrigatoriamente correta. “Atômica” não significa aproximada, nondeterminística ou incompleta; significa que estados intermediários não observáveis não são modelados sem necessidade. O detalhamento temporal deve concentrar-se nos caminhos de gameplay sensíveis ao tempo. **Não existe requisito de precisão por pino, por borda elétrica ou por transistor.**
-
-Antes de elevar uma operação do nível atômico ao temporal, registrar: jogo/console/revisão/periférico afetado, efeito observável, evidência, menor granularidade suficiente, teste de regressão e custo. Na ausência dessa evidência, manter execução atômica e registrar a incerteza sem bloquear a plataforma.
-
-## 2. Fases de plataforma
-
-### P0 — Infraestrutura e hosts
-
-Consolidar workspace, ferramentas, CI, runtime Rust, integração coarse-grained e interfaces de host necessárias às plataformas ativas.
-
-**Saída:** builds reproduzíveis, gates confiáveis, runtime de hardware e aplicação Rust independentes da GUI, e empacotamento sem runtime Python ao final da migração.
-
-### P1 — Master System
-
-Prioridade principal. Consolidar a máquina SMS em Rust:
-- Z80 compartilhado e semanticamente correto para o software suportado;
-- memória, mappers, I/O e periféricos;
-- VDP Mode 4, registradores, sprites, raster e interrupções relevantes;
-- PSG e áudio;
-- sincronização CPU/vídeo/áudio nos pontos de interação que afetem jogos;
-- compatibilidade com ROMs de teste e jogos representativos.
-
-Priorizar temporização de instruções e processos que afetem gameplay: escritas/leituras de I/O e registradores de VDP/PSG, efeitos de mapper, interrupções, raster/H-counter, DMA, contenção e WAIT quando presentes no console. Instruções puramente internas de CPU e operações sem interação observável permanecem atômicas, preservando semântica e duração nominal conhecida. Não exigir execução por T-state de todas as instruções nem representação integral dos pinos.
-
-### P2 — SG-1000
-
-Preservar e consolidar o runtime SG-1000, reutilizando o Z80 e componentes comuns quando compatíveis. Manter VDP TMS9918A, mapa de memória, cartuchos, PSG e particularidades do sistema. Não regredir jogos já validados.
-
-### P3 — Game Gear
-
-Reutilizar a base SMS onde houver equivalência. Implementar diferenças reais de LCD, viewport, paleta, áudio estéreo, I/O e perfil de hardware.
-
-### P4 — Mega Drive / Genesis
-
-Adicionar o Motorola 68000, VDP, áudio e integração do Z80 auxiliar. Modelar arbitragem e sincronização entre CPUs conforme as necessidades observáveis dos jogos.
-
-### P5 — Sega CD
-
-Compor a plataforma Mega Drive com CD-ROM, sub-CPU, memória compartilhada, áudio e ASICs específicos.
-
-### P6 — 32X / Sega CD 32X
-
-Adicionar SH-2, vídeo e áudio do 32X e composição com Mega Drive/Sega CD.
-
-### P7 — Aplicação nativa Rust / egui-eframe
-
-Migrar launcher, biblioteca, ROM/firmware, preferências, perfis, telemetria, logging e automação para Rust; construir a UI egui/eframe e integrar o viewport D3D12 já existente. Extrair o worker SMS da extensão PyO3 para uma biblioteca Rust comum, eliminar a dependência PyO3/Maturin do produto e manter o Scheduler como autoridade temporal. A GUI não executa nem temporiza hardware. A ADR 0009 e o inventário M0.2 definem os gates de migração e preservação de dados.
-
-### P8 — Compatibilidade e auditoria
-
-Ampliar matriz de jogos, ROMs de diagnóstico, regressões, compatibilidade de revisões e validação em ambientes de host suportados.
-
-### P9 — Validação sistêmica
-
-Comprovar determinismo, save states, replay e sincronização de cada plataforma na granularidade realmente necessária. Não exigir um selo global de cycle-accuracy ou pin-accuracy como condição universal.
-
-## 3. Z80 compartilhado — política de conclusão
-
-O Z80 é um componente compartilhado, não uma CPU duplicada por console.
-
-Critérios funcionais:
-- instruções documentadas necessárias aos sistemas suportados;
-- registradores, flags e efeitos arquiteturais corretos;
-- prefixos e operações indexadas utilizadas pelo conjunto de instruções;
-- interrupções e HALT conforme o uso da plataforma;
-- regressões SG-1000 e SMS.
-
-Critérios temporais prioritários:
-- preservar duração nominal e ordem das instruções executadas por jogos;
-- detalhar sequência temporal quando uma instrução/processo interagir com VDP, áudio, mapper, I/O, interrupção ou barramento de modo sensível ao instante;
-- manter atomicidade para operações internas sem efeito intermediário observável;
-- representar transações suspensíveis, WAIT, M-cycle/T-state e sinais derivados somente quando a plataforma exigir;
-- não simular todos os pinos ou estados internos como meta independente.
-
-Suítes externas como ZEXDOC/ZEXALL e traces de barramento são instrumentos de diagnóstico/validação. Não são autorização para ampliar indefinidamente o escopo nem substituem testes de integração nos consoles.
-
-## 4. Método por tarefa
-
-1. Auditar SHA da main, código, PRs, workflows e documentação relevante.
-2. Identificar o comportamento observável que precisa ser corrigido.
-3. Consultar documentação primária e referências independentes proporcionais ao risco.
-4. Definir critérios de aceitação objetivos.
-5. Implementar a menor mudança Rust que resolva o comportamento.
-6. Executar testes direcionados e regressões dos consoles afetados.
-7. Medir desempenho quando o caminho crítico for alterado.
-8. Atualizar status/documentação e abrir PR.
-9. Integrar somente com CI verde no SHA final.
-
-Para tarefas complexas, pesquisas independentes podem ser conduzidas em três frentes (implementações de referência, documentação de hardware, arquitetura/testes). A pesquisa não deve criar uma obrigação de modelar fenômenos sem impacto no console.
-
-## 5. Gates de qualidade
-
-```text
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-# Gates Python são transitórios: manter enquanto houver código Python ativo; remover após o gate P7.
-python -m pytest
-python -m ruff check .
-python -m ruff format --check .
-```
-
-Cada suíte é PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca é PASS. Registrar o SHA exato, jobs executados e jobs não executados.
-
-## 6. Como determinar o estado atual
-
-Este roadmap define a ordem e os critérios de saída; não declara, por si só, que uma fase ou componente está concluído. Para cada nova tarefa:
-
-1. Consultar o SHA mais recente da `main` e confirmar o código efetivamente integrado.
-2. Consultar PRs abertas e distinguir explicitamente Draft, aberta, aprovada e mesclada. Uma PR não mesclada não integra a `main`.
-3. Conferir os workflows e os resultados vinculados ao SHA exato; jobs SKIPPED ou NOT RUN não são PASS.
-4. Reconciliar o [estado dos componentes](component-status.md), o [scorecard Z80](z80-completion-scorecard.md) e a [matriz DD/FD](z80-dd-fd-semantic-matrix.md) com o código e os testes atuais antes de usá-los como evidência.
-
-Não manter snapshots de PRs abertas neste roadmap. Auditorias datadas e relatórios de PR preservam evidências históricas, não definem prioridade nem estado integrado. O contrato de aceitação final é acompanhado pela [PR permanente de conclusão #533](https://github.com/leonardo201800478/sega-emulator/pull/533); ela não substitui esta rota normativa.
-
-## 7. Autoridade documental
-
-- [Escopo e princípios arquiteturais](project-scope.md)
-- [Estado dos componentes](component-status.md)
-- [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
-- [ADRs de arquitetura](architecture/adr/README.md)
-
-Documentos históricos podem explicar como uma proposta surgiu, mas não devem ser tratados como requisitos vigentes quando conflitam com esta política. Planos de sprint avulsos ou roadmaps reconciliados fora do repositório (incluindo cópias anexadas em conversas) são referências históricas, não uma segunda rota de execução; tarefas antigas que exijam microsequenciamento universal devem ser reinterpretadas pela regra temporal-para-gameplay/atômica-para-o-restante. Não manter nem atualizar cronogramas paralelos.
+- Hardware, Scheduler, áudio, vídeo, input, mídia e aplicação em Rust.
+- egui/eframe somente apresentação e menus; sem lógica de hardware ou clocks.
+- Nenhum binding Python/PyO3 ou fallback para cores antigos.
+- Nenhuma duplicidade de CPU, PSG, VDP, worker ou Scheduler.
+- Cores antigos em legacy não são membros Cargo, não são executáveis e não são usados em testes ativos.
+- Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
