@@ -1,6 +1,8 @@
+> Este documento é mantido somente para rastreabilidade histórica. As decisões abaixo que permitem Python/Qt/PyO3 ou descrevem um frontend híbrido não são normativas e foram substituídas pela ADR 0010 atual.
+
 # ADR-0010 — Runtime Rust autônomo e propriedade temporal da máquina
 
-- **Status:** Accepted — contrato arquitetural; implementação incremental.
+- **Status:** SUPERSEDED — documento histórico; substituído por [ADR 0010 — Produto 100% Rust, SMS temporal como único runtime inicial](../../../adr/0010-rust-only-sms-temporal-first.md).
 - **Escopo inicial:** SG-1000 e Master System, com prioridade imediata no SMS.
 - **Decisões relacionadas:** arquitetura Rust-first; scheduler temporal; apresentação nativa Rust; perfis de hardware SMS1/SMS2.
 
