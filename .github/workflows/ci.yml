@@ -50,6 +50,7 @@ jobs:
           filters: |
             rust:
               - 'native/**/*.rs'
+              - 'native/sega_app/**'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
               - '.cargo/**'
@@ -84,6 +85,7 @@ jobs:
               - 'native/video_runtime/**'
               - 'native/audio_output/**'
               - 'native/audio_runtime/**'
+              - 'native/sega_app/**'
               - 'rust-toolchain*'
             scheduler:
               - 'native/machine_scheduler/**'
@@ -422,15 +424,24 @@ jobs:
     if: |
       always() &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
-    name: Windows x64 D3D12 compile
+    name: Windows x64 D3D12 and native app compile
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Format native egui application
+        run: cargo fmt --all --manifest-path native/sega_app/Cargo.toml -- --check
+      - name: Check native egui application
+        run: cargo check --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Clippy native egui application
+        run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test native egui application headlessly
+        run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Compile native video runtime for Windows x64
         run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
       - name: Run Windows video-runtime unit tests
