@@ -43,12 +43,15 @@ A branch de correção separa a fonte externa da saída IRQ do VDP:
 - A atualização ocorre após o dispatch do Scheduler e os efeitos de I/O, antes do próximo ponto de amostragem do Z80.
 - A restauração valida que o estado de INT da CPU corresponde às fontes restauradas.
 - A API `set_int_line()` continua representando a fonte externa e não avança o tempo.
+- A linha efetiva também controla o byte do ciclo Interrupt Acknowledge: fonte externa ativa fornece seu vetor; VDP-only fornece `$FF` (barramento não dirigido/pull-up); sem fonte ativa, o valor retorna a `$FF`. Isso evita reutilizar um vetor externo obsoleto após sua desativação.
+- A restauração valida tanto a linha INT da CPU quanto o byte de acknowledge persistido no barramento.
 
 Testes adicionados na branch:
 1. VDP VBlank IRQ chega ao Z80 em uma ROM sintética com IM 1/HALT, a ISR lê `$BF` e incrementa RAM por frame.
 2. A sincronização do VDP não apaga uma fonte externa INT ativa, inclusive após export/restore.
 3. Uma ROM sintética configura VDP Mode 4, VRAM/name table e CRAM e exige pixels RGB não pretos.
 4. A mesma ROM programa o SN76489 e exige amostras PCM não silenciosas.
+5. O teste de interrupção usa R0 `$06` (Mode 4) e R1 `$E0` (16 KB, display ligado e frame IRQ ligado), verificando explicitamente os bits BLK/IE0.
 
 **Validação desta branch:** NOT RUN até que os workflows sejam executados no HEAD final. Nenhum resultado de PR #594 ou #593 é transferido para este candidato.
 
@@ -89,7 +92,7 @@ Foi adicionado o exemplo reproduzível `native/sms_core/examples/irq_wiring_repr
 cargo run --release -p sega-sms-core --example irq_wiring_repro
 ```
 
-O exemplo exige que a ISR incremente `$C000` exatamente 20 vezes em 20 frames; resultado de execução ainda depende do CI/execução local e permanece NOT RUN até essa evidência.
+O exemplo exige que a ISR incremente `$C000` exatamente 20 vezes em 20 frames; resultado de execução ainda depende do CI/execução local e permanece NOT RUN até essa evidência. O ACK é retomado pelo contrato já existente de `step_frame()` → `resume_instruction()`.
 
 ### HALT fast-forward
 
