@@ -3100,7 +3100,16 @@ mod temporal_frame_tests {
             // Tile zero: plane zero set for all eight rows (palette index 1).
             0x3E, 0x00, 0xD3, 0xBF, 0x3E, 0x40, 0xD3, 0xBF,
         ];
-        program.extend([0x3E, 0xFF, 0xD3, 0xBE].repeat(8));
+        for _ in 0..8 {
+            // One byte per bitplane per row: only plane 0 is set, so every
+            // pixel selects background palette entry 1 (the white CRAM color).
+            program.extend([
+                0x3E, 0xFF, 0xD3, 0xBE, // Plane 0
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 1
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 2
+                0x3E, 0x00, 0xD3, 0xBE, // Plane 3
+            ]);
+        }
         program.extend([
             // Tone channel 0, period 4, maximum volume.
             0x3E, 0x84, 0xD3, 0x7E, 0x3E, 0x00, 0xD3, 0x7E, 0x3E, 0x90, 0xD3, 0x7E, 0x18,
