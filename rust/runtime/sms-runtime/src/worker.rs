@@ -235,11 +235,7 @@ impl SmsTemporalWorker {
             .map_err(|error| format!("SMS machine worker did not return a frame: {error}"))?
     }
 
-    pub fn set_controller(
-        &self,
-        player: u8,
-        buttons: ControllerButtons,
-    ) -> Result<(), String> {
+    pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetController(player, buttons, reply))
     }
 
@@ -337,10 +333,7 @@ impl SmsTemporalWorker {
     }
 
     #[cfg(not(windows))]
-    pub fn open_video_output_in_viewport(
-        &self,
-        _window_handle: usize,
-    ) -> Result<(), String> {
+    pub fn open_video_output_in_viewport(&self, _window_handle: usize) -> Result<(), String> {
         Err("D3D12 video output is available only on Windows".to_owned())
     }
 
@@ -755,22 +748,20 @@ fn handle_command(
             let _ = reply.send(result);
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
-        WorkerCommand::ConfigureAudio(factory, reply) => {
-            match factory() {
-                Ok(session) => {
-                    if let Some(mut previous) = audio_session.replace(session) {
-                        previous.close();
-                    }
-                    telemetry.set_audio_error(None);
-                    telemetry.set_audio_metrics((0, 0));
-                    let _ = reply.send(Ok(()));
+        WorkerCommand::ConfigureAudio(factory, reply) => match factory() {
+            Ok(session) => {
+                if let Some(mut previous) = audio_session.replace(session) {
+                    previous.close();
                 }
-                Err(error) => {
-                    telemetry.set_audio_error(Some(error.clone()));
-                    let _ = reply.send(Err(error));
-                }
+                telemetry.set_audio_error(None);
+                telemetry.set_audio_metrics((0, 0));
+                let _ = reply.send(Ok(()));
             }
-        }
+            Err(error) => {
+                telemetry.set_audio_error(Some(error.clone()));
+                let _ = reply.send(Err(error));
+            }
+        },
         WorkerCommand::CloseAudio(reply) => {
             if let Some(mut session) = audio_session.take() {
                 session.close();
@@ -928,8 +919,14 @@ mod tests {
         });
 
         assert_eq!(result, Err("audio host unavailable".to_owned()));
-        assert_ne!(observed_thread.lock().unwrap().as_ref(), Some(&caller_thread));
-        assert_eq!(worker.audio_output_error().as_deref(), Some("audio host unavailable"));
+        assert_ne!(
+            observed_thread.lock().unwrap().as_ref(),
+            Some(&caller_thread)
+        );
+        assert_eq!(
+            worker.audio_output_error().as_deref(),
+            Some("audio host unavailable")
+        );
         assert!(!worker.is_running());
     }
 
