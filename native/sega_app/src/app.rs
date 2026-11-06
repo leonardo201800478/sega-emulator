@@ -592,10 +592,10 @@ mod tests {
         });
 
         assert_ne!(
-    output.shapes.len(),
-    0,
-    "A interface deve produzir elementos visuais"
-);
+            output.shapes.len(),
+            0,
+            "A interface deve produzir elementos visuais"
+        );
         output.drop_without_applying_deltas();
     }
 }
