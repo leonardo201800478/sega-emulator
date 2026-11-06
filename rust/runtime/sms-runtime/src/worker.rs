@@ -680,9 +680,9 @@ fn worker_loop(
     if let Some(mut session) = audio_session.take() {
         session.close();
     }
-    if let Some(mailbox) = video_mailbox.take() {
-        let _ = mailbox.close();
-    }
+    // The worker only borrows the publisher handle. Mailbox closure belongs
+    // to the host that created the presentation session.
+    drop(video_mailbox);
 }
 
 /// Dispatch one coarse worker command over the worker-owned machine and outputs.
@@ -804,9 +804,9 @@ fn handle_command(
             if let Some(mut session) = audio_session.take() {
                 session.close();
             }
-            if let Some(mailbox) = video_mailbox.take() {
-                let _ = mailbox.close();
-            }
+            // Do not close a mailbox supplied by an external presentation host.
+            // The host detaches us and closes its own mailbox after worker shutdown.
+            drop(video_mailbox.take());
             return false;
         }
     }
@@ -978,7 +978,11 @@ mod tests {
         worker.step_frame(100_000).unwrap();
         assert!(
             mailbox.take_latest().unwrap().is_none(),
-            "detaching must stop frame publication without closing the owner mailbox"
+            "detaching must stop frame publication"
+        );
+        assert!(
+            !mailbox.is_closed().unwrap(),
+            "detaching must not close the externally owned mailbox"
         );
     }
 
@@ -1049,6 +1053,20 @@ mod tests {
         drop(blocks_before_close);
 
         audio_session.as_mut().unwrap().close();
+    }
+
+    #[test]
+    fn dropping_worker_does_not_close_externally_owned_video_mailbox() {
+        let mailbox = FrameMailbox::new();
+        {
+            let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+            worker.attach_video_mailbox(mailbox.clone()).unwrap();
+        }
+
+        assert!(
+            !mailbox.is_closed().unwrap(),
+            "the external host retains ownership of mailbox shutdown"
+        );
     }
 
     #[test]
