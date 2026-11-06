@@ -913,6 +913,27 @@ mod tests {
     }
 
     #[test]
+    fn audio_factory_runs_on_worker_thread_and_isolates_host_errors() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let caller_thread = std::thread::current().id();
+        let observed_thread = Arc::new(Mutex::new(None));
+        let factory_thread = Arc::clone(&observed_thread);
+
+        let result = worker.configure_audio_output(move || {
+            *factory_thread
+                .lock()
+                .map_err(|_| "audio test lock poisoned".to_owned())? =
+                Some(std::thread::current().id());
+            Err("audio host unavailable".to_owned())
+        });
+
+        assert_eq!(result, Err("audio host unavailable".to_owned()));
+        assert_ne!(*observed_thread.lock().unwrap(), Some(caller_thread));
+        assert_eq!(worker.audio_output_error().as_deref(), Some("audio host unavailable"));
+        assert!(!worker.is_running());
+    }
+
+    #[test]
     fn completed_frames_publish_rgb888_and_keep_sequence_monotonic_across_reset() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let mailbox = FrameMailbox::new();
