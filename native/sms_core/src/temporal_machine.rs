@@ -1001,8 +1001,7 @@ impl SmsTemporalMachine {
                             && event.timestamp
                                 .checked_duration_since(state.bus.coordinator.scheduler.now)
                                 .is_some_and(|elapsed| {
-                                    elapsed > 0
-                                        && elapsed
+                                    elapsed
                                             % u128::from(state.bus.coordinator.master_ticks_per_tstate)
                                             == 0
                                 })
