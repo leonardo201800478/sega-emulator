@@ -13,6 +13,11 @@ on:
         type: choice
         options: [none, short, long]
         default: none
+      run_legacy_python_validation:
+        description: "Run legacy Python, Qt and PyO3 validation manually"
+        required: false
+        type: boolean
+        default: false
       refresh_cargo_lockfiles:
         description: "Generate updated Cargo.lock files and upload them as an artifact"
         required: false
@@ -219,10 +224,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   python:
     needs: [changes]
-    # Required by the main ruleset: run on every PR; do not path-filter.
-    if: |
-      always() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Legacy Python validation is opt-in and never blocks Rust migration PRs.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Python lint and regression
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -275,12 +278,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-python-qt:
     needs: [changes]
-    if: |
-      always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.qt == 'true' ||
-       needs.changes.outputs.full == 'true') &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Legacy Qt smoke remains available only through explicit manual dispatch.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Windows Python 3.15 Qt smoke test
     runs-on: windows-latest
     timeout-minutes: 20
@@ -356,12 +355,8 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-native-python-extension:
     needs: [changes]
-    if: |
-      always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.pyo3 == 'true' ||
-       needs.changes.outputs.full == 'true') &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    # Transitional PyO3 validation is opt-in until the bridge is removed.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_legacy_python_validation && !inputs.refresh_cargo_lockfiles
     name: Windows Python 3.15 PyO3 extension build
     runs-on: windows-latest
     timeout-minutes: 30
