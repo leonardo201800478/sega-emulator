@@ -323,7 +323,7 @@ impl D3d12ChildWindow {
     }
 
     /// Return the child HWND without transferring ownership.
-    pub const fn handle(&self) -> usize {
+    pub fn handle(&self) -> usize {
         self.hwnd.0 as usize
     }
 
