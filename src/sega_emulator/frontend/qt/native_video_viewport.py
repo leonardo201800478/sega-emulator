@@ -34,6 +34,14 @@ class SmsVideoViewport(QWidget):
             Qt.WidgetAttribute.WA_OpaquePaintEvent,
             True,
         )
+        self.surface_widget.setAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground,
+            True,
+        )
+        self.surface_widget.setAttribute(
+            Qt.WidgetAttribute.WA_PaintOnScreen,
+            True,
+        )
         self.surface_widget.setStyleSheet(
             "QWidget#smsD3d12Surface { background: #000000; }"
         )
