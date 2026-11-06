@@ -7,15 +7,20 @@
 
 ## Diretriz vigente — 2026-11-06
 
-A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**.
+A prioridade imediata de P1 permanece: **recuperar a funcionalidade observável do Master System, sem confundir baseline sintética com gameplay real**. A migração da aplicação para Rust/egui/eframe é uma frente arquitetural paralela e não substitui nem reordena os gates de hardware.
 
-A `main` atual é `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (merge da PR #597). Ela contém a baseline VDP IRQ/INT e A/V sintética da PR #595, mais o teste de integração worker → `NativeAudioSession` → `PcmSink` da PR #597. O CI #5178 passou no HEAD #595 `69ca40ab29c486f26852adb7536a04f95f9dd7ae`; o CI #5185 passou no HEAD #597 `30554cc6642dd49d06adf495dca3e80f4822b081`.
+A `main` atual é `b82f748b83749eac2173ff86e535cc2a9e2ca862` (merge da PR #598). Ela contém a baseline VDP IRQ/INT e A/V sintética da PR #595, mais o teste de integração worker → `NativeAudioSession` → `PcmSink` da PR #597 e a reconciliação documental da PR #598.
 
-**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → NativeAudioSession → sink em memória, PCM não silencioso) = PASS automatizado. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling também ficaram NOT RUN nos workflows #5178/#5185.
+**Estado dos gates:** A/V-01 (VDP/core), A/V-02 (PSG/core), A/V-03 (worker/mailbox de vídeo) e A/V-04a (worker → NativeAudioSession → sink em memória, PCM não silencioso) = PASS automatizado. A/V-04b (NativeAudioBackend/WASAPI/XAudio2 real aceitando PCM) = NOT RUN até execução dos testes físicos ignorados da PR #599. A/V-05 (imagem D3D12 e som audível em hardware físico) = NOT RUN. A/V-06 (gameplay com ROM real/homebrew) = NOT RUN. Scheduler stress, Qt smoke e PowerShell tooling não podem ser considerados PASS quando SKIPPED.
+
+**PRs relevantes observadas nesta auditoria:**
+
+- PR #599: aberta, não integrada, HEAD `bb88e96cdb45d703f66d23acde42a2ead74fadd4`; CI #5206 SUCCESS, com Rust quality/tests, Python lint/regression, Windows PyO3 e D3D12 PASS. Scheduler stress, Qt smoke, PowerShell tooling e lock refresh SKIPPED. Os testes WASAPI/XAudio2 de endpoint real são ignorados por padrão e permanecem NOT RUN; A/V-04b/A/V-05 não estão fechados.
+- PR #600: aberta em Draft, não integrada; migração da aplicação para egui/eframe. HEAD `216bed93634cafec464af9e3783cafaaaa619028`; CI #5209 SUCCESS para a documentação, com Rust quality/tests, Python lint/regression e D3D12 compile PASS. PyO3 build, Qt smoke, scheduler stress, PowerShell tooling e lock refresh SKIPPED. Não é uma validação do novo frontend porque ainda não contém runtime egui.
 
 Ordem vertical ativa:
 
-1. **Áudio nativo:** o worker → `NativeAudioSession` → `PcmSink` em memória está coberto por teste de integração. Próximo gate: comprovar PCM aceito pelo `NativeAudioBackend` WASAPI/XAudio2 e depois saída audível em dispositivo físico, sem confundir sink de teste com endpoint real.
+1. **Áudio nativo:** comprovar PCM aceito pelo NativeAudioBackend WASAPI/XAudio2 e depois saída audível em dispositivo físico, sem confundir sink de teste com endpoint real.
 2. **Vídeo/host físico:** executar ROM de diagnóstico em janela D3D12 real, verificar pixels apresentados e estabilidade da sequência de frames em GPU Windows.
 3. **Gameplay:** executar ROM legal/homebrew e jogo representativo, registrando região, hash local, boot, input e comportamento observável. Não versionar ROM comercial.
 4. **Controles e IRQ:** validar VBlank/Line IRQ, input, HALT e restauração de snapshots em cenários integrados; preservar o SG-1000.
@@ -28,11 +33,11 @@ A VDP atual produz composição por scanline; fetch arbitration, WAIT físico e 
 
 O fechamento semântico global E7.7 do Z80 continua sendo uma frente independente. Não reiniciar E4C/E5/E6 nem promover E8 antes de fechar E7. A correção de IRQ do SMS deve preservar o núcleo compartilhado e não criar uma CPU por console.
 
-Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
+Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes. A migração egui/eframe é formalizada pela [ADR 0009](architecture/adr/0009-full-rust-application-egui-eframe.md) e pelo [inventário M0.2](architecture/rust-application-migration-inventory.md); não é uma segunda sequência de plataformas.
 
 ## Contrato da primeira interface operacional — SMS e SG-1000
 
-A primeira entrega utilizável não exige biblioteca visual completa nem todos os recursos avançados do frontend P7. Exige, porém, uma interface Qt coerente para selecionar sistema, abrir jogos, controlar a sessão e configurar os recursos básicos de vídeo, áudio, controles e região. A Qt é camada de apresentação e configuração; execução, entrada de gameplay, vídeo, áudio e temporização pertencem aos runtimes/hosts nativos em Rust.
+A primeira entrega utilizável não exige biblioteca visual completa nem todos os recursos avançados do frontend P7. Exige, porém, uma interface nativa **egui/eframe** coerente para selecionar sistema, abrir jogos, controlar a sessão e configurar os recursos básicos de vídeo, áudio, controles e região. A UI Rust é camada de apresentação e configuração; execução, entrada de gameplay, vídeo, áudio e temporização pertencem aos runtimes/hosts nativos em Rust. Esta tecnologia substitui Qt/PySide6, sem alterar os critérios funcionais abaixo.
 
 ### Sistemas e modelos
 
@@ -72,7 +77,7 @@ A primeira entrega utilizável não exige biblioteca visual completa nem todos o
 
 - Mapeamento de controles via **SDL3**, com configuração por dispositivo e preservação dos mapeamentos padrão.
 - Deadzone analógica configurável, padrão **15%** para sticks; triggers/eixos unipolares usam limiar próprio, evitando aplicar uma zona radial inadequada.
-- A captura e normalização de gameplay ficam no runtime nativo de entrada. A Qt pode configurar mapeamentos e atalhos, mas não faz polling por instrução nem decide quando o Scheduler avança.
+- A captura e normalização de gameplay ficam no runtime nativo de entrada. A UI egui/eframe pode configurar mapeamentos e atalhos, mas não faz polling por instrução nem decide quando o Scheduler avança.
 - Pause do emulador é ação de host, separada do Pause/NMI do console. Eventos de botão devem ser tratados por transição (edge-trigger), sem repetição enquanto o botão permanecer pressionado. Validar especificamente a sequência de boot/introdução de **Road Rash**: uma pressão não pode gerar uma série de NMI nem manter o jogo preso no logotipo. Inputs devem ser amostrados/latchados em fronteiras determinísticas, sem ler estado antigo antes de o novo input ser aplicado.
 
 ### Limite real de sprites
@@ -93,8 +98,8 @@ Não remover nem desativar por padrão os limites reais de sprites do VDP SMS1/S
 
 ## 1. Princípios de execução
 
-1. Rust é o único runtime de hardware; Python/PySide6 é frontend, launcher, configuração, diagnóstico e tooling.
-2. PyO3 oferece operações coarse-grained; sem callbacks por instrução.
+1. Rust é o único runtime do produto, incluindo hardware, aplicação, frontend, launcher, configuração e diagnóstico. O produto final não depende de interpretador Python.
+2. A UI Rust chama APIs de aplicação e runtime diretamente, por comandos coarse-grained. PyO3 é somente uma fronteira transitória enquanto o frontend legado existir e será removido no gate de migração integral; sem callbacks por instrução em qualquer etapa.
 3. Reutilizar componentes compartilhados quando representarem hardware compatível; manter diferenças reais por plataforma.
 4. Corrigir primeiro comportamento funcional e compatibilidade; adicionar precisão temporal onde uma interação real exigir.
 5. Um Scheduler por máquina composta coordena os eventos relevantes, sem impor atualização de cada pino/tick de cada componente.
@@ -120,7 +125,7 @@ Antes de elevar uma operação do nível atômico ao temporal, registrar: jogo/c
 
 Consolidar workspace, ferramentas, CI, runtime Rust, integração coarse-grained e interfaces de host necessárias às plataformas ativas.
 
-**Saída:** builds reproduzíveis, gates confiáveis, fronteira Rust/Python clara e runtime de hardware independente da GUI.
+**Saída:** builds reproduzíveis, gates confiáveis, runtime de hardware e aplicação Rust independentes da GUI, e empacotamento sem runtime Python ao final da migração.
 
 ### P1 — Master System
 
@@ -154,9 +159,9 @@ Compor a plataforma Mega Drive com CD-ROM, sub-CPU, memória compartilhada, áud
 
 Adicionar SH-2, vídeo e áudio do 32X e composição com Mega Drive/Sega CD.
 
-### P7 — Frontend Qt / PyO3
+### P7 — Aplicação nativa Rust / egui-eframe
 
-Consolidar launcher, biblioteca, configurações, telemetria e automação. A GUI não executa nem temporiza hardware.
+Migrar launcher, biblioteca, ROM/firmware, preferências, perfis, telemetria, logging e automação para Rust; construir a UI egui/eframe e integrar o viewport D3D12 já existente. Extrair o worker SMS da extensão PyO3 para uma biblioteca Rust comum, eliminar a dependência PyO3/Maturin do produto e manter o Scheduler como autoridade temporal. A GUI não executa nem temporiza hardware. A ADR 0009 e o inventário M0.2 definem os gates de migração e preservação de dados.
 
 ### P8 — Compatibilidade e auditoria
 
@@ -206,6 +211,7 @@ Para tarefas complexas, pesquisas independentes podem ser conduzidas em três fr
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+# Gates Python são transitórios: manter enquanto houver código Python ativo; remover após o gate P7.
 python -m pytest
 python -m ruff check .
 python -m ruff format --check .
