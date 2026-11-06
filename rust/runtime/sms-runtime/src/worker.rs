@@ -806,7 +806,7 @@ fn handle_command(
             }
             // Do not close a mailbox supplied by an external presentation host.
             // The host detaches us and closes its own mailbox after worker shutdown.
-            video_mailbox.take();
+            drop(video_mailbox.take());
             return false;
         }
     }
