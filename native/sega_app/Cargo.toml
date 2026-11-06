@@ -17,6 +17,7 @@ sega-video-runtime = { path = "../video_runtime" }
 sega-sms-runtime = { path = "../../rust/runtime/sms-runtime" }
 sega-sms-core = { path = "../sms_core" }
 sega-audio-output = { path = "../audio_output" }
+sega-input-runtime = { path = "../input_runtime" }
 
 [lints.rust]
 unsafe_code = "deny"

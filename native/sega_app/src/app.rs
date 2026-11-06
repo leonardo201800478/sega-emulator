@@ -7,6 +7,10 @@ use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
+use sega_input_runtime::{
+    BackendKind, DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend,
+    InputBuffers, sdl3_backend::Sdl3Backend,
+};
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
@@ -29,6 +33,12 @@ pub struct SegaApp {
     audio_volume: u8,
     last_controller: Option<ControllerButtons>,
     pause_key_down: bool,
+    input_backend: Option<Sdl3Backend>,
+    input_attempted: bool,
+    input_buffers: InputBuffers,
+    input_devices: Vec<DeviceDescriptor>,
+    selected_gamepad: Option<DeviceId>,
+    input_error: Option<String>,
     native_viewport: NativeViewportState,
 }
 
@@ -45,6 +55,12 @@ impl Default for SegaApp {
             audio_volume: 100,
             last_controller: None,
             pause_key_down: false,
+            input_backend: None,
+            input_attempted: false,
+            input_buffers: InputBuffers::default(),
+            input_devices: Vec::new(),
+            selected_gamepad: None,
+            input_error: None,
             native_viewport: NativeViewportState::default(),
         }
     }
@@ -229,6 +245,12 @@ impl SegaApp {
                 &mut self.audio_volume,
                 &mut audio_command,
             );
+            render_input_controls(
+                ui,
+                &self.input_devices,
+                &mut self.selected_gamepad,
+                self.input_error.as_deref(),
+            );
             render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui, self.aspect_ratio);
             render_footer(ui);
@@ -366,8 +388,84 @@ impl SegaApp {
         }
     }
 
+    fn ensure_input_backend(&mut self) {
+        if self.input_attempted {
+            return;
+        }
+        self.input_attempted = true;
+        match Sdl3Backend::new() {
+            Ok(mut backend) => match backend.enumerate(&mut self.input_devices) {
+                Ok(()) => {
+                    self.selected_gamepad = self
+                        .input_devices
+                        .iter()
+                        .find(|device| device.class == DeviceClass::Gamepad)
+                        .map(|device| device.id);
+                    self.input_backend = Some(backend);
+                }
+                Err(error) => {
+                    self.input_error = Some(error.to_string());
+                    backend.shutdown();
+                }
+            },
+            Err(error) => self.input_error = Some(error.to_string()),
+        }
+    }
+
+    fn update_gamepad_input(&mut self) -> (ControllerButtons, bool) {
+        self.ensure_input_backend();
+        let Some(backend) = self.input_backend.as_mut() else {
+            return (ControllerButtons::default(), false);
+        };
+        self.input_buffers.clear();
+        if let Err(error) = backend.poll_into(&mut self.input_buffers) {
+            self.input_error = Some(error.to_string());
+            return (ControllerButtons::default(), false);
+        }
+        if !self.input_buffers.events.is_empty()
+            && let Err(error) = backend.enumerate(&mut self.input_devices)
+        {
+            self.input_error = Some(error.to_string());
+        }
+        if self
+            .selected_gamepad
+            .is_none_or(|selected| !self.input_devices.iter().any(|device| device.id == selected))
+        {
+            self.selected_gamepad = self
+                .input_devices
+                .iter()
+                .find(|device| device.class == DeviceClass::Gamepad)
+                .map(|device| device.id);
+        }
+        let Some(reading) = self
+            .input_buffers
+            .readings
+            .iter()
+            .find(|reading| Some(reading.device_id) == self.selected_gamepad)
+            .copied()
+        else {
+            return (ControllerButtons::default(), false);
+        };
+        let state = reading.state;
+        let up = state.buttons.is_pressed(11) || state.hat(0) & 0x01 != 0 || state.axis(1) < -16_000;
+        let down = state.buttons.is_pressed(12) || state.hat(0) & 0x04 != 0 || state.axis(1) > 16_000;
+        let left = state.buttons.is_pressed(13) || state.hat(0) & 0x08 != 0 || state.axis(0) < -16_000;
+        let right = state.buttons.is_pressed(14) || state.hat(0) & 0x02 != 0 || state.axis(0) > 16_000;
+        (
+            ControllerButtons {
+                up,
+                down,
+                left,
+                right,
+                button_1: state.buttons.is_pressed(0),
+                button_2: state.buttons.is_pressed(1),
+            },
+            state.buttons.is_pressed(6),
+        )
+    }
+
     fn update_keyboard_input(&mut self, context: &egui::Context) {
-        let (buttons, pause_down) = context.input(|input| {
+        let (keyboard_buttons, keyboard_pause) = context.input(|input| {
             (
                 ControllerButtons {
                     up: input.key_down(egui::Key::ArrowUp),
@@ -380,6 +478,16 @@ impl SegaApp {
                 input.key_down(egui::Key::P),
             )
         });
+        let (gamepad_buttons, gamepad_pause) = self.update_gamepad_input();
+        let buttons = ControllerButtons {
+            up: keyboard_buttons.up || gamepad_buttons.up,
+            down: keyboard_buttons.down || gamepad_buttons.down,
+            left: keyboard_buttons.left || gamepad_buttons.left,
+            right: keyboard_buttons.right || gamepad_buttons.right,
+            button_1: keyboard_buttons.button_1 || gamepad_buttons.button_1,
+            button_2: keyboard_buttons.button_2 || gamepad_buttons.button_2,
+        };
+        let pause_down = keyboard_pause || gamepad_pause;
         if let Some(worker) = self.native_viewport.worker.as_ref() {
             if self.last_controller != Some(buttons) && worker.set_controller(1, buttons).is_ok() {
                 self.last_controller = Some(buttons);
@@ -817,12 +925,42 @@ fn render_audio_controls(
             *command = Some(AudioCommand::Configure);
         }
     });
-    ui.small("Teclado: setas = direcional · Z/X = Botões 1/2 · P = Pause (NMI)");
+    ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
     if let Some(worker) = viewport.worker.as_ref() {
         let (underruns, dropped) = worker.audio_output_metrics();
         ui.small(format!("Áudio: {underruns} underruns · {dropped} blocos descartados"));
     } else {
         ui.small("Áudio: aguardando ROM");
+    }
+}
+
+fn render_input_controls(
+    ui: &mut egui::Ui,
+    devices: &[DeviceDescriptor],
+    selected: &mut Option<DeviceId>,
+    error: Option<&str>,
+) {
+    ui.horizontal(|ui| {
+        ui.label("Controle:");
+        let selected_name = devices
+            .iter()
+            .find(|device| Some(device.id) == *selected)
+            .map_or("Nenhum gamepad SDL3", |device| device.name.as_str());
+        egui::ComboBox::from_id_salt("sms_gamepad")
+            .selected_text(selected_name)
+            .show_ui(ui, |ui| {
+                for device in devices.iter().filter(|device| device.class == DeviceClass::Gamepad) {
+                    ui.selectable_value(selected, Some(device.id), &device.name);
+                }
+            });
+        if devices.iter().any(|device| device.class == DeviceClass::Gamepad) {
+            ui.label(format!("{} gamepad(s) detectado(s)", devices.iter().filter(|device| device.class == DeviceClass::Gamepad).count()));
+        } else {
+            ui.label("Conecte um gamepad compatível com SDL3");
+        }
+    });
+    if let Some(error) = error {
+        ui.colored_label(egui::Color32::YELLOW, format!("Input SDL3: {error}"));
     }
 }
 
