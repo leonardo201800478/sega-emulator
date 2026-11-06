@@ -81,8 +81,11 @@ No caminho temporal, uma escrita ímpar em `$01..$3F` é aplicada depois de o Sc
 
 Assim, no caminho atualmente implementado:
 - saída baixa -> entrada alta por escrita em I/O control: captura;
+- saída alta -> entrada alta: não captura;
 - saída baixa -> saída alta: não captura;
 - transição descendente: não captura.
+
+A detecção compara explicitamente os bits anteriores de direção e nível de saída ($22 para TH1, $88 para TH2), e depois verifica se a entrada está alta. Ela não usa o readback de $DD para reconstruir o nível elétrico anterior, pois o perfil japonês oculta os níveis TH dirigidos em modo de saída. Testes temporais cobrem saída-alta -> entrada-alta sem latch falso para TH1/TH2 no perfil japonês e preservam a captura válida saída-baixa -> entrada-alta.
 
 A borda ascendente de uma entrada TH externa enquanto o pino já está configurado como entrada também é exigida pelo modelo MAME, mas ainda não possui um evento de periférico dedicado no `SmsIo/SmsTemporalBus`; permanece NOT RUN. O Light Phaser continua usando seu evento sintético interno para atualizar o latch.
 
@@ -113,6 +116,7 @@ A proposta antiga de adicionar `synchronize_tstates` ao caminho de CPU atômica 
 - Saída baixa -> saída alta não captura.
 - Borda descendente não substitui o valor capturado.
 - Todos os casos passam pelo `SmsTemporalMachine`, `SmsTemporalBus` e Scheduler.
+- Perfil japonês: saída alta -> entrada alta não captura falsamente; saída baixa -> entrada alta captura.
 
 ## 6. Limitações e classificação
 
