@@ -134,32 +134,85 @@ impl SegaApp {
             ui.horizontal(|ui| {
                 ui.label("Região:");
                 egui::ComboBox::from_id_salt("sms_region")
-                    .selected_text(if self.region.is_empty() { "USA / NTSC" } else { &self.region })
+                    .selected_text(if self.region.is_empty() {
+                        "USA / NTSC"
+                    } else {
+                        &self.region
+                    })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.region, "usa".to_owned(), "USA / NTSC");
-                        ui.selectable_value(&mut self.region, "brazil".to_owned(), "Brasil / PAL-M");
+                        ui.selectable_value(
+                            &mut self.region,
+                            "brazil".to_owned(),
+                            "Brasil / PAL-M",
+                        );
                         ui.selectable_value(&mut self.region, "europe".to_owned(), "Europa / PAL");
                         ui.selectable_value(&mut self.region, "japan".to_owned(), "Japão / NTSC");
                     });
             });
 
             ui.horizontal(|ui| {
-                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(|worker| !worker.is_running()), egui::Button::new("Iniciar")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport
+                            .worker
+                            .as_ref()
+                            .is_some_and(|worker| !worker.is_running()),
+                        egui::Button::new("Iniciar"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::Start);
                 }
-                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(SmsTemporalWorker::is_running), egui::Button::new("Pausar")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport
+                            .worker
+                            .as_ref()
+                            .is_some_and(SmsTemporalWorker::is_running),
+                        egui::Button::new("Pausar"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::Pause);
                 }
-                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Parar")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport.worker.is_some(),
+                        egui::Button::new("Parar"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::Stop);
                 }
-                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Reset")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport.worker.is_some(),
+                        egui::Button::new("Reset"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::Reset);
                 }
-                if ui.add_enabled(self.native_viewport.worker.as_ref().is_some_and(|worker| !worker.is_running()), egui::Button::new("Avançar quadro")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport
+                            .worker
+                            .as_ref()
+                            .is_some_and(|worker| !worker.is_running()),
+                        egui::Button::new("Avançar quadro"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::StepFrame);
                 }
-                if ui.add_enabled(self.native_viewport.worker.is_some(), egui::Button::new("Fechar ROM")).clicked() {
+                if ui
+                    .add_enabled(
+                        self.native_viewport.worker.is_some(),
+                        egui::Button::new("Fechar ROM"),
+                    )
+                    .clicked()
+                {
                     command = Some(UiCommand::CloseMachine);
                 }
             });
@@ -220,7 +273,8 @@ impl SegaApp {
     fn load_rom_from_path(&mut self) {
         let path = self.rom_path.trim();
         if path.is_empty() {
-            self.native_viewport.error = Some("Informe o caminho de uma ROM .sms ou .bin".to_owned());
+            self.native_viewport.error =
+                Some("Informe o caminho de uma ROM .sms ou .bin".to_owned());
             return;
         }
 
@@ -236,10 +290,16 @@ impl SegaApp {
             }
         };
 
-        let region = if self.region.is_empty() { "usa" } else { &self.region };
+        let region = if self.region.is_empty() {
+            "usa"
+        } else {
+            &self.region
+        };
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => self.native_viewport.replace_worker(worker),
-            Err(error) => self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}")),
+            Err(error) => {
+                self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"))
+            }
         }
     }
 
@@ -294,7 +354,9 @@ impl SegaApp {
         context: &egui::Context,
         viewport_rect: egui::Rect,
     ) {
-        let Some(parent_hwnd) = resolve_parent_hwnd(frame, context, &mut self.native_viewport.error) else {
+        let Some(parent_hwnd) =
+            resolve_parent_hwnd(frame, context, &mut self.native_viewport.error)
+        else {
             return;
         };
 
@@ -319,19 +381,22 @@ impl SegaApp {
         let child = match D3d12ChildWindow::create(parent_hwnd) {
             Ok(child) => child,
             Err(error) => {
-                self.native_viewport.error = Some(format!("Falha ao criar HWND filho D3D12: {error}"));
+                self.native_viewport.error =
+                    Some(format!("Falha ao criar HWND filho D3D12: {error}"));
                 return false;
             }
         };
 
-        let session = match D3d12MailboxSession::start_for_existing_window_async(256, 192, child.handle()) {
-            Ok(session) => session,
-            Err(error) => {
-                self.native_viewport.error = Some(format!("Falha ao iniciar worker D3D12: {error}"));
-                drop(child);
-                return false;
-            }
-        };
+        let session =
+            match D3d12MailboxSession::start_for_existing_window_async(256, 192, child.handle()) {
+                Ok(session) => session,
+                Err(error) => {
+                    self.native_viewport.error =
+                        Some(format!("Falha ao iniciar worker D3D12: {error}"));
+                    drop(child);
+                    return false;
+                }
+            };
 
         self.native_viewport.parent_hwnd = Some(parent_hwnd);
         self.native_viewport.child = Some(child);
@@ -356,7 +421,8 @@ impl SegaApp {
             match child.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
                 Ok(()) => self.native_viewport.last_bounds = Some(bounds),
                 Err(error) => {
-                    self.native_viewport.error = Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
+                    self.native_viewport.error =
+                        Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
                     context.request_repaint();
                 }
             }
@@ -364,7 +430,11 @@ impl SegaApp {
     }
 
     fn poll_native_startup(&mut self, context: &egui::Context) {
-        let startup = self.native_viewport.session.as_mut().map(D3d12MailboxSession::poll_startup);
+        let startup = self
+            .native_viewport
+            .session
+            .as_mut()
+            .map(D3d12MailboxSession::poll_startup);
         match startup {
             Some(Ok(true)) => {
                 self.native_viewport.ready = true;
@@ -384,7 +454,11 @@ impl SegaApp {
         if !self.native_viewport.ready || self.native_viewport.video_attached {
             return;
         }
-        let mailbox = self.native_viewport.session.as_ref().map(D3d12MailboxSession::mailbox);
+        let mailbox = self
+            .native_viewport
+            .session
+            .as_ref()
+            .map(D3d12MailboxSession::mailbox);
         let Some(mailbox) = mailbox else {
             return;
         };
@@ -400,22 +474,30 @@ impl SegaApp {
                         Ok(()) => self.native_viewport.start_requested = false,
                         Err(error) => {
                             self.native_viewport.start_requested = false;
-                            self.native_viewport.error = Some(format!("Falha ao iniciar SMS: {error}"));
+                            self.native_viewport.error =
+                                Some(format!("Falha ao iniciar SMS: {error}"));
                         }
                     }
                 }
                 context.request_repaint();
             }
-            Err(error) => self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}")),
+            Err(error) => {
+                self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}"))
+            }
         }
     }
 
     fn monitor_native_state(&mut self, context: &egui::Context) {
         if self.native_viewport.ready
-            && self.native_viewport.session.as_ref().is_some_and(|session| !session.is_running())
+            && self
+                .native_viewport
+                .session
+                .as_ref()
+                .is_some_and(|session| !session.is_running())
         {
             self.native_viewport.shutdown();
-            self.native_viewport.error = Some("O worker de apresentação D3D12 foi encerrado".to_owned());
+            self.native_viewport.error =
+                Some("O worker de apresentação D3D12 foi encerrado".to_owned());
             context.request_repaint();
         } else {
             context.request_repaint_after(Duration::from_millis(100));
@@ -444,7 +526,9 @@ fn resolve_parent_hwnd(
     let window_handle = match window.window_handle() {
         Ok(handle) => handle,
         Err(handle_error) => {
-            *error = Some(format!("Não foi possível obter o HWND do eframe: {handle_error}"));
+            *error = Some(format!(
+                "Não foi possível obter o HWND do eframe: {handle_error}"
+            ));
             context.request_repaint_after(Duration::from_millis(16));
             return None;
         }
