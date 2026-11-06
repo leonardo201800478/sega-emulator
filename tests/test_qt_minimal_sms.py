@@ -61,6 +61,7 @@ class FakeTemporalSMSMachine:
 
     def open_video_output_in_viewport(self, window_handle: int) -> None:
         self.calls.append(("open_video_output_in_viewport", window_handle))
+        self.video_output_is_running = True
 
     def close_video_output(self) -> None:
         self.calls.append(("close_video_output",))
@@ -112,6 +113,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert len(video_calls) == 1
     assert video_calls[0][1] > 0
     assert "aguardando o primeiro frame" in window.status_label.text()
+    assert "aguardando o primeiro frame" in window.statusBar().currentMessage()
 
     window._toggle_running()
     assert machine.is_running
