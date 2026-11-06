@@ -1329,8 +1329,13 @@ mod temporal_vdp_tests {
         let v_counter = transact(&mut bus, 1, Z80BusOperation::PortRead, 0x127E);
         assert_eq!(v_counter.data, Some(0));
 
+        // H-counter is latched and remains at its reset value until TH rises.
         let h_counter = transact(&mut bus, 2, Z80BusOperation::PortRead, 0x127F);
-        assert_eq!(h_counter.data, Some(8));
+        assert_eq!(h_counter.data, Some(0));
+
+        let h_counter_after_more_cycles =
+            transact(&mut bus, 3, Z80BusOperation::PortRead, 0x007F);
+        assert_eq!(h_counter_after_more_cycles.data, Some(0));
     }
 
     #[test]
