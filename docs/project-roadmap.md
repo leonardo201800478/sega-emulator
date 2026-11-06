@@ -16,12 +16,12 @@ A migração de aplicação deixa de ser paralela aos gates do SMS: ela é a pri
 
 ## Sequência normativa
 
-1. Inventariar e congelar dependências Python/Qt/PyO3, crates e módulos SMS temporais versus atômicos.
-2. Extrair worker SMS temporal e serviços de host para bibliotecas Rust puras. O worker já está em `rust/runtime/sms-runtime` na branch de migração; a validação CI e a integração egui continuam pendentes.
-3. Isolar o SMS atômico antigo e remover a duplicidade de CPU/PSG/VDP do caminho ativo.
-4. Integrar o runtime SMS temporal ao binário egui/eframe com menus mínimos e comandos coarse-grained.
-5. Retirar o SG-1000 atômico do workspace; eliminá-lo após SMS executável. Criar SG-1000 novo somente em etapa posterior.
-6. Excluir integralmente fontes, testes, tooling, empacotamento, artefatos e CI Python/Qt/PyO3.
+1. Inventariar dependências, manifests, workflows e módulos temporais versus atômicos; baseline concluído.
+2. Extrair o worker SMS para Rust puro. O crate `rust/runtime/sms-runtime` já existe na branch de migração; validação CI pendente.
+3. Remover Python/Qt/PyO3 e tooling legado sem portá-los. A remoção foi executada na branch de migração; não substitui validação funcional.
+4. Isolar o SMS atômico antigo e remover duplicidade de CPU/PSG/VDP do caminho ativo.
+5. Integrar o runtime SMS temporal ao binário egui/eframe com menus mínimos, D3D12, áudio e input nativos.
+6. Retirar o SG-1000 atômico do workspace; eliminá-lo após SMS executável. Criar SG-1000 novo somente em etapa posterior.
 7. Validar o produto exclusivamente com Cargo, testes Rust e gates físicos Windows aplicáveis.
 
 A implementação deve ocorrer em PRs pequenas, compiláveis e com CI verde no HEAD exato. Não fazer merge com jobs obrigatórios SKIPPED, FAIL, BLOCKED ou NOT RUN.
