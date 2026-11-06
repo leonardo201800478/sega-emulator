@@ -23,16 +23,15 @@ Construir um emulador Sega modular, determinístico e temporalmente fiel, com ba
 
 ## Estado da migração
 
-A branch de migração extraiu o worker SMS para Rust puro e removeu a aplicação Python, os testes Python, tooling Python, extensão PyO3 e workflows Qt/Python. A CI no HEAD exato ainda precisa validar a extração. O shell egui permanece demonstrativo e não está integrado ao runtime.
+A branch de migração extraiu o worker SMS para Rust puro e removeu a aplicação Python, os testes Python, tooling Python, extensão PyO3 e workflows Qt/Python. O SMS atômico antigo foi retirado do crate ativo: `native/sms_core` agora contém o caminho temporal e fachadas/reexports para os componentes compartilhados. A CI no HEAD exato ainda precisa validar as alterações mais recentes. O shell egui permanece demonstrativo e não está integrado ao runtime.
 
-O SMS core ainda contém módulos temporais e atômicos. A separação deve seguir dependências concretas: preservar somente o que o barramento temporal consome e retirar implementações atômicas duplicadas sem apagar memória, mapper, I/O ou componentes ainda necessários.
+O SMS temporal reutiliza o único Z80/ALU, SN76489 e VDP compartilhados. A implementação continua parcial: VDP por scanline, WAIT fornecido por fixtures, ausência de Save States persistentes e integração física de host pendentes.
 
 ## Prioridades de implementação
 
-1. Validar `rust/runtime/sms-runtime` em CI Linux e Windows/D3D12.
-2. Isolar o SMS temporal do código atômico dentro de `native/sms_core`.
-3. Mover os crates ativos para a raiz canônica `rust/` e consolidar workspace/lockfile.
-4. Integrar ROM, lifecycle, input, vídeo e áudio ao shell egui, sem transferir clocks à UI.
-5. Remover o SG-1000 atômico depois que o SMS estiver executável e validado.
-6. Portar para Rust os harnesses externos essenciais, incluindo o runner ZEXDOC/ZEXALL.
-7. Executar validação física Windows e regressão determinística.
+1. Validar `rust/runtime/sms-runtime` em CI Linux e Windows/D3D12 no HEAD exato.
+2. Mover os crates ativos para a raiz canônica `rust/` e consolidar workspace/lockfiles.
+3. Integrar ROM, lifecycle, input, vídeo e áudio ao shell egui, sem transferir clocks à UI.
+4. Remover o SG-1000 legado depois que o SMS estiver executável e validado.
+5. Portar para Rust os harnesses externos essenciais, incluindo o runner ZEXDOC/ZEXALL, sem antecipar E8 antes do fechamento E7.
+6. Executar validação física Windows e regressão determinística.
