@@ -12,12 +12,12 @@ A decisão arquitetural é definitiva: o produto não manterá Python, Qt/PySide
 
 O único runtime ativo inicial será o Master System temporal, usando o Z80 compartilhado, PSG temporal, VDP temporal e MachineScheduler. O SMS atômico antigo e o SG-1000 atômico serão desconectados do workspace/runtime e arquivados temporariamente como referência Rust. O SG-1000 legado será eliminado depois que o SMS estiver executável; uma implementação SG-1000 nova será iniciada posteriormente sobre o Z80 compartilhado. Nenhum código Python será preservado, inclusive em diretórios legacy.
 
-A migração de aplicação deixa de ser paralela aos gates do SMS: ela é a prioridade atual. Não ampliar funcionalidades do frontend Qt/Python nem investir em paridade visual. Preservar somente contratos funcionais relevantes e reimplementá-los/testá-los em Rust.
+A migração de aplicação deixa de ser paralela aos gates do SMS: ela é a prioridade atual. O frontend Qt/Python e seus serviços foram removidos na branch de migração, sem port de funcionalidades de biblioteca visual/scraper. Preservar somente contratos funcionais necessários ao produto mínimo e reimplementá-los/testá-los em Rust.
 
 ## Sequência normativa
 
 1. Inventariar e congelar dependências Python/Qt/PyO3, crates e módulos SMS temporais versus atômicos.
-2. Extrair worker SMS temporal e serviços de host para bibliotecas Rust puras.
+2. Extrair worker SMS temporal e serviços de host para bibliotecas Rust puras. O worker já está em `rust/runtime/sms-runtime` na branch de migração; a validação CI e a integração egui continuam pendentes.
 3. Isolar o SMS atômico antigo e remover a duplicidade de CPU/PSG/VDP do caminho ativo.
 4. Integrar o runtime SMS temporal ao binário egui/eframe com menus mínimos e comandos coarse-grained.
 5. Retirar o SG-1000 atômico do workspace; eliminá-lo após SMS executável. Criar SG-1000 novo somente em etapa posterior.
