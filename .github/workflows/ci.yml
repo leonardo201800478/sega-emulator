@@ -128,6 +128,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Discover toolchains and Cargo workspaces
         run: python tools/project_manager.py audit
+      # TEMPORARY: generate the first eframe lockfile; remove after committing its resolved output.
+      - name: Bootstrap initial eframe lockfile
+        shell: bash
+        run: |
+          cargo generate-lockfile --manifest-path native/sega_app/Cargo.toml
+          python -c "from pathlib import Path; import base64; print('SEGA_APP_LOCK_BASE64=' + base64.b64encode(Path('native/sega_app/Cargo.lock').read_bytes()).decode('ascii'))"
       - name: Verify every Cargo workspace lockfile
         run: python tools/project_manager.py locks
       - name: Formatting
@@ -436,6 +442,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format native egui application
         run: cargo fmt --all --manifest-path native/sega_app/Cargo.toml -- --check
+      # TEMPORARY: use the same generated resolution until the lockfile is committed.
+      - name: Bootstrap eframe lockfile for Windows
+        run: cargo generate-lockfile --manifest-path native/sega_app/Cargo.toml
       - name: Check native egui application
         run: cargo check --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Clippy native egui application
