@@ -12,6 +12,8 @@ use std::time::Duration;
 #[cfg(windows)]
 use std::collections::VecDeque;
 #[cfg(windows)]
+use std::ffi::c_void;
+#[cfg(windows)]
 use wasapi::{
     DeviceEnumerator, Direction, SampleType, StreamMode, TimingMode, WaveFormat, deinitialize,
     initialize_mta,
@@ -492,7 +494,8 @@ fn run_wasapi_worker(
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2EngineCallback, IXAudio2EngineCallback_Impl, IXAudio2MasteringVoice,
-    IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR,
+    IXAudio2SourceVoice, IXAudio2VoiceCallback, IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER,
+    XAUDIO2_DEFAULT_PROCESSOR,
     XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
@@ -716,6 +719,31 @@ impl IXAudio2EngineCallback_Impl for XAudio2EngineCallbackState {
 }
 
 #[cfg(windows)]
+struct XAudio2VoiceCallbackState {
+    voice_error: Arc<AtomicI32>,
+}
+
+#[cfg(windows)]
+impl IXAudio2VoiceCallback_Impl for XAudio2VoiceCallbackState {
+    fn OnVoiceProcessingPassStart(&self, _bytes_required: u32) {}
+
+    fn OnVoiceProcessingPassEnd(&self) {}
+
+    fn OnStreamEnd(&self) {}
+
+    fn OnBufferStart(&self, _buffer_context: *mut c_void) {}
+
+    fn OnBufferEnd(&self, _buffer_context: *mut c_void) {}
+
+    fn OnLoopEnd(&self, _buffer_context: *mut c_void) {}
+
+    fn OnVoiceError(&self, _buffer_context: *mut c_void, error: HRESULT) {
+        // Keep the real-time callback bounded and non-blocking.
+        self.voice_error.store(error.0, Ordering::Release);
+    }
+}
+
+#[cfg(windows)]
 fn run_xaudio2_worker(
     mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
@@ -736,6 +764,11 @@ fn run_xaudio2_worker(
         critical_error: Arc::clone(&critical_error),
     };
     let engine_callback = IXAudio2EngineCallback::new(&callback_state);
+    let voice_error = Arc::new(AtomicI32::new(0));
+    let voice_callback_state = XAudio2VoiceCallbackState {
+        voice_error: Arc::clone(&voice_error),
+    };
+    let voice_callback = IXAudio2VoiceCallback::new(&voice_callback_state);
 
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
@@ -789,7 +822,7 @@ fn run_xaudio2_worker(
                     &format,
                     0,
                     2.0,
-                    None::<&IXAudio2VoiceCallback>,
+                    &*voice_callback,
                     None,
                     None,
                 )
@@ -826,6 +859,14 @@ fn run_xaudio2_worker(
             set_worker_output_error(
                 &output_error,
                 Some(format!("XAudio2 critical engine error: 0x{:08X}", critical_error_code as u32)),
+            );
+            break;
+        }
+        let voice_error_code = voice_error.load(Ordering::Acquire);
+        if voice_error_code != 0 {
+            set_worker_output_error(
+                &output_error,
+                Some(format!("XAudio2 source voice error: 0x{:08X}", voice_error_code as u32)),
             );
             break;
         }
