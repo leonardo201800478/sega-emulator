@@ -322,4 +322,3 @@ Esta seção supersede as baselines históricas acima como referência da `main`
 - A matriz continua sendo inventário de implementação e evidências; a baseline atual não equivale a uma nova execução das suítes.
 - E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED até fechamento formal de E7.
 - `TEMPORAL_UNVERIFIED` continua sendo uma classificação de lacuna de evidência, não uma falha funcional automática. Aplicar ADR-0016 e exigir precisão temporal somente onde houver interação observável demonstrada.
-
