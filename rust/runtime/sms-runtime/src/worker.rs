@@ -80,8 +80,7 @@ fn reset_sms_temporal_machine(
     region: &str,
 ) -> Result<SmsTemporalMachine, String> {
     let sram_size = current.memory().cartridge_sram().map(<[u8]>::len);
-    let mut reset_machine =
-        build_sms_temporal_machine_with_sram_size(rom, region, sram_size)?;
+    let mut reset_machine = build_sms_temporal_machine_with_sram_size(rom, region, sram_size)?;
     if let Some(sram) = current.memory().cartridge_sram() {
         reset_machine
             .load_cartridge_sram(sram)
