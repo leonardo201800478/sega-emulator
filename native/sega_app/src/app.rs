@@ -1349,7 +1349,6 @@ fn to_win32_pixel(value: f32) -> i32 {
     }
 }
 
-
 impl Drop for SegaApp {
     fn drop(&mut self) {
         if let Err(error) = self.persist_current_cartridge() {
