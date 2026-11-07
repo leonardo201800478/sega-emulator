@@ -7,7 +7,6 @@ members = [
     "native/sg1000_core",
     "native/sms_core",
     "native/media_runtime",
-    "native/media_runtime",
     "native/z80_cpu",
     "native/sn76489",
     "native/z80_alu",
@@ -23,6 +22,7 @@ members = [
 default-members = [
     "native/sg1000_core",
     "native/sms_core",
+    "native/media_runtime",
     "native/z80_cpu",
     "native/sn76489",
     "native/z80_alu",
