@@ -200,7 +200,10 @@ impl fmt::Display for ClockError {
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
             Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
             Self::InvalidPreview => {
-                write!(f, "clock-domain preview is stale or belongs to another domain")
+                write!(
+                    f,
+                    "clock-domain preview is stale or belongs to another domain"
+                )
             }
         }
     }
@@ -448,10 +451,7 @@ impl ClockDomain {
     /// A preview can only be committed to the exact domain state from which it
     /// was produced. This preserves preflight atomicity while avoiding a second
     /// conversion of the same elapsed interval.
-    pub fn commit_preview(
-        &mut self,
-        preview: ClockDomainPreview,
-    ) -> Result<u128, ClockError> {
+    pub fn commit_preview(&mut self, preview: ClockDomainPreview) -> Result<u128, ClockError> {
         if preview.ratio != self.ratio
             || preview.origin_time != self.time
             || preview.origin_total_cycles != self.total_cycles
@@ -459,7 +459,9 @@ impl ClockDomain {
             || preview.snapshot.time < self.time
             || preview.snapshot.phase >= u128::from(self.ratio.ticks_denominator)
             || preview.snapshot.total_cycles
-                != self.total_cycles.checked_add(preview.elapsed_cycles)
+                != self
+                    .total_cycles
+                    .checked_add(preview.elapsed_cycles)
                     .ok_or(ClockError::ArithmeticOverflow)?
         {
             return Err(ClockError::InvalidPreview);
@@ -520,11 +522,16 @@ mod tests {
     fn preview_commit_matches_advance_and_rejects_stale_tokens() {
         let ratio = ClockRatio::new(5, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::ZERO);
-        let preview = domain.preview_advance_to(MachineTime::from_ticks(11)).unwrap();
+        let preview = domain
+            .preview_advance_to(MachineTime::from_ticks(11))
+            .unwrap();
         let stale = preview;
         assert_eq!(domain.commit_preview(preview), Ok(18));
         assert_eq!(domain.snapshot(), stale.snapshot());
-        assert_eq!(domain.commit_preview(stale), Err(ClockError::InvalidPreview));
+        assert_eq!(
+            domain.commit_preview(stale),
+            Err(ClockError::InvalidPreview)
+        );
     }
 
     #[test]
