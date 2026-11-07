@@ -1,28 +1,45 @@
-# CI validation policy — Rust-only migration
+# CI Validation Policy
 
-## Required Rust gates
+**Scope:** all project phases and platforms (P0–P9).
 
-The pull-request workflow validates the active root Cargo workspace with the pinned Rust toolchain:
+The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository.
 
-- `cargo metadata --locked --format-version 1 --no-deps`;
-- `cargo fmt --all -- --check`;
-- `cargo clippy --workspace --all-targets --locked -- -D warnings`;
-- `cargo test --workspace --locked`.
+## Validation matrix
 
-The standalone `native/audio_output` and `native/sega_app` workspaces retain their own lockfiles and receive Windows x64 checks until they are consolidated under `rust/`.
+| Change area | Required automated validation |
+| --- | --- |
+| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Rust formatting; Clippy and tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core` |
+| Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
+| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay |
+| Video core / D3D12 / DXGI | Root workspace validation where applicable; Windows validation of the affected video runtime or native application |
+| Audio chips / DSP / audio runtime | Root workspace validation where applicable; Windows WASAPI/XAudio2 validation when native audio output or its host integration changes |
+| SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation |
+| Native egui application | Windows-targeted format, Clippy, and headless tests for the application |
+| PowerShell tooling | Parse only the changed `.ps1` scripts |
+| Markdown / MDX documentation | Prettier check only for changed Markdown/MDX files; no Rust build, Clippy, or tests |
+| Other text documentation | Patch whitespace check only; no Rust build, Clippy, or tests |
 
-## Windows host validation
+## Dependency fan-out
 
-The Windows workflow validates the egui shell, the SMS temporal runtime with D3D12 enabled, the video runtime, and WASAPI/XAudio2 output. Compile/Clippy success is not a substitute for physical-device validation. GPU presentation, actual audio output, input latency and shutdown behavior must be classified separately.
+1. Shared contracts and libraries must trigger validation for their actual consumers.
+2. A change spanning multiple components runs the union of those components' required suites.
+3. Changes to global Cargo configuration, the root workspace manifest/lockfile, Rust toolchain configuration, or CI workflows trigger broad regression.
+4. A component-local manifest or lockfile change triggers that component's validation, not a full Windows matrix by default.
+5. A Z80-focused change also validates SMS and SG-1000 integration. If unrelated root-workspace code is changed in the same patch, both focused and workspace validation run.
+6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
 
-The PowerShell tooling job parses the maintained scripts. The scripts invoke Cargo directly; no language runtime or binding build is required.
+## Determinism and hardware validation
 
-## Removed legacy validation
+- Scheduler stress replay is required for Scheduler/temporal-core changes and may be explicitly requested with the `scheduler-stress-short` or `scheduler-stress-long` PR label.
+- Physical hardware checks (GPU presentation, audible WASAPI/XAudio2 output, and real gamepad behavior) are recorded separately. A successful compile or headless test is not evidence of physical operation.
+- Do not add unrelated platform builds as a substitute for targeted tests.
 
-The Python/Qt/PyO3 jobs and their workflows were removed together with the corresponding source tree and extension crate. Their former test results are historical only and are not part of the current gate.
+## Retained project-specific gates
 
-The Python orchestration for external Z80 conformance was removed. A low-level Rust test binary remains in the SMS core but is not yet an independent, complete harness: it still depends on SMS compatibility exports and requires the upstream-suite acquisition/assembly/preflight pipeline. ZEXDOC/ZEXALL are **NOT RUN** until that harness is relocated to the shared Z80 crate and completed in Rust. Existing Rust semantic, bus, microsequencing and temporal tests remain active; they do not replace those external suites.
+The standalone `native/audio_output` and `native/sega_app` workspaces retain their own lockfiles and receive targeted Windows x64 checks. The ZEXDOC/ZEXALL external conformance suites remain **NOT RUN** until their independent Rust harness is completed; existing semantic, bus, microsequencing and temporal tests do not replace them.
 
-## Result classification
+## Result classification and merge gate
 
-Every required suite is reported as PASS, FAIL, BLOCKED or NOT RUN. Skipped, cancelled, unavailable or unexecuted checks never count as PASS. Results are valid only for the exact commit SHA being reviewed. A green Linux workspace does not imply Windows host or physical-device validation.
+Every applicable suite is classified as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A skipped suite is never reported as a pass.
+
+The aggregate `Rust quality and unit regression` check must fail if any applicable validation fails, is cancelled, or times out. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
