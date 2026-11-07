@@ -239,7 +239,7 @@ Foram localizadas duas propostas históricas que impedem uma implementação par
 
 ## 11. Estado da continuidade em 2026-11-07
 
-- Baseline confirmada por commit: `main = 0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`.
+- Baseline confirmada por commit: `main = 3ca0f648c841bfe7c85a301fb561273e5c62f676`.
 - A branch documental anterior foi criada a partir de baseline obsoleta e não deve receber implementação de runtime.
 - A presente branch foi criada diretamente de `main` para corrigir a base documental.
 - Nenhum dump de ROM comercial foi obtido ou analisado; nenhum fingerprint foi validado.
