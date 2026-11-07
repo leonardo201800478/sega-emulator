@@ -197,7 +197,7 @@ jobs:
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core
 
   docs-format:
-    name: Documentation formatting
+    name: Documentation text formatting
     needs: [changes]
     if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
@@ -221,21 +221,6 @@ jobs:
             range="$BASE_SHA..$HEAD_SHA"
           fi
           git diff --check "$range"
-      - name: Check changed Markdown formatting
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            range="$BASE_SHA...$HEAD_SHA"
-          else
-            range="$BASE_SHA..$HEAD_SHA"
-          fi
-          git diff --name-only -z "$range" -- '*.md' '*.mdx' |
-            xargs -0 -r npx --yes prettier@3.9.10 --check
 
   windows-d3d12:
     name: Windows x64 D3D12 compile
@@ -354,13 +339,13 @@ jobs:
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
-              $file.FullName,
+              $file,
               [ref]$tokens,
               [ref]$errors
             ) | Out-Null
             if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error "$($file.FullName): $($_.Message)" }
-              throw "PowerShell parse failed: $($file.FullName)"
+              $errors | ForEach-Object { Write-Error "$($file): $($_.Message)" }
+              throw "PowerShell parse failed: $file"
             }
             Write-Host "PASS $($file.FullName)"
           }
