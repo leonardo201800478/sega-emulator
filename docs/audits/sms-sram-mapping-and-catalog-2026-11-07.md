@@ -102,7 +102,17 @@ MAME `hash/sms.xml` lista três ROMs de Flight of Pigarus com `battery=yes`:
 | v1.10 | 262144 | `1950005D` | `3BD03C3BE402B90E61E6BE5B67216C0C6D8056E6` |
 | v1.00 | 262144 | `838574D1` | `E53A16F5BF4A2D804B26C359CF3A727C06379E6D` |
 
-O registro MAME confirma bateria, mas não fornece PCB/IC nem protocolo completo. A alegação de memória 256 Kibit/32 KiB utilizáveis não basta para concluir que o protocolo é o Sega mapper padrão. **Estado: BLOCKED** para perfil executável até confirmar independentemente decodificação, capacidade acessível, seleção de bancos e comportamento de leitura/escrita. Não incluir no catálogo genérico.
+A evidência independente agora confirma que o jogo utiliza duas páginas lógicas de 16 KiB: o autor Kagesan afirma que os 15.000 frames de replay cabem em uma página de 16 KiB e que o high score comprimido é armazenado na outra; Ichigo, responsável pela PCB, afirma que precisou alterar mapper e SRAM para disponibilizar duas páginas. Isso sustenta 32 KiB de armazenamento acessível pelo software, mas não revela os endereços de decodificação nem prova que o circuito é idêntico ao Sega mapper padrão.
+
+A PCB usa FeRAM Lapis MR48V256 de 256 Kibit (32 KiB), segundo a nota de hardware no MAME e a declaração do fabricante da placa. FeRAM é não volátil e não exige bateria; portanto, o campo MAME `battery=yes` não deve ser interpretado aqui como prova de bateria física. O próprio MAME registra que o dump digital v1.11 não foi verificado contra o cartucho físico e questiona se os 32 KiB são integralmente acessíveis.
+
+**Estado: BLOCKED** para perfil executável até confirmar por documentação elétrica, disassembly ou trace: decodificação de endereço, mecanismo exato de seleção das duas páginas, comportamento de leitura/escrita e equivalência entre dump digital e PCB. Registrar provisoriamente como `NONVOLATILE_FRAM`, não como SRAM battery-backed, e não incluir no perfil genérico.
+
+Evidências:
+- Kagesan, desenvolvedor — [Flight of Pigarus development Q&A](https://www.smspower.org/forums/17278-FlightOfPigarusDevelopmentQA), mensagem de 04/12/2018: 16 KiB para replay e outra página para high score.
+- Ichigo, designer da PCB — [Flight of Pigarus discussion](https://www.smspower.org/forums/17274-HomebrewGameFlightOfPigarus?start=50), mensagem de 02/01/2019: necessidade de mapper e SRAM com duas páginas.
+- 2Minds — [Flight of Pigarus physical production](https://www.smspower.org/forums/18169-2MindsStudioPublisher): FeRAM 256 Kibit sem bateria.
+- MAME `hash/sms.xml`, entrada `pigarus`: `dataarea ram size=32768`, parte Lapis MR48V256 e ressalva sobre o dump digital.
 
 ## 5. RAM volátil — não gerar .srm
 
@@ -114,7 +124,7 @@ O registro MAME confirma bateria, mas não fornece PCB/IC nem protocolo completo
 | The Terminator (Brazil) | MAME não informa IC nem battery | UNKNOWN; não herdar perfil europeu sem fingerprint |
 | Othello | Não consta como cartucho Master System no MAME `sms.xml`; documentação do projeto o lista no contexto SG-1000 | Não cadastrar como SRAM de cartucho SMS |
 
-A ausência de `battery=yes` não prova ausência de RAM; apenas impede classificar como battery-backed com base nesta fonte.
+A ausência de `battery=yes` não prova ausência de RAM; apenas impede classificar como battery-backed com base nesta fonte. Da mesma forma, `battery=yes` é um marcador do software list MAME para dados persistentes e não prova sozinho que a PCB possua uma bateria física; Flight of Pigarus é o contraexemplo documentado, com FeRAM.
 
 ## 6. Arquitetura e sequência de implementação
 
@@ -137,7 +147,7 @@ A ausência de `battery=yes` não prova ausência de RAM; apenas impede classifi
 | Catálogo de identidades MAME | REFERÊNCIA DOCUMENTAL, não runtime |
 | Comparação com DAT SMS versionado no projeto | BLOCKED — DAT não encontrado |
 | SHA-256 das variantes locais | BLOCKED — dumps exatos não fornecidos |
-| Flight of Pigarus | BLOCKED |
+| Flight of Pigarus | BLOCKED — FRAM 32 KiB provável; mapper não confirmado |
 | SaveRamStore / integração host | NOT IMPLEMENTED |
 
 **Próximo gate:** executar CI no novo HEAD da PR, revisar os testes de janela alta e só então avançar para catálogo. Nenhum merge é autorizado por este documento.
