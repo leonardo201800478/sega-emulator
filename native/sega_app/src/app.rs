@@ -341,15 +341,33 @@ impl SegaApp {
             .ok_or_else(|| "runtime SMS não está disponível para exportar a SRAM".to_owned())?;
         // Freeze the worker before taking the persistence snapshot. Otherwise a
         // frame could mutate SRAM after export but before ROM replacement/shutdown.
-        if worker.is_running() {
+        let was_running = worker.is_running();
+        if was_running {
             worker.pause()?;
         }
-        let contents = worker
-            .export_cartridge_sram()?
-            .ok_or_else(|| "perfil persistente não possui SRAM no runtime".to_owned())?;
-        self.save_ram_store
-            .save(&current.identity, &current.profile, &contents)
-            .map_err(|error| error.to_string())
+        let persistence_result = (|| {
+            let contents = worker
+                .export_cartridge_sram()?
+                .ok_or_else(|| "perfil persistente não possui SRAM no runtime".to_owned())?;
+            self.save_ram_store
+                .save(&current.identity, &current.profile, &contents)
+                .map_err(|error| error.to_string())
+        })();
+
+        // Callers stop, replace, or shut down the worker after a successful
+        // snapshot. On failure, however, the previous machine remains active:
+        // restore its execution state instead of leaving it unexpectedly paused.
+        if let Err(error) = persistence_result {
+            if was_running {
+                if let Err(resume_error) = worker.start() {
+                    return Err(format!(
+                        "{error}; também não foi possível restaurar a execução do SMS: {resume_error}"
+                    ));
+                }
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn load_rom_from_path(&mut self) {
@@ -401,13 +419,9 @@ impl SegaApp {
             None => (None, None),
         };
 
-        if let Err(error) = self.persist_current_cartridge() {
-            self.native_viewport.error = Some(format!(
-                "Não foi possível salvar a SRAM do cartucho atual: {error}"
-            ));
-            return;
-        }
-
+        // Validate and construct the incoming machine before freezing the current
+        // one. A corrupt save or runtime-construction error must not interrupt the
+        // cartridge that is already running.
         let initial_sram = match profile.as_ref() {
             Some(profile) if profile.requires_persistent_store() => {
                 match self.save_ram_store.load(&identity, profile) {
@@ -431,27 +445,36 @@ impl SegaApp {
         } else {
             &self.region
         };
-        match SmsTemporalWorker::new_with_cartridge_hardware_profile(
+        let worker = match SmsTemporalWorker::new_with_cartridge_hardware_profile(
             rom,
             region,
             profile,
             initial_sram,
         ) {
-            Ok(worker) => {
-                self.native_viewport.replace_worker(worker);
-                self.current_cartridge = current_cartridge;
-                if let Some(notice) = cartridge_notice {
-                    self.native_viewport.error = Some(notice);
-                }
-                self.last_controller = None;
-                self.pause_key_down = false;
-                if self.audio_enabled {
-                    self.apply_audio_command(AudioCommand::Configure);
-                }
-            }
+            Ok(worker) => worker,
             Err(error) => {
                 self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"));
+                return;
             }
+        };
+
+        if let Err(error) = self.persist_current_cartridge() {
+            self.native_viewport.error = Some(format!(
+                "Não foi possível salvar a SRAM do cartucho atual: {error}"
+            ));
+            drop(worker);
+            return;
+        }
+
+        self.native_viewport.replace_worker(worker);
+        self.current_cartridge = current_cartridge;
+        if let Some(notice) = cartridge_notice {
+            self.native_viewport.error = Some(notice);
+        }
+        self.last_controller = None;
+        self.pause_key_down = false;
+        if self.audio_enabled {
+            self.apply_audio_command(AudioCommand::Configure);
         }
     }
 
