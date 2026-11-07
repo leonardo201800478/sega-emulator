@@ -92,12 +92,16 @@ impl CartridgeCatalog {
         identity: &CartridgeIdentity,
     ) -> Result<Option<CartridgeMatch<'_>>, CatalogLookupError> {
         let sha1 = identity.sha1_hex();
+        let matched = self.dat.entries.iter().find_map(|game| {
+            game.roms
+                .iter()
+                .find(|rom| rom.sha1.eq_ignore_ascii_case(&sha1))
+                .map(|rom| (game, rom))
+        });
 
-        for game in &self.dat.entries {
-            for rom in &game.roms {
-                if !rom.sha1.eq_ignore_ascii_case(&sha1) {
-                    continue;
-                }
+        match matched {
+            None => Ok(None),
+            Some((game, rom)) => {
                 if rom.size_bytes != identity.size_bytes() || rom.crc32 != identity.crc32() {
                     return Err(CatalogLookupError::DatFingerprintMismatch {
                         sha1,
@@ -113,11 +117,9 @@ impl CartridgeCatalog {
                     .iter()
                     .find(|known| known.sha1.eq_ignore_ascii_case(&rom.sha1))
                     .map(|known| &known.profile);
-                return Ok(Some(CartridgeMatch { game, rom, profile }));
+                Ok(Some(CartridgeMatch { game, rom, profile }))
             }
         }
-
-        Ok(None)
     }
 
     /// Return a profile only when the exact ROM identity has a verified executable mapping.
