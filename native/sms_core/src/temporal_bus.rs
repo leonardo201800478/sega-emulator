@@ -617,6 +617,11 @@ impl SmsTemporalBus {
         &self.memory
     }
 
+    /// Load the persistent battery-backed SRAM image without advancing time.
+    pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), SmsCoreError> {
+        self.memory.load_cartridge_sram(contents)
+    }
+
     /// Read-only access to the SMS1 VDP connected to the temporal bus.
     pub const fn vdp(&self) -> &SmsVdp {
         &self.vdp

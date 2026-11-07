@@ -7,6 +7,7 @@ pub enum SmsCoreError {
     EmptyCartridge,
     RomTooLargeForSegaMapper { size: usize, max_size: usize },
     InvalidBiosSize { size: usize, expected: usize },
+    InvalidCartridgeRamSize { size: usize, expected: usize },
 }
 
 impl fmt::Display for SmsCoreError {
@@ -20,6 +21,10 @@ impl fmt::Display for SmsCoreError {
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
                 "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
+            ),
+            Self::InvalidCartridgeRamSize { size, expected } => write!(
+                f,
+                "cartridge SRAM size {size} bytes is invalid; expected 8 KiB or {expected} bytes"
             ),
         }
     }

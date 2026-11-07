@@ -951,6 +951,11 @@ impl SmsTemporalMachine {
         self.bus.memory()
     }
 
+    /// Restore the cartridge battery RAM before execution starts.
+    pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), crate::SmsCoreError> {
+        self.bus.load_cartridge_sram(contents)
+    }
+
     /// Inspect the SMS-profile PSG without advancing machine time.
     pub fn psg(&self) -> &Sn76489Core {
         self.bus.psg()
