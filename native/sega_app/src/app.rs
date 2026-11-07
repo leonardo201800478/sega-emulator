@@ -724,8 +724,10 @@ impl SegaApp {
             }
             Some(Ok(false)) => context.request_repaint_after(Duration::from_millis(16)),
             Some(Err(error)) => {
-                self.native_viewport.shutdown();
-                self.native_viewport.error = Some(format!("Inicialização D3D12 falhou: {error}"));
+                if self.shutdown_native_viewport_with_save() {
+                    self.native_viewport.error =
+                        Some(format!("Inicialização D3D12 falhou: {error}"));
+                }
                 context.request_repaint();
             }
             None => {}
