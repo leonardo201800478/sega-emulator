@@ -95,11 +95,11 @@ Testes diferenciais devem comparar o caminho convencional e temporal para a mesm
 - Confronto do contrato principal de SRAM com SMS Power: **PASS**.
 - Decisão de não fazer cherry-pick de branches obsoletas/empilhadas: **PASS**.
 - Compatibilidade exata do overlay `$FFFC-$FFFF` no slot alto: **BLOCKED** até teste/decisão documentada.
-- Execução local de Cargo/Ruff/Pytest nesta sessão: **NOT RUN**.
+- Execução local dos gates Cargo nesta sessão: **NOT RUN**.
 - Boot/gameplay com ROM legal de teste: **NOT RUN**.
 - Port de runtime: **NOT STARTED**.
 
-Próximo incremento permitido: implementar primeiro a SRAM explícita de 8 KiB no `SmsMemory` atual, com gating de cartucho e cobertura do overlay; depois estender para 16/32 KiB e persistência em mudanças isoladas. A branch deve partir do HEAD atual de `main`, e o port não deve ser publicado como concluído sem os gates Rust/Python no HEAD final.
+Próximo incremento permitido: implementar primeiro a SRAM explícita de 8 KiB no `SmsMemory` atual, com gating de cartucho e cobertura do overlay; depois estender para 16/32 KiB e persistência em mudanças isoladas. A branch deve partir do HEAD atual de `main`, e o port não deve ser publicado como concluído sem os gates Rust no HEAD final.
 
 
 ## 8. Revalidação de escopo após consolidação Rust-only (2026-11-07)
