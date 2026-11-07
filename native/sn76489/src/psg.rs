@@ -552,34 +552,46 @@ mod tests {
     }
 
     #[test]
-    fn psg_fir_preserves_audio_band_and_rejects_frequencies_above_output_nyquist() {
-        for output_rate in [22_050_u64, 44_100, 48_000] {
-            let coefficients = super::design_lowpass(3_579_545, output_rate);
-            let ratio = output_rate as f64 / (3_579_545.0 / 16.0);
-            let passband = frequency_response(&coefficients, 0.40 * ratio);
-            let stopband = frequency_response(&coefficients, 0.52 * ratio);
+    fn psg_fir_preserves_audio_band_and_rejects_the_full_stopband() {
+        for clock_hz in [3_579_545_u64, 3_546_893] {
+            for output_rate in [22_050_u64, 44_100, 48_000, 96_000] {
+                let coefficients = super::design_lowpass(clock_hz, output_rate);
+                let internal_rate = clock_hz as f64 / 16.0;
+                let ratio = output_rate as f64 / internal_rate;
+                let passband = frequency_response(&coefficients, 0.42 * ratio);
+                let stopband = (0..=256)
+                    .map(|index| {
+                        let fraction = index as f64 / 256.0;
+                        let frequency = 0.5 * ratio + (0.5 - 0.5 * ratio) * fraction;
+                        frequency_response(&coefficients, frequency)
+                    })
+                    .fold(0.0_f64, f64::max);
 
-            assert!(
-                passband > 0.98,
-                "passband gain too low at {output_rate} Hz: {passband:.6}"
-            );
-            assert!(
-                stopband < 0.000_2,
-                "stopband attenuation below target at {output_rate} Hz: {stopband:.8}"
-            );
-            assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
-            assert!(!coefficients.len().is_multiple_of(2));
-        }
-    }
+                assert!(
+                    passband > 0.999,
+                    "passband gain too low at {clock_hz} Hz / {output_rate} Hz: {passband:.6}"
+                );
+                assert!(
+                    stopband < 0.000_12,
+                    "stopband attenuation below 78 dB at {clock_hz} Hz / {output_rate} Hz: {stopband:.8}"
+                );
+                assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
+                assert!(!coefficients.len().is_multiple_of(2));
+                assert!(coefficients.iter().all(|coefficient| coefficient.is_finite()));
 
-    #[test]
-    fn psg_fir_is_symmetric_and_has_unity_dc_gain() {
-        let coefficients = super::design_lowpass(3_579_545, 44_100);
-        let sum: f64 = coefficients.iter().sum();
-        assert!((sum - 1.0).abs() < 1.0e-12);
-        for index in 0..coefficients.len() / 2 {
-            let mirrored = coefficients.len() - 1 - index;
-            assert!((coefficients[index] - coefficients[mirrored]).abs() < 1.0e-12);
+                let sum: f64 = coefficients.iter().sum();
+                assert!(
+                    (sum - 1.0).abs() < 1.0e-12,
+                    "DC gain differs from unity at {clock_hz} Hz / {output_rate} Hz"
+                );
+                for index in 0..coefficients.len() / 2 {
+                    let mirrored = coefficients.len() - 1 - index;
+                    assert!(
+                        (coefficients[index] - coefficients[mirrored]).abs() < 1.0e-12,
+                        "FIR is not symmetric at tap {index} for {clock_hz} Hz / {output_rate} Hz"
+                    );
+                }
+            }
         }
     }
 
