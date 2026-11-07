@@ -26,7 +26,8 @@ const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
 const MAX_EXTENDED_BANKS: usize = 256;
 const MAX_EXTENDED_ROM_SIZE: usize = BANK_SIZE * MAX_EXTENDED_BANKS;
 const RAM_SIZE: usize = 0x2000;
-const CARTRIDGE_SRAM_SIZE: usize = 0x2000;
+const CARTRIDGE_SRAM_8K: usize = 0x2000;
+const CARTRIDGE_SRAM_32K: usize = 0x8000;
 const RAM_START: u16 = 0xC000;
 // SMS Plus GX initializes the BIOS slot with $E0: BIOS and work RAM enabled,
 // while cartridge, card and expansion slots remain disabled. Port $3E bits
@@ -105,8 +106,8 @@ pub struct SmsMemory {
     mapper_control: u8,
     bank_registers: [u8; 3],
     work_ram: [u8; RAM_SIZE],
-    /// 8 KiB battery-backed cartridge RAM, mirrored over slot 2 when enabled.
-    cartridge_sram: Option<Box<[u8; CARTRIDGE_SRAM_SIZE]>>,
+    /// Battery-backed cartridge RAM (8 KiB mirrored or two 16 KiB banks).
+    cartridge_sram: Option<Vec<u8>>,
     bios: Option<Box<[u8]>>,
     control_port: u8,
     #[cfg(test)]
@@ -121,6 +122,28 @@ impl SmsMemory {
     /// Construct memory with an optional user-supplied 8 KiB SMS BIOS.
     /// The complete BIOS image is mapped at $0000-$1FFF while enabled.
     pub fn with_bios(rom: CartridgeImage, bios: Option<Vec<u8>>) -> Result<Self, SmsCoreError> {
+        let has_cartridge_sram = rom.len() >= 0x1_0000
+            && matches!(detect_mapper(&rom), MapperKind::Sega | MapperKind::SegaExtended);
+        let default_sram_size = has_cartridge_sram.then_some(CARTRIDGE_SRAM_8K);
+        Self::with_bios_and_sram_size(rom, bios, default_sram_size)
+    }
+
+    /// Construct a cartridge with an explicit battery-backed SRAM capacity.
+    /// Supported capacities are 8 KiB (mirrored in slot 2) and 32 KiB (two
+    /// independently selected 16 KiB pages via $FFFC bit 2).
+    pub fn with_cartridge_sram_size(
+        rom: CartridgeImage,
+        sram_size: Option<usize>,
+    ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_and_sram_size(rom, None, sram_size)
+    }
+
+    /// Construct memory with explicit BIOS and cartridge SRAM hardware.
+    pub fn with_bios_and_sram_size(
+        rom: CartridgeImage,
+        bios: Option<Vec<u8>>,
+        sram_size: Option<usize>,
+    ) -> Result<Self, SmsCoreError> {
         let mapper = detect_mapper(&rom);
         let max_rom_size = match mapper {
             MapperKind::SegaExtended => MAX_EXTENDED_ROM_SIZE,
@@ -140,6 +163,19 @@ impl SmsMemory {
             });
         }
 
+        if sram_size.is_some_and(|size| size != CARTRIDGE_SRAM_8K && size != CARTRIDGE_SRAM_32K) {
+            return Err(SmsCoreError::InvalidCartridgeRamSize {
+                size: sram_size.unwrap_or_default(),
+                expected: CARTRIDGE_SRAM_8K,
+            });
+        }
+        if sram_size.is_some() && !matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended) {
+            return Err(SmsCoreError::InvalidCartridgeRamSize {
+                size: sram_size.unwrap_or_default(),
+                expected: CARTRIDGE_SRAM_8K,
+            });
+        }
+
         let bank_registers = match mapper {
             MapperKind::Sega | MapperKind::SegaExtended => [0, 1, 2],
             MapperKind::Codemasters => [0, 1, 0],
@@ -153,18 +189,15 @@ impl SmsMemory {
         } else {
             CARTRIDGE_BOOT_CONTROL
         };
-        let has_cartridge_sram =
-            rom.len() >= 0x1_0000 && matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended);
         Ok(Self {
             rom,
             mapper,
             mapper_control: 0,
             bank_registers,
             work_ram: [0; RAM_SIZE],
-            // Large Sega-mapper cartridges can expose battery-backed SRAM via
-            // $FFFC. Keep it separate from the console's mirrored work RAM.
-            // A game only observes it when it explicitly sets mapper bit 3.
-            cartridge_sram: has_cartridge_sram.then(|| Box::new([0; CARTRIDGE_SRAM_SIZE])),
+            // Keep cartridge RAM separate from console work RAM. Its capacity
+            // is hardware metadata supplied by the cartridge profile.
+            cartridge_sram: sram_size.map(|size| vec![0; size]),
             bios: bios.map(Vec::into_boxed_slice),
             control_port,
             #[cfg(test)]
@@ -204,9 +237,10 @@ impl SmsMemory {
                 if matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
                     && self.mapper_control & 0x08 != 0
                 {
-                    self.cartridge_sram
-                        .as_ref()
-                        .map_or(0xFF, |sram| sram[offset & (CARTRIDGE_SRAM_SIZE - 1)])
+                    self.cartridge_sram.as_ref().map_or(0xFF, |sram| {
+                        let bank_offset = usize::from((self.mapper_control >> 2) & 1) * BANK_SIZE;
+                        sram[(bank_offset + offset) % sram.len()]
+                    })
                 } else {
                     self.read_bank(self.bank_registers[2], offset)
                 }
@@ -238,8 +272,10 @@ impl SmsMemory {
             && self.mapper_control & 0x08 != 0
         {
             if let Some(sram) = self.cartridge_sram.as_mut() {
-                let offset = usize::from(address - 0x8000) & (CARTRIDGE_SRAM_SIZE - 1);
-                sram[offset] = value;
+                let offset = usize::from(address - 0x8000);
+                let bank_offset = usize::from((self.mapper_control >> 2) & 1) * BANK_SIZE;
+                let index = (bank_offset + offset) % sram.len();
+                sram[index] = value;
             }
             return;
         }
@@ -316,21 +352,24 @@ impl SmsMemory {
     /// Return the battery-backed cartridge SRAM contents, if this cartridge
     /// profile exposes an 8 KiB Sega-mapper RAM device.
     pub fn cartridge_sram(&self) -> Option<&[u8]> {
-        self.cartridge_sram.as_deref().map(|sram| sram.as_slice())
+        self.cartridge_sram.as_deref()
     }
 
     /// Restore exactly one 8 KiB cartridge SRAM image.
     pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), SmsCoreError> {
-        if contents.len() != CARTRIDGE_SRAM_SIZE || self.cartridge_sram.is_none() {
+        let Some(sram) = self.cartridge_sram.as_mut() else {
             return Err(SmsCoreError::InvalidCartridgeRamSize {
                 size: contents.len(),
-                expected: CARTRIDGE_SRAM_SIZE,
+                expected: CARTRIDGE_SRAM_8K,
+            });
+        };
+        if contents.len() != sram.len() {
+            return Err(SmsCoreError::InvalidCartridgeRamSize {
+                size: contents.len(),
+                expected: sram.len(),
             });
         }
-        self.cartridge_sram
-            .as_mut()
-            .expect("SRAM presence was validated")
-            .copy_from_slice(contents);
+        sram.copy_from_slice(contents);
         Ok(())
     }
 
@@ -368,7 +407,7 @@ impl SmsMemory {
 #[cfg(test)]
 mod tests {
     use super::{
-        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_SIZE, MAX_EXTENDED_BANKS,
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_8K, MAX_EXTENDED_BANKS,
         MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
@@ -732,6 +771,54 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn sega_mapper_selects_second_sram_bank_with_control_bit_two() {
+        let mut memory = SmsMemory::with_cartridge_sram_size(
+            patterned_rom(4),
+            Some(CARTRIDGE_SRAM_32K),
+        )
+        .unwrap();
+
+        memory.write(0xFFFC, 0x08);
+        memory.write(0x8000, 0x11);
+        assert_eq!(memory.read(0x8000), 0x11);
+
+        memory.write(0xFFFC, 0x0C);
+        assert_eq!(memory.read(0x8000), 0x00, "second SRAM bank is independent");
+        memory.write(0x8000, 0x22);
+        assert_eq!(memory.read(0x8000), 0x22);
+
+        memory.write(0xFFFC, 0x08);
+        assert_eq!(memory.read(0x8000), 0x11, "first SRAM bank is retained");
+    }
+
+    #[test]
+    fn eight_kib_sram_mirrors_across_both_sram_bank_selections() {
+        let mut memory = SmsMemory::with_cartridge_sram_size(
+            patterned_rom(4),
+            Some(CARTRIDGE_SRAM_8K),
+        )
+        .unwrap();
+        memory.write(0xFFFC, 0x08);
+        memory.write(0x8000, 0x5A);
+        memory.write(0xFFFC, 0x0C);
+        assert_eq!(memory.read(0x8000), 0x5A);
+    }
+
+    #[test]
+    fn rejects_unsupported_cartridge_sram_capacity() {
+        let error = SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(0x4000))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            SmsCoreError::InvalidCartridgeRamSize {
+                size: 0x4000,
+                expected: CARTRIDGE_SRAM_8K,
+            }
+        );
+    }
+
     #[test]
     fn disabled_cartridge_slot_rejects_sram_writes() {
         let mut memory = SmsMemory::with_bios(patterned_rom(4), Some(vec![0xA5; 0x2000])).unwrap();
@@ -748,14 +835,14 @@ mod tests {
 
     #[test]
     fn cartridge_sram_contents_survive_memory_clone_and_explicit_reload() {
-        let mut memory = SmsMemory::new(patterned_rom(4)).unwrap();
+        let mut memory = SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         memory.write(0xFFFC, 0x08);
         memory.write(0x8123, 0xC7);
 
         let cloned = memory.clone();
         assert_eq!(cloned.cartridge_sram().unwrap()[0x123], 0xC7);
 
-        let mut reloaded = SmsMemory::new(patterned_rom(4)).unwrap();
+        let mut reloaded = SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         reloaded
             .load_cartridge_sram(memory.cartridge_sram().unwrap())
             .unwrap();
