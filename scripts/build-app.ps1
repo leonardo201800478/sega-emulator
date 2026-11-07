@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $appManifest = Join-Path $repoRoot "native\sega_app\Cargo.toml"
-$profile = if ($Release) { "release" } else { "debug" }
+$buildConfiguration = if ($Release) { "release" } else { "debug" }
 
 . (Join-Path $PSScriptRoot "common.ps1")
 
@@ -33,9 +33,9 @@ $arguments = @(
 )
 if ($Release) { $arguments += "--release" }
 
-Invoke-SegaChecked -File $cargo.Source -Arguments $arguments -Step "Build da aplicacao sega-app ($profile)"
+Invoke-SegaChecked -File $cargo.Source -Arguments $arguments -Step "Build da aplicacao sega-app ($buildConfiguration)"
 
-$binary = Join-Path $env:CARGO_TARGET_DIR (Join-Path $profile "sega-app.exe")
+$binary = Join-Path $env:CARGO_TARGET_DIR (Join-Path $buildConfiguration "sega-app.exe")
 if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
     throw "Build terminou sem produzir o executavel esperado: $binary"
 }
