@@ -2,7 +2,7 @@
 
 **Data da auditoria:** 2026-11-07
 **PR de implementação:** #643
-**SHA de código auditado nesta revisão:** `e6a0384036ee3b13aa45324904988219d41fa6e0`
+**SHA de código auditado nesta revisão:** `5428f0dee266e7c23290ca1585de2f3ac9bc0404`
 **Base remota:** `f47f71830344b85f72329376505d400bfbfaae69`
 **Estado:** mapeamento, catálogo inicial, store host-side e integração do carregador implementados na PR; validação CI do HEAD final ainda pendente.
 
