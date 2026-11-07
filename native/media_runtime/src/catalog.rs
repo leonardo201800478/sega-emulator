@@ -30,6 +30,14 @@ pub struct CartridgeMatch<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogLookupError {
+    AmbiguousDatIdentity {
+        sha1: String,
+        entries: usize,
+    },
+    AmbiguousHardwareProfile {
+        sha1: String,
+        profiles: usize,
+    },
     DatFingerprintMismatch {
         sha1: String,
         dat_size_bytes: usize,
@@ -42,6 +50,14 @@ pub enum CatalogLookupError {
 impl Display for CatalogLookupError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::AmbiguousDatIdentity { sha1, entries } => write!(
+                formatter,
+                "DAT contains {entries} entries with the same SHA-1 {sha1}"
+            ),
+            Self::AmbiguousHardwareProfile { sha1, profiles } => write!(
+                formatter,
+                "catalog contains {profiles} hardware profiles for SHA-1 {sha1}"
+            ),
             Self::DatFingerprintMismatch {
                 sha1,
                 dat_size_bytes,
@@ -92,35 +108,56 @@ impl CartridgeCatalog {
         identity: &CartridgeIdentity,
     ) -> Result<Option<CartridgeMatch<'_>>, CatalogLookupError> {
         let sha1 = identity.sha1_hex();
-        let matched = self.dat.entries.iter().find_map(|game| {
-            game.roms
-                .iter()
-                .find(|rom| rom.sha1.eq_ignore_ascii_case(&sha1))
-                .map(|rom| (game, rom))
-        });
-
-        match matched {
-            None => Ok(None),
-            Some((_game, rom))
-                if rom.size_bytes != identity.size_bytes() || rom.crc32 != identity.crc32() =>
-            {
-                Err(CatalogLookupError::DatFingerprintMismatch {
-                    sha1,
-                    dat_size_bytes: rom.size_bytes,
-                    identity_size_bytes: identity.size_bytes(),
-                    dat_crc32: rom.crc32,
-                    identity_crc32: identity.crc32(),
-                })
-            }
-            Some((game, rom)) => {
-                let profile = self
-                    .profiles
+        let matches: Vec<_> = self
+            .dat
+            .entries
+            .iter()
+            .flat_map(|game| {
+                game.roms
                     .iter()
-                    .find(|known| known.sha1.eq_ignore_ascii_case(&rom.sha1))
-                    .map(|known| &known.profile);
-                Ok(Some(CartridgeMatch { game, rom, profile }))
+                    .filter(|rom| rom.sha1.eq_ignore_ascii_case(&sha1))
+                    .map(move |rom| (game, rom))
+            })
+            .collect();
+
+        let (game, rom) = match matches.as_slice() {
+            [] => return Ok(None),
+            [(game, rom)] => (*game, *rom),
+            _ => {
+                return Err(CatalogLookupError::AmbiguousDatIdentity {
+                    sha1,
+                    entries: matches.len(),
+                });
             }
+        };
+
+        if rom.size_bytes != identity.size_bytes() || rom.crc32 != identity.crc32() {
+            return Err(CatalogLookupError::DatFingerprintMismatch {
+                sha1,
+                dat_size_bytes: rom.size_bytes,
+                identity_size_bytes: identity.size_bytes(),
+                dat_crc32: rom.crc32,
+                identity_crc32: identity.crc32(),
+            });
         }
+
+        let matching_profiles: Vec<_> = self
+            .profiles
+            .iter()
+            .filter(|known| known.sha1.eq_ignore_ascii_case(&rom.sha1))
+            .collect();
+        let profile = match matching_profiles.as_slice() {
+            [] => None,
+            [known] => Some(&known.profile),
+            _ => {
+                return Err(CatalogLookupError::AmbiguousHardwareProfile {
+                    sha1,
+                    profiles: matching_profiles.len(),
+                });
+            }
+        };
+
+        Ok(Some(CartridgeMatch { game, rom, profile }))
     }
 
     /// Return a profile only when the exact ROM identity has a verified executable mapping.
