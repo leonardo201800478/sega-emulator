@@ -248,8 +248,32 @@ impl SmsTemporalBus {
         vdp_profile: SmsVdpProfile,
         territory: Territory,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_hardware_profile_and_sram_size(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            vdp_profile,
+            territory,
+            None,
+        )
+    }
+
+    /// Construct the temporal bus with an explicit cartridge SRAM hardware capacity.
+    ///
+    /// The capacity is supplied by the cartridge hardware profile; it is never
+    /// inferred from a save file or ROM length.
+    pub fn new_with_hardware_profile_and_sram_size(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+        cartridge_sram_size: Option<usize>,
+    ) -> Result<Self, SmsTemporalBusError> {
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::new(cartridge)?;
+        let memory = SmsMemory::with_cartridge_sram_size(cartridge, cartridge_sram_size)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
         let psg = ScheduledPsg::new(
             SMS_PSG_CLOCK_DOMAIN_ID,
