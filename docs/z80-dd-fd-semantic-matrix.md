@@ -305,3 +305,21 @@ O CI #5185 passou no HEAD `30554cc6642dd49d06adf495dca3e80f4822b081`. O teste de
 - E7.7 permanece IN_PROGRESS.
 - E8 permanece BLOCKED até o fechamento documentado de E7; não iniciar ZEXDOC/ZEXALL.
 - Não promover a integração de áudio SMS a DIFFERENTIAL_PASS, TEMPORAL_PASS ou fechamento global do Z80.
+
+
+---
+
+## Reconciliação da baseline — 2026-11-07
+
+**`main` auditada:** `e77eff26d80fd77a64546373c3e92326a0cc4e7a` (após merge da PR #628).
+
+Esta seção supersede as baselines históricas acima como referência da `main` corrente, sem apagar as evidências históricas vinculadas aos respectivos SHAs.
+
+- PR #613 integrou o runtime SMS temporal/vídeo na aplicação e modificou `rust/runtime/sms-runtime/src/worker.rs`, mas não alterou `native/z80_cpu`, o decoder DD/FD ou a implementação das famílias indexadas.
+- PR #614 integrou áudio e controles na aplicação; não alterou o núcleo Z80.
+- PR #628 corrigiu classificação de impacto e gate de CI; não alterou o código Z80 ou os resultados das famílias DD/FD.
+- Portanto, os estados semânticos documentados para E4C, E5 e E6 não são reabertos nem promovidos por essas integrações.
+- A matriz continua sendo inventário de implementação e evidências; a baseline atual não equivale a uma nova execução das suítes.
+- E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED até fechamento formal de E7.
+- `TEMPORAL_UNVERIFIED` continua sendo uma classificação de lacuna de evidência, não uma falha funcional automática. Aplicar ADR-0016 e exigir precisão temporal somente onde houver interação observável demonstrada.
+
