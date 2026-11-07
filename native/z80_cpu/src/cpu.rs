@@ -3727,6 +3727,54 @@ mod architectural_state_tests {
         );
         assert_eq!(cpu.export_architectural_state(), before);
     }
+
+    #[test]
+    fn ed_absolute_word_transfers_wrap_address_and_wz_at_ffff() {
+        for (store_opcode, load_opcode, pair) in [
+            (0x43, 0x4B, 0_u8), // BC
+            (0x53, 0x5B, 1_u8), // DE
+            (0x63, 0x6B, 2_u8), // HL
+            (0x73, 0x7B, 3_u8), // SP
+        ] {
+            let expected = [0x1234_u16, 0x2345, 0x3456, 0x4567][usize::from(pair)];
+            let mut store_bus = TestBus([0; 0x10000]);
+            store_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
+            let mut store_cpu = Z80::default();
+            store_cpu.registers.pc = 0x0100;
+            store_cpu.registers.f = 0xA5;
+            store_cpu.registers.set_bc(0x1234);
+            store_cpu.registers.set_de(0x2345);
+            store_cpu.registers.set_hl(0x3456);
+            store_cpu.registers.sp = 0x4567;
+
+            assert_eq!(store_cpu.step(&mut store_bus), Ok(20));
+            assert_eq!(store_bus.0[0xFFFF], expected as u8);
+            assert_eq!(store_bus.0[0x0000], (expected >> 8) as u8);
+            assert_eq!(store_cpu.wz, 0x0000);
+            assert_eq!(store_cpu.registers.pc, 0x0104);
+            assert_eq!(store_cpu.registers.f, 0xA5);
+
+            let mut load_bus = TestBus([0; 0x10000]);
+            load_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
+            load_bus.0[0xFFFF] = 0xCD;
+            load_bus.0[0x0000] = 0xAB;
+            let mut load_cpu = Z80::default();
+            load_cpu.registers.pc = 0x0100;
+            load_cpu.registers.f = 0x5A;
+
+            assert_eq!(load_cpu.step(&mut load_bus), Ok(20));
+            let actual = match pair {
+                0 => load_cpu.registers.bc(),
+                1 => load_cpu.registers.de(),
+                2 => load_cpu.registers.hl(),
+                _ => load_cpu.registers.sp,
+            };
+            assert_eq!(actual, 0xABCD);
+            assert_eq!(load_cpu.wz, 0x0000);
+            assert_eq!(load_cpu.registers.pc, 0x0104);
+            assert_eq!(load_cpu.registers.f, 0x5A);
+        }
+    }
 }
 
 #[cfg(test)]
