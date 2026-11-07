@@ -975,6 +975,79 @@ mod tests {
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
 
+    fn cartridge_ram_profile(
+        kind: CartridgeRamKind,
+        status: ProfileStatus,
+    ) -> CartridgeHardwareProfile {
+        CartridgeHardwareProfile {
+            system: CartridgeSystem::MasterSystem,
+            mapper: CartridgeMapper::SmsSega,
+            ram: Some(CartridgeRamProfile {
+                kind,
+                capacity_bytes: 0x2000,
+                mapping: CartridgeRamMapping::SegaMapperSlot2,
+                mapped_window_bytes: 0x4000,
+                bank_size_bytes: 0x2000,
+                mirrored: true,
+            }),
+            status,
+            board: None,
+            evidence: vec!["worker unit test".to_owned()],
+        }
+    }
+
+    #[test]
+    fn worker_restores_and_exports_battery_backed_sram_at_safe_points() {
+        let initial = vec![0x5A; 0x2000];
+        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            Some(cartridge_ram_profile(
+                CartridgeRamKind::BatteryBackedSram,
+                ProfileStatus::Verified,
+            )),
+            Some(initial.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial));
+    }
+
+    #[test]
+    fn worker_allocates_volatile_ram_without_accepting_a_persistent_save() {
+        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            Some(cartridge_ram_profile(
+                CartridgeRamKind::VolatileSram,
+                ProfileStatus::Verified,
+            )),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            worker.export_cartridge_sram().unwrap(),
+            Some(vec![0; 0x2000])
+        );
+
+        let result = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            Some(cartridge_ram_profile(
+                CartridgeRamKind::VolatileSram,
+                ProfileStatus::Verified,
+            )),
+            Some(vec![0x5A; 0x2000]),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unknown_cartridge_has_no_additional_ram_to_export() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        assert_eq!(worker.export_cartridge_sram().unwrap(), None);
+    }
+
     fn av_test_rom() -> Vec<u8> {
         let mut rom = vec![0; 0x4000];
         let mut program = vec![
