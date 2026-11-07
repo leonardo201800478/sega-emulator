@@ -6,4 +6,7 @@
 mod app;
 
 #[cfg(windows)]
+mod save_ram_store;
+
+#[cfg(windows)]
 pub use app::SegaApp;
