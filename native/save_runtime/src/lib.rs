@@ -435,6 +435,41 @@ mod tests {
     }
 
     #[test]
+    fn rejects_truncated_and_oversized_payloads_even_with_valid_header() {
+        let directory = temporary_directory();
+        let store = SaveRamStore::new(&directory);
+        let identity = CartridgeIdentity::from_bytes(b"save-test-rom");
+        let profile = battery_profile();
+        let path = store.path_for_identity(&identity);
+
+        store.save(&identity, &profile, &[0x5A; 0x2000]).unwrap();
+        let mut encoded = fs::read(&path).unwrap();
+        encoded.pop();
+        fs::write(&path, encoded).unwrap();
+        assert_eq!(
+            store.load(&identity, &profile),
+            Err(SaveRamError::RamSizeMismatch {
+                expected: 0x2000,
+                actual: 0x1FFF,
+            })
+        );
+
+        store.save(&identity, &profile, &[0xA5; 0x2000]).unwrap();
+        let mut encoded = fs::read(&path).unwrap();
+        encoded.push(0x00);
+        fs::write(&path, encoded).unwrap();
+        assert_eq!(
+            store.load(&identity, &profile),
+            Err(SaveRamError::RamSizeMismatch {
+                expected: 0x2000,
+                actual: 0x2001,
+            })
+        );
+
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn rejects_wrong_capacity_and_volatile_ram() {
         let directory = temporary_directory();
         let store = SaveRamStore::new(&directory);
