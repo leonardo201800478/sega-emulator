@@ -339,7 +339,7 @@ impl SegaApp {
 
         let (profile, cartridge_notice) = match matched {
             Some(matched) => match matched.profile {
-                Some(profile) if profile.is_runtime_usable() => (Some(profile.clone()), None),
+                Some(profile) if profile.is_runtime_usable() => (Some((*profile).clone()), None),
                 Some(profile) => (
                     None,
                     Some(format!(
