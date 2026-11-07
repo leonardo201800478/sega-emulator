@@ -14,7 +14,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 | Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
 | Audio chips / DSP / audio runtime | Root workspace validation where applicable. Windows WASAPI/XAudio2 validation runs for `native/audio_output`, `native/audio_runtime`, or the shared SN76489 dependency. |
 | SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation |
-| Native egui application and SMS worker integration | Windows-targeted format, Clippy, and headless tests for the application; changes to `rust/runtime/sms-runtime` also trigger this dependent application build |
+| Native egui application and SMS worker integration | Windows-targeted format and Clippy for all targets; changes to `rust/runtime/sms-runtime` also trigger this dependent application build. A separate `cargo test` is added when the application gains its own tests. |
 | PowerShell tooling | Parse only the changed `.ps1` scripts |
 | Documentation text (Markdown, MDX, RST, TXT) | `git diff --check` for whitespace and patch hygiene only; no Rust build, Clippy, or tests |
 
