@@ -446,6 +446,69 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_dat_sha1_is_rejected_instead_of_selecting_first_entry() {
+        let identity = CartridgeIdentity::from_bytes(b"abc");
+        let mut dat = synthetic_dat(&identity, identity.crc32());
+        dat.entries.push(dat.entries[0].clone());
+        let catalog = CartridgeCatalog::from_dat(dat, Vec::new());
+
+        assert!(matches!(
+            catalog.lookup(&identity),
+            Err(CatalogLookupError::AmbiguousDatIdentity { entries: 2, .. })
+        ));
+    }
+
+    #[test]
+    fn duplicate_hardware_profiles_for_one_sha1_are_rejected() {
+        let identity = CartridgeIdentity::from_bytes(b"abc");
+        let profile = test_battery_profile();
+        let catalog = CartridgeCatalog::from_dat(
+            synthetic_dat(&identity, identity.crc32()),
+            vec![
+                KnownCartridgeProfile::new(identity.sha1_hex(), profile.clone()),
+                KnownCartridgeProfile::new(identity.sha1_hex(), profile),
+            ],
+        );
+
+        assert!(matches!(
+            catalog.lookup(&identity),
+            Err(CatalogLookupError::AmbiguousHardwareProfile { profiles: 2, .. })
+        ));
+    }
+
+    #[test]
+    fn eight_commercial_sram_titles_have_verified_8k_profiles() {
+        let catalog = CartridgeCatalog::sms_default().unwrap();
+        let expected = [
+            "fbda0486b393708a89756bb57d116ad6007484e4", // Golden Axe Warrior
+            "d0b964dd7cd8ccdd730de4d8e4bb2e87bea7686e", // Golfamania
+            "f952406bca4918ee91a89b27e949e224eae96d85", // Miracle Warriors
+            "6bad7176011dd4bbd007498d167399daacde173d", // Monopoly Rev A
+            "8762239c339a084dfb8443cc38515301476bde28", // Penguin Land
+            "257ca76ebcd54c75a414ca7ce968fa59ea42f150", // Phantasy Star USA/Europe
+            "a90e21e5961bcf2e10b715a009c04e7c2017a3b1", // Ultima IV
+            "e73e836c353543e9f48315410b0d72278899ff59", // Ys: The Vanished Omens
+        ];
+
+        for sha1 in expected {
+            let profile = catalog
+                .profiles()
+                .iter()
+                .find(|entry| entry.sha1 == sha1)
+                .unwrap_or_else(|| panic!("missing commercial SRAM profile {sha1}"));
+            assert_eq!(profile.profile.status, ProfileStatus::Verified);
+            assert_eq!(
+                profile.profile.ram.as_ref().map(|ram| ram.kind),
+                Some(CartridgeRamKind::BatteryBackedSram)
+            );
+            assert_eq!(
+                profile.profile.ram.as_ref().map(|ram| ram.capacity_bytes),
+                Some(0x2000)
+            );
+        }
+    }
+
+    #[test]
     fn default_catalog_keeps_flight_of_pigarus_blocked() {
         let profile = flight_of_pigarus_blocked();
         assert_eq!(profile.status, ProfileStatus::Blocked);
