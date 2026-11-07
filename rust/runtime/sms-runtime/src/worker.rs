@@ -50,27 +50,38 @@ pub fn sms_temporal_region_profile(
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
+    build_sms_temporal_machine_with_sram_size(rom, region, None)
+}
+
+fn build_sms_temporal_machine_with_sram_size(
+    rom: Vec<u8>,
+    region: &str,
+    cartridge_sram_size: Option<usize>,
+) -> Result<SmsTemporalMachine, String> {
     let (territory, vdp_profile, psg_clock_hz) =
         sms_temporal_region_profile(region).map_err(str::to_owned)?;
-    SmsTemporalMachine::new_with_hardware_profile(
+    SmsTemporalMachine::new_with_hardware_profile_and_sram_size(
         rom,
         SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE,
         psg_clock_hz,
         SMS_TEMPORAL_SAMPLE_RATE,
         vdp_profile,
         territory,
+        cartridge_sram_size,
     )
     .map_err(|error| error.to_string())
 }
 
-/// Rebuild the machine at its power-on state while preserving battery-backed
-/// cartridge SRAM. A reset must not behave like replacing the cartridge.
+/// Rebuild the machine at its power-on state while preserving the explicit
+/// cartridge SRAM hardware capacity and its bytes. A reset is not a ROM swap.
 fn reset_sms_temporal_machine(
     current: &SmsTemporalMachine,
     rom: Vec<u8>,
     region: &str,
 ) -> Result<SmsTemporalMachine, String> {
-    let mut reset_machine = build_sms_temporal_machine(rom, region)?;
+    let sram_size = current.memory().cartridge_sram().map(<[u8]>::len);
+    let mut reset_machine =
+        build_sms_temporal_machine_with_sram_size(rom, region, sram_size)?;
     if let Some(sram) = current.memory().cartridge_sram() {
         reset_machine
             .load_cartridge_sram(sram)
@@ -165,6 +176,22 @@ pub struct SmsTemporalWorker {
 impl SmsTemporalWorker {
     /// Start the native worker and wait until the first machine is constructed.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
+        Self::new_with_cartridge_sram_profile(rom, region, None, None)
+    }
+
+    /// Start the worker with an explicit cartridge SRAM profile and optional
+    /// save bytes. The capacity must come from the cartridge hardware profile;
+    /// save length is validated but never used to infer hardware.
+    pub fn new_with_cartridge_sram_profile(
+        rom: Vec<u8>,
+        region: &str,
+        cartridge_sram_size: Option<usize>,
+        initial_sram: Option<Vec<u8>>,
+    ) -> Result<Self, String> {
+        if initial_sram.is_some() && cartridge_sram_size.is_none() {
+            return Err("initial cartridge SRAM requires an explicit hardware capacity".to_owned());
+        }
+
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
         let worker_telemetry = Arc::clone(&telemetry);
@@ -175,16 +202,24 @@ impl SmsTemporalWorker {
         let worker = thread::Builder::new()
             .name("sms-temporal-machine".to_owned())
             .spawn(move || {
-                let machine = match build_sms_temporal_machine(rom.clone(), &worker_region) {
-                    Ok(machine) => {
-                        let _ = ready_sender.send(Ok(()));
-                        machine
-                    }
+                let mut machine = match build_sms_temporal_machine_with_sram_size(
+                    rom.clone(),
+                    &worker_region,
+                    cartridge_sram_size,
+                ) {
+                    Ok(machine) => machine,
                     Err(error) => {
                         let _ = ready_sender.send(Err(error));
                         return;
                     }
                 };
+                if let Some(contents) = initial_sram {
+                    if let Err(error) = machine.load_cartridge_sram(&contents) {
+                        let _ = ready_sender.send(Err(error.to_string()));
+                        return;
+                    }
+                }
+                let _ = ready_sender.send(Ok(()));
                 worker_loop(machine, rom, worker_region, receiver, worker_telemetry);
             })
             .map_err(|error| format!("could not start SMS machine worker: {error}"))?;
@@ -940,7 +975,8 @@ mod tests {
     fn reset_preserves_battery_backed_cartridge_sram() {
         let mut rom = SYNTHETIC_ROM.to_vec();
         rom.resize(0x1_0000, 0);
-        let mut machine = build_sms_temporal_machine(rom.clone(), "usa").unwrap();
+        let mut machine =
+            build_sms_temporal_machine_with_sram_size(rom.clone(), "usa", Some(0x2000)).unwrap();
         let sram = vec![0x5A; 0x2000];
         machine.load_cartridge_sram(&sram).unwrap();
 
