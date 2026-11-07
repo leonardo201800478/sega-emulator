@@ -337,8 +337,7 @@ mod tests {
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
         let mut indices = DirectoryKind::ALL.map(index);
         indices.sort_unstable();
-        indices.dedup();
-        assert_eq!(indices.len(), DirectoryKind::ALL.len());
+        assert!(indices.windows(2).all(|pair| pair[0] != pair[1]));
     }
 
     #[test]
