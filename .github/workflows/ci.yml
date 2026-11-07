@@ -174,7 +174,7 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy Z80 and console integration packages
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
-      - name: Test Z80 and SMS integration packages
+      - name: Test Z80, SMS and SG-1000 integration packages
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
 
   docs-format:
