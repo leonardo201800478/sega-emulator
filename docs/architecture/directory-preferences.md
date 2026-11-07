@@ -2,7 +2,7 @@
 
 ## Scope
 
-The native egui application exposes thirteen independent user-selected directories:
+The native egui application exposes seventeen independent user-selected directories:
 
 - Configuration
 - ROMs
@@ -17,6 +17,10 @@ The native egui application exposes thirteen independent user-selected directori
 - Shader presets
 - Shader textures / LUTs
 - Compiled shader cache
+- Patches (IPS/BPS/UPS)
+- Cheats
+- Artwork / thumbnails
+- Video recordings
 
 No category is forced to share a parent directory. Selecting one path must not modify any other category. Changing a configured path does not move or delete existing files.
 
@@ -33,6 +37,10 @@ Sega Emulator/
   saves/
   states/
   screenshots/
+  patches/
+  cheats/
+  thumbnails/
+  recordings/
   shaders/
     vulkan/
     directx/
