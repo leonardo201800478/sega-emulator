@@ -114,7 +114,7 @@ jobs:
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' && needs.changes.outputs.rust == 'true')
+      (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.rust == 'true' || needs.changes.outputs.full == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -321,12 +321,24 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Parse changed project PowerShell scripts
         shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          $files = Get-ChildItem -Path scripts -Filter *.ps1 -Recurse
-          if (-not $files) { throw "No PowerShell scripts found under scripts/" }
+          if ($env:EVENT_NAME -eq "pull_request") {
+            $range = "$($env:BASE_SHA)...$($env:HEAD_SHA)"
+          } else {
+            $range = "$($env:BASE_SHA)..$($env:HEAD_SHA)"
+          }
+          $paths = git diff --name-only $range -- scripts
+          if ($LASTEXITCODE -ne 0) { throw "Could not discover changed PowerShell scripts" }
+          $files = @($paths | Where-Object { $_.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) })
+          if (-not $files) { Write-Host "No PowerShell scripts changed."; exit 0 }
           foreach ($file in $files) {
             $tokens = $null
             $errors = $null
@@ -347,7 +359,7 @@ jobs:
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
-      (github.event_name == 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' &&
        (needs.changes.outputs.scheduler == 'true' ||
         contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
         contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
