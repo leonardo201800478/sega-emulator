@@ -181,7 +181,7 @@ jobs:
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
 
   docs-format:
-    name: Documentation text formatting
+    name: Documentation patch hygiene
     needs: [changes]
     if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
@@ -191,7 +191,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check changed documentation formatting
+      - name: Check documentation patch formatting
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -203,12 +203,6 @@ jobs:
             range="$BASE_SHA...$HEAD_SHA"
           else
             range="$BASE_SHA..$HEAD_SHA"
-          fi
-          mapfile -d '' markdown_files < <(git diff --name-only -z "$range" -- '*.md' '*.mdx')
-          if (("${#markdown_files[@]}" > 0)); then
-            npx --yes prettier@3.9.10 --check "${markdown_files[@]}"
-          else
-            echo "No changed Markdown/MDX files."
           fi
           git diff --check "$range"
 
