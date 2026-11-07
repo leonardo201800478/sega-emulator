@@ -12,8 +12,8 @@ use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
 };
-use sega_save_runtime::SaveRamStore;
 use sega_media::{CartridgeCatalog, CartridgeHardwareProfile, CartridgeIdentity};
+use sega_save_runtime::SaveRamStore;
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
@@ -316,8 +316,9 @@ impl SegaApp {
 
     fn shutdown_native_viewport_with_save(&mut self) -> bool {
         if let Err(error) = self.persist_current_cartridge() {
-            self.native_viewport.error =
-                Some(format!("Não foi possível salvar a SRAM antes do encerramento: {error}"));
+            self.native_viewport.error = Some(format!(
+                    "Não foi possível salvar a SRAM antes do encerramento: {error}"
+                ));
             return false;
         }
         self.native_viewport.shutdown();
