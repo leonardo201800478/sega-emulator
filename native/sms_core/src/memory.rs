@@ -755,7 +755,7 @@ mod tests {
     #[test]
     fn sega_mapper_maps_and_mirrors_eight_kib_cartridge_sram() {
         let mut memory = SmsMemory::new(patterned_rom(4)).unwrap();
-        assert_eq!(memory.cartridge_sram().unwrap().len(), CARTRIDGE_SRAM_32K);
+        assert_eq!(memory.cartridge_sram().unwrap().len(), CARTRIDGE_SRAM_8K);
         assert_eq!(memory.read(0x8000), 2);
 
         memory.write(0xFFFC, 0x08);
