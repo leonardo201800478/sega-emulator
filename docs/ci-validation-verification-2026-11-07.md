@@ -1,8 +1,8 @@
 # CI Workflow Verification — 2026-11-07
 
-**Repository:** `leonardo201800478/sega-emulator`  
-**Baseline `main` SHA audited:** `d48d5c35cd3469bad8f090f6a28094d6339560e8`  
-**Verification/fix PR:** [#628](https://github.com/leonardo201800478/sega-emulator/pull/628)  
+**Repository:** `leonardo201800478/sega-emulator`
+**Baseline `main` SHA audited:** `d48d5c35cd3469bad8f090f6a28094d6339560e8`
+**Verification/fix PR:** [#628](https://github.com/leonardo201800478/sega-emulator/pull/628)
 **Status:** targeted PR and path-filter verification passed; manual dispatch and post-merge push verification remain pending.
 
 ## 1. Consolidated changes in this delivery
