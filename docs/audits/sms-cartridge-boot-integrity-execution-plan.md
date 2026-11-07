@@ -195,9 +195,6 @@ Gates para cada PR/HEAD:
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets --locked -- -D warnings`
 - `cargo test --workspace --locked`
-- `cargo fmt --all -- --check`
-- `cargo clippy --workspace --all-targets --locked -- -D warnings`
-- `cargo test --workspace --locked`
 - Gates adicionais específicos do app Windows, quando o escopo tocar `native/sega_app`: `cargo check --manifest-path native/sega_app/Cargo.toml --locked`, Clippy e testes equivalentes no target Windows suportado.
 
 Registrar cada gate como PASS, FAIL, BLOCKED ou NOT RUN. Não declarar validação in-game sem execução real. Não integrar com warnings/falhas. Não fazer merge sem autorização explícita.
