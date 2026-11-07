@@ -108,7 +108,7 @@ A tabela No-Intro `2026.10.07` e MAME `hash/sms.xml` apresentam SHA-1, CRC32 e t
 | Ultima IV | Europe, Brazil (En) | 512 KiB; CRC `B52D60C8`; SHA-1 `A90E21E5961BCF2E10B715A009C04E7C2017A3B1` | MATCH |
 | Ys | Japan; The Vanished Omens (USA, Europe, Brazil) | 256 KiB; CRCs `32759751` / `B33E2827`; SHA-1s `614B589080B732E17CC0D253E17216A72A268955` / `E73E836C353543E9F48315410B0D72278899FF59` | MATCH |
 
-Os protótipos presentes no MAME para Golfamania, Miracle Warriors, Monopoly, Doki Doki Penguin Land e Ultima IV não aparecem no DAT No-Intro consultado e permanecem variantes separadas; não herdar os perfis comerciais sem fingerprint próprio. O demo de Ys não está marcado `battery=yes` no MAME e não está no conjunto de perfis persistentes.
+Os protótipos presentes no MAME para Golfamania, Miracle Warriors, Monopoly, Doki Doki Penguin Land e Ultima IV não aparecem no DAT No-Intro consultado e permanecem variantes separadas; não herdar os perfis comerciais sem fingerprint próprio. O demo de Ys não está marcado `battery=yes` no MAME e não está no conjunto de perfis persistentes. As imagens Phantasy Star Sega Ages (World/En e World/Ja) no DAT são repacks de tamanho/hash distintos e não devem herdar perfis das ROMs de 512 KiB sem verificação própria.
 
 ## 4. Flight of Pigarus — perfil isolado e BLOCKED
 
@@ -134,13 +134,13 @@ Evidências:
 
 ## 5. RAM volátil — não gerar .srm
 
-| Jogo | Evidência atual | Tratamento |
-|---|---|---|
-| Desert Speedtrap | Pesquisa histórica do projeto registra RAM sem bateria via Gearsystem; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
-| The Flash | Pesquisa histórica do projeto registra RAM sem bateria via Gearsystem; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
-| The Terminator (Europe) | MAME lista IC2 `KM62256BLP-10L` (32 KiB SRAM) e não marca battery | RAM sem evidência de bateria; não gerar .srm |
-| The Terminator (Brazil) | MAME não informa IC nem battery | UNKNOWN; não herdar perfil europeu sem fingerprint |
-| Othello | Não consta como cartucho Master System no MAME `sms.xml`; documentação do projeto o lista no contexto SG-1000 | Não cadastrar como SRAM de cartucho SMS |
+| Jogo / variante | Identidade No-Intro 2026.10.07 | Evidência MAME / projeto | Tratamento |
+|---|---|---|---|
+| Desert Speedtrap (Europe, Brazil) | 256 KiB; CRC `B137007A`; SHA-1 `60E2B6EC69D73DD73C1EF846634942C81800655B` | Gearsystem classifica RAM sem bateria; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
+| The Flash (Europe, Brazil) | 256 KiB; CRC `BE31D63F`; SHA-1 `1732B4C13FD00DD5EFC5BF1CCB1AB6ED3889C8BA` | Gearsystem classifica RAM sem bateria; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
+| The Terminator (Europe) | 256 KiB; CRC `EDC5C012`; SHA-1 `EAF733D385E61526B90C1B194BF605078D43E2D3` | MAME lista PCB 171-6339A e IC2 `KM62256BLP-10L` (32 KiB SRAM), sem feature battery | RAM sem evidência de bateria; não gerar .srm |
+| The Terminator (Brazil) | 256 KiB; CRC `E3D5CE9A`; SHA-1 `BEA0A1D0271FAA2273E4CF1E968241D018C81DA1` | MAME não informa IC nem battery | UNKNOWN; não herdar perfil europeu sem fingerprint |
+| Othello | Sem entrada no DAT No-Intro SMS consultado | Não consta como cartucho Master System no MAME `sms.xml`; documentação do projeto o lista no contexto SG-1000 | Não cadastrar como SRAM de cartucho SMS |
 
 A ausência de `battery=yes` não prova ausência de RAM; apenas impede classificar como battery-backed com base nesta fonte. Da mesma forma, `battery=yes` é um marcador do software list MAME para dados persistentes e não prova sozinho que a PCB possua uma bateria física; Flight of Pigarus é o contraexemplo documentado, com FeRAM.
 
