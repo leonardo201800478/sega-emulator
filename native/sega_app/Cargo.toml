@@ -16,6 +16,7 @@ zip = { version = "=9.4.1", default-features = false, features = ["deflate"] }
 sega-video-runtime = { path = "../video_runtime" }
 sega-sms-runtime = { path = "../../rust/runtime/sms-runtime" }
 sega-media = { path = "../media_runtime" }
+sega-save-runtime = { path = "../save_runtime" }
 sega-sms-core = { path = "../sms_core" }
 sega-audio-output = { path = "../audio_output" }
 sega-input-runtime = { path = "../input_runtime" }
