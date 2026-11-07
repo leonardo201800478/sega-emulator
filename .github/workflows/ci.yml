@@ -83,6 +83,8 @@ jobs:
               - 'native/z80_cpu/**'
               - 'native/z80_alu/**'
               - 'native/z80_bus/**'
+              - 'native/sms_core/Cargo.toml'
+              - 'native/sg1000_core/Cargo.toml'
               - 'native/sms_core/tests/z80_*.rs'
               - 'native/sms_core/src/temporal*.rs'
               - 'native/sms_core/src/bin/z80test_runner.rs'
