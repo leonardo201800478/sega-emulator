@@ -23,6 +23,7 @@ pub enum DirectoryKind {
     Screenshots,
     VulkanShaders,
     DirectXShaders,
+    SharedShaders,
     ShaderPresets,
     ShaderTextures,
 }
@@ -40,6 +41,7 @@ impl DirectoryKind {
             Self::Screenshots => "screenshots",
             Self::VulkanShaders => "shaders_vulkan",
             Self::DirectXShaders => "shaders_directx",
+            Self::SharedShaders => "shaders_shared",
             Self::ShaderPresets => "shader_presets",
             Self::ShaderTextures => "shader_textures",
         }
@@ -57,13 +59,14 @@ impl DirectoryKind {
             Self::Screenshots => "Capturas de tela",
             Self::VulkanShaders => "Shaders — Vulkan",
             Self::DirectXShaders => "Shaders — DirectX 11/12",
+            Self::SharedShaders => "Shaders compartilhados (Slang)",
             Self::ShaderPresets => "Presets de shaders",
             Self::ShaderTextures => "Texturas de shaders",
         }
     }
 
     /// All supported categories in stable presentation order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Configuration,
         Self::Roms,
         Self::Bios,
@@ -73,6 +76,7 @@ impl DirectoryKind {
         Self::Screenshots,
         Self::VulkanShaders,
         Self::DirectXShaders,
+        Self::SharedShaders,
         Self::ShaderPresets,
         Self::ShaderTextures,
     ];
@@ -81,8 +85,8 @@ impl DirectoryKind {
 /// Persistent directory choices and last-visited folder for each category.
 #[derive(Debug, Clone)]
 pub struct DirectoryPreferences {
-    paths: [PathBuf; 11],
-    last_opened: [Option<PathBuf>; 11],
+    paths: [PathBuf; 12],
+    last_opened: [Option<PathBuf>; 12],
     settings_file: PathBuf,
     bootstrap_file: PathBuf,
 }
@@ -263,8 +267,9 @@ fn index(kind: DirectoryKind) -> usize {
         DirectoryKind::Screenshots => 6,
         DirectoryKind::VulkanShaders => 7,
         DirectoryKind::DirectXShaders => 8,
-        DirectoryKind::ShaderPresets => 9,
-        DirectoryKind::ShaderTextures => 10,
+        DirectoryKind::SharedShaders => 9,
+        DirectoryKind::ShaderPresets => 10,
+        DirectoryKind::ShaderTextures => 11,
     }
 }
 
@@ -291,7 +296,7 @@ fn documents_directory() -> Option<PathBuf> {
         .or_else(|| Some(profile.join("Documents")))
 }
 
-fn default_paths(root: &Path) -> [PathBuf; 11] {
+fn default_paths(root: &Path) -> [PathBuf; 12] {
     [
         root.join("config"),
         root.join("roms"),
@@ -302,6 +307,7 @@ fn default_paths(root: &Path) -> [PathBuf; 11] {
         root.join("screenshots"),
         root.join("shaders").join("vulkan"),
         root.join("shaders").join("directx"),
+        root.join("shaders").join("shared"),
         root.join("shaders").join("presets"),
         root.join("shaders").join("textures"),
     ]
@@ -319,7 +325,7 @@ mod tests {
 
     #[test]
     fn categories_have_independent_indices_and_labels() {
-        assert_eq!(DirectoryKind::ALL.len(), 11);
+        assert_eq!(DirectoryKind::ALL.len(), 12);
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
@@ -335,8 +341,9 @@ mod tests {
         assert_eq!(paths[6], PathBuf::from("root/screenshots"));
         assert_eq!(paths[7], PathBuf::from("root/shaders/vulkan"));
         assert_eq!(paths[8], PathBuf::from("root/shaders/directx"));
-        assert_eq!(paths[9], PathBuf::from("root/shaders/presets"));
-        assert_eq!(paths[10], PathBuf::from("root/shaders/textures"));
+        assert_eq!(paths[9], PathBuf::from("root/shaders/shared"));
+        assert_eq!(paths[10], PathBuf::from("root/shaders/presets"));
+        assert_eq!(paths[11], PathBuf::from("root/shaders/textures"));
     }
 
     #[test]
