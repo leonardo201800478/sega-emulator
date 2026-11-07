@@ -1,6 +1,7 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline reconciliada:** `main` em `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (2026-11-06, após PRs #562, #563, #584, #595, #596 e #597). As evidências específicas de cada gate permanecem vinculadas aos SHAs e workflows indicados nas auditorias.  
+**Baseline documental atual:** `main` = `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
+**Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -18,11 +19,9 @@ Este scorecard mede o que é necessário para executar corretamente SG-1000 e Ma
 | Estado compartilhado | Uma implementação Rust, sem cópias de CPU por console |
 | Regressão | Alterações no Z80 não podem quebrar SMS nem SG-1000 |
 
-A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência técnica para instruções indexadas. Ela não transforma cada particularidade não documentada em requisito universal.
-
 ## 2. Estado conhecido na baseline consultada
 
-- O núcleo Z80 compartilhado está em native/z80_cpu.
+- O núcleo Z80 compartilhado está em `native/z80_cpu`.
 - E3A1/E3A2 e E4A/E4B/E4C constam como integradas nas auditorias recentes.
 - E5 DDCB/FDCB e E6 resolução geral de prefixos constam como integradas na main.
 - E7.3/HALT T4 consta como integrada.
@@ -75,37 +74,32 @@ A PR #527 é uma proposta documental não integrada. Não usar os relatórios de
 
 Atualizar este scorecard somente quando uma mudança integrada, um teste executado ou uma evidência de hardware alterar o estado de um critério funcional relevante. Não criar fases, percentuais de completude ou bloqueios de precisão elétrica sem necessidade comprovada.
 
-
 ## 7. Reconciliação de evidências — 2026-11-06
 
-Baseline: `main` = `08d9fac1d30a659bde8298e7da2f8ae1d75510d1`.
+Baseline histórica: `main` = `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. As evidências específicas de cada gate permanecem vinculadas aos SHAs e workflows indicados nas auditorias.
 
 - PR #562 integrou a correção do erratum NMOS de P/V em `LD A,I` / `LD A,R` no microsequenciador; INT imediato, instrução intermediária, NMI e snapshot/restore têm testes dedicados.
-- PR #563 integrou as matrizes de regressão de I/O em bloco e dos aliases DD/FD half-register (LD, ALU e INC/DEC), além das auditorias correspondentes. Essas matrizes aumentam a evidência funcional, mas não equivalem a um oráculo independente de silício.
-- A auditoria `docs/audits/z80-e7-block-io-flags-2026-11-05.md` caracteriza as fórmulas de flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR para o perfil Zilog NMOS, confrontando pesquisa experimental, referência comparativa e código atômico/microsequenciado. Não foi identificada correção de runtime justificada nessa subquestão.
-- A identificação de um Z80 NMOS em documentação de uma revisão do SMS sustenta essa baseline de compatibilidade, mas não prova todas as revisões de placa. Diferenças CMOS/clones permanecem NOT VERIFIED; a suíte de hardware citada não foi executada em um Master System físico.
-- A matriz DD/FD deve ser lida em conjunto com as auditorias E7.7 mais recentes. Estados históricos que classificavam half-register LD/ALU/INC/DEC como FUNCTIONAL_UNVERIFIED foram complementados pelas matrizes integradas em #563; não promover esses resultados a DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+- PR #563 integrou as matrizes de regressão de I/O em bloco e dos aliases DD/FD half-register (LD, ALU e INC/DEC), além das auditorias correspondentes.
+- A auditoria `docs/audits/z80-e7-block-io-flags-2026-11-05.md` caracteriza as fórmulas de flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR para o perfil Zilog NMOS.
+- CMOS/clones, validação direta em hardware SMS e `OUT (C),0` variante-dependente permanecem sem comprovação conclusiva.
+- E7.7 continua IN_PROGRESS e E8 continua BLOCKED.
 
-**Decisão:** E7.7 continua IN_PROGRESS e E8 continua BLOCKED. O próximo trabalho deve fechar as lacunas semânticas restantes com evidência específica por família, incluindo a variante de `OUT (C),0`, sem iniciar ZEXDOC/ZEXALL nem exigir microsequenciamento universal.
+## 8. Registro histórico após PR #595 — fotografia de 2026-11-06
 
+A main estava em `733152f61b706b2243914ae017643cef949d4ae1`. A PR #595 alterou integração temporal SMS e testes/documentação; não alterou o decoder Z80, as famílias DD/FD ou os resultados E4C/E5/E6.
 
-## 8. Registro historico apos PR #595 — fotografia de 2026-11-06
+- A conexão VDP IRQ → Z80 INT temporal foi integrada, com preservação da fonte externa e validação de snapshot/acknowledge.
+- E7.7 permaneceu IN_PROGRESS; E8 permaneceu BLOCKED.
 
-Na fotografia imediatamente apos a PR #595, a `main` estava em `733152f61b706b2243914ae017643cef949d4ae1`. A baseline posterior, apos a PR #597, esta registrada na secao 9. A PR #595 alterou somente a integracao temporal SMS e seus testes/documentacao; nao alterou o decoder Z80, as familias DD/FD, os resultados E4C/E5/E6 ou as lacunas semanticas globais.
+## 9. Reconciliação após PR #597 — fotografia histórica de 2026-11-06
 
-- A conexao VDP IRQ → Z80 INT temporal foi integrada, com preservacao da fonte externa e validacao de snapshot/acknowledge. Os testes direcionados passaram no CI #5178 no HEAD `69ca40ab29c486f26852adb7536a04f95f9dd7ae`.
-- E7.7 permanece IN_PROGRESS. Nenhuma pendencia semantica do Z80 foi fechada por essa integracao de SMS.
-- E8 permanece BLOCKED. Nao iniciar ZEXDOC/ZEXALL antes de fechar E7.
-- Nao reabrir E4C/E5/E6 sem divergencia reproduzivel; nao atribuir a cobertura de IRQ SMS a fechamento geral de interrupcoes Z80.
-- O estado de SG-1000 deve continuar sendo verificado por regressao nos proximos merges compartilhados.
+A main estava em `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. A PR #597 alterou a fronteira do worker de áudio SMS, não o núcleo Z80. E7.7 permaneceu IN_PROGRESS; E8 permaneceu BLOCKED.
 
+## 10. Baseline atual — 2026-11-07
 
-## 9. Reconciliacao apos PR #597 — baseline main 2026-11-06
+A main atual consultada é `3ad1781f84b7824b5aa889a583ae6d4545987ec1`. As PRs #615 e #617 não alteraram a implementação ou a evidência do Z80. As PRs #613/#614 ainda não foram integradas na fotografia desta baseline.
 
-A main atual e `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. A PR #597 alterou apenas a fronteira do worker de audio SMS para permitir um `PcmSink` de teste e comprovar a entrega de PCM nao silencioso a `NativeAudioSession`; nao alterou o nucleo Z80, o decoder DD/FD, o microsequenciador, os resultados E4C/E5/E6 ou as lacunas semanticas globais.
-
-- CI #5185 passou no HEAD `30554cc6642dd49d06adf495dca3e80f4822b081`; o teste de worker/audio foi executado pelo build PyO3 Windows e o pipeline SMS/SG-1000 permaneceu verde.
-- E7.7 permanece IN_PROGRESS. A integração worker → NativeAudioSession não fecha semântica de CPU nem precisão temporal.
-- E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL antes do fechamento documentado de E7.
-- Nenhuma pendência Z80 foi encerrada por PR #597. Não reabrir E4C/E5/E6 sem divergência reproduzível.
-- Regressão SG-1000 continua obrigatória em mudanças compartilhadas; dois testes de pipeline de áudio SMS/SG-1000 passaram no CI #5185.
+- E4C, E5 e E6 permanecem integradas conforme evidências anteriores.
+- E7.7 permanece IN_PROGRESS.
+- E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL antes do fechamento E7.
+- A auditoria semântica deve continuar com lacunas específicas, incluindo `OUT (C),0` variante-dependente, sem exigir microsequenciamento universal.
