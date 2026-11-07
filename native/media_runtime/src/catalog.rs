@@ -101,17 +101,19 @@ impl CartridgeCatalog {
 
         match matched {
             None => Ok(None),
+            Some((game, rom))
+                if rom.size_bytes != identity.size_bytes()
+                    || rom.crc32 != identity.crc32() =>
+            {
+                Err(CatalogLookupError::DatFingerprintMismatch {
+                    sha1,
+                    dat_size_bytes: rom.size_bytes,
+                    identity_size_bytes: identity.size_bytes(),
+                    dat_crc32: rom.crc32,
+                    identity_crc32: identity.crc32(),
+                })
+            }
             Some((game, rom)) => {
-                if rom.size_bytes != identity.size_bytes() || rom.crc32 != identity.crc32() {
-                    return Err(CatalogLookupError::DatFingerprintMismatch {
-                        sha1,
-                        dat_size_bytes: rom.size_bytes,
-                        identity_size_bytes: identity.size_bytes(),
-                        dat_crc32: rom.crc32,
-                        identity_crc32: identity.crc32(),
-                    });
-                }
-
                 let profile = self
                     .profiles
                     .iter()
