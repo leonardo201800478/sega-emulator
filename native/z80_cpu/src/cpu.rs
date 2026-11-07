@@ -3738,8 +3738,7 @@ mod architectural_state_tests {
         ] {
             let expected = [0x1234_u16, 0x2345, 0x3456, 0x4567][usize::from(pair)];
             let mut store_bus = TestBus([0; 0x10000]);
-            store_bus.0[0x0100..0x0104]
-                .copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
+            store_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
             let mut store_cpu = Z80::default();
             store_cpu.registers.pc = 0x0100;
             store_cpu.registers.f = 0xA5;
@@ -3756,8 +3755,7 @@ mod architectural_state_tests {
             assert_eq!(store_cpu.registers.f, 0xA5);
 
             let mut load_bus = TestBus([0; 0x10000]);
-            load_bus.0[0x0100..0x0104]
-                .copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
+            load_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
             load_bus.0[0xFFFF] = 0xCD;
             load_bus.0[0x0000] = 0xAB;
             let mut load_cpu = Z80::default();
@@ -3777,7 +3775,6 @@ mod architectural_state_tests {
             assert_eq!(load_cpu.registers.f, 0x5A);
         }
     }
-
 }
 
 #[cfg(test)]
