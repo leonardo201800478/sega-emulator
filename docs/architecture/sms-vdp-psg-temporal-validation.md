@@ -156,7 +156,7 @@ Fontes comparativas:
 | PSG-F05 | Volume | 0..15 em todos os canais | Escala de atenuação e silêncio no 15 | DOC + TEST |
 | PSG-F06 | Noise rate | 0x10, 0x20, 0x40 e tom 2 | Counter usa o período selecionado; canal 2 dirige a taxa quando 11 | DOC + TEST |
 | PSG-F07 | White noise SMS | Seed, taps 0/3, feedback em bit 15 | Sequência de 16 bits idêntica ao perfil SMS documentado | DOC + DIFF |
-| PSG-F08 | Periodic noise SMS | Feedback por bit 0 | Sequência periódica de 16 bits e reset ao escrever noise register | DOC + TEST |
+| PSG-F08 | Periodic noise SMS | Feedback por bit 0 | Sequência periódica de 16 bits; escrita no noise register reinicia o LFSR sem reiniciar o divisor/fase em andamento | DOC + DIFF + TEST |
 | PSG-F09 | Shift cadence | Duas expirações do contador de ruído | LFSR desloca na borda correta (uma vez a cada duas expirações) | DOC + TEST |
 | PSG-F10 | Divider | Avanços que terminam antes, exatamente em e depois de 16 clocks | Fase residual correta; nenhum drift por chunking | DOC + TEST |
 | PSG-F11 | Port mapping | Escritas em $40-$7F, inclusive $7E/$7F | Decode/mirror correto para SMS | DOC + TEST |
@@ -165,6 +165,7 @@ Fontes comparativas:
 | PSG-F14 | Sampling | 44.1/48/96 kHz e clocks NTSC/PAL | Sample count/phase exatos sem comandar o chip pelo host | MODEL + TEST |
 | PSG-F15 | Filter | FIR history/position e continuidade em blocos | Sem descontinuidade ao mudar o tamanho do bloco; filtro identificado como output stage, não circuito analógico físico | TEST |
 | PSG-F16 | Save state | Durante tom, ruído e fase intermediária do divisor | Restore reproduz exatamente a sequência digital e amostras futuras | TEST |
+| PSG-F17 | FIR espectral | NTSC/PAL em 22,05/44,1/48/96 kHz | Ganho DC unitário, simetria, ganho de banda passante ≥ 0,999 e rejeição ≥ 78 dB na varredura de 257 pontos da banda a partir de Nyquist da saída; filtro é estágio de conversão, não circuito analógico | MODEL + TEST |
 
 ## 5. PSG — integração temporal
 
@@ -174,12 +175,22 @@ Fontes comparativas:
 | PSG-T02 | Escrita PSG | Registrador atualizado no timestamp de conclusão da transação I/O |
 | PSG-T03 | Tone edge | Contadores e flip-flops avançam somente nos clocks internos devidos |
 | PSG-T04 | Noise edge | Counter, fase e LFSR seguem a sequência de bordas do chip |
-| PSG-T05 | Noise rate = tone 2 | O ruído usa a saída/cadência do canal 2, sem clock independente |
+| PSG-T05 | Noise rate = tone 2 | A taxa segue a cadência do canal 2; relação de fase e realização interna (contador equivalente ou clock derivado do flip-flop) precisam corresponder ao hardware |
 | PSG-T06 | Geração de amostras | Samples são derivados da timeline; o dispositivo host só consome blocos |
 | PSG-T07 | Overflow de fila | Política de host buffer não retroage nem altera o estado digital do PSG |
 | PSG-T08 | Determinismo | Diferentes tamanhos de avanço geram a mesma sequência de bits e samples |
 | PSG-T09 | Restore | Snapshot inclui fase do divisor, counters, outputs, LFSR, filtro e fase de sample |
 | PSG-T10 | CPU/VDP/PSG | Escritas de CPU, eventos VDP e PSG seguem ordem causal única |
+
+### 5.1 Nota de evidência — continuidade do divisor e rate = Tone2
+
+A documentação SMS Power afirma que a escrita no noise register reinicia o shift register, sem especificar reinício do contador/divisor. A implementação comparativa MAME atualiza o período de ruído e reinicia o RNG, mas não reinicia o contador de ruído. O RTL MiSTer do projeto ColecoVision mantém o contador de ruído em execução e seleciona o flip-flop do canal C quando o rate é Tone2; trata-se de um perfil TI/15-bit e serve apenas como exemplo de arquitetura alternativa, não como prova direta do Sega PSG de 16 bits. Essas referências sustentam separar o reset do LFSR da continuidade do divisor, mas não substituem medição de hardware SMS.
+
+Há duas realizações comparativas para o rate Tone2:
+- MAME: contador de ruído dedicado com período equivalente a duas vezes o período do canal Tone2.
+- RTL MiSTer/ColecoVision (perfil TI/15-bit): seleciona diretamente o flip-flop interno do canal C como fonte de clock do LFSR; referência arquitetural comparativa, não oráculo do perfil Sega/SMS de 16 bits.
+
+Ambas podem produzir a mesma frequência média, mas podem divergir na fase após writes e na relação de fase entre os contadores. A implementação atual mantém contador dedicado; o alinhamento de fase com Tone2 permanece PENDENTE até vetor independente ou medição física. Não declarar PSG-T05 fechado apenas pela igualdade da frequência média.
 
 ## 6. Clock profile — itens que precisam de reconciliação
 
