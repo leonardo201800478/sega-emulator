@@ -80,15 +80,21 @@ jobs:
               - '!native/sega_app/**'
               - '!native/audio_output/**'
             z80:
-              - 'native/z80_cpu/**/*.rs'
-              - 'native/z80_alu/**/*.rs'
-              - 'native/z80_bus/**/*.rs'
+              - 'native/z80_cpu/**'
+              - 'native/z80_alu/**'
+              - 'native/z80_bus/**'
+              - 'native/sms_core/**'
+              - 'native/sg1000_core/**'
             video:
+              - 'native/video_core/**'
               - 'native/video_runtime/**/*.rs'
               - 'native/video_runtime/Cargo.toml'
               - 'native/video_runtime/Cargo.lock'
               - 'native/video_runtime/build.rs'
             audio:
+              - 'native/sn76489/**'
+              - 'native/sg1000_core/src/audio.rs'
+              - 'rust/runtime/sms-runtime/src/audio.rs'
               - 'native/audio_output/**/*.rs'
               - 'native/audio_output/Cargo.toml'
               - 'native/audio_output/Cargo.lock'
@@ -106,16 +112,16 @@ jobs:
               - 'native/sega_app/Cargo.lock'
               - 'native/sega_app/build.rs'
             scheduler:
-              - 'native/machine_scheduler/**/*.rs'
-              - 'native/temporal_core/**/*.rs'
+              - 'native/machine_scheduler/**'
+              - 'native/temporal_core/**'
+              - 'native/sms_core/src/temporal*.rs'
+              - 'native/sg1000_core/src/temporal*.rs'
             tooling:
               - 'scripts/**/*.ps1'
             full:
               - '.github/workflows/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
-              - '**/Cargo.toml'
-              - '**/Cargo.lock'
               - 'rust-toolchain*'
               - '.cargo/**'
               - 'scripts/common.ps1'
@@ -159,7 +165,6 @@ jobs:
     if: |
       github.event_name != 'workflow_dispatch' &&
       needs.changes.outputs.z80 == 'true' &&
-      needs.changes.outputs.other_rust != 'true' &&
       needs.changes.outputs.full != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -332,7 +337,7 @@ jobs:
               $errors | ForEach-Object { Write-Error "$($file): $($_.Message)" }
               throw "PowerShell parse failed: $file"
             }
-            Write-Host "PASS $($file.FullName)"
+            Write-Host "PASS $file"
           }
 
   scheduler-stress:
