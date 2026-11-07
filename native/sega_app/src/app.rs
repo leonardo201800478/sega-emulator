@@ -358,12 +358,10 @@ impl SegaApp {
         // snapshot. On failure, however, the previous machine remains active:
         // restore its execution state instead of leaving it unexpectedly paused.
         if let Err(error) = persistence_result {
-            if was_running {
-                if let Err(resume_error) = worker.start() {
-                    return Err(format!(
-                        "{error}; também não foi possível restaurar a execução do SMS: {resume_error}"
-                    ));
-                }
+            if was_running && let Err(resume_error) = worker.start() {
+                return Err(format!(
+                    "{error}; também não foi possível restaurar a execução do SMS: {resume_error}"
+                ));
             }
             return Err(error);
         }
