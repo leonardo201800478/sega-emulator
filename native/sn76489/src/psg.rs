@@ -34,7 +34,9 @@ fn advance_output_phase(phase: u64, sample_rate: u64, clock_hz: u64) -> (u64, u6
 const TONE_CHANNELS: usize = 3;
 const NOISE_CHANNEL: usize = 3;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
-const FILTER_TAPS: usize = 63;
+const MIN_FILTER_TAPS: usize = 63;
+const KAISER_ATTENUATION_DB: f64 = 80.0;
+const KAISER_BETA: f64 = 7.857_26;
 const ATTENUATION: [f64; 16] = [
     1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
     0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
@@ -59,22 +61,62 @@ impl fmt::Display for PsgError {
 
 impl std::error::Error for PsgError {}
 
+/// Approximate the modified Bessel function I0 for the Kaiser window.
+fn bessel_i0(value: f64) -> f64 {
+    let quarter_square = value * value * 0.25;
+    let mut sum = 1.0;
+    let mut term = 1.0;
+    for order in 1..=32 {
+        term *= quarter_square / (order as f64 * order as f64);
+        sum += term;
+        if term <= sum * f64::EPSILON {
+            break;
+        }
+    }
+    sum
+}
+
+/// Design a normalized low-pass FIR for PSG clock-to-host-rate conversion.
+///
+/// For downsampling, the passband ends at 84% of the output Nyquist frequency
+/// and the stopband begins at output Nyquist. The Kaiser order is selected for
+/// approximately 80 dB stopband attenuation. This avoids asking a short windowed
+/// FIR to make an unrealistically sharp transition at the SMS 5:1 rate ratio.
 fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
     let internal_rate = clock_hz as f64 / CLOCK_DIVIDER as f64;
-    let cutoff = 0.45 * (sample_rate as f64 / internal_rate).min(1.0);
-    let center = (FILTER_TAPS - 1) as f64 / 2.0;
-    let mut coefficients = Vec::with_capacity(FILTER_TAPS);
-    for index in 0..FILTER_TAPS {
+    let rate_ratio = (sample_rate as f64 / internal_rate).min(1.0);
+
+    let (cutoff, taps) = if sample_rate as f64 < internal_rate {
+        let transition_width = 0.08 * rate_ratio;
+        let order = ((KAISER_ATTENUATION_DB - 8.0)
+            / (2.285 * 2.0 * PI * transition_width))
+            .ceil() as usize;
+        let mut taps = (order + 1).max(MIN_FILTER_TAPS);
+        if taps.is_multiple_of(2) {
+            taps += 1;
+        }
+        (0.46 * rate_ratio, taps)
+    } else {
+        (0.45, MIN_FILTER_TAPS)
+    };
+
+    let center = (taps - 1) as f64 / 2.0;
+    let window_denominator = bessel_i0(KAISER_BETA);
+    let mut coefficients = Vec::with_capacity(taps);
+    for index in 0..taps {
         let offset = index as f64 - center;
         let ideal = if offset == 0.0 {
             2.0 * cutoff
         } else {
             (2.0 * PI * cutoff * offset).sin() / (PI * offset)
         };
-        let position = index as f64 / (FILTER_TAPS - 1) as f64;
-        let window = 0.42 - 0.5 * (2.0 * PI * position).cos() + 0.08 * (4.0 * PI * position).cos();
+        let normalized_position = offset / center;
+        let window = bessel_i0(
+            KAISER_BETA * (1.0 - normalized_position * normalized_position).max(0.0).sqrt(),
+        ) / window_denominator;
         coefficients.push(ideal * window);
     }
+
     let total: f64 = coefficients.iter().sum();
     for coefficient in &mut coefficients {
         *coefficient /= total;
@@ -491,6 +533,49 @@ mod tests {
         0x0008, 0x0004, 0x0002, 0x4001, 0x6000, 0x3000, 0x1800, 0x0C00, 0x0600, 0x0300, 0x0180,
         0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001, 0x5000, 0x2800,
     ];
+
+    fn frequency_response(coefficients: &[f64], frequency: f64) -> f64 {
+        let (real, imaginary) = coefficients.iter().enumerate().fold(
+            (0.0, 0.0),
+            |(real, imaginary), (index, coefficient)| {
+                let phase = std::f64::consts::TAU * frequency * index as f64;
+                (real + coefficient * phase.cos(), imaginary - coefficient * phase.sin())
+            },
+        );
+        real.hypot(imaginary)
+    }
+
+    #[test]
+    fn psg_fir_preserves_audio_band_and_rejects_frequencies_above_output_nyquist() {
+        for output_rate in [22_050_u64, 44_100, 48_000] {
+            let coefficients = super::design_lowpass(3_579_545, output_rate);
+            let ratio = output_rate as f64 / (3_579_545.0 / 16.0);
+            let passband = frequency_response(&coefficients, 0.40 * ratio);
+            let stopband = frequency_response(&coefficients, 0.52 * ratio);
+
+            assert!(
+                passband > 0.98,
+                "passband gain too low at {output_rate} Hz: {passband:.6}"
+            );
+            assert!(
+                stopband < 0.000_2,
+                "stopband attenuation below target at {output_rate} Hz: {stopband:.8}"
+            );
+            assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
+            assert!(coefficients.len().is_multiple_of(2) == false);
+        }
+    }
+
+    #[test]
+    fn psg_fir_is_symmetric_and_has_unity_dc_gain() {
+        let coefficients = super::design_lowpass(3_579_545, 44_100);
+        let sum: f64 = coefficients.iter().sum();
+        assert!((sum - 1.0).abs() < 1.0e-12);
+        for index in 0..coefficients.len() / 2 {
+            let mirrored = coefficients.len() - 1 - index;
+            assert!((coefficients[index] - coefficients[mirrored]).abs() < 1.0e-12);
+        }
+    }
 
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
