@@ -56,7 +56,10 @@ impl Display for DatParseError {
         match self {
             Self::Xml(error) => write!(formatter, "invalid No-Intro XML: {error}"),
             Self::MissingAttribute { element, attribute } => {
-                write!(formatter, "DAT {element} is missing required attribute {attribute}")
+                write!(
+                    formatter,
+                    "DAT {element} is missing required attribute {attribute}"
+                )
             }
             Self::InvalidInteger { field, value } => {
                 write!(formatter, "invalid DAT integer {field}={value}")
@@ -92,12 +95,8 @@ impl NoIntroDat {
                     b"name" if in_header => header_field = Some("name"),
                     b"version" if in_header => header_field = Some("version"),
                     b"game" => {
-                        let game_name = required_attribute(
-                            &element,
-                            reader.decoder(),
-                            "game",
-                            "name",
-                        )?;
+                        let game_name =
+                            required_attribute(&element, reader.decoder(), "game", "name")?;
                         current_game = Some(DatGameEntry {
                             name: game_name,
                             roms: Vec::new(),
@@ -188,12 +187,10 @@ fn required_attribute(
     element_name: &'static str,
     attribute_name: &'static str,
 ) -> Result<String, DatParseError> {
-    optional_attribute(element, decoder, attribute_name)?.ok_or(
-        DatParseError::MissingAttribute {
-            element: element_name,
-            attribute: attribute_name,
-        },
-    )
+    optional_attribute(element, decoder, attribute_name)?.ok_or(DatParseError::MissingAttribute {
+        element: element_name,
+        attribute: attribute_name,
+    })
 }
 
 fn optional_attribute(
@@ -285,6 +282,9 @@ mod tests {
         let dat = NoIntroDat::sms_default().unwrap();
         assert_eq!(dat.version.as_deref(), Some(super::SMS_DAT_VERSION));
         assert!(dat.entries.len() > 500);
-        assert!(dat.find_sha1("fbda0486b393708a89756bb57d116ad6007484e4").is_some());
+        assert!(
+            dat.find_sha1("fbda0486b393708a89756bb57d116ad6007484e4")
+                .is_some()
+        );
     }
 }
