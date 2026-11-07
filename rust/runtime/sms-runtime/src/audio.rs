@@ -10,6 +10,9 @@ pub trait AudioSession {
     /// Process one machine-generated audio sample batch.
     fn process_samples(&mut self, samples: &[f64]) -> Result<(), String>;
 
+    /// Update output volume without replacing the native host session.
+    fn set_volume(&mut self, volume: u8) -> Result<(), String>;
+
     /// Return host underrun and dropped-block counters.
     fn metrics(&self) -> (u64, u64);
 
@@ -20,6 +23,10 @@ pub trait AudioSession {
 impl<S: PcmSink> AudioSession for NativeAudioSession<S> {
     fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
         NativeAudioSession::process_samples(self, samples)
+    }
+
+    fn set_volume(&mut self, volume: u8) -> Result<(), String> {
+        NativeAudioSession::set_volume(self, volume)
     }
 
     fn metrics(&self) -> (u64, u64) {

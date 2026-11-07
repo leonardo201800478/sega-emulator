@@ -67,6 +67,9 @@ mod windows {
     type UpdateGamepads = unsafe extern "C" fn();
     type Free = unsafe extern "C" fn(*mut c_void);
     type GetError = unsafe extern "C" fn() -> *const c_char;
+    type GetVersion = unsafe extern "C" fn() -> c_int;
+
+    const MINIMUM_SDL_VERSION: c_int = 3_004_020;
 
     struct SdlApi {
         handle: *mut c_void,
@@ -97,6 +100,7 @@ mod windows {
         update_gamepads: UpdateGamepads,
         free: Free,
         get_error: GetError,
+        get_version: GetVersion,
     }
 
     impl SdlApi {
@@ -169,6 +173,7 @@ mod windows {
                 update_gamepads: load!("SDL_UpdateGamepads", UpdateGamepads),
                 free: load!("SDL_free", Free),
                 get_error: load!("SDL_GetError", GetError),
+                get_version: load!("SDL_GetVersion", GetVersion),
             })
         }
 
@@ -262,6 +267,18 @@ mod windows {
                 backend: BackendKind::Sdl3,
                 message,
             })?;
+            let linked_version = unsafe { (api.get_version)() };
+            if linked_version < MINIMUM_SDL_VERSION {
+                let major = linked_version / 1_000_000;
+                let minor = (linked_version / 1_000) % 1_000;
+                let patch = linked_version % 1_000;
+                return Err(BackendError {
+                    backend: BackendKind::Sdl3,
+                    message: format!(
+                        "SDL3.dll 3.4.20 ou superior é obrigatório; encontrada {major}.{minor}.{patch}. Execute scripts/install_sdl3_runtime.ps1."
+                    ),
+                });
+            }
             let flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS;
             if !unsafe { (api.init_subsystem)(flags) } {
                 return Err(BackendError {

@@ -130,6 +130,7 @@ enum WorkerCommand {
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
+    SetAudioVolume(u8, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
     #[cfg(any(windows, test))]
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
@@ -255,6 +256,11 @@ impl SmsTemporalWorker {
         F: FnOnce() -> Result<Box<dyn AudioSession>, String> + Send + 'static,
     {
         self.request_unit(|reply| WorkerCommand::ConfigureAudio(Box::new(factory), reply))
+    }
+
+    /// Update the configured output volume without restarting the audio backend.
+    pub fn set_audio_volume(&self, volume: u8) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetAudioVolume(volume, reply))
     }
 
     pub fn close_audio_output(&self) -> Result<(), String> {
@@ -784,6 +790,13 @@ fn handle_command(
                 let _ = reply.send(Err(error));
             }
         },
+        WorkerCommand::SetAudioVolume(volume, reply) => {
+            let result = audio_session
+                .as_mut()
+                .ok_or_else(|| "native audio output is not configured".to_owned())
+                .and_then(|session| session.set_volume(volume));
+            let _ = reply.send(result);
+        }
         WorkerCommand::CloseAudio(reply) => {
             if let Some(mut session) = audio_session.take() {
                 session.close();
