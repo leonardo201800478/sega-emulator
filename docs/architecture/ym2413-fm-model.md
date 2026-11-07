@@ -507,7 +507,7 @@ Cada incremento de SL representa 3 dB. O KSR usa:
 
 `RATE = min(63, 4 * R + RKS)`
 
-O texto do manual confirma a relação RATE=4R+RKS e que RATE=0 não altera o envelope. A tabela de medições de andete detalha o escalonamento do RKS e as curvas de ataque/decay.
+O texto do manual confirma a relação RATE=4R+RKS e que RATE=0 não altera o envelope. A tabela de medições de andete detalha o escalonamento do RKS e as curvas de ataque/decay. Há listagens C++ nas notas de 2017 que exibem `max(63, 4*R + RKS)` e `max(127, env + step)`; essas expressões contradizem os limites superiores documentados/medidos e o próprio comportamento descrito. Tratá-las como provável erro tipográfico da listagem: a hipótese coerente é saturar superiormente com `min(63, ...)` e `min(127, ...)`, sujeita a vetores antes de codificar.
 
 ### 14.4 EG — temporização candidata e transições observadas
 
