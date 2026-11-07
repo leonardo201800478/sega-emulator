@@ -863,6 +863,7 @@ mod tests {
     use super::{
         DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
+        reset_sms_temporal_machine,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
