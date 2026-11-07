@@ -6,4 +6,7 @@
 mod app;
 
 #[cfg(windows)]
+mod directories;
+
+#[cfg(windows)]
 pub use app::SegaApp;
