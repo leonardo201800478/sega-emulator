@@ -742,8 +742,7 @@ fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> eg
     let mut viewport_rect = egui::Rect::NOTHING;
     ui.horizontal(|ui| {
         ui.add_space(horizontal_padding);
-        let (rect, _) =
-            ui.allocate_exact_size(viewport_size, egui::Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(viewport_size, egui::Sense::hover());
         viewport_rect = rect;
     });
     ui.painter()
