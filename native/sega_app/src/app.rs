@@ -1359,7 +1359,6 @@ impl Drop for SegaApp {
 
 #[cfg(test)]
 mod tests {
-    use super::SegaApp;
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
