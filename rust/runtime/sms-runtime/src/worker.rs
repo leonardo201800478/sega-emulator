@@ -212,11 +212,11 @@ impl SmsTemporalWorker {
                         return;
                     }
                 };
-                if let Some(contents) = initial_sram {
-                    if let Err(error) = machine.load_cartridge_sram(&contents) {
-                        let _ = ready_sender.send(Err(error.to_string()));
-                        return;
-                    }
+                if let Some(contents) = initial_sram
+                    && let Err(error) = machine.load_cartridge_sram(&contents)
+                {
+                    let _ = ready_sender.send(Err(error.to_string()));
+                    return;
                 }
                 let _ = ready_sender.send(Ok(()));
                 worker_loop(machine, rom, worker_region, receiver, worker_telemetry);
