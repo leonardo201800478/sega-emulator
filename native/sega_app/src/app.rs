@@ -1455,4 +1455,3 @@ impl Drop for SegaApp {
         }
     }
 }
-
