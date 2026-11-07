@@ -1,50 +1,135 @@
 # Roadmap mestre — Sega Emulator
 
-**Status:** única rota normativa de implementação.
-**Regra de atualização:** este documento define a sequência normativa, não uma fotografia de branches/PRs. Antes de cada tarefa, auditar o SHA corrente da `main`, código, PRs e workflows.
-**Prioridade imediata:** migração integral para Rust/egui e SMS temporal como único runtime inicial.
-**Política de arquitetura:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).
-**Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
+**Status:** rota normativa de implementação.  
+**Baseline documental:** main `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
+**Regra:** o roadmap define sequência e gates; o [status datado](project-status-2026-11-07.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
 
-## Diretriz vigente — 2026-11-06
+**Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).  
+**Política de fidelidade:** [ADR-0016 — fidelidade observável e temporização proporcional](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
-A decisão arquitetural é definitiva: o produto não manterá Python, Qt/PySide6, PyO3 ou Maturin. A aplicação será nativa Rust com egui/eframe. Nesta etapa, a UI terá somente menus operacionais; biblioteca visual, frontend rico e serviços não essenciais ficam fora do escopo.
+## 1. Diretriz vigente
 
-O único runtime ativo inicial será o Master System temporal, usando o Z80 compartilhado, PSG temporal, VDP temporal e MachineScheduler. O SMS atômico antigo e o SG-1000 atômico serão desconectados do workspace/runtime e arquivados temporariamente como referência Rust. O SG-1000 legado será eliminado depois que o SMS estiver executável; uma implementação SG-1000 nova será iniciada posteriormente sobre o Z80 compartilhado. Nenhum código Python será preservado, inclusive em diretórios legacy.
+O produto é integralmente Rust, com interface desktop egui/eframe. Python, PySide6/Qt, PyO3 e Maturin não fazem parte do produto nem podem ser reintroduzidos no runtime, testes, tooling, scripts, CI ou distribuição.
 
-A migração de aplicação deixa de ser paralela aos gates do SMS: ela é a prioridade atual. O frontend Qt/Python e seus serviços foram removidos na branch de migração, sem port de funcionalidades de biblioteca visual/scraper. Preservar somente contratos funcionais necessários ao produto mínimo e reimplementá-los/testá-los em Rust.
+O primeiro runtime executável é o Master System temporal, composto pelo Z80 compartilhado, barramento/memória/mapper, PSG, VDP e MachineScheduler. O Scheduler é a autoridade única da ordem temporal. A GUI não executa hardware, avança clocks ou realiza callbacks por instrução.
 
-## Sequência normativa
+O shell egui está integrado à main. A integração vertical do shell com ROM/runtime SMS, viewport D3D12, áudio e input está em PRs abertas (#613 e #614), empilhadas; não considerar essas funcionalidades integradas até os merges e validações correspondentes.
 
-1. Inventariar dependências, manifests, workflows e módulos temporais versus atômicos; baseline concluído.
-2. Extrair o worker SMS para Rust puro. O crate `rust/runtime/sms-runtime` já existe na branch de migração; validação CI pendente.
-3. Remover Python/Qt/PyO3 e tooling legado sem portá-los. A remoção foi executada na branch de migração; não substitui validação funcional.
-4. Isolar o SMS atômico antigo e remover duplicidade de CPU/PSG/VDP do caminho ativo.
-5. Integrar o runtime SMS temporal ao binário egui/eframe com menus mínimos, D3D12, áudio e input nativos.
-6. Retirar o SG-1000 atômico do workspace; eliminá-lo após SMS executável. Criar SG-1000 novo somente em etapa posterior.
-7. Validar o produto exclusivamente com Cargo, testes Rust e gates físicos Windows aplicáveis.
+## 2. Sequência normativa
 
-A implementação deve ocorrer em PRs pequenas, compiláveis e com CI verde no HEAD exato. Não fazer merge com jobs obrigatórios SKIPPED, FAIL, BLOCKED ou NOT RUN.
+1. **P0 — Infraestrutura e hosts:** workspaces, toolchain, CI, boundaries e hosts nativos.
+2. **P1 — Master System:** runtime temporal único, ROM, lifecycle, vídeo, áudio, input e validação funcional/temporal proporcional.
+3. **P2 — SG-1000:** nova integração sobre componentes compartilhados, preservando regressões e sem duplicar CPU/chips.
+4. **P3 — Game Gear.**
+5. **P4 — Mega Drive/Genesis.**
+6. **P5 — Sega CD.**
+7. **P6 — 32X / Sega CD 32X.**
+8. **P7 — Frontend egui/eframe completo:** biblioteca, preferências e fluxos de aplicação além do shell mínimo, sem lógica de hardware.
+9. **P8 — Compatibilidade e auditoria.**
+10. **P9 — Comprovação temporal sistêmica dos caminhos observáveis.**
 
-## Gates do SMS executável
+Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriores. A integração mínima do shell egui necessária para executar o SMS pertence ao P1; o frontend completo permanece P7.
 
-- Carregamento de ROM sintética/homebrew.
+## 3. Estado da prioridade imediata — P1 / SMS
+
+### 3.1 Integrado na main
+
+- Produto e shell nativos Rust/egui.
+- Worker/runtime SMS temporal em Rust.
+- Componentes compartilhados sem runtime atômico SMS como fallback.
+- CI Rust-first e contratos de validação.
+- Melhoria de fidelidade do SN76489 integrada pela PR #615.
+- Esclarecimento da arquitetura Rust-only integrado pela PR #617.
+- MachineScheduler com testes de determinismo, codec e restauração; campanha longa documentada em [evidência de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md).
+
+### 3.2 Em PRs abertas — não integradas
+
+- **PR #613:** integração do runtime SMS temporal, carregamento de ROM e viewport D3D12 no shell.
+- **PR #614:** integração de áudio WASAPI/XAudio2 e controles de teclado/SDL3; branch empilhada sobre #613.
+- **PR #616:** reconciliação documental da auditoria de boot/cartuchos.
+
+Os estados de CI e validação física devem ser reconsultados no HEAD exato antes de qualquer merge.
+
+### 3.3 Gates de aceitação SMS
+
+- ROM sintética/homebrew carregada sem depender de ROM comercial versionada.
 - Z80 compartilhado como única CPU.
-- Scheduler único coordenando CPU, PSG e VDP.
-- Framebuffer real apresentado pelo host D3D12.
-- PCM não silencioso entregue a WASAPI/XAudio2.
-- Input nativo e comandos coarse-grained.
+- Um único MachineScheduler coordenando os componentes temporais.
+- Framebuffer real apresentado pelo host gráfico.
+- PCM não silencioso entregue ao backend nativo e validado em endpoint físico.
+- Input nativo validado com teclado e gamepad.
 - Start/pause/resume/stop/reset/close sem threads órfãs.
-- Execução contínua versus em blocos e snapshot/restore determinísticos.
-- Validação física Windows separada de testes headless.
+- Execução contínua versus em blocos com equivalência demonstrada.
+- Snapshot/restore determinístico dos estados que integram a máquina.
+- Regressões e gates Rust/Windows no mesmo SHA final.
 
-O fechamento semântico global do Z80 continua obrigatório conforme o scorecard e a matriz semântica. Não promover E8 antes do fechamento de E7.
+A campanha de stress do Scheduler é uma evidência de robustez do Scheduler isolado; não substitui os gates de integração acima.
 
-## Regras de arquitetura
+## 4. Z80 — sequência obrigatória
 
-- Hardware, Scheduler, áudio, vídeo, input, mídia e aplicação em Rust.
-- egui/eframe somente apresentação e menus; sem lógica de hardware ou clocks.
-- Nenhum binding Python/PyO3 ou fallback para cores antigos.
-- Nenhuma duplicidade de CPU, PSG, VDP, worker ou Scheduler.
-- Cores antigos em legacy não são membros Cargo, não são executáveis e não são usados em testes ativos.
+- E4C: INC/DEC indexado.
+- E5: DDCB/FDCB.
+- E6: resolução de prefixos.
+- E7: fechamento semântico e auditoria de lacunas.
+- E8: validação externa/formal, incluindo ZEXDOC/ZEXALL após harness Rust completo.
+- E9: integração temporal dos caminhos de gameplay que exigirem granularidade.
+
+O [scorecard](z80-completion-scorecard.md) e a [matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md) são documentos obrigatórios antes de qualquer tarefa Z80. Não iniciar E8 antes de E7 fechado. A situação registrada em 2026-11-07 mantém E7.7 IN_PROGRESS e E8 BLOCKED.
+
+## 5. Contratos arquiteturais
+
+- Backend e lógica de hardware em Rust.
+- egui/eframe exclusivamente para UI, menus, estado de apresentação e comandos de alto nível.
+- Integração coarse-grained: `load_rom`, `start`, `pause`, `stop`, `reset`, `step_frame`.
+- Scheduler único, causal e determinístico.
+- WAIT e suspensão/retomada somente onde o modelo e o caminho observável exigirem.
+- Sem duplicação de CPU, PSG, VDP, worker ou Scheduler.
+- Sem JIT, frame skipping, hacks temporais ou otimizações especulativas.
+- Precisão proporcional a interações observáveis, conforme ADR-0016; não exigir microsequenciamento universal sem consumidor demonstrado.
+
+## 6. Método de entrega
+
+1. Auditar SHA da main, PRs e workflows.
+2. Pesquisar evidência independente e documentação primária.
+3. Definir critérios de aceitação mensuráveis.
+4. Modelar estados, transições, eventos e ciclos necessários.
+5. Implementar incrementos pequenos e compiláveis.
+6. Executar testes direcionados.
+7. Executar regressão e gates aplicáveis.
+8. Auditar diff e riscos.
+9. Atualizar documentação e ledger de evidências.
+10. Publicar por branch e PR.
+
+Para hardware complexo, confrontar três frentes: engenharia reversa, documentação primária e arquitetura/modelagem.
+
+## 7. Gates obrigatórios
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+Executar também os workspaces standalone e os gates Windows/D3D12/WASAPI/XAudio2 enquanto existirem. Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED, ausência de job e resultado de SHA anterior não são PASS.
+
+Toda validação deve indicar SHA, ambiente, comando, escopo e limitações. Testes físicos não executados permanecem NOT RUN.
+
+## 8. GitHub e integração
+
+- GitHub é a fonte da verdade.
+- Toda alteração em branch e Pull Request.
+- Proibido commit direto na main, force-push e reset destrutivo.
+- Merge somente com CI 100% verde no HEAD final e autorização explícita do mantenedor.
+- Não inferir integração a partir de PR aberta, branch, build local ou documentação.
 - Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
+
+## 9. Documentos operacionais
+
+- [Mapa de documentação](README.md)
+- [Status atual](project-status-2026-11-07.md)
+- [Status por componente](component-status.md)
+- [Política de CI](ci-validation-policy.md)
+- [Política de desenvolvimento e validação](development-and-validation-policy.md)
+- [Scorecard Z80](z80-completion-scorecard.md)
+- [Matriz DD/FD](z80-dd-fd-semantic-matrix.md)
+- [Ledger de evidências](evidence/README.md)

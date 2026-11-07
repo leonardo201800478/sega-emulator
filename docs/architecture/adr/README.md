@@ -6,7 +6,7 @@ Este índice lista decisões vigentes e registros históricos. ADR aceita não s
 |---|---|---|
 | [ADR-0001 — motor Z80 compartilhado](0001-shared-z80-engine.md) | Um único núcleo Z80 reutilizável, com adaptação por plataforma. | Referência arquitetural; validar no código |
 | [ADR-0002 — scheduler temporal](0002-machine-temporal-scheduler.md) | Coordenação de eventos e clocks por máquina composta. | Aplicar na granularidade necessária |
-| [ADR-0003 — fronteiras host/Rust](0003-host-runtime-boundaries.md) | Runtime de hardware em Rust; Python/Qt como host de aplicação. | Diretriz vigente |
+| [ADR-0003 — fronteiras host/Rust](0003-host-runtime-boundaries.md) | Runtime de hardware em Rust; Python/Qt como host de aplicação. | Histórica; supersedida pela ADR 0010 |
 | [ADR-0011 — modelo cycle-accurate](0011-cycle-accurate-temporal-model.md) | Decisão histórica de precisão cycle-accurate universal. | Supersedida pela ADR-0016 |
 | [ADR-0012 — dimensões de ordenação temporal](0012-event-ordering-dimensions.md) | Ordenação determinística de eventos. | Usar quando necessária ao Scheduler |
 | [ADR-0013 — snapshot/restore determinístico](0013-deterministic-scheduler-snapshot-restore.md) | Snapshot, restauração e replay determinísticos. | Aplicar ao estado ativo da máquina |
