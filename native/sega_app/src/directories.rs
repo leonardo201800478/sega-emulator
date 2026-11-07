@@ -26,6 +26,7 @@ pub enum DirectoryKind {
     SharedShaders,
     ShaderPresets,
     ShaderTextures,
+    ShaderCache,
 }
 
 impl DirectoryKind {
@@ -44,6 +45,7 @@ impl DirectoryKind {
             Self::SharedShaders => "shaders_shared",
             Self::ShaderPresets => "shader_presets",
             Self::ShaderTextures => "shader_textures",
+            Self::ShaderCache => "shader_cache",
         }
     }
 
@@ -62,11 +64,12 @@ impl DirectoryKind {
             Self::SharedShaders => "Shaders compartilhados (Slang)",
             Self::ShaderPresets => "Presets de shaders",
             Self::ShaderTextures => "Texturas de shaders",
+            Self::ShaderCache => "Cache de shaders compilados",
         }
     }
 
     /// All supported categories in stable presentation order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Configuration,
         Self::Roms,
         Self::Bios,
@@ -79,14 +82,15 @@ impl DirectoryKind {
         Self::SharedShaders,
         Self::ShaderPresets,
         Self::ShaderTextures,
+        Self::ShaderCache,
     ];
 }
 
 /// Persistent directory choices and last-visited folder for each category.
 #[derive(Debug, Clone)]
 pub struct DirectoryPreferences {
-    paths: [PathBuf; 12],
-    last_opened: [Option<PathBuf>; 12],
+    paths: [PathBuf; 13],
+    last_opened: [Option<PathBuf>; 13],
     settings_file: PathBuf,
     bootstrap_file: PathBuf,
 }
@@ -270,6 +274,7 @@ fn index(kind: DirectoryKind) -> usize {
         DirectoryKind::SharedShaders => 9,
         DirectoryKind::ShaderPresets => 10,
         DirectoryKind::ShaderTextures => 11,
+        DirectoryKind::ShaderCache => 12,
     }
 }
 
@@ -296,7 +301,7 @@ fn documents_directory() -> Option<PathBuf> {
         .or_else(|| Some(profile.join("Documents")))
 }
 
-fn default_paths(root: &Path) -> [PathBuf; 12] {
+fn default_paths(root: &Path) -> [PathBuf; 13] {
     [
         root.join("config"),
         root.join("roms"),
@@ -310,6 +315,7 @@ fn default_paths(root: &Path) -> [PathBuf; 12] {
         root.join("shaders").join("shared"),
         root.join("shaders").join("presets"),
         root.join("shaders").join("textures"),
+        root.join("shaders").join("cache"),
     ]
 }
 
@@ -325,7 +331,7 @@ mod tests {
 
     #[test]
     fn categories_have_independent_indices_and_labels() {
-        assert_eq!(DirectoryKind::ALL.len(), 12);
+        assert_eq!(DirectoryKind::ALL.len(), 13);
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
@@ -344,6 +350,7 @@ mod tests {
         assert_eq!(paths[9], PathBuf::from("root/shaders/shared"));
         assert_eq!(paths[10], PathBuf::from("root/shaders/presets"));
         assert_eq!(paths[11], PathBuf::from("root/shaders/textures"));
+        assert_eq!(paths[12], PathBuf::from("root/shaders/cache"));
     }
 
     #[test]
