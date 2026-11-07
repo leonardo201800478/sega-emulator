@@ -307,15 +307,19 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
-          if ($env:EVENT_NAME -eq "pull_request") {
-            $range = "$($env:BASE_SHA)...$($env:HEAD_SHA)"
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $files = @(Get-ChildItem -Path scripts -Filter *.ps1 -Recurse | ForEach-Object FullName)
           } else {
-            $range = "$($env:BASE_SHA)..$($env:HEAD_SHA)"
+            if ($env:EVENT_NAME -eq "pull_request") {
+              $range = "$($env:BASE_SHA)...$($env:HEAD_SHA)"
+            } else {
+              $range = "$($env:BASE_SHA)..$($env:HEAD_SHA)"
+            }
+            $paths = git diff --name-only $range -- scripts
+            if ($LASTEXITCODE -ne 0) { throw "Could not discover changed PowerShell scripts" }
+            $files = @($paths | Where-Object { $_.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) })
+            if (-not $files) { Write-Host "No PowerShell scripts changed."; exit 0 }
           }
-          $paths = git diff --name-only $range -- scripts
-          if ($LASTEXITCODE -ne 0) { throw "Could not discover changed PowerShell scripts" }
-          $files = @($paths | Where-Object { $_.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) })
-          if (-not $files) { Write-Host "No PowerShell scripts changed."; exit 0 }
           foreach ($file in $files) {
             $tokens = $null
             $errors = $null
