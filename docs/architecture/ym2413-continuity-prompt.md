@@ -36,7 +36,7 @@ Se algum caminho não existir, procure o arquivo correto no repositório; não i
 ## Modelo físico obrigatório
 - Clock de entrada de referência: 3.579.545 Hz.
 - 18 slots sequenciais, quatro clocks por slot e 72 clocks por período de saída.
-- Um engine de operador reutilizado sequencialmente; não calcular os 18 operadores como engines físicos paralelos.
+- Um engine de operador reutilizado sequencialmente, com estágios PG/EG/OP defasados no pipeline entre slots; não calcular os 18 operadores como engines físicos paralelos.
 - 9 canais melódicos, 2 operadores por canal, 15 presets + patch de usuário.
 - Implementar PG, EG, Log-Sine/EXP, feedback, AM, PM e Rhythm Mode com aritmética e transições discretas verificadas.
 - Saídas MO/RO e resolução DAC devem ser representadas de acordo com o manual.
@@ -48,7 +48,9 @@ Se algum caminho não existir, procure o arquivo correto no repositório; não i
 - SMS exportação e Tec Toy: não presumir presença do chip; exigir evidência por modelo/revisão.
 - Separar capacidade física, estado interno de síntese e roteamento/mute.
 - Implementar $F0 (latch), $F1 (data) e $F2 (controle/detecção) no barramento no timestamp de conclusão da transação.
-- Preservar clocks e estados independentes de PSG e FM; misturar ambas as fontes no pipeline comum.
+- Preservar estados internos independentes de PSG e FM. No perfil em que ambos recebem 3.579.545 Hz com a mesma razão temporal, ambos consomem o mesmo ClockAdvance do domínio PSG existente (ID 1); não criar domínio FM adicional nem avançar o Scheduler duas vezes.
+- O mixer genérico aceita múltiplas fontes, mas a sessão atual processa uma fonte por chamada. Criar uma operação de sessão que misture blocos alinhados numa única chamada; nunca chamar process_samples separadamente para PSG e FM esperando soma.
+- Definir uma taxa comum de mistura e conversão determinística: PSG atual gera blocos na taxa configurada (44.100 Hz no caminho padrão), YM2413 gera uma amostra por 72 clocks (~49.716,04 Hz), e o PcmResampler atual assume entrada de 44.100 Hz. Preservar fase/latência dos conversores em Save State.
 - Não interromper a síntese interna só porque a saída está silenciada, a menos que o comportamento físico medido demonstre isso.
 
 ## Método obrigatório — três frentes
