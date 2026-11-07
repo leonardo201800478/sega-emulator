@@ -22,6 +22,10 @@ impl fmt::Display for SmsCoreError {
                 f,
                 "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
             ),
+            Self::InvalidCartridgeRamSize { size, expected } => write!(
+                f,
+                "cartridge SRAM size {size} bytes is invalid; expected 8 KiB or {expected} bytes"
+            ),
         }
     }
 }
