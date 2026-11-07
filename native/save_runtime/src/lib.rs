@@ -39,11 +39,17 @@ impl Display for SaveRamError {
         match self {
             Self::Io(error) => write!(formatter, "save RAM I/O failed: {error}"),
             Self::ProfileNotExecutable => {
-                write!(formatter, "cartridge profile is not verified for persistence")
+                write!(
+                    formatter,
+                    "cartridge profile is not verified for persistence"
+                )
             }
             Self::ProfileHasNoRam => write!(formatter, "cartridge profile has no RAM"),
             Self::NotPersistent => {
-                write!(formatter, "volatile cartridge RAM must not be written to an SRM file")
+                write!(
+                    formatter,
+                    "volatile cartridge RAM must not be written to an SRM file"
+                )
             }
             Self::InvalidMagic => write!(formatter, "save RAM file has an invalid signature"),
             Self::InvalidHeader => write!(formatter, "save RAM file has invalid header flags"),
@@ -52,13 +58,22 @@ impl Display for SaveRamError {
             }
             Self::InvalidRamKind(kind) => write!(formatter, "unknown save RAM kind {kind}"),
             Self::IdentityMismatch => {
-                write!(formatter, "save RAM file belongs to a different ROM identity")
+                write!(
+                    formatter,
+                    "save RAM file belongs to a different ROM identity"
+                )
             }
             Self::RamKindMismatch => {
-                write!(formatter, "save RAM technology differs from the cartridge profile")
+                write!(
+                    formatter,
+                    "save RAM technology differs from the cartridge profile"
+                )
             }
             Self::RamSizeMismatch { expected, actual } => {
-                write!(formatter, "save RAM size {actual} does not match expected {expected}")
+                write!(
+                    formatter,
+                    "save RAM size {actual} does not match expected {expected}"
+                )
             }
             Self::PayloadChecksumMismatch => {
                 write!(formatter, "save RAM payload checksum validation failed")
@@ -191,12 +206,11 @@ impl SaveRamStore {
             });
         }
 
-        let ram_capacity = u32::try_from(ram.capacity_bytes).map_err(|_| {
-            SaveRamError::RamSizeMismatch {
+        let ram_capacity =
+            u32::try_from(ram.capacity_bytes).map_err(|_| SaveRamError::RamSizeMismatch {
                 expected: u32::MAX as usize,
                 actual: ram.capacity_bytes,
-            }
-        })?;
+            })?;
         let rom_size = u64::try_from(identity.size_bytes())
             .map_err(|error| SaveRamError::Io(error.to_string()))?;
         let payload_identity = CartridgeIdentity::from_bytes(contents);
@@ -311,10 +325,8 @@ mod tests {
 
     fn temporary_directory() -> PathBuf {
         let sequence = TEST_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let directory = std::env::temp_dir().join(format!(
-            "sega-srm-test-{}-{sequence}",
-            std::process::id()
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("sega-srm-test-{}-{sequence}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
         directory
@@ -410,9 +422,7 @@ mod tests {
             Err(SaveRamError::Truncated)
         );
 
-        store
-            .save(&identity, &profile, &[0x55; 0x2000])
-            .unwrap();
+        store.save(&identity, &profile, &[0x55; 0x2000]).unwrap();
         let mut encoded = fs::read(&path).unwrap();
         *encoded.last_mut().unwrap() ^= 0xFF;
         fs::write(&path, encoded).unwrap();
