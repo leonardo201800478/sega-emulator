@@ -434,12 +434,42 @@ mod tests {
 
     #[test]
     fn system_scoped_paths_are_isolated_and_validated() {
-        let preferences = DirectoryPreferences { paths: default_paths(Path::new("root")), last_opened: std::array::from_fn(|_| None), settings_file: PathBuf::from("root/config/directories.ini"), bootstrap_file: PathBuf::from("bootstrap") };
-        assert_eq!(preferences.system_path(DirectoryKind::Roms, "master-system").unwrap(), PathBuf::from("root/roms/master-system"));
-        assert_eq!(preferences.system_path(DirectoryKind::Saves, "sg-1000").unwrap(), PathBuf::from("root/saves/sg-1000"));
-        assert_eq!(preferences.system_path(DirectoryKind::States, "game-gear").unwrap(), PathBuf::from("root/states/game-gear"));
-        assert_eq!(preferences.system_path(DirectoryKind::Configuration, "mega-drive").unwrap(), PathBuf::from("root/config/systems/mega-drive"));
-        assert_eq!(preferences.system_path(DirectoryKind::Controls, "master-system").unwrap(), PathBuf::from("root/controls/master-system"));
+        let preferences = DirectoryPreferences {
+            paths: default_paths(Path::new("root")),
+            last_opened: std::array::from_fn(|_| None),
+            settings_file: PathBuf::from("root/config/directories.ini"),
+            bootstrap_file: PathBuf::from("bootstrap"),
+        };
+        assert_eq!(
+            preferences
+                .system_path(DirectoryKind::Roms, "master-system")
+                .unwrap(),
+            PathBuf::from("root/roms/master-system")
+        );
+        assert_eq!(
+            preferences
+                .system_path(DirectoryKind::Saves, "sg-1000")
+                .unwrap(),
+            PathBuf::from("root/saves/sg-1000")
+        );
+        assert_eq!(
+            preferences
+                .system_path(DirectoryKind::States, "game-gear")
+                .unwrap(),
+            PathBuf::from("root/states/game-gear")
+        );
+        assert_eq!(
+            preferences
+                .system_path(DirectoryKind::Configuration, "mega-drive")
+                .unwrap(),
+            PathBuf::from("root/config/systems/mega-drive")
+        );
+        assert_eq!(
+            preferences
+                .system_path(DirectoryKind::Controls, "master-system")
+                .unwrap(),
+            PathBuf::from("root/controls/master-system")
+        );
         assert!(preferences.system_path(DirectoryKind::Bios, "master-system").is_err());
         assert!(preferences.system_path(DirectoryKind::Roms, "../outside").is_err());
     }
