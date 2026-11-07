@@ -1,3 +1,7 @@
+> **Aviso de obsolescência:** auditoria histórica da fase inicial Python/SG-1000, iniciada em 2026-10-22. As descrições de arquitetura, diretórios, ferramentas, testes e estado de implementação não representam o produto atual Rust-only. Não use este texto como baseline operacional. Consulte o [status atual](project-status-2026-11-07.md), o [roadmap mestre](project-roadmap.md) e o [status dos componentes](component-status.md). O relatório original foi preservado abaixo para rastreabilidade.
+
+---
+
 > **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
 
 # Auditoria geral do código

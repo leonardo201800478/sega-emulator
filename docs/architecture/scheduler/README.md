@@ -1,7 +1,7 @@
 # Master Clock Scheduler — documentação normativa
 
 **Política de fidelidade:** [ADR-0016 — fidelidade observável](../../architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
-**Implementação:** crates Rust em native/temporal_core e native/machine_scheduler.
+**Implementação:** crates Rust em `native/temporal_core` e `native/machine_scheduler`.
 
 O Scheduler coordena o tempo virtual e os eventos relevantes de uma instância de máquina. Não executa instruções, sintetiza áudio, renderiza pixels nem arbitra sinais elétricos por conta própria.
 
@@ -16,12 +16,19 @@ O Scheduler coordena o tempo virtual e os eventos relevantes de uma instância d
 7. [Requisitos de validação](validation-requirements.md) — testes e evidências.
 8. Exemplos de integração: [Z80/barramento](integration-examples/z80-bus.md), [VDP SMS](integration-examples/sms-vdp.md), [SN76489](integration-examples/sn76489.md).
 
+## Evidência executada
+
+- [Campanha longa de estresse — 2026-11-07](../../evidence/scheduler-stress-long-2026-11-07.md): 320.000 operações e 4.000.000 dispatches, 2 testes PASS. Os fontes relevantes foram comparados com a main.
+- [Ledger geral de evidências](../../evidence/README.md).
+
+A campanha comprova apenas os cenários do Scheduler executados; não comprova TEMPORAL_PASS da máquina SMS.
+
 ## Código-fonte
 
 | Responsabilidade | Local |
 |---|---|
-| Tempo, clocks e fila de eventos | native/temporal_core |
-| Scheduler da máquina | native/machine_scheduler |
+| Tempo, clocks e fila de eventos | `native/temporal_core` |
+| Scheduler da máquina | `native/machine_scheduler` |
 | Adaptadores e estado de plataforma | crates de cada console |
 
 **Regra de granularidade:** o Scheduler dá suporte à precisão temporal dos caminhos de gameplay que precisam de coordenação entre componentes. Ele não converte todo dispositivo em um componente temporal de granularidade fina. Operações sem interação intermediária observável podem permanecer atômicas e avançar em blocos, desde que preservem resultado, duração nominal e determinismo.
