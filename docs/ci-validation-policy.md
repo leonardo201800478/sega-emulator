@@ -16,8 +16,8 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 | SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation |
 | Native egui application and SMS worker integration | Windows-targeted format, Clippy, and headless tests for the application; changes to `rust/runtime/sms-runtime` also trigger this dependent application build |
 | PowerShell tooling | Parse only the changed `.ps1` scripts |
-| Markdown / MDX documentation | Prettier check only for changed Markdown/MDX files; no Rust build, Clippy, or tests |
-| Other text documentation | Patch whitespace check only; no Rust build, Clippy, or tests |
+| Documentation text (Markdown, MDX, RST, TXT) | `git diff --check` for whitespace and patch hygiene only; no Rust build, Clippy, or tests |
+
 
 ## Dependency fan-out
 
