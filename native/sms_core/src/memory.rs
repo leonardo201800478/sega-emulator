@@ -782,7 +782,11 @@ mod tests {
         let mut memory =
             SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         assert_eq!(memory.cartridge_sram().unwrap().len(), CARTRIDGE_SRAM_8K);
-        assert_eq!(memory.read(0x8000), 0);
+        assert_eq!(
+            memory.read(0x8000),
+            2,
+            "ROM remains visible until SRAM is enabled"
+        );
 
         memory.write(0xFFFC, 0x08);
         memory.write(0x8000, 0xA5);
@@ -859,12 +863,17 @@ mod tests {
             SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_32K))
                 .unwrap();
         thirty_two_k.write_control_port(0x18);
-        thirty_two_k.write(0xFFFC, 0x14);
+        thirty_two_k.write(0xFFFC, 0x1C);
         thirty_two_k.write(0xC000, 0x11);
         thirty_two_k.write(0x8000, 0x22);
         assert_eq!(thirty_two_k.read(0xC000), 0x11);
         assert_eq!(thirty_two_k.read(0x8000), 0x22);
-        thirty_two_k.write(0xFFFC, 0x10);
+        thirty_two_k.write(0xFFFC, 0x18);
+        assert_eq!(
+            thirty_two_k.read(0x8000),
+            0,
+            "bit 2 selects the lower slot-2 page"
+        );
         assert_eq!(thirty_two_k.read(0xC000), 0x11);
     }
 
@@ -942,11 +951,11 @@ mod tests {
     #[test]
     fn rejects_unsupported_cartridge_sram_capacity() {
         let error =
-            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(0x4000)).unwrap_err();
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(0x6000)).unwrap_err();
         assert_eq!(
             error,
             SmsCoreError::InvalidCartridgeRamSize {
-                size: 0x4000,
+                size: 0x6000,
                 expected: CARTRIDGE_SRAM_8K,
             }
         );
