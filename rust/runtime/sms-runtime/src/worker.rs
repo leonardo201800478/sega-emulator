@@ -153,6 +153,7 @@ enum WorkerCommand {
     Stop(SyncSender<Result<(), String>>),
     Reset(SyncSender<Result<(), String>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
+    ExportCartridgeSram(SyncSender<Option<Vec<u8>>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
@@ -289,6 +290,20 @@ impl SmsTemporalWorker {
 
     pub fn load_rom(&self, rom: Vec<u8>) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::LoadRom(rom, reply))
+    }
+
+    /// Copy the cartridge RAM at a worker safe point for host-side persistence.
+    ///
+    /// The host performs filesystem I/O after this coarse-grained command returns;
+    /// no disk operation is performed on the machine-owning thread.
+    pub fn export_cartridge_sram(&self) -> Result<Option<Vec<u8>>, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::ExportCartridgeSram(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not export cartridge SRAM: {error}"))
     }
 
     pub fn reset(&self) -> Result<(), String> {
@@ -824,6 +839,10 @@ fn handle_command(
                     let _ = reply.send(Err(error));
                 }
             }
+        }
+        WorkerCommand::ExportCartridgeSram(reply) => {
+            let contents = machine.memory().cartridge_sram().map(<[u8]>::to_vec);
+            let _ = reply.send(contents);
         }
         WorkerCommand::StepFrame(max_instructions, reply) => {
             if *running {
