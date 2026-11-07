@@ -2,7 +2,7 @@
 
 **Scope:** all project phases and platforms (P0–P9).
 
-The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository.
+The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository. The path classifier uses `predicate-quantifier: some-with-excludes` whenever a filter combines positive and negated patterns; without that mode, negated patterns can match unrelated files and cause false-positive jobs.
 
 ## Validation matrix
 
@@ -42,4 +42,4 @@ The standalone `native/audio_output` and `native/sega_app` workspaces retain the
 
 Every applicable suite is classified as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A skipped suite is never reported as a pass.
 
-The aggregate `Rust quality and unit regression` check must fail if any applicable validation fails, is cancelled, or times out. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
+The aggregate `Rust quality and unit regression` check explicitly verifies expected applicability: required jobs must conclude `success`, while non-applicable jobs must conclude `skipped`. Unexpected executions and missing required executions both fail the aggregate gate. Manual dispatch runs the classifier job successfully with the path-filter step omitted, so dependent manual jobs are not blocked by a skipped prerequisite. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
