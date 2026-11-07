@@ -1,8 +1,8 @@
 # E7.7 — ED 71 / OUT (C),0: perfil de hardware Master System
 
-**Data:** 2026-11-07  
-**Baseline auditada:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0`  
-**Escopo:** determinar a semântica de `ED 71` para as variantes de CPU documentadas em placas Sega Master System e verificar o runtime compartilhado.  
+**Data:** 2026-11-07
+**Baseline auditada:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0`
+**Escopo:** determinar a semântica de `ED 71` para as variantes de CPU documentadas em placas Sega Master System e verificar o runtime compartilhado.
 **Decisão:** manter a saída `0x00` no perfil SMS NMOS documentado; não introduzir configuração CMOS/clones sem hardware suportado que exija essa variante.
 
 ## 1. Conclusão executiva
@@ -141,4 +141,4 @@ ED 71 é uma transação de I/O observável. O requisito atual é o valor corret
 - Manter E8 como **BLOCKED** até o fechamento formal de E7.
 - Não executar ZEXDOC/ZEXALL nesta etapa.
 
-**Resultado desta auditoria:** evidência suficiente para a escolha ED 71 = 0 no perfil de placas SMS documentadas; nenhuma alteração de runtime justificada.  
+**Resultado desta auditoria:** evidência suficiente para a escolha ED 71 = 0 no perfil de placas SMS documentadas; nenhuma alteração de runtime justificada.
