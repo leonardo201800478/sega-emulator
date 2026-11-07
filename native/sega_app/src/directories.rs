@@ -195,7 +195,7 @@ impl DirectoryPreferences {
         fs::create_dir_all(&configuration_directory)?;
         let settings_file = configuration_directory.join(SETTINGS_FILE);
         let temporary_file = settings_file.with_extension("ini.tmp");
-        let mut contents = String::from("version=1\n");
+        let mut contents = String::from("version=2\n");
         for kind in DirectoryKind::ALL {
             let slot = index(kind);
             contents.push_str(kind.key());
