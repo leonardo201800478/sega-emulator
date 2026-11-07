@@ -22,9 +22,10 @@
 - A página Mappers é a especificação de referência para a função dos bits.
 - SMS Plus GX é uma implementação comparativa; não é substituto de documentação elétrica.
 - O MAME classifica a presença de bateria quando `feature battery=yes`, mas nem sempre informa capacidade SRAM.
-- O DAT No-Intro do Master System não foi encontrado no branch `main` do projeto. As pesquisas do repositório localizaram DATs de 32X e SG-1000, mas não o DAT SMS. Não é possível declarar confronto com um DAT SMS atual do projeto.
+- O DAT No-Intro do Master System não foi encontrado no branch `main` do projeto. As pesquisas do repositório localizaram DATs de 32X e SG-1000, mas não o DAT SMS.
+- Foi feito confronto independente com o espelho público do DAT No-Intro em `libretro/libretro-database`, arquivo `metadat/no-intro/Sega - Master System - Mark III.dat`, versão `2026.10.07`, blob SHA `7b4e4ac75edb2ba33900d78b19f87602785bb47d`. Os SHA-1/CRC32/tamanhos das variantes comerciais base dos oito títulos coincidem com os registros MAME correspondentes. Isso é uma validação cruzada externa, não substitui a inclusão/versão do DAT no projeto.
 - Os arquivos técnicos locais enviados nesta conversa não contêm uma especificação de mapper/cartucho SMS; os documentos Z80 são manuais de CPU.
-- SHA-256 não é fornecido pelo MAME `sms.xml`; deverá ser calculado sobre cada dump local exato. Não preencher hashes ausentes com valores inferidos.
+- SHA-256 não é fornecido pelo MAME nem pelo DAT No-Intro consultado; deverá ser calculado sobre cada dump local exato quando carregado. Não preencher hashes ausentes com valores inferidos.
 
 ## 2. Matriz de conformidade do Sega mapper
 
@@ -91,6 +92,23 @@ O MAME atual lista os seguintes registros com `battery=yes`. Os hashes abaixo s�
 **Importante:** `battery=yes` prova que o registro MAME está classificado como cartucho com bateria; não prova, isoladamente, que todos os registros usem exatamente 8 KiB. A capacidade de 8 KiB está documentada no material histórico do projeto como configuração usual, e Phantasy Star v3 identifica explicitamente uma SRAM MB8464A de 8K×8. Para os demais registros, exigir confirmação da placa/IC ou de outra fonte independente antes de fixar a capacidade por variante.
 
 **Variantes não incluídas automaticamente:** demos/protótipos sem `battery=yes`, como Ys USA demo, permanecem fora do perfil persistente. Não herdar o perfil do título comercial por semelhança de nome.
+
+### Confronto No-Intro ↔ MAME para as oito famílias comerciais
+
+A tabela No-Intro `2026.10.07` e MAME `hash/sms.xml` apresentam SHA-1, CRC32 e tamanho coincidentes para as variantes comerciais de referência. Os nomes variam em normalização de região/revisão, mas os fingerprints coincidem.
+
+| Família | Variante No-Intro | Fingerprint | Resultado |
+|---|---|---|---|
+| Golden Axe Warrior | USA, Europe, Brazil (En) | 256 KiB; CRC `C7DED988`; SHA-1 `FBDA0486B393708A89756BB57D116AD6007484E4` | MATCH |
+| Golfamania | Europe, Brazil (En) | 256 KiB; CRC `48651325`; SHA-1 `D0B964DD7CD8CCDD730DE4D8E4BB2E87BEA7686E` | MATCH |
+| Miracle Warriors | USA, Europe, Brazil (En) | 256 KiB; CRC `0E333B6E`; SHA-1 `F952406BCA4918EE91A89B27E949E224EAE96D85` | MATCH |
+| Monopoly | USA, Europe; USA, Europe (Rev A) | 128 KiB; CRCs `69538469` / `026D94A4`; SHA-1s `8DD7BB4F666F70F7F57687823D0068C9100AF8E5` / `6BAD7176011DD4BBD007498D167399DAACDE173D` | MATCH |
+| Penguin Land | Doki Doki Penguin Land (Japan); Penguin Land (USA, Europe) | 128 KiB; CRCs `2BCDB8FA` / `F97E9875`; SHA-1s `C01CF44EEE335D509DC20A165ADD8514E7FBB7C4` / `8762239C339A084DFB8443CC38515301476BDE28` | MATCH |
+| Phantasy Star | Brazil, Japan, Japan Rev 1, Korea, USA/Europe, USA/Europe Rev A | 512 KiB; CRC/SHA-1 coincidem para cada variante | MATCH |
+| Ultima IV | Europe, Brazil (En) | 512 KiB; CRC `B52D60C8`; SHA-1 `A90E21E5961BCF2E10B715A009C04E7C2017A3B1` | MATCH |
+| Ys | Japan; The Vanished Omens (USA, Europe, Brazil) | 256 KiB; CRCs `32759751` / `B33E2827`; SHA-1s `614B589080B732E17CC0D253E17216A72A268955` / `E73E836C353543E9F48315410B0D72278899FF59` | MATCH |
+
+Os protótipos presentes no MAME para Golfamania, Miracle Warriors, Monopoly, Doki Doki Penguin Land e Ultima IV não aparecem no DAT No-Intro consultado e permanecem variantes separadas; não herdar os perfis comerciais sem fingerprint próprio. O demo de Ys não está marcado `battery=yes` no MAME e não está no conjunto de perfis persistentes.
 
 ## 4. Flight of Pigarus — perfil isolado e BLOCKED
 
