@@ -577,7 +577,11 @@ mod tests {
                 );
                 assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
                 assert!(!coefficients.len().is_multiple_of(2));
-                assert!(coefficients.iter().all(|coefficient| coefficient.is_finite()));
+                assert!(
+                    coefficients
+                        .iter()
+                        .all(|coefficient| coefficient.is_finite())
+                );
 
                 let sum: f64 = coefficients.iter().sum();
                 assert!(
@@ -673,8 +677,7 @@ mod tests {
 
     #[test]
     fn noise_register_write_resets_lfsr_without_restarting_noise_divider() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.noise_counter = 7;
         device.noise_counter_phase = 1;
         device.lfsr = 0x1234;
