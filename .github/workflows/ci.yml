@@ -120,29 +120,6 @@ jobs:
               - '.cargo/**'
               - 'scripts/common.ps1'
 
-  rust-format:
-    name: Rust formatting
-    needs: [changes]
-    if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.rust == 'true' || needs.changes.outputs.full == 'true'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt && rustup default 1.99.1
-      - name: Format root Rust workspace
-        run: cargo fmt --all -- --check
-      - name: Format native egui application
-        if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true'
-        run: cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
-      - name: Format standalone native audio output
-        if: needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true'
-        run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
-
   rust-workspace:
     name: Rust workspace regression
     needs: [changes]
@@ -169,6 +146,8 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
+      - name: Format root Rust workspace
+        run: cargo fmt --all -- --check
       - name: Clippy workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
@@ -191,7 +170,9 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Clippy Z80 and SMS integration packages
+      - name: Format root Rust workspace
+        run: cargo fmt --all -- --check
+      - name: Clippy Z80 and console integration packages
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80 and SMS integration packages
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
@@ -423,7 +404,6 @@ jobs:
     name: Rust quality and unit regression
     needs:
       - changes
-      - rust-format
       - rust-workspace
       - z80-focused
       - docs-format
@@ -440,7 +420,6 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          RUST_FORMAT: ${{ needs.rust-format.result }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           Z80: ${{ needs.z80-focused.result }}
           DOCS: ${{ needs.docs-format.result }}
@@ -451,7 +430,7 @@ jobs:
           SCHEDULER: ${{ needs.scheduler-stress.result }}
         run: |
           set -euo pipefail
-          for result in "$CHANGES" "$RUST_FORMAT" "$RUST_WORKSPACE" "$Z80" "$DOCS" \
+          for result in "$CHANGES" "$RUST_WORKSPACE" "$Z80" "$DOCS" \
                         "$WINDOWS_D3D12" "$WINDOWS_AUDIO" "$WINDOWS_INPUT" \
                         "$WINDOWS_TOOLING" "$SCHEDULER"; do
             case "$result" in
