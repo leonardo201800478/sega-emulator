@@ -153,8 +153,8 @@ impl SmsMemory {
         } else {
             CARTRIDGE_BOOT_CONTROL
         };
-        let has_cartridge_sram = rom.len() >= 0x1_0000
-            && matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended);
+        let has_cartridge_sram =
+            rom.len() >= 0x1_0000 && matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended);
         Ok(Self {
             rom,
             mapper,
@@ -367,8 +367,8 @@ impl SmsMemory {
 #[cfg(test)]
 mod tests {
     use super::{
-        BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE,
-        MapperKind, RAM_SIZE, CARTRIDGE_SRAM_SIZE, SmsMemory,
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_SIZE, MAX_EXTENDED_BANKS,
+        MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
 
@@ -708,7 +708,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn sega_mapper_maps_and_mirrors_eight_kib_cartridge_sram() {
         let mut memory = SmsMemory::new(patterned_rom(4)).unwrap();
@@ -725,7 +724,11 @@ mod tests {
         assert_eq!(memory.read(0xC000), 0x00, "system RAM remains independent");
 
         memory.write(0xFFFC, 0x00);
-        assert_eq!(memory.read(0x8000), 2, "ROM bank is visible when SRAM is disabled");
+        assert_eq!(
+            memory.read(0x8000),
+            2,
+            "ROM bank is visible when SRAM is disabled"
+        );
     }
 
     #[test]
@@ -738,7 +741,9 @@ mod tests {
         assert_eq!(cloned.cartridge_sram().unwrap()[0x123], 0xC7);
 
         let mut reloaded = SmsMemory::new(patterned_rom(4)).unwrap();
-        reloaded.load_cartridge_sram(memory.cartridge_sram().unwrap()).unwrap();
+        reloaded
+            .load_cartridge_sram(memory.cartridge_sram().unwrap())
+            .unwrap();
         reloaded.write(0xFFFC, 0x08);
         assert_eq!(reloaded.read(0x8123), 0xC7);
     }
