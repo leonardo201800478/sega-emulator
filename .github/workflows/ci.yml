@@ -527,7 +527,7 @@ jobs:
           VDP: ${{ needs.vdp-focused.result }}
           EXPECT_INPUT: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true' && needs.changes.outputs.full != 'true' }}
           INPUT: ${{ needs.input-focused.result }}
-      EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
+          EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
