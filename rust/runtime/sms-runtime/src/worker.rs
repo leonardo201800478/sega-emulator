@@ -175,21 +175,44 @@ pub struct SmsTemporalWorker {
 impl SmsTemporalWorker {
     /// Start the native worker and wait until the first machine is constructed.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
-        Self::new_with_cartridge_sram_profile(rom, region, None, None)
+        Self::new_with_cartridge_hardware_profile(rom, region, None, None)
     }
 
-    /// Start the worker with an explicit cartridge SRAM profile and optional
-    /// save bytes. The capacity must come from the cartridge hardware profile;
-    /// save length is validated but never used to infer hardware.
-    pub fn new_with_cartridge_sram_profile(
+    /// Start with an explicit SMS hardware profile and optional persistent RAM bytes.
+    ///
+    /// The profile selects the RAM capacity and mapper. Save bytes are accepted
+    /// only for a verified persistent-memory profile and are restored before the
+    /// worker signals readiness. Volatile RAM is always initialized without a save.
+    pub fn new_with_cartridge_hardware_profile(
         rom: Vec<u8>,
         region: &str,
-        cartridge_sram_size: Option<usize>,
+        profile: Option<CartridgeHardwareProfile>,
         initial_sram: Option<Vec<u8>>,
     ) -> Result<Self, String> {
-        if initial_sram.is_some() && cartridge_sram_size.is_none() {
-            return Err("initial cartridge SRAM requires an explicit hardware capacity".to_owned());
-        }
+        let cartridge_sram_size = match profile.as_ref() {
+            Some(profile) => {
+                if profile.system != CartridgeSystem::MasterSystem {
+                    return Err("cartridge hardware profile is not for Master System".to_owned());
+                }
+                if !profile.is_runtime_usable() {
+                    return Err("cartridge hardware profile is not verified for execution".to_owned());
+                }
+                let ram = profile
+                    .ram
+                    .as_ref()
+                    .ok_or_else(|| "verified SMS profile has no cartridge RAM".to_owned())?;
+                if initial_sram.is_some() && !ram.is_persistent() {
+                    return Err("volatile cartridge RAM cannot be restored from a save file".to_owned());
+                }
+                Some(ram.capacity_bytes)
+            }
+            None => {
+                if initial_sram.is_some() {
+                    return Err("initial cartridge SRAM requires a verified hardware profile".to_owned());
+                }
+                None
+            }
+        };
 
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
