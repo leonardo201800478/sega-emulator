@@ -1359,9 +1359,18 @@ impl Drop for SegaApp {
 
 #[cfg(test)]
 mod tests {
+    use super::{LoadedCartridge, SaveRamStore, SegaApp, UiCommand};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
+    use sega_media::{
+        CartridgeHardwareProfile, CartridgeIdentity, CartridgeMapper, CartridgeRamKind,
+        CartridgeRamMapping, CartridgeRamProfile, CartridgeSystem, ProfileStatus,
+    };
+    use sega_sms_runtime::SmsTemporalWorker;
+    use std::fs;
     use std::io::{Cursor, Write};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn aspect_ratio_modes_preserve_requested_geometry() {
@@ -1484,15 +1493,6 @@ mod tests {
         assert!(error.contains("mais de um arquivo .sms"));
     }
 
-    use super::{LoadedCartridge, SaveRamStore, SegaApp, UiCommand};
-    use sega_media::{
-        CartridgeHardwareProfile, CartridgeIdentity, CartridgeMapper, CartridgeRamKind,
-        CartridgeRamMapping, CartridgeRamProfile, CartridgeSystem, ProfileStatus,
-    };
-    use sega_sms_runtime::SmsTemporalWorker;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
     static SRAM_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
