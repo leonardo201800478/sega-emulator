@@ -732,6 +732,22 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn disabled_cartridge_slot_rejects_sram_writes() {
+        let mut memory =
+            SmsMemory::with_bios(patterned_rom(4), Some(vec![0xA5; 0x2000])).unwrap();
+        memory.write_control_port(0xAB);
+        memory.write(0xFFFC, 0x08);
+        memory.write(0x8000, 0x11);
+        assert_eq!(memory.cartridge_sram().unwrap()[0], 0x11);
+
+        memory.write_control_port(0xEB);
+        memory.write(0x8000, 0x22);
+        assert_eq!(memory.cartridge_sram().unwrap()[0], 0x11);
+        assert_eq!(memory.read(0x8000), 0xFF);
+    }
+
     #[test]
     fn cartridge_sram_contents_survive_memory_clone_and_explicit_reload() {
         let mut memory = SmsMemory::new(patterned_rom(4)).unwrap();
