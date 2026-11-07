@@ -153,6 +153,8 @@ impl SmsMemory {
         } else {
             CARTRIDGE_BOOT_CONTROL
         };
+        let has_cartridge_sram = rom.len() >= 0x1_0000
+            && matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended);
         Ok(Self {
             rom,
             mapper,
@@ -162,9 +164,7 @@ impl SmsMemory {
             // Large Sega-mapper cartridges can expose battery-backed SRAM via
             // $FFFC. Keep it separate from the console's mirrored work RAM.
             // A game only observes it when it explicitly sets mapper bit 3.
-            cartridge_sram: (rom.len() >= 0x1_0000
-                && matches!(mapper, MapperKind::Sega | MapperKind::SegaExtended))
-                .then(|| Box::new([0; CARTRIDGE_SRAM_SIZE])),
+            cartridge_sram: has_cartridge_sram.then(|| Box::new([0; CARTRIDGE_SRAM_SIZE])),
             bios: bios.map(Vec::into_boxed_slice),
             control_port,
             #[cfg(test)]
@@ -368,7 +368,7 @@ impl SmsMemory {
 mod tests {
     use super::{
         BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE,
-        MapperKind, RAM_SIZE, SmsMemory,
+        MapperKind, RAM_SIZE, CARTRIDGE_SRAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
 
