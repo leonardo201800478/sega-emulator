@@ -4,10 +4,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$version = "3.4.18"
+$version = "3.4.20"
 $archiveName = "SDL3-$version-win32-x64.zip"
 $uri = "https://github.com/libsdl-org/SDL/releases/download/release-$version/$archiveName"
-$expectedSha256 = "75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c"
+$expectedSha256 = "368bed8b24e44ad9ea372990814f2343fcfb9e468abb7f8f4a3bc146c7304752"
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("sega-sdl3-" + [guid]::NewGuid())
 $archivePath = Join-Path $tempRoot $archiveName
