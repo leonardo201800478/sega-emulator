@@ -949,6 +949,10 @@ mod tests {
         execute_frame, reset_sms_temporal_machine,
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
+    use sega_media::{
+        CartridgeMapper, CartridgeRamKind, CartridgeRamMapping, CartridgeRamProfile,
+        CartridgeSystem, ProfileStatus,
+    };
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
