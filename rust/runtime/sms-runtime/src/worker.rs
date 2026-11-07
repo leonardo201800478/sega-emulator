@@ -63,6 +63,23 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
     .map_err(|error| error.to_string())
 }
 
+
+/// Rebuild the machine at its power-on state while preserving battery-backed
+/// cartridge SRAM. A reset must not behave like replacing the cartridge.
+fn reset_sms_temporal_machine(
+    current: &SmsTemporalMachine,
+    rom: Vec<u8>,
+    region: &str,
+) -> Result<SmsTemporalMachine, String> {
+    let mut reset_machine = build_sms_temporal_machine(rom, region)?;
+    if let Some(sram) = current.memory().cartridge_sram() {
+        reset_machine
+            .load_cartridge_sram(sram)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(reset_machine)
+}
+
 #[derive(Debug, Default)]
 struct WorkerTelemetry {
     running: AtomicBool,
@@ -718,7 +735,7 @@ fn handle_command(
             telemetry.running.store(false, Ordering::Release);
             let _ = reply.send(Ok(()));
         }
-        WorkerCommand::Reset(reply) => match build_sms_temporal_machine(rom.clone(), region) {
+        WorkerCommand::Reset(reply) => match reset_sms_temporal_machine(machine, rom.clone(), region) {
             Ok(reset_machine) => {
                 *machine = reset_machine;
                 telemetry.reset_machine_counters();
@@ -916,6 +933,19 @@ mod tests {
 
         worker.step_frame(100_000).unwrap();
         assert_eq!(worker.frame_number(), paused_frame + 1);
+    }
+
+
+    #[test]
+    fn reset_preserves_battery_backed_cartridge_sram() {
+        let mut rom = SYNTHETIC_ROM.to_vec();
+        rom.resize(0x1_0000, 0);
+        let mut machine = build_sms_temporal_machine(rom.clone(), "usa").unwrap();
+        let sram = vec![0x5A; 0x2000];
+        machine.load_cartridge_sram(&sram).unwrap();
+
+        let reset = reset_sms_temporal_machine(&machine, rom, "usa").unwrap();
+        assert_eq!(reset.memory().cartridge_sram(), Some(sram.as_slice()));
     }
 
     #[test]
