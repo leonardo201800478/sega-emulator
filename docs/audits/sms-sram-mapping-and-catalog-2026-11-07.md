@@ -22,10 +22,10 @@
 - A página Mappers é a especificação de referência para a função dos bits.
 - SMS Plus GX é uma implementação comparativa; não é substituto de documentação elétrica.
 - O MAME usa `feature battery=yes` como indicador de memória persistente no software list; isso não prova, isoladamente, a existência de bateria física. Flight of Pigarus é o contraexemplo documentado: usa FeRAM sem bateria.
-- O DAT No-Intro do Master System não foi encontrado no branch `main` do projeto. As pesquisas do repositório localizaram DATs de 32X e SG-1000, mas não o DAT SMS.
-- Foi feito confronto independente com o espelho público do DAT No-Intro em `libretro/libretro-database`, arquivo `metadat/no-intro/Sega - Master System - Mark III.dat`, versão `2026.10.07`, blob SHA `7b4e4ac75edb2ba33900d78b19f87602785bb47d`. Os SHA-1/CRC32/tamanhos das variantes comerciais base dos oito títulos coincidem com os registros MAME correspondentes. Isso é uma validação cruzada externa, não substitui a inclusão/versão do DAT no projeto.
-- Os arquivos técnicos locais enviados nesta conversa não contêm uma especificação de mapper/cartucho SMS; os documentos Z80 são manuais de CPU.
-- SHA-256 não é fornecido pelo MAME nem pelo DAT No-Intro consultado; deverá ser calculado sobre cada dump local exato quando carregado. Não preencher hashes ausentes com valores inferidos.
+- O DAT No-Intro SMS versionado no próprio projeto foi localizado: `dats/Sega - Master System - Mark III (Parent-Clone) (20261013-064924).dat`, versão `20261013-064924`, blob SHA `9528da45f7e341ff642164ddbd58f93dfc353338`.
+- O DAT do projeto foi confrontado por SHA-1, CRC32 e tamanho com MAME `hash/sms.xml`, blob SHA `5410f81bc8e1900375d076f2f7ee42ee852c2c48`. Os fingerprints coincidem nas variantes comuns, protótipos e variantes regionais cobertas por ambas as bases. Exceções sem par MAME são explicitamente mantidas separadas.
+- O DAT contém MD5 além de SHA-1/CRC32/tamanho. O catálogo deverá usar SHA-1 para correspondência DAT e calcular SHA-256 diretamente dos bytes carregados para identidade de armazenamento; não é necessário inventar SHA-256 ausente no DAT.
+- Os arquivos técnicos locais enviados nesta conversa não contêm uma especificação de mapper/cartucho SMS; os documentos Z80 são manuais de CPU. A semântica de mapper foi obtida das referências SMS Power e da implementação comparativa SMS Plus GX.
 
 ## 2. Matriz de conformidade do Sega mapper
 
@@ -93,22 +93,44 @@ O MAME atual lista os seguintes registros com `battery=yes`. Os hashes abaixo s�
 
 **Variantes não incluídas automaticamente:** demos/protótipos sem `battery=yes`, como Ys USA demo, permanecem fora do perfil persistente. Não herdar o perfil do título comercial por semelhança de nome.
 
-### Confronto No-Intro ↔ MAME para as oito famílias comerciais
+### Confronto DAT do projeto ↔ MAME
 
-A tabela No-Intro `2026.10.07` e MAME `hash/sms.xml` apresentam SHA-1, CRC32 e tamanho coincidentes para as variantes comerciais de referência. Os nomes variam em normalização de região/revisão, mas os fingerprints coincidem.
+O DAT SMS versionado no projeto está na versão `20261013-064924`. MAME `hash/sms.xml` foi consultado no blob `5410f81bc8e1900375d076f2f7ee42ee852c2c48`. Os registros com mesmo SHA-1 têm também tamanho e CRC32 coincidentes.
 
-| Família | Variante No-Intro | Fingerprint | Resultado |
-|---|---|---|---|
-| Golden Axe Warrior | USA, Europe, Brazil (En) | 256 KiB; CRC `C7DED988`; SHA-1 `FBDA0486B393708A89756BB57D116AD6007484E4` | MATCH |
-| Golfamania | Europe, Brazil (En) | 256 KiB; CRC `48651325`; SHA-1 `D0B964DD7CD8CCDD730DE4D8E4BB2E87BEA7686E` | MATCH |
-| Miracle Warriors | USA, Europe, Brazil (En) | 256 KiB; CRC `0E333B6E`; SHA-1 `F952406BCA4918EE91A89B27E949E224EAE96D85` | MATCH |
-| Monopoly | USA, Europe; USA, Europe (Rev A) | 128 KiB; CRCs `69538469` / `026D94A4`; SHA-1s `8DD7BB4F666F70F7F57687823D0068C9100AF8E5` / `6BAD7176011DD4BBD007498D167399DAACDE173D` | MATCH |
-| Penguin Land | Doki Doki Penguin Land (Japan); Penguin Land (USA, Europe) | 128 KiB; CRCs `2BCDB8FA` / `F97E9875`; SHA-1s `C01CF44EEE335D509DC20A165ADD8514E7FBB7C4` / `8762239C339A084DFB8443CC38515301476BDE28` | MATCH |
-| Phantasy Star | Brazil, Japan, Japan Rev 1, Korea, USA/Europe, USA/Europe Rev A | 512 KiB; CRC/SHA-1 coincidem para cada variante | MATCH |
-| Ultima IV | Europe, Brazil (En) | 512 KiB; CRC `B52D60C8`; SHA-1 `A90E21E5961BCF2E10B715A009C04E7C2017A3B1` | MATCH |
-| Ys | Japan; The Vanished Omens (USA, Europe, Brazil) | 256 KiB; CRCs `32759751` / `B33E2827`; SHA-1s `614B589080B732E17CC0D253E17216A72A268955` / `E73E836C353543E9F48315410B0D72278899FF59` | MATCH |
+O MAME informa `dataarea ram size=8192` e `feature battery=yes` para os cartuchos comerciais das oito famílias, confirmando 8 KiB de RAM persistente no modelo do software list. Phantasy Star v3 identifica ainda o IC `MB8464A-15LL-SK`, uma SRAM 8K×8. As entradas protótipo que também aparecem no DAT têm fingerprints próprios e não devem herdar identidade por nome.
 
-Os protótipos presentes no MAME para Golfamania, Miracle Warriors, Monopoly, Doki Doki Penguin Land e Ultima IV não aparecem no DAT No-Intro consultado e permanecem variantes separadas; não herdar os perfis comerciais sem fingerprint próprio. O demo de Ys não está marcado `battery=yes` no MAME e não está no conjunto de perfis persistentes. As imagens Phantasy Star Sega Ages (World/En e World/Ja) no DAT são repacks de tamanho/hash distintos e não devem herdar perfis das ROMs de 512 KiB sem verificação própria.
+| Família / variante | Tamanho | CRC32 | SHA-1 | MAME |
+|---|---:|---|---|---|
+| Golden Axe Warrior (USA, Europe, Brazil) | 262144 | `C7DED988` | `FBDA0486B393708A89756BB57D116AD6007484E4` | battery=yes; RAM 8192 |
+| Golfamania (Europe, Brazil) | 262144 | `48651325` | `D0B964DD7CD8CCDD730DE4D8E4BB2E87BEA7686E` | battery=yes; RAM 8192 |
+| Golfamania (Beta) | 262144 | `5DABFDC3` | `DA88DC3E84DAA2F8B8D803B00A13B5FB3185D8C5` | battery=yes; RAM 8192 |
+| Super Golf (Europe) (Beta) | 262144 | `7F7B568D` | `EBE733EA693FA46EDDE43260FDB963CAB71317E1` | battery=yes; RAM 8192; protótipo distinto |
+| Miracle Warriors (USA, Europe, Brazil) | 262144 | `0E333B6E` | `F952406BCA4918EE91A89B27E949E224EAE96D85` | battery=yes; RAM 8192 |
+| Haja no Fuuin (Japan) | 262144 | `B9FDF6D9` | `46A032004D49FEC58099AA6BF0DD796997E95142` | battery=yes; RAM 8192; variante japonesa distinta |
+| Miracle Warriors (Beta) | 262144 | `301A59AA` | `5F1CFC974A8FFC965F18216A89472FD1A980D7CB` | battery=yes; RAM 8192; protótipo distinto |
+| Monopoly (USA, Europe) | 131072 | `69538469` | `8DD7BB4F666F70F7F57687823D0068C9100AF8E5` | battery=yes; RAM 8192 |
+| Monopoly (USA, Europe) (Rev A) | 131072 | `026D94A4` | `6BAD7176011DD4BBD007498D167399DAACDE173D` | battery=yes; RAM 8192 |
+| Monopoly (Beta 1) | 131072 | `7E9D87FC` | `68830FB46A010CF2F2D04BDC69E3759F6D42B8DE` | battery=yes; RAM 8192; protótipo distinto |
+| Monopoly (Beta 2) | 131072 | `E0D1049B` | `6D100D43CDDFB761D3560786C26E345873452A4B` | battery=yes; RAM 8192; protótipo distinto |
+| Penguin Land (USA, Europe) | 131072 | `F97E9875` | `8762239C339A084DFB8443CC38515301476BDE28` | battery=yes; RAM 8192 |
+| Doki Doki Penguin Land (Japan) | 131072 | `2BCDB8FA` | `C01CF44EEE335D509DC20A165ADD8514E7FBB7C4` | battery=yes; RAM 8192 |
+| Doki Doki Penguin Land (Japan) (Beta) | 131072 | `56BD2455` | `C56417EFD78A332A35E4D0E87C7B13C20DA85391` | battery=yes; RAM 8192; protótipo distinto |
+| Phantasy Star (USA, Europe) (Rev A) | 524288 | `00BEF1D7` | `07FCF297BE4F4C9D92CD3F119A7AC48467E06838` | battery=yes; RAM 8192; IC SRAM identificado |
+| Phantasy Star (USA, Europe) | 524288 | `E4A65E79` | `257CA76EBCD54C75A414CA7CE968FA59EA42F150` | battery=yes; RAM 8192 |
+| Phantasy Star (Brazil) | 524288 | `75971BEF` | `FD8DAD6ACB6FA75DC8E9BBAEA2A7E9FD486FC2DD` | battery=yes; RAM 8192 |
+| Phantasy Star (Japan) | 524288 | `6605D36A` | `C9A40DDD217C58DDDCD6B5C0FE66C3A50D3E68E4` | battery=yes; RAM 8192 |
+| Phantasy Star (Korea) (Unl) | 524288 | `747E83B5` | `52B2AA52A1C96E15869498A8E42B074705070007` | battery=yes; RAM 8192 |
+| Phantasy Star (Japan) (Rev 1) | 524288 | `07301F83` | `B3AE447DC739256616B44CBD77CB903C9F19E980` | battery=yes; RAM 8192; MAME dump status baddump |
+| Ultima IV - Quest of the Avatar (Europe, Brazil) | 524288 | `B52D60C8` | `A90E21E5961BCF2E10B715A009C04E7C2017A3B1` | battery=yes; RAM 8192 |
+| Ultima IV (Beta) | 524288 | `DE9F8517` | `BB1AE06B62A9F7D3259C51EEE4CFDED781EB5D30` | battery=yes; RAM 8192; protótipo distinto |
+| Ys (Japan) | 262144 | `32759751` | `614B589080B732E17CC0D253E17216A72A268955` | battery=yes; RAM 8192 |
+| Ys - The Vanished Omens (USA, Europe, Brazil) | 262144 | `B33E2827` | `E73E836C353543E9F48315410B0D72278899FF59` | battery=yes; RAM 8192 |
+
+**Variantes separadas, sem associação automática:**
+- `Astro Adventure (Taiwan) (En) (Unl)` está no DAT (SHA-1 `E3DA56644C098D07947B1FFD9465002616A69D30`) mas não tem entrada MAME correspondente nem evidência de SRAM/bateria; não atribuir perfil.
+- `Phantasy Star (World) (En/Ja) (Sega Ages)` são imagens de 540672/565248 bytes sem par MAME; não herdar perfil das ROMs de 512 KiB.
+- `Ys - The Vanished Omens (USA, Europe) (Ja) (Demo)` tem SHA-1 `B70757876E4FF592692EB0EE1C51C571B31541A9`; MAME não marca battery nem área RAM. Não atribuir perfil persistente.
+- Não foi encontrada variante Beta de Golden Axe Warrior; não inventar.
 
 ## 4. Flight of Pigarus — perfil isolado e BLOCKED
 
@@ -134,15 +156,15 @@ Evidências:
 
 ## 5. RAM volátil — não gerar .srm
 
-| Jogo / variante | Identidade No-Intro 2026.10.07 | Evidência MAME / projeto | Tratamento |
+| Jogo / variante | Identidade DAT SMS do projeto | Evidência MAME | Tratamento |
 |---|---|---|---|
-| Desert Speedtrap (Europe, Brazil) | 256 KiB; CRC `B137007A`; SHA-1 `60E2B6EC69D73DD73C1EF846634942C81800655B` | Gearsystem classifica RAM sem bateria; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
-| The Flash (Europe, Brazil) | 256 KiB; CRC `BE31D63F`; SHA-1 `1732B4C13FD00DD5EFC5BF1CCB1AB6ED3889C8BA` | Gearsystem classifica RAM sem bateria; MAME não marca battery | Candidato a RAM volátil; exigir capacidade/protocolo antes de implementar |
-| The Terminator (Europe) | 256 KiB; CRC `EDC5C012`; SHA-1 `EAF733D385E61526B90C1B194BF605078D43E2D3` | MAME lista PCB 171-6339A e IC2 `KM62256BLP-10L` (32 KiB SRAM), sem feature battery | RAM sem evidência de bateria; não gerar .srm |
-| The Terminator (Brazil) | 256 KiB; CRC `E3D5CE9A`; SHA-1 `BEA0A1D0271FAA2273E4CF1E968241D018C81DA1` | MAME não informa IC nem battery | UNKNOWN; não herdar perfil europeu sem fingerprint |
-| Othello | Sem entrada no DAT No-Intro SMS consultado | Não consta como cartucho Master System no MAME `sms.xml`; documentação do projeto o lista no contexto SG-1000 | Não cadastrar como SRAM de cartucho SMS |
+| Desert Speedtrap (Europe, Brazil) | 262144; CRC `B137007A`; SHA-1 `60E2B6EC69D73DD73C1EF846634942C81800655B` | `dataarea ram size=8192`; sem `battery=yes` | RAM volátil 8 KiB candidata; não gerar .srm |
+| Flash, The (Europe, Brazil) | 262144; CRC `BE31D63F`; SHA-1 `1732B4C13FD00DD5EFC5BF1CCB1AB6ED3889C8BA` | `dataarea ram size=8192`; sem `battery=yes` | RAM volátil 8 KiB candidata; não gerar .srm |
+| Terminator, The (Europe) | 262144; CRC `EDC5C012`; SHA-1 `EAF733D385E61526B90C1B194BF605078D43E2D3` | PCB 171-6339A; IC2 `KM62256BLP-10L`; `dataarea ram size=32768`; sem `battery=yes` | RAM volátil 32 KiB candidata; não gerar .srm |
+| Terminator, The (Brazil) | 262144; CRC `E3D5CE9A`; SHA-1 `BEA0A1D0271FAA2273E4CF1E968241D018C81DA1` | `dataarea ram size=32768`; sem IC/PCB detalhados | RAM volátil 32 KiB indicada pelo MAME; manter identidade e proveniência separadas |
+| Othello | Sem entrada no DAT SMS do projeto | Não consta como cartucho SMS no MAME; documentação do projeto o lista no contexto SG-1000 | Não cadastrar como SRAM de cartucho SMS |
 
-A ausência de `battery=yes` não prova ausência de RAM; apenas impede classificar como battery-backed com base nesta fonte. Da mesma forma, `battery=yes` é um marcador do software list MAME para dados persistentes e não prova sozinho que a PCB possua uma bateria física; Flight of Pigarus é o contraexemplo documentado, com FeRAM.
+A ausência de `battery=yes` não prova ausência de RAM: MAME lista RAM de 8 KiB em Desert Speedtrap/Flash, The e RAM de 32 KiB em The Terminator sem flag de persistência. Da mesma forma, `battery=yes` é um marcador do software list MAME para dados persistentes e não prova sozinho que a PCB possua uma bateria física; Flight of Pigarus é o contraexemplo documentado, com FeRAM.
 
 ## 6. Arquitetura e sequência de implementação
 
@@ -151,21 +173,21 @@ A ausência de `battery=yes` não prova ausência de RAM; apenas impede classifi
 - `SaveRamStore`: filesystem na camada host, carregamento/validação, metadados versionados, gravação atômica e associação inequívoca por SHA-256.
 - Nenhum I/O no caminho CPU/barramento. O runtime recebe bytes de SRAM antes da execução e expõe snapshots/dirty state para a camada host.
 - Reset de hardware preserva SRAM. Troca de ROM constrói novo estado de cartucho e salva a SRAM anterior antes de descartá-la.
-- Não implementar o catálogo automático até adicionar/identificar o DAT SMS atual do projeto, calcular SHA-256 dos dumps efetivamente suportados e reconciliar variantes.
+- O DAT SMS atual já está no projeto e foi reconciliado com MAME; o próximo passo é implementar o catálogo em crate compartilhada de mídia usando SHA-1 do DAT para seleção exata e SHA-256 calculado dos bytes carregados para a chave de armazenamento.
 - Não implementar persistência até auditar o carregador/runtime e o limite host existente; evitar duplicar catálogo ou store.
 
 ## 7. Estado desta etapa
 
 | Item | Estado |
 |---|---|
-| Semântica documentada de `$FFFC` bit 4 | DOCUMENTED |
-| Implementação inicial da janela alta na PR #643 | IMPLEMENTED — pendente CI |
-| Testes unitários de 8/16/32 KiB e overlay | IMPLEMENTED — pendente execução CI |
+| Semântica documentada de `$FFFC` bit 4 | PASS — fontes SMS Power e SMS Plus GX confrontadas |
+| Implementação da janela alta na PR #643 | PASS — CI Rust workspace no SHA `a6987ae3bbdc1cae2d12e7b91f7e50f83bc82bcf` |
+| Testes unitários de 8/16/32 KiB e overlay | PASS — CI focused e workspace |
 | Conflito elétrico com work RAM habilitada | MODELADO conservadoramente; hardware value não reivindicado |
 | Catálogo de identidades MAME | REFERÊNCIA DOCUMENTAL, não runtime |
-| Comparação com DAT SMS versionado no projeto | BLOCKED — DAT não encontrado |
+| Comparação com DAT SMS versionado no projeto | PASS — versão `20261013-064924`, blob `9528da45f7e341ff642164ddbd58f93dfc353338` |
 | SHA-256 das variantes locais | BLOCKED — dumps exatos não fornecidos |
 | Flight of Pigarus | BLOCKED — FRAM 32 KiB provável; mapper não confirmado |
 | SaveRamStore / integração host | NOT IMPLEMENTED |
 
-**Próximo gate:** executar CI no novo HEAD da PR, revisar os testes de janela alta e só então avançar para catálogo. Nenhum merge é autorizado por este documento.
+**Próximo gate:** implementar `CartridgeIdentity` e `CartridgeHardwareProfile` em crate compartilhada de mídia, mantendo variantes sem evidência fora do catálogo executável. Em seguida, implementar `SaveRamStore` na camada host. Nenhum merge é autorizado por este documento.
