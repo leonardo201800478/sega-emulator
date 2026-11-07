@@ -902,6 +902,12 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
 }
 
 /// Return the per-user settings directory used to persist the last ROM folder.
+fn save_ram_directory() -> PathBuf {
+    rom_settings_directory()
+        .unwrap_or_else(|| PathBuf::from(APP_DATA_DIRECTORY))
+        .join("saves")
+}
+
 fn rom_settings_directory() -> Option<PathBuf> {
     std::env::var_os("APPDATA")
         .map(PathBuf::from)
