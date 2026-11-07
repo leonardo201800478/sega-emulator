@@ -26,19 +26,24 @@ if ([string]::IsNullOrWhiteSpace($branchName)) {
     throw "HEAD destacado nao e permitido para atualizar/compilar."
 }
 
-$status = @(Get-GitOutput -Arguments @("status", "--porcelain=v1", "--untracked-files=all"))
-if (-not [string]::IsNullOrWhiteSpace(($status -join ""))) {
+$status = Get-GitOutput -Arguments @("status", "--porcelain=v1", "--untracked-files=all")
+if (-not [string]::IsNullOrWhiteSpace($status)) {
     throw "Existem alteracoes locais. Preserve ou commit as alteracoes antes de atualizar."
 }
 
 Invoke-SegaChecked -File "git" -Arguments @("fetch", "origin", "main", "--prune") -Step "Atualizar referencias remotas"
-$remoteMain = Get-GitOutput -Arguments @("rev-parse", "origin/main")
-$head = Get-GitOutput -Arguments @("rev-parse", "HEAD")
-& git -C $repoRoot merge-base --is-ancestor origin/main HEAD
-if ($LASTEXITCODE -ne 0) {
-    throw "A branch atual nao contem origin/main. Atualize-a por fast-forward/rebase controlado antes do build; nenhum reset ou merge automatico foi executado."
+if ($branchName -eq "main") {
+    Invoke-SegaChecked -File "git" -Arguments @("pull", "--ff-only", "origin", "main") -Step "Atualizar main por fast-forward"
+}
+else {
+    & git -C $repoRoot merge-base --is-ancestor origin/main HEAD
+    if ($LASTEXITCODE -ne 0) {
+        throw "A branch atual nao contem origin/main. Atualize-a por fast-forward/rebase controlado antes do build; nenhum reset ou merge automatico foi executado."
+    }
 }
 
+$remoteMain = Get-GitOutput -Arguments @("rev-parse", "origin/main")
+$head = Get-GitOutput -Arguments @("rev-parse", "HEAD")
 Write-Host "Branch: $branchName | HEAD: $head | origin/main: $remoteMain" -ForegroundColor Cyan
 
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
