@@ -12,7 +12,8 @@ use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
 };
-use sega_media::{CartridgeCatalog, CartridgeIdentity};
+use crate::save_ram_store::SaveRamStore;
+use sega_media::{CartridgeCatalog, CartridgeHardwareProfile, CartridgeIdentity};
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
@@ -26,6 +27,8 @@ const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
     rom_path: String,
+    save_ram_store: SaveRamStore,
+    current_cartridge: Option<LoadedCartridge>,
     region: String,
     last_rom_directory: Option<PathBuf>,
     rom_dialog_requested: bool,
@@ -42,10 +45,18 @@ pub struct SegaApp {
     native_viewport: NativeViewportState,
 }
 
+#[derive(Clone)]
+struct LoadedCartridge {
+    identity: CartridgeIdentity,
+    profile: CartridgeHardwareProfile,
+}
+
 impl Default for SegaApp {
     fn default() -> Self {
         Self {
             rom_path: String::new(),
+            save_ram_store: SaveRamStore::new(save_ram_directory()),
+            current_cartridge: None,
             region: String::new(),
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
@@ -303,6 +314,27 @@ impl SegaApp {
         }
     }
 
+    fn persist_current_cartridge(&mut self) -> Result<(), String> {
+        let Some(current) = self.current_cartridge.as_ref() else {
+            return Ok(());
+        };
+        if !current.profile.requires_persistent_store() {
+            return Ok(());
+        }
+
+        let worker = self
+            .native_viewport
+            .worker
+            .as_ref()
+            .ok_or_else(|| "runtime SMS não está disponível para exportar a SRAM".to_owned())?;
+        let contents = worker
+            .export_cartridge_sram()?
+            .ok_or_else(|| "perfil persistente não possui SRAM no runtime".to_owned())?;
+        self.save_ram_store
+            .save(&current.identity, &current.profile, &contents)
+            .map_err(|error| error.to_string())
+    }
+
     fn load_rom_from_path(&mut self) {
         let path = Path::new(self.rom_path.trim());
         if path.as_os_str().is_empty() {
@@ -352,14 +384,44 @@ impl SegaApp {
             None => (None, None),
         };
 
+        if let Err(error) = self.persist_current_cartridge() {
+            self.native_viewport.error =
+                Some(format!("Não foi possível salvar a SRAM do cartucho atual: {error}"));
+            return;
+        }
+
+        let initial_sram = match profile.as_ref() {
+            Some(profile) if profile.requires_persistent_store() => {
+                match self.save_ram_store.load(&identity, profile) {
+                    Ok(contents) => contents,
+                    Err(error) => {
+                        self.native_viewport.error =
+                            Some(format!("Save RAM inválido ou incompatível: {error}"));
+                        return;
+                    }
+                }
+            }
+            _ => None,
+        };
+        let current_cartridge = profile.clone().map(|profile| LoadedCartridge {
+            identity: identity.clone(),
+            profile,
+        });
+
         let region = if self.region.is_empty() {
             "usa"
         } else {
             &self.region
         };
-        match SmsTemporalWorker::new_with_cartridge_hardware_profile(rom, region, profile, None) {
+        match SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            rom,
+            region,
+            profile,
+            initial_sram,
+        ) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                self.current_cartridge = current_cartridge;
                 if let Some(notice) = cartridge_notice {
                     self.native_viewport.error = Some(notice);
                 }
@@ -395,8 +457,22 @@ impl SegaApp {
 
     fn apply_command(&mut self, command: UiCommand) {
         if matches!(command, UiCommand::CloseMachine) {
+            if let Err(error) = self.persist_current_cartridge() {
+                self.native_viewport.error =
+                    Some(format!("Não foi possível salvar a SRAM antes de fechar: {error}"));
+                return;
+            }
             self.native_viewport.close_worker();
+            self.current_cartridge = None;
             return;
+        }
+
+        if matches!(command, UiCommand::Stop) {
+            if let Err(error) = self.persist_current_cartridge() {
+                self.native_viewport.error =
+                    Some(format!("Não foi possível salvar a SRAM antes de parar: {error}"));
+                return;
+            }
         }
 
         let Some(worker) = self.native_viewport.worker.as_ref() else {
@@ -1347,3 +1423,12 @@ mod tests {
         assert!(error.contains("mais de um arquivo .sms"));
     }
 }
+
+impl Drop for SegaApp {
+    fn drop(&mut self) {
+        if let Err(error) = self.persist_current_cartridge() {
+            eprintln!("Falha ao persistir SRAM do cartucho no encerramento: {error}");
+        }
+    }
+}
+
