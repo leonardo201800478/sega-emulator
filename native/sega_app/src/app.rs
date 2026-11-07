@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Seek};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use eframe::egui;
@@ -16,17 +16,17 @@ use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
 
+use super::directories::{DirectoryKind, DirectoryPreferences};
+
 const MAX_ROM_SIZE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ROM_SIZE_BYTES_U64: u64 = 16 * 1024 * 1024;
-const APP_DATA_DIRECTORY: &str = "Sega Emulator";
-const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
     rom_path: String,
     region: String,
-    last_rom_directory: Option<PathBuf>,
-    rom_dialog_requested: bool,
+    directory_preferences: DirectoryPreferences,
+    ui_state: AppUiState,
     aspect_ratio: AspectRatioMode,
     audio_enabled: bool,
     audio_backend: AudioBackend,
@@ -40,13 +40,20 @@ pub struct SegaApp {
     native_viewport: NativeViewportState,
 }
 
+#[derive(Default)]
+struct AppUiState {
+    settings_open: bool,
+    directory_picker_requested: Option<DirectoryKind>,
+    rom_dialog_requested: bool,
+}
+
 impl Default for SegaApp {
     fn default() -> Self {
         Self {
             rom_path: String::new(),
             region: String::new(),
-            last_rom_directory: load_last_rom_directory(),
-            rom_dialog_requested: false,
+            directory_preferences: DirectoryPreferences::load(),
+            ui_state: AppUiState::default(),
             aspect_ratio: AspectRatioMode::FourThree,
             audio_enabled: true,
             audio_backend: AudioBackend::Wasapi,
@@ -222,14 +229,22 @@ impl SegaApp {
         let mut command = None;
         let mut audio_command = None;
         let mut load_requested = false;
+        let mut directory_picker_requested = None;
 
         ui.vertical(|ui| {
-            render_header(ui);
+            render_header(ui, &mut self.ui_state.settings_open);
+            if self.ui_state.settings_open {
+                render_directory_settings(
+                    ui,
+                    &self.directory_preferences,
+                    &mut directory_picker_requested,
+                );
+            }
             render_rom_controls(
                 ui,
                 &mut self.rom_path,
                 &mut self.region,
-                &mut self.rom_dialog_requested,
+                &mut self.ui_state.rom_dialog_requested,
                 &mut self.aspect_ratio,
                 &mut load_requested,
             );
@@ -259,6 +274,7 @@ impl SegaApp {
         if load_requested {
             self.load_rom_from_path();
         }
+        self.ui_state.directory_picker_requested = directory_picker_requested;
         if let Some(command) = command {
             self.apply_command(command);
         }
@@ -279,25 +295,54 @@ impl SegaApp {
             return;
         };
 
-        let mut dialog = FileDialog::new()
+        let initial_directory = self
+            .directory_preferences
+            .picker_start_directory(DirectoryKind::Roms);
+        let dialog = FileDialog::new()
             .set_title("Selecionar ROM do Sega Master System")
-            .add_filter("ROM do Master System", &["sms", "zip"]);
-        if let Some(directory) = self.last_rom_directory.as_ref() {
-            dialog = dialog.set_directory(directory);
-        }
+            .add_filter("ROM do Master System", &["sms", "zip"])
+            .set_directory(initial_directory);
 
         if let Some(path) = dialog.set_parent(window).pick_file() {
             self.rom_path = path.to_string_lossy().into_owned();
-            if let Some(directory) = path.parent().filter(|path| path.is_dir()) {
-                self.last_rom_directory = Some(directory.to_path_buf());
-                if let Err(error) = save_last_rom_directory(directory) {
-                    self.native_viewport.error = Some(format!(
-                        "ROM selecionada, mas não foi possível salvar o último diretório: {error}"
-                    ));
-                    return;
-                }
+            if let Some(directory) = path.parent().filter(|path| path.is_dir())
+                && let Err(error) = self
+                    .directory_preferences
+                    .record_last_opened(DirectoryKind::Roms, directory.to_path_buf())
+            {
+                self.native_viewport.error = Some(format!(
+                    "ROM selecionada, mas não foi possível salvar o histórico de diretórios: {error}"
+                ));
+                return;
             }
             self.native_viewport.error = None;
+        }
+    }
+
+    /// Open a native folder picker for one independent storage category.
+    fn open_directory_dialog(&mut self, frame: &eframe::Frame, kind: DirectoryKind) {
+        let Some(window) = frame.winit_window() else {
+            self.native_viewport.error = Some(
+                "A janela principal ainda não está disponível para abrir o seletor de pasta"
+                    .to_owned(),
+            );
+            return;
+        };
+
+        let initial_directory = self.directory_preferences.picker_start_directory(kind);
+        if let Some(path) = FileDialog::new()
+            .set_title(format!("Selecionar diretório: {}", kind.label()))
+            .set_directory(initial_directory)
+            .set_parent(window)
+            .pick_folder()
+        {
+            match self.directory_preferences.set_path(kind, path) {
+                Ok(()) => self.native_viewport.error = None,
+                Err(error) => {
+                    self.native_viewport.error =
+                        Some(format!("Não foi possível salvar o diretório: {error}"));
+                }
+            }
         }
     }
 
@@ -673,9 +718,12 @@ impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let viewport_rect = self.render(ui);
         self.update_keyboard_input(ui.ctx());
-        if self.rom_dialog_requested {
-            self.rom_dialog_requested = false;
+        if self.ui_state.rom_dialog_requested {
+            self.ui_state.rom_dialog_requested = false;
             self.open_rom_dialog(frame);
+        }
+        if let Some(kind) = self.ui_state.directory_picker_requested.take() {
+            self.open_directory_dialog(frame, kind);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
     }
@@ -777,42 +825,59 @@ fn read_sms_from_zip<R: Read + Seek>(reader: R) -> Result<Vec<u8>, String> {
     Ok(rom)
 }
 
-/// Return the per-user settings directory used to persist the last ROM folder.
-fn rom_settings_directory() -> Option<PathBuf> {
-    std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .map(|directory| directory.join(APP_DATA_DIRECTORY))
-}
-
-/// Restore the last directory used by the ROM picker, if it still exists.
-fn load_last_rom_directory() -> Option<PathBuf> {
-    let settings_file = rom_settings_directory()?.join(LAST_ROM_DIRECTORY_FILE);
-    let directory = PathBuf::from(fs::read_to_string(settings_file).ok()?.trim());
-    directory.is_dir().then_some(directory)
-}
-
-/// Persist only the last selected directory; the ROM itself is not copied.
-fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
-    let settings_directory = rom_settings_directory()
-        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
-    fs::create_dir_all(&settings_directory)?;
-    fs::write(
-        settings_directory.join(LAST_ROM_DIRECTORY_FILE),
-        directory.to_string_lossy().as_bytes(),
-    )
-}
-
-fn render_header(ui: &mut egui::Ui) {
+fn render_header(ui: &mut egui::Ui, settings_open: &mut bool) {
     ui.horizontal(|ui| {
         ui.heading("Sega Emulator");
         ui.separator();
         ui.label("Rust · egui/eframe");
+        if ui
+            .button(if *settings_open {
+                "Fechar configurações"
+            } else {
+                "Configurações"
+            })
+            .clicked()
+        {
+            *settings_open = !*settings_open;
+        }
         if ui.button("Sair").clicked() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     });
     ui.separator();
     ui.heading("Sega Master System");
+}
+
+fn render_directory_settings(
+    ui: &mut egui::Ui,
+    preferences: &DirectoryPreferences,
+    picker_requested: &mut Option<DirectoryKind>,
+) {
+    egui::CollapsingHeader::new("Diretórios de armazenamento")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.label("Cada categoria possui um caminho independente e seu próprio histórico de navegação.");
+            for kind in DirectoryKind::ALL {
+                ui.horizontal(|ui| {
+                    ui.label(kind.label());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Selecionar...").clicked() {
+                            *picker_requested = Some(kind);
+                        }
+                    });
+                });
+                ui.add(
+                    egui::Label::new(preferences.path(kind).display().to_string())
+                        .wrap(),
+                );
+                if let Some(last_opened) = preferences.last_opened(kind) {
+                    ui.small(format!("Última pasta aberta: {}", last_opened.display()));
+                } else {
+                    ui.small("Última pasta aberta: ainda não registrada");
+                }
+                ui.separator();
+            }
+        });
 }
 
 fn render_rom_controls(
