@@ -3,7 +3,7 @@
 **Repository:** `leonardo201800478/sega-emulator`
 **Baseline `main` SHA audited:** `d48d5c35cd3469bad8f090f6a28094d6339560e8`
 **Verification/fix PR:** [#628](https://github.com/leonardo201800478/sega-emulator/pull/628)
-**Status:** targeted PR and path-filter verification passed; manual dispatch and post-merge push verification remain pending.
+**Status:** targeted PR validation and post-merge push validation passed; manual dispatch remains NOT RUN.
 
 ## 1. Consolidated changes in this delivery
 
@@ -84,7 +84,7 @@ The aggregate job log explicitly printed PASS for each required suite and NOT RU
 | --- | --- | --- |
 | PR-triggered impact matrix | PASS | Docs, Z80, audio, Scheduler, tooling and combined host scenarios were exercised. |
 | Full PR validation | PASS | PR #628 full path passed. |
-| Push event after the latest classifier correction | NOT RUN | Must be verified by the automatic CI run after PR #628 is merged into `main`. Earlier push run [42374351667](https://github.com/leonardo201800478/sega-emulator/actions/runs/42374351667) passed on the prior workflow revision. |
+| Push event after the latest classifier correction | PASS | Post-merge run [42378588031](https://github.com/leonardo201800478/sega-emulator/actions/runs/42378588031) completed successfully on exact `main` HEAD `e77eff26d80fd77a64546373c3e92326a0cc4e7a`. |
 | Manual `workflow_dispatch` default run | NOT RUN | The workflow's manual path was corrected and its expressions parsed by PR CI, but this integration did not have a workflow-dispatch trigger operation. Trigger it from GitHub Actions after merge. |
 | Manual lockfile-refresh artifact | NOT RUN | Requires explicit manual dispatch with `refresh_cargo_lockfiles=true`. |
 | Physical GPU/audio/gamepad validation | NOT RUN in CI | These require actual host devices and must be recorded separately. |
