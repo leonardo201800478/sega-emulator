@@ -1,3 +1,16 @@
+## Atualização documental e validação do Scheduler — 2026-11-07
+
+- Registra a baseline consultada da main: `3ad1781f84b7824b5aa889a583ae6d4545987ec1`.
+- Consolida o estado das PRs #613 e #614 como integração SMS/viewport/áudio/input ainda aberta e empilhada; não declara essas funcionalidades como integradas.
+- Registra a PR #615 (SN76489: filtragem de saída e reset do ruído) e a PR #617 (clarificação Rust/egui-only) como merged.
+- Documenta a campanha longa do MachineScheduler no Windows local: 320.000 operações, 4.000.000 dispatches, 16 seeds, 2 testes PASS, 0 falhas, 405,68 s.
+- Compara os blobs de teste, manifesto e implementação do Scheduler entre o SHA executado `f118a4d3a2547b95c679c4133b94e22d2b3a03be` e a main; os três arquivos são idênticos.
+- Mantém separados os resultados do Scheduler, os gates de workspace, a validação física e a integração temporal sistêmica SMS.
+- Cria índice central da documentação e ledger de evidências; identifica documentos de fases Python/Qt como históricos, sem apagar registros técnicos úteis.
+- Mantém E7.7 do Z80 IN_PROGRESS e E8 BLOCKED.
+
+Registro detalhado: [status do projeto](docs/project-status-2026-11-07.md) e [evidência do Scheduler](docs/evidence/scheduler-stress-long-2026-11-07.md).
+
 ## Estado SMS — 2026-10-29
 - Publica fotografia técnica do SMS na base `b4a85c82b1d975a126f1dcbd3084dac51249b398`, após integração do runtime nativo Rust à aplicação Qt/PySide6.
 - Registra separadamente os subsistemas implementados e as lacunas de Z80, VDP raster, scheduler temporal, FM/YM2413 e validação Windows.
