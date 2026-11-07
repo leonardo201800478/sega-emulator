@@ -17,7 +17,6 @@
 ## Current limitations
 
 - 7z archives, multi-ROM ZIP selection and library indexing are not implemented.
-- Audio output and physical controller input are not yet connected to the app.
 - The D3D12 viewport requires Windows x64 and a compatible graphics device.
 - CI compilation and headless tests do not prove physical GPU presentation or gameplay compatibility.
 
@@ -28,6 +27,32 @@ cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
 cargo check --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 cargo test --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 ```
+
+## Dependências nativas Windows — versões verificadas em 2026-11-07
+
+| Componente | Implementação / pacote | Versão |
+|---|---|---:|
+| WASAPI | crate Rust `wasapi` | 0.26.0 |
+| XAudio2 | API Windows via crate `windows` | 0.62.2 |
+| SDL3 | DLL nativa carregada pela ABI C | 3.4.20 |
+| Direct3D 12 / DXGI | API Windows via crate `windows` | 0.62.2 |
+
+XAudio2 e Direct3D 12 não usam crates separados neste projeto: ambos são
+projetados pelos bindings oficiais `windows-rs`, com as features específicas
+habilitadas nos crates `sega-audio-output` e `sega-video-runtime`.
+As versões WASAPI e Windows estão fixadas exatamente no `Cargo.toml`;
+os lockfiles já continham essas versões.
+
+O SDL3 é carregado dinamicamente, sem dependência Cargo `sdl3`. Para instalar
+a DLL oficial x64 verificada por SHA-256, execute na raiz do repositório:
+
+```powershell
+./scripts/install_sdl3_runtime.ps1
+```
+
+O backend consulta `SDL_GetVersion` e rejeita DLLs anteriores a 3.4.20.
+Versões estáveis posteriores são aceitas. A atualização da DLL não altera a
+semântica do polling nem introduz callbacks no caminho da CPU/Scheduler.
 
 ## Ownership and timing
 
