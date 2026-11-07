@@ -193,7 +193,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check whitespace and patch formatting
+      - name: Check changed documentation formatting
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -205,6 +205,12 @@ jobs:
             range="$BASE_SHA...$HEAD_SHA"
           else
             range="$BASE_SHA..$HEAD_SHA"
+          fi
+          mapfile -d '' markdown_files < <(git diff --name-only -z "$range" -- '*.md' '*.mdx')
+          if (("${#markdown_files[@]}" > 0)); then
+            npx --yes prettier@3.9.10 --check "${markdown_files[@]}"
+          else
+            echo "No changed Markdown/MDX files."
           fi
           git diff --check "$range"
 
