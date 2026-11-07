@@ -27,6 +27,10 @@ pub enum DirectoryKind {
     ShaderPresets,
     ShaderTextures,
     ShaderCache,
+    Patches,
+    Cheats,
+    Thumbnails,
+    Recordings,
 }
 
 impl DirectoryKind {
@@ -46,6 +50,10 @@ impl DirectoryKind {
             Self::ShaderPresets => "shader_presets",
             Self::ShaderTextures => "shader_textures",
             Self::ShaderCache => "shader_cache",
+            Self::Patches => "patches",
+            Self::Cheats => "cheats",
+            Self::Thumbnails => "thumbnails",
+            Self::Recordings => "recordings",
         }
     }
 
@@ -65,11 +73,15 @@ impl DirectoryKind {
             Self::ShaderPresets => "Presets de shaders",
             Self::ShaderTextures => "Texturas de shaders",
             Self::ShaderCache => "Cache de shaders compilados",
+            Self::Patches => "Patches IPS/BPS/UPS",
+            Self::Cheats => "Cheats",
+            Self::Thumbnails => "Capas e artes dos jogos",
+            Self::Recordings => "Gravações de vídeo",
         }
     }
 
     /// All supported categories in stable presentation order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 17] = [
         Self::Configuration,
         Self::Roms,
         Self::Bios,
@@ -83,14 +95,18 @@ impl DirectoryKind {
         Self::ShaderPresets,
         Self::ShaderTextures,
         Self::ShaderCache,
+        Self::Patches,
+        Self::Cheats,
+        Self::Thumbnails,
+        Self::Recordings,
     ];
 }
 
 /// Persistent directory choices and last-visited folder for each category.
 #[derive(Debug, Clone)]
 pub struct DirectoryPreferences {
-    paths: [PathBuf; 13],
-    last_opened: [Option<PathBuf>; 13],
+    paths: [PathBuf; 17],
+    last_opened: [Option<PathBuf>; 17],
     settings_file: PathBuf,
     bootstrap_file: PathBuf,
 }
@@ -275,6 +291,10 @@ fn index(kind: DirectoryKind) -> usize {
         DirectoryKind::ShaderPresets => 10,
         DirectoryKind::ShaderTextures => 11,
         DirectoryKind::ShaderCache => 12,
+        DirectoryKind::Patches => 13,
+        DirectoryKind::Cheats => 14,
+        DirectoryKind::Thumbnails => 15,
+        DirectoryKind::Recordings => 16,
     }
 }
 
@@ -301,7 +321,7 @@ fn documents_directory() -> Option<PathBuf> {
         .or_else(|| Some(profile.join("Documents")))
 }
 
-fn default_paths(root: &Path) -> [PathBuf; 13] {
+fn default_paths(root: &Path) -> [PathBuf; 17] {
     [
         root.join("config"),
         root.join("roms"),
@@ -316,6 +336,10 @@ fn default_paths(root: &Path) -> [PathBuf; 13] {
         root.join("shaders").join("presets"),
         root.join("shaders").join("textures"),
         root.join("shaders").join("cache"),
+        root.join("patches"),
+        root.join("cheats"),
+        root.join("thumbnails"),
+        root.join("recordings"),
     ]
 }
 
@@ -331,7 +355,7 @@ mod tests {
 
     #[test]
     fn categories_have_independent_indices_and_labels() {
-        assert_eq!(DirectoryKind::ALL.len(), 13);
+        assert_eq!(DirectoryKind::ALL.len(), 17);
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
@@ -354,6 +378,10 @@ mod tests {
         assert_eq!(paths[10], PathBuf::from("root/shaders/presets"));
         assert_eq!(paths[11], PathBuf::from("root/shaders/textures"));
         assert_eq!(paths[12], PathBuf::from("root/shaders/cache"));
+        assert_eq!(paths[13], PathBuf::from("root/patches"));
+        assert_eq!(paths[14], PathBuf::from("root/cheats"));
+        assert_eq!(paths[15], PathBuf::from("root/thumbnails"));
+        assert_eq!(paths[16], PathBuf::from("root/recordings"));
     }
 
     #[test]
