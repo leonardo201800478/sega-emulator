@@ -428,10 +428,10 @@ impl Sn76489Core {
     }
 
     fn reset_noise_generator(&mut self) {
+        // A noise-register write resets the shift register, not the running
+        // divider. Keep the counter and its phase continuous across the write.
         self.lfsr = self.profile.lfsr_seed();
         self.noise_output = (self.lfsr & 1) as u8;
-        self.noise_counter = self.noise_period;
-        self.noise_counter_phase = 0;
     }
 
     fn shift_noise_register(&mut self) {
@@ -669,6 +669,30 @@ mod tests {
         device.write_inner(0x12); // period high bits = 0x12
         assert_eq!(device.tone_periods[2], 0x123);
         assert_eq!(device.noise_period, 0x123);
+    }
+
+    #[test]
+    fn noise_register_write_resets_lfsr_without_restarting_noise_divider() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.noise_counter = 7;
+        device.noise_counter_phase = 1;
+        device.lfsr = 0x1234;
+        device.noise_output = 1;
+
+        device.write_inner(0xE4); // Latch white noise, fixed rate 0x10.
+        assert_eq!(device.lfsr, 0x8000);
+        assert_eq!(device.noise_output, 0);
+        assert_eq!(device.noise_counter, 7);
+        assert_eq!(device.noise_counter_phase, 1);
+
+        device.noise_counter = 5;
+        device.noise_counter_phase = 0;
+        device.write_inner(0x07); // Data byte updates the latched noise register.
+        assert_eq!(device.noise_control, 0x07);
+        assert_eq!(device.lfsr, 0x8000);
+        assert_eq!(device.noise_counter, 5);
+        assert_eq!(device.noise_counter_phase, 0);
     }
 
     #[test]
