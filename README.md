@@ -10,13 +10,17 @@ A prioridade atual é tornar o **Sega Master System temporal** executável por m
 - O runtime utiliza `sega-sms-core`, `sega-audio-runtime` e `sega-video-runtime`.
 - A máquina SMS temporal é executada pelo worker dedicado; a aplicação envia comandos de sessão, sem callbacks por instrução.
 - A sessão de áudio física é criada por uma factory do host e executada na thread proprietária da máquina, preservando a afinidade dos objetos WASAPI/XAudio2.
-- `native/sega_app` contém o shell desktop egui/eframe. A integração operacional entre a GUI, o worker SMS, o viewport D3D12, o áudio e o input nativos ainda está em andamento.
+- `native/sega_app` contém o shell desktop egui/eframe. A integração operacional entre GUI, worker SMS, viewport D3D12, áudio e input nativos está em desenvolvimento nas PRs empilhadas #613 e #614; elas ainda não fazem parte da main.
 - O SMS atômico antigo foi removido do core ativo. `native/sms_core` contém a máquina temporal e fachadas para componentes compartilhados.
 - A implementação temporal ainda é parcial: o VDP opera por scanline, há WAIT de fixture e ainda não há Save States persistentes completos.
-- A consolidação dos crates na árvore canônica `rust/` e a integração do runtime ao shell egui continuam pendentes.
 - O SG-1000 atômico antigo não é runtime alternativo nem fallback do SMS temporal.
+- A PR #615 integrou melhoria de filtragem de saída SN76489 e fidelidade do reset do ruído.
 
 A existência dos crates e do worker temporal não comprova que o emulador esteja pronto para gameplay real. Compatibilidade, fidelidade e desempenho só devem ser declarados após validação reproduzível.
+
+**Fotografia operacional e PRs:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).  
+**Mapa de documentação:** [docs/README.md](docs/README.md).  
+**Evidência do stress longo do Scheduler:** [registro de 2026-11-07](docs/evidence/scheduler-stress-long-2026-11-07.md).
 
 ## Arquitetura
 
