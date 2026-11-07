@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
+**Baseline documental atual:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
@@ -120,3 +120,17 @@ Esta seção supersede as referências anteriores de baseline como fotografia co
 - A integração de aplicação/runtime SMS não comprova por si só a precisão temporal sistêmica do Z80. Não declarar TEMPORAL_PASS global nem equivalência contínua/em blocos sem testes específicos.
 
 Nenhuma alteração de código Z80 decorre desta reconciliação documental.
+
+
+## 12. Baseline remota e fechamento da subquestão OUT (C),0 — 2026-11-07
+
+**Baseline atual auditada:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0`.
+
+- PR #632 integrou esta reconciliação documental de scorecard/matriz no merge SHA `415861b7c550512e0380ac85b273748de796b5f3`.
+- PR #634 integrou o registro das validações de CI no merge SHA `43323df653497a98c7afae52a6f3ea198f46cdb0`. Nenhuma das duas PRs alterou o runtime Z80.
+- CI pós-merge da PR #634: run [42379523450](https://github.com/leonardo201800478/sega-emulator/actions/runs/42379523450), SUCCESS no SHA exato desta baseline. O job de Z80 focused e Scheduler stress foi SKIPPED por classificação de impacto; não é validação semântica do Z80.
+- A investigação E7.7 específica de `ED 71` (`OUT (C),0`) está registrada em [z80-e7-77-out-c-zero-variant-2026-11-07.md](audits/z80-e7-77-out-c-zero-variant-2026-11-07.md).
+- Para as placas SMS documentadas e examinadas, as peças listadas são Zilog Z0840004PSC e, em uma revisão inicial PAL, NEC D780C-1 ou Zilog Z0840004PSC. A evidência do fabricante classifica Z08400 como NMOS; a família Z84C00 é CMOS. A referência experimental/comparativa atribui saída zero ao ED 71 no Z80 NMOS e FF no Zilog CMOS, com exceções entre clones.
+- O runtime integrado escreve `0x00` para ED 71 e tem teste de I/O que confirma a transação `(BC, 0x00)`. Esse comportamento corresponde ao perfil NMOS das placas SMS documentadas. Não foi necessária alteração de runtime.
+- **Limite:** o levantamento de placas não é um censo de todas as unidades/revisões produzidas. Não inferir que todos os clones CMOS ou todas as variantes Z80 tenham comportamento idêntico. A exceção Sharp LH5080A demonstra que uma regra binária “CMOS = FF” não é universal.
+- **Estado E7.7:** a subquestão ED 71 fica RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE, com evidência documental de componentes e regressão de runtime. A auditoria semântica integral E7.7 continua IN_PROGRESS; CMOS/clones em geral e outras famílias/efeitos ainda exigem reconciliação. **E8 permanece BLOCKED.**

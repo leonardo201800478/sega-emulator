@@ -1,7 +1,7 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c` (2026-11-06, após PRs #595–#597).  
+**Baseline auditada:** `main` — `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
@@ -322,3 +322,14 @@ Esta seção supersede as baselines históricas acima como referência da `main`
 - A matriz continua sendo inventário de implementação e evidências; a baseline atual não equivale a uma nova execução das suítes.
 - E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED até fechamento formal de E7.
 - `TEMPORAL_UNVERIFIED` continua sendo uma classificação de lacuna de evidência, não uma falha funcional automática. Aplicar ADR-0016 e exigir precisão temporal somente onde houver interação observável demonstrada.
+
+
+---
+
+## Baseline e evidência E7.7 — 2026-11-07
+
+**Main atual:** `43323df653497a98c7afae52a6f3ea198f46cdb0`. PRs #632 e #634 alteraram somente documentação; não reabriram E4C/E5/E6 nem produziram nova validação de CPU.
+
+A subquestão `ED 71 / OUT (C),0` está resolvida para o perfil NMOS das placas Master System documentadas no levantamento: SMS Power lista Zilog Z0840004PSC em várias revisões e Zilog Z0840004PSC ou NEC D780C-1 em uma revisão inicial PAL. O produto Zilog distingue Z08400 NMOS de Z84C00 CMOS. As referências comparativas descrevem ED 71 como saída 00h no Zilog NMOS e FFh no Zilog CMOS, com exceções em clones; o teste de runtime integrado verifica a saída 00h. Consulte [auditoria E7.7 ED 71](audits/z80-e7-77-out-c-zero-variant-2026-11-07.md).
+
+**Classificação:** `OUT (C),0` = `RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE`; outros clones/variantes = `NOT_VERIFIED`. Não adicionar uma configuração de variante CMOS ao runtime sem um console/placa suportado que a exija. E7.7 global permanece `IN_PROGRESS`; E8 permanece `BLOCKED`.
