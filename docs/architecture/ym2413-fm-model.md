@@ -584,3 +584,39 @@ A implementação Rust de referência `emu198x_yamaha_ym2413` documenta seguir o
 - Implementação de referência emu2413 (MIT; usar somente para comparação e conferir branch/commit): https://github.com/digital-sound-antiques/emu2413
 
 **Status M1:** PG base e PM têm fórmulas candidatas com suporte de medições; a escala EG de 0,375 dB e a temporização por tabela estão caracterizadas; feedback possui modelo que reproduz medições após sincronização. Pipeline exato, estados iniciais, todos os offsets, integração de slots e vetores completos continuam pendentes. Nenhum core YM2413 foi implementado por esta atualização documental.
+
+
+### 14.10 Auditoria de integração SMS/áudio contra o `main` (SHA `c65594cf840090bad6036810a0df98f22b9d1484`)
+
+A leitura dos fontes ativos confirmou os seguintes limites concretos:
+
+1. **Domínio de clock compartilhável.** O coordenador SMS registra exatamente três domínios: Z80 (ID 0), PSG (ID 1) e VDP (ID 2). O restore exige exatamente três domínios. O PSG recebe 3.579.545 Hz; o YM2413 também recebe 3.579.545 Hz. Como ambos compartilham a mesma fonte/razão de clock no perfil SMS NTSC considerado, o adapter FM deve consumir o mesmo `ClockAdvance` do domínio 1, sem registrar um quarto domínio nem avançar o Scheduler duas vezes. O estado interno de fase/divisor de cada chip continua independente.
+
+2. **Barramento FM ausente.** `SmsIo::write_port` trata somente o registrador de controle $3F e declara explicitamente que FM ainda não está conectado. `SmsTemporalBus::write_port` intercepta VDP, PSG e memória; $F0/$F1/$F2 atualmente caem no caminho genérico de I/O. `read_port` também não fornece o contador/control readback do FM. O decode de portas, a ordem do latch/endereço, a escrita de dados e o readback de $F2 precisam ser implementados no barramento SMS, com timestamp de conclusão do ciclo Z80.
+
+3. **Save State incompleto para FM.** `SmsTemporalBusState` serializa atualmente `psg`, `vdp`, `io` e o estado do coordenador, mas não contém latch FM, registradores, slots, operadores, LFOs, pipeline, saídas MO/RO ou estado de mix/resampling FM. A adição do chip exige extensão/versionamento do estado do barramento e validação cruzada com o perfil físico do SMS. Como não se adiciona domínio ao Scheduler, a versão do estado do coordenador não deve ser incrementada apenas por essa razão; a versão do estado do barramento deve ser revista.
+
+4. **Mixer multi-source ainda não está exposto pela sessão.** `AudioMixer::mix_mono_into` aceita várias `MixSource` com o mesmo número de frames, mas `NativeAudioSession::process_samples` constrói sempre um array com uma única fonte. Chamá-lo uma vez para PSG e outra para FM não mistura os chips: concatena dois blocos temporalmente no resampler e envia blocos separados. É necessário expor uma operação de sessão que receba todas as fontes alinhadas e invoque o mixer uma única vez por lote; manter `process_samples` como wrapper de fonte única é compatível.
+
+5. **Taxas nativas diferentes.** O SN76489 produz amostras na taxa solicitada ao core e aplica seu próprio filtro/downsampling a partir do clock interno dividido por 16. O `PcmResampler` de `sega-audio-runtime` assume entrada fixa de 44.100 Hz e converte para a taxa de saída do host. O YM2413 produz uma amostra por 72 clocks de entrada (aprox. 49.716,04 amostras/s). Portanto, a saída YM2413 não pode ser entregue diretamente ao atual `NativeAudioSession` como se fosse 44.100 Hz. Antes da mistura, deve existir uma conversão determinística para uma taxa comum (ou uma generalização explícita do mixer/resampler para fontes com taxas e timestamps próprios). A fase dos conversores precisa ser derivada do tempo do Scheduler, não do tamanho dos blocos da GUI/host.
+
+6. **MO/RO e circuito analógico.** O core deve preservar os pinos MO e RO separadamente. A conversão para a fonte mono do SMS deve seguir a rede de soma/ganho do hardware da placa/revisão selecionada. Não aplicar automaticamente a ponderação de uma implementação genérica ou de outro derivativo OPLL; o ganho relativo e eventual filtragem analógica exigem evidência do circuito SMS escolhido. O controle de mute/roteamento de $F2 não deve parar os geradores internos sem evidência física.
+
+**Decisão arquitetural M1:** o YM2413 recebe os mesmos avanços de clock do domínio PSG (ID 1), mas mantém estado e pipeline próprios. O adapter não cria um relógio paralelo nem um novo domínio no Scheduler. O barramento SMS passa a possuir o adapter e o estado de portas FM. A sessão de áudio passa a misturar fontes alinhadas antes do resampling PCM final.
+
+**Bloqueios para implementação:**
+- confirmar o circuito MO/RO e as revisões/modelos SMS japoneses alvo;
+- definir a taxa comum de mistura e o ponto único de conversão, preservando latência/fase entre PSG e FM;
+- especificar o alinhamento temporal entre o ciclo de escrita $F0/$F1/$F2, a amostra YM2413 e o avanço compartilhado do domínio 1;
+- projetar os vetores de $F2 (mute/enable e contador C-Sync) e a compatibilidade de perfil antes de habilitar FM por região/modelo.
+
+Fontes de código auditadas:
+- `native/sms_core/src/temporal.rs`: IDs 0/1/2 e restore com três domínios.
+- `native/sms_core/src/io.rs`: I/O atual e ausência explícita de FM.
+- `native/sms_core/src/temporal_bus.rs`: decode de portas, estado do barramento e avanço do PSG.
+- `native/audio_runtime/src/dsp.rs`: mixer multi-source.
+- `native/audio_runtime/src/session.rs`: sessão que atualmente passa uma única fonte ao mixer.
+- `native/audio_runtime/src/lib.rs`: entrada fixa de 44.100 Hz do resampler PCM.
+- `native/sn76489/src/psg.rs`: geração/downsampling interno do SN76489 para a taxa configurada.
+
+**Status:** auditoria de integração PASS (leitura estática dos fontes no SHA acima); implementação FM, validação elétrica da mistura MO/RO e testes de integração permanecem NOT RUN.
