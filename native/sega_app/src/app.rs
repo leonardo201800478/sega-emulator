@@ -339,6 +339,11 @@ impl SegaApp {
             .worker
             .as_ref()
             .ok_or_else(|| "runtime SMS não está disponível para exportar a SRAM".to_owned())?;
+        // Freeze the worker before taking the persistence snapshot. Otherwise a
+        // frame could mutate SRAM after export but before ROM replacement/shutdown.
+        if worker.is_running() {
+            worker.pause()?;
+        }
         let contents = worker
             .export_cartridge_sram()?
             .ok_or_else(|| "perfil persistente não possui SRAM no runtime".to_owned())?;
