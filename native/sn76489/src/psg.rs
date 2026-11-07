@@ -207,6 +207,7 @@ impl Sn76489Core {
         let sample_buffer_capacity =
             usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
+        let filter_history = vec![0.0; filter_coefficients.len()];
         let mut device = Self {
             profile,
             clock_hz,
@@ -229,7 +230,7 @@ impl Sn76489Core {
             output_phase: 0,
             noise_period: 0x10,
             filter_coefficients,
-            filter_history: vec![0.0; FILTER_TAPS],
+            filter_history,
             filter_position: 0,
         };
         device.reset_inner();
