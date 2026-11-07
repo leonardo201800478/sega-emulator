@@ -86,7 +86,7 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
     let internal_rate = clock_hz as f64 / CLOCK_DIVIDER as f64;
     let rate_ratio = (sample_rate as f64 / internal_rate).min(1.0);
 
-    let (cutoff, taps) = if sample_rate as f64 < internal_rate {
+    let (cutoff, taps) = if (sample_rate as f64) < internal_rate {
         let transition_width = 0.08 * rate_ratio;
         let order = ((KAISER_ATTENUATION_DB - 8.0)
             / (2.285 * 2.0 * PI * transition_width))
@@ -562,7 +562,7 @@ mod tests {
                 "stopband attenuation below target at {output_rate} Hz: {stopband:.8}"
             );
             assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
-            assert!(coefficients.len().is_multiple_of(2) == false);
+            assert!(!coefficients.len().is_multiple_of(2));
         }
     }
 
