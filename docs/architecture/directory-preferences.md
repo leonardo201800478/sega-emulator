@@ -2,7 +2,7 @@
 
 ## Scope
 
-The native egui application exposes six independent user-selected directories:
+The native egui application exposes thirteen independent user-selected directories:
 
 - Configuration
 - ROMs
@@ -16,6 +16,7 @@ The native egui application exposes six independent user-selected directories:
 - Shared Slang shader assets
 - Shader presets
 - Shader textures / LUTs
+- Compiled shader cache
 
 No category is forced to share a parent directory. Selecting one path must not modify any other category. Changing a configured path does not move or delete existing files.
 
@@ -38,6 +39,7 @@ Sega Emulator/
     shared/
     presets/
     textures/
+    cache/
 ```
 
 The application checks the OneDrive and OneDriveCommercial environment paths for a redirected Documents folder before falling back to `%USERPROFILE%/Documents`. Each path can be changed independently through the general settings screen.
@@ -52,7 +54,7 @@ The shader storage is separated by graphics backend, with additional shared-reso
 - `shaders/presets`: user presets and shader-chain descriptions (for example, `.slangp`).
 - `shaders/textures`: LUTs and external texture assets referenced by presets.
 
-The folder split is an organization and selection boundary, not a claim that Vulkan and Direct3D require different shader languages. Slang is the preferred cross-backend format where supported; GLSL is OpenGL-specific and legacy Cg is deprecated. The current native video runtime exposes D3D12 presentation only; this preference layer does not implement a Vulkan renderer, shader compiler, shader-chain loader, or runtime shader application.
+The folder split is an organization and selection boundary, not a claim that Vulkan and Direct3D require different shader languages. The compiled shader cache is separate from source packs and presets because compiled artifacts may depend on backend, GPU, driver and shader compiler versions; cache invalidation must be handled by the renderer rather than by deleting user shader sources. Slang is the preferred cross-backend format where supported; GLSL is OpenGL-specific and legacy Cg is deprecated. The current native video runtime exposes D3D12 presentation only; this preference layer does not implement a Vulkan renderer, shader compiler, shader-chain loader, or runtime shader application.
 
 ## Picker history
 
@@ -72,4 +74,4 @@ Settings are written to a temporary file and renamed into place. The bootstrap p
 
 ## Boundaries and follow-up
 
-The settings service only owns path preferences and picker history. It does not yet redirect the ROM loader, BIOS resolver, logging backend, SRAM persistence, save-state serializer, screenshot capture pipeline, shader discovery, preset loader, shader compiler/cache or texture resolver. Those consumers must be integrated separately before the configured paths can be considered operational for their respective data.
+The settings service only owns path preferences and picker history. It does not yet redirect the ROM loader, BIOS resolver, logging backend, SRAM persistence, save-state serializer, screenshot capture pipeline, shader discovery, preset loader, shader compiler, compiled-shader cache manager or texture resolver. Those consumers must be integrated separately before the configured paths can be considered operational for their respective data.
