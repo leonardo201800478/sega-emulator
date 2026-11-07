@@ -317,8 +317,8 @@ impl SegaApp {
     fn shutdown_native_viewport_with_save(&mut self) -> bool {
         if let Err(error) = self.persist_current_cartridge() {
             self.native_viewport.error = Some(format!(
-                    "Não foi possível salvar a SRAM antes do encerramento: {error}"
-                ));
+                "Não foi possível salvar a SRAM antes do encerramento: {error}"
+            ));
             return false;
         }
         self.native_viewport.shutdown();
@@ -397,8 +397,9 @@ impl SegaApp {
         };
 
         if let Err(error) = self.persist_current_cartridge() {
-            self.native_viewport.error =
-                Some(format!("Não foi possível salvar a SRAM do cartucho atual: {error}"));
+            self.native_viewport.error = Some(format!(
+                "Não foi possível salvar a SRAM do cartucho atual: {error}"
+            ));
             return;
         }
 
@@ -470,8 +471,9 @@ impl SegaApp {
     fn apply_command(&mut self, command: UiCommand) {
         if matches!(command, UiCommand::CloseMachine) {
             if let Err(error) = self.persist_current_cartridge() {
-                self.native_viewport.error =
-                    Some(format!("Não foi possível salvar a SRAM antes de fechar: {error}"));
+                self.native_viewport.error = Some(format!(
+                    "Não foi possível salvar a SRAM antes de fechar: {error}"
+                ));
                 return;
             }
             self.native_viewport.close_worker();
@@ -481,8 +483,9 @@ impl SegaApp {
 
         if matches!(command, UiCommand::Stop) {
             if let Err(error) = self.persist_current_cartridge() {
-                self.native_viewport.error =
-                    Some(format!("Não foi possível salvar a SRAM antes de parar: {error}"));
+                self.native_viewport.error = Some(format!(
+                    "Não foi possível salvar a SRAM antes de parar: {error}"
+                ));
                 return;
             }
         }
