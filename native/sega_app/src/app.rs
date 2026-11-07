@@ -1483,5 +1483,206 @@ mod tests {
         let error = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
             .expect_err("ambiguous archives must be rejected");
         assert!(error.contains("mais de um arquivo .sms"));
+
+    use super::{LoadedCartridge, SaveRamStore, SegaApp, UiCommand};
+    use sega_media::{
+        CartridgeHardwareProfile, CartridgeIdentity, CartridgeMapper, CartridgeRamKind,
+        CartridgeRamMapping, CartridgeRamProfile, CartridgeSystem, ProfileStatus,
+    };
+    use sega_sms_runtime::SmsTemporalWorker;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static SRAM_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    fn temporary_test_directory(label: &str) -> PathBuf {
+        let sequence = SRAM_TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "sega-app-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("test directory should be created");
+        path
+    }
+
+    fn persistent_test_profile() -> CartridgeHardwareProfile {
+        CartridgeHardwareProfile {
+            system: CartridgeSystem::MasterSystem,
+            mapper: CartridgeMapper::SmsSega,
+            ram: Some(CartridgeRamProfile {
+                kind: CartridgeRamKind::BatteryBackedSram,
+                capacity_bytes: 0x2000,
+                mapping: CartridgeRamMapping::SegaMapperSlot2,
+                mapped_window_bytes: 0x4000,
+                bank_size_bytes: 0x2000,
+                mirrored: true,
+            }),
+            status: ProfileStatus::Verified,
+            board: None,
+            evidence: vec!["native application lifecycle test".to_owned()],
+        }
+    }
+
+    fn persistent_test_app(
+        save_root: PathBuf,
+        rom: Vec<u8>,
+        initial_sram: Vec<u8>,
+    ) -> (SegaApp, CartridgeIdentity, CartridgeHardwareProfile) {
+        let identity = CartridgeIdentity::from_bytes(&rom);
+        let profile = persistent_test_profile();
+        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            rom,
+            "usa",
+            Some(profile.clone()),
+            Some(initial_sram),
+        )
+        .expect("persistent SMS worker should be created");
+        let mut app = SegaApp::default();
+        app.save_ram_store = SaveRamStore::new(save_root);
+        app.current_cartridge = Some(LoadedCartridge {
+            identity: identity.clone(),
+            profile: profile.clone(),
+        });
+        app.native_viewport.worker = Some(worker);
+        (app, identity, profile)
+    }
+
+    #[test]
+    fn application_persists_sram_snapshot_at_worker_safe_point() {
+        let directory = temporary_test_directory("snapshot");
+        let save_root = directory.join("saves");
+        let initial = vec![0x5A; 0x2000];
+        let (mut app, identity, profile) =
+            persistent_test_app(save_root, vec![0xA5; 0x4000], initial.clone());
+
+        app.native_viewport
+            .worker
+            .as_ref()
+            .unwrap()
+            .start()
+            .expect("worker should start");
+        app.persist_current_cartridge()
+            .expect("SRAM snapshot should be persisted");
+
+        assert!(
+            !app.native_viewport.worker.as_ref().unwrap().is_running(),
+            "successful persistence leaves the worker paused for its caller to stop or replace"
+        );
+        assert_eq!(
+            app.save_ram_store.load(&identity, &profile).unwrap(),
+            Some(initial)
+        );
+        drop(app);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn failed_application_persistence_restores_previously_running_worker() {
+        let directory = temporary_test_directory("failed-save");
+        let invalid_save_root = directory.join("not-a-directory");
+        fs::write(&invalid_save_root, b"file blocks directory creation")
+            .expect("blocking file should be created");
+        let initial = vec![0x3C; 0x2000];
+        let (mut app, _, _) = persistent_test_app(
+            invalid_save_root,
+            vec![0xC3; 0x4000],
+            initial,
+        );
+
+        let worker = app.native_viewport.worker.as_ref().unwrap();
+        worker.start().expect("worker should start");
+        assert!(worker.is_running());
+
+        let error = app
+            .persist_current_cartridge()
+            .expect_err("invalid save root must fail persistence");
+        assert!(!error.is_empty());
+        assert!(
+            worker.is_running(),
+            "persistence failure must restore the worker's previous running state"
+        );
+
+        worker.pause().expect("worker should pause for test cleanup");
+        app.current_cartridge = None;
+        drop(app);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn stop_persists_sram_before_stopping_the_worker() {
+        let directory = temporary_test_directory("stop");
+        let initial = vec![0x69; 0x2000];
+        let (mut app, identity, profile) = persistent_test_app(
+            directory.join("saves"),
+            vec![0x96; 0x4000],
+            initial.clone(),
+        );
+
+        app.native_viewport
+            .worker
+            .as_ref()
+            .unwrap()
+            .start()
+            .expect("worker should start");
+        app.apply_command(UiCommand::Stop);
+
+        assert!(!app.native_viewport.worker.as_ref().unwrap().is_running());
+        assert_eq!(
+            app.save_ram_store.load(&identity, &profile).unwrap(),
+            Some(initial)
+        );
+        drop(app);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn controlled_shutdown_persists_sram_before_worker_teardown() {
+        let directory = temporary_test_directory("shutdown");
+        let initial = vec![0x87; 0x2000];
+        let (mut app, identity, profile) = persistent_test_app(
+            directory.join("saves"),
+            vec![0x78; 0x4000],
+            initial.clone(),
+        );
+
+        assert!(app.shutdown_native_viewport_with_save());
+        assert!(app.native_viewport.worker.is_none());
+        assert!(app.current_cartridge.is_none());
+        assert_eq!(
+            app.save_ram_store.load(&identity, &profile).unwrap(),
+            Some(initial)
+        );
+        drop(app);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn switching_to_unknown_rom_persists_previous_cartridge_without_sram_leakage() {
+        let directory = temporary_test_directory("rom-switch");
+        let save_root = directory.join("saves");
+        let old_rom = vec![0xA5; 0x4000];
+        let initial = vec![0xD2; 0x2000];
+        let (mut app, old_identity, old_profile) =
+            persistent_test_app(save_root, old_rom, initial.clone());
+        let incoming_rom_path = directory.join("unknown.sms");
+        fs::write(&incoming_rom_path, vec![0x5A; 0x4000])
+            .expect("incoming synthetic ROM should be written");
+        app.rom_path = incoming_rom_path.to_string_lossy().into_owned();
+
+        app.load_rom_from_path();
+
+        assert!(app.native_viewport.worker.is_some());
+        assert!(
+            app.current_cartridge.is_none(),
+            "unknown incoming ROM must not inherit the previous cartridge profile"
+        );
+        assert_eq!(
+            app.save_ram_store.load(&old_identity, &old_profile).unwrap(),
+            Some(initial)
+        );
+        drop(app);
+        let _ = fs::remove_dir_all(directory);
+    }
     }
 }
