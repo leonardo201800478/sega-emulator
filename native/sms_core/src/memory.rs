@@ -840,14 +840,17 @@ mod tests {
         assert_eq!(memory.read(0xDFFF), 0x5A);
         assert_eq!(memory.read(0xE000), 0x3C);
         assert_eq!(memory.read(0xFFFF), 0xC3);
-        assert_eq!(memory.work_ram()[0], 0, "internal work RAM remains isolated");
+        assert_eq!(
+            memory.work_ram()[0],
+            0,
+            "internal work RAM remains isolated"
+        );
     }
 
     #[test]
     fn mapper_bit_four_high_window_mirrors_eight_kib_and_uses_lower_page_of_32k() {
         let mut eight_k =
-            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K))
-                .unwrap();
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         eight_k.write_control_port(0x18);
         eight_k.write(0xFFFC, 0x10);
         eight_k.write(0xC123, 0x61);
@@ -894,10 +897,18 @@ mod tests {
         memory.write(0xC000, 0xA5);
         memory.write_control_port(0x08);
         memory.write(0xFFFC, 0x10);
-        assert_eq!(memory.read(0xC000), 0xA5, "enabled internal RAM has priority");
+        assert_eq!(
+            memory.read(0xC000),
+            0xA5,
+            "enabled internal RAM has priority"
+        );
 
         memory.write_control_port(0x58);
-        assert_eq!(memory.read(0xC000), 0xFF, "disabled cartridge does not expose SRAM");
+        assert_eq!(
+            memory.read(0xC000),
+            0xFF,
+            "disabled cartridge does not expose SRAM"
+        );
     }
 
     #[test]
