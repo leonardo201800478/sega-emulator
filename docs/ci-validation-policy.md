@@ -8,13 +8,13 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 
 | Change area | Required automated validation |
 | --- | --- |
-| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Rust formatting; Clippy and tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core` |
+| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Rust formatting; Clippy and tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU-focused validation is selected from Z80 implementation, SMS/SG-1000 temporal integration, and Z80 conformance-test paths. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
-| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay |
-| Video core / D3D12 / DXGI | Root workspace validation where applicable; Windows validation of the affected video runtime or native application |
-| Audio chips / DSP / audio runtime | Root workspace validation where applicable; Windows WASAPI/XAudio2 validation when native audio output or its host integration changes |
+| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
+| Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
+| Audio chips / DSP / audio runtime | Root workspace validation where applicable. Windows WASAPI/XAudio2 validation runs for `native/audio_output`, `native/audio_runtime`, or the shared SN76489 dependency. |
 | SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation |
-| Native egui application | Windows-targeted format, Clippy, and headless tests for the application |
+| Native egui application and SMS worker integration | Windows-targeted format, Clippy, and headless tests for the application; changes to `rust/runtime/sms-runtime` also trigger this dependent application build |
 | PowerShell tooling | Parse only the changed `.ps1` scripts |
 | Markdown / MDX documentation | Prettier check only for changed Markdown/MDX files; no Rust build, Clippy, or tests |
 | Other text documentation | Patch whitespace check only; no Rust build, Clippy, or tests |
