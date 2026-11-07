@@ -29,7 +29,6 @@ concurrency:
 jobs:
   changes:
     name: Change impact classification
-    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,16 +47,18 @@ jobs:
       full: ${{ steps.filter.outputs.full }}
     steps:
       - name: Checkout history for push path classification
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Classify changed paths
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 (Node.js 24)
         with:
           base: ${{ github.ref }}
+          predicate-quantifier: some-with-excludes
           filters: |
             docs:
               - '**/*.md'
@@ -433,24 +434,51 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
+          EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' && needs.changes.outputs.full != 'true' }}
           Z80: ${{ needs.z80-focused.result }}
+          EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
+          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
+          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
+          EXPECT_WINDOWS_INPUT: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_INPUT: ${{ needs.windows-input.result }}
+          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
+          EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
         run: |
           set -euo pipefail
-          for result in "$CHANGES" "$RUST_WORKSPACE" "$Z80" "$DOCS" \
-                        "$WINDOWS_D3D12" "$WINDOWS_AUDIO" "$WINDOWS_INPUT" \
-                        "$WINDOWS_TOOLING" "$SCHEDULER"; do
-            case "$result" in
-              failure|cancelled|timed_out)
-                echo "Validation failed or was cancelled: $result"
+          check_job() {
+            local name="$1"
+            local expected="$2"
+            local actual="$3"
+            if [[ "$expected" == "true" ]]; then
+              if [[ "$actual" != "success" ]]; then
+                echo "Required validation '$name' expected success but got '$actual'."
                 exit 1
-                ;;
-            esac
-          done
-          echo "All applicable validation jobs passed or were correctly skipped."
+              fi
+              echo "PASS $name"
+            else
+              if [[ "$actual" != "skipped" ]]; then
+                echo "Unexpected validation '$name' ran (result: '$actual'); review impact filters."
+                exit 1
+              fi
+              echo "NOT RUN (not applicable): $name"
+            fi
+          }
+          if [[ "$CHANGES" != "success" ]]; then
+            echo "Change classification did not succeed: $CHANGES"
+            exit 1
+          fi
+          check_job "Rust workspace" "$EXPECT_RUST_WORKSPACE" "$RUST_WORKSPACE"
+          check_job "Z80 focused" "$EXPECT_Z80" "$Z80"
+          check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
+          check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
+          check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
+          check_job "Windows input" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
+          check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
+          check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
