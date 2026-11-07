@@ -511,7 +511,7 @@ O texto do manual confirma a relação RATE=4R+RKS e que RATE=0 não altera o en
 
 ### 14.4 EG — temporização candidata e transições observadas
 
-O modelo de andete descreve um contador global compartilhado, incrementado uma vez por amostra interna, que distribui as atualizações de envelope. Para as taxas de decay usuais:
+O modelo de andete descreve um contador global compartilhado, incrementado uma vez por amostra de saída (uma travessia completa dos 18 slots, equivalente a 72 clocks de entrada), que distribui as atualizações de envelope. Para as taxas de decay usuais:
 
 - `eg_shift = 13 - (RATE / 4)`
 - `eg_select = RATE & 3`
