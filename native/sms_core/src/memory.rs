@@ -871,8 +871,8 @@ mod tests {
         thirty_two_k.write(0xFFFC, 0x18);
         assert_eq!(
             thirty_two_k.read(0x8000),
-            0,
-            "bit 2 selects the lower slot-2 page"
+            0x11,
+            "slot-2 bank 0 aliases the lower page exposed in the high window"
         );
         assert_eq!(thirty_two_k.read(0xC000), 0x11);
     }
