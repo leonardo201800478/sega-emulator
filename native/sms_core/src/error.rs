@@ -7,6 +7,7 @@ pub enum SmsCoreError {
     EmptyCartridge,
     RomTooLargeForSegaMapper { size: usize, max_size: usize },
     InvalidBiosSize { size: usize, expected: usize },
+    InvalidCartridgeRamSize { size: usize, expected: usize },
 }
 
 impl fmt::Display for SmsCoreError {
