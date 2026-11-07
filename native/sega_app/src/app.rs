@@ -486,13 +486,13 @@ impl SegaApp {
             return;
         }
 
-        if matches!(command, UiCommand::Stop) {
-            if let Err(error) = self.persist_current_cartridge() {
-                self.native_viewport.error = Some(format!(
-                    "Não foi possível salvar a SRAM antes de parar: {error}"
-                ));
-                return;
-            }
+        if matches!(command, UiCommand::Stop)
+            && let Err(error) = self.persist_current_cartridge()
+        {
+            self.native_viewport.error = Some(format!(
+                "Não foi possível salvar a SRAM antes de parar: {error}"
+            ));
+            return;
         }
 
         let Some(worker) = self.native_viewport.worker.as_ref() else {
@@ -1328,6 +1328,15 @@ fn to_win32_pixel(value: f32) -> i32 {
     }
 }
 
+
+impl Drop for SegaApp {
+    fn drop(&mut self) {
+        if let Err(error) = self.persist_current_cartridge() {
+            eprintln!("Falha ao persistir SRAM do cartucho no encerramento: {error}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::SegaApp;
@@ -1454,13 +1463,5 @@ mod tests {
         let error = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
             .expect_err("ambiguous archives must be rejected");
         assert!(error.contains("mais de um arquivo .sms"));
-    }
-}
-
-impl Drop for SegaApp {
-    fn drop(&mut self) {
-        if let Err(error) = self.persist_current_cartridge() {
-            eprintln!("Falha ao persistir SRAM do cartucho no encerramento: {error}");
-        }
     }
 }
