@@ -732,7 +732,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn disabled_cartridge_slot_rejects_sram_writes() {
         let mut memory =
