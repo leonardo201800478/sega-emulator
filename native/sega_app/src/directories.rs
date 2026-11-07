@@ -335,6 +335,10 @@ mod tests {
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
+        let mut indices = DirectoryKind::ALL.map(index);
+        indices.sort_unstable();
+        indices.dedup();
+        assert_eq!(indices.len(), DirectoryKind::ALL.len());
     }
 
     #[test]
