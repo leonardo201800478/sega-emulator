@@ -68,6 +68,13 @@ impl<S: PcmSink> NativeAudioSession<S> {
         self.sink.write_pcm(pcm)
     }
 
+    /// Update output volume without rebuilding the host stream.
+    pub fn set_volume(&mut self, volume: u8) -> Result<(), String> {
+        self.resampler
+            .set_volume(volume)
+            .map_err(|error| error.to_string())
+    }
+
     /// Return backend underrun and dropped-block counters.
     pub fn metrics(&self) -> (u64, u64) {
         self.sink.metrics()
@@ -142,6 +149,29 @@ mod tests {
         session.close();
         assert!(session.sink.closed);
         assert!(session.process_samples(&[0.25]).is_err());
+    }
+
+    #[test]
+    fn changing_volume_keeps_the_existing_output_sink_open() {
+        let sink = RecordingSink::default();
+        let mut session = NativeAudioSession::new(44_100, 100, sink).unwrap();
+
+        session.process_samples(&[0.5]).unwrap();
+        session.set_volume(50).unwrap();
+        session.process_samples(&[0.5]).unwrap();
+
+        assert_eq!(session.sink.blocks.len(), 2);
+        assert!(!session.sink.closed);
+        let full_volume = i16::from_le_bytes([session.sink.blocks[0][0], session.sink.blocks[0][1]]);
+        let half_volume = i16::from_le_bytes([session.sink.blocks[1][0], session.sink.blocks[1][1]]);
+        assert!(half_volume.abs() < full_volume.abs());
+    }
+
+    #[test]
+    fn invalid_volume_does_not_change_the_active_session() {
+        let mut session = NativeAudioSession::new(44_100, 100, RecordingSink::default()).unwrap();
+        assert!(session.set_volume(101).is_err());
+        assert_eq!(session.resampler.volume(), 100);
     }
 
     #[test]
