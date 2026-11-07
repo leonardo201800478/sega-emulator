@@ -5,7 +5,8 @@
 //! The Codemasters mapper pages all three slots through writes to 0000, 4000
 //! and 8000. Sega mapper writes also reach mirrored work RAM, and reads from
 //! those addresses return the RAM copy. Sega mapper SRAM is selected by $FFFC
-//! bit 3 in slot 2; 8 KiB SRAM is mirrored across the 16 KiB slot.
+//! bit 3 in slot 2 and bit 2 selects one of two 16 KiB SRAM banks; 8 KiB SRAM
+//! mirrors across both banks and the 16 KiB slot.
 //!
 //! Reference: https://www.smspower.org/Development/Mappers
 //! Reference: https://www.smspower.org/Development/MemoryMap
@@ -264,8 +265,8 @@ impl SmsMemory {
         }
 
         // Sega mapper bit 3 replaces slot 2 ROM with cartridge SRAM. An 8 KiB
-        // device mirrors across the 16 KiB CPU window; bit 2 only selects a
-        // second 16 KiB page on cartridges that physically provide one.
+        // device mirrors across both bank selections; 32 KiB devices expose
+        // two independent 16 KiB pages selected by bit 2.
         if (0x8000..=0xBFFF).contains(&address)
             && self.control_port & 0x40 == 0
             && matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
@@ -350,12 +351,12 @@ impl SmsMemory {
     }
 
     /// Return the battery-backed cartridge SRAM contents, if this cartridge
-    /// profile exposes an 8 KiB Sega-mapper RAM device.
+    /// profile exposes a Sega-mapper RAM device.
     pub fn cartridge_sram(&self) -> Option<&[u8]> {
         self.cartridge_sram.as_deref()
     }
 
-    /// Restore exactly one 8 KiB cartridge SRAM image.
+    /// Restore an image matching the configured cartridge SRAM capacity.
     pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), SmsCoreError> {
         let Some(sram) = self.cartridge_sram.as_mut() else {
             return Err(SmsCoreError::InvalidCartridgeRamSize {
@@ -407,7 +408,7 @@ impl SmsMemory {
 #[cfg(test)]
 mod tests {
     use super::{
-        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_8K, MAX_EXTENDED_BANKS,
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_32K, CARTRIDGE_SRAM_8K, MAX_EXTENDED_BANKS,
         MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
