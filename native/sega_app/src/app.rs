@@ -1482,6 +1482,7 @@ mod tests {
         let error = super::read_sms_from_zip(Cursor::new(archive.into_inner()))
             .expect_err("ambiguous archives must be rejected");
         assert!(error.contains("mais de um arquivo .sms"));
+    }
 
     use super::{LoadedCartridge, SaveRamStore, SegaApp, UiCommand};
     use sega_media::{
@@ -1682,6 +1683,5 @@ mod tests {
         );
         drop(app);
         let _ = fs::remove_dir_all(directory);
-    }
     }
 }
