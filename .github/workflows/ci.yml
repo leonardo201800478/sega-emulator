@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-\${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,17 +35,17 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      rust: \${{ steps.filter.outputs.rust }}
-      other_rust: \${{ steps.filter.outputs.other_rust }}
-      z80: \${{ steps.filter.outputs.z80 }}
-      docs: \${{ steps.filter.outputs.docs }}
-      video: \${{ steps.filter.outputs.video }}
-      audio: \${{ steps.filter.outputs.audio }}
-      input: \${{ steps.filter.outputs.input }}
-      app: \${{ steps.filter.outputs.app }}
-      scheduler: \${{ steps.filter.outputs.scheduler }}
-      tooling: \${{ steps.filter.outputs.tooling }}
-      full: \${{ steps.filter.outputs.full }}
+      rust: ${{ steps.filter.outputs.rust }}
+      other_rust: ${{ steps.filter.outputs.other_rust }}
+      z80: ${{ steps.filter.outputs.z80 }}
+      docs: ${{ steps.filter.outputs.docs }}
+      video: ${{ steps.filter.outputs.video }}
+      audio: ${{ steps.filter.outputs.audio }}
+      input: ${{ steps.filter.outputs.input }}
+      app: ${{ steps.filter.outputs.app }}
+      scheduler: ${{ steps.filter.outputs.scheduler }}
+      tooling: ${{ steps.filter.outputs.tooling }}
+      full: ${{ steps.filter.outputs.full }}
     steps:
       - name: Classify changed paths
         id: filter
@@ -61,8 +61,6 @@ jobs:
             rust:
               - 'native/**/*.rs'
               - 'rust/**/*.rs'
-              - 'native/sega_app/**'
-              - 'native/audio_output/**'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
               - '.cargo/**'
@@ -86,14 +84,27 @@ jobs:
               - 'native/z80_alu/**'
               - 'native/z80_bus/**'
             video:
-              - 'native/video_runtime/**'
+              - 'native/video_runtime/**/*.rs'
+              - 'native/video_runtime/Cargo.toml'
+              - 'native/video_runtime/Cargo.lock'
+              - 'native/video_runtime/build.rs'
             audio:
-              - 'native/audio_output/**'
-              - 'native/audio_runtime/**'
+              - 'native/audio_output/**/*.rs'
+              - 'native/audio_output/Cargo.toml'
+              - 'native/audio_output/Cargo.lock'
+              - 'native/audio_output/build.rs'
+              - 'native/audio_runtime/**/*.rs'
+              - 'native/audio_runtime/Cargo.toml'
             input:
-              - 'native/input_runtime/**'
+              - 'native/input_runtime/**/*.rs'
+              - 'native/input_runtime/Cargo.toml'
+              - 'native/input_runtime/Cargo.lock'
+              - 'native/input_runtime/build.rs'
             app:
-              - 'native/sega_app/**'
+              - 'native/sega_app/**/*.rs'
+              - 'native/sega_app/Cargo.toml'
+              - 'native/sega_app/Cargo.lock'
+              - 'native/sega_app/build.rs'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
@@ -199,9 +210,9 @@ jobs:
       - name: Check whitespace and patch formatting
         shell: bash
         env:
-          EVENT_NAME: \${{ github.event_name }}
-          BASE_SHA: \${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: \${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -213,9 +224,9 @@ jobs:
       - name: Check changed Markdown formatting
         shell: bash
         env:
-          EVENT_NAME: \${{ github.event_name }}
-          BASE_SHA: \${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: \${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -369,7 +380,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SCHEDULER_STRESS_PROFILE: \${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
+      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -416,7 +427,7 @@ jobs:
       - name: Upload generated Cargo lockfiles
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cargo-lockfiles-\${{ github.run_id }}
+          name: cargo-lockfiles-${{ github.run_id }}
           path: |
             Cargo.lock
             native/audio_output/Cargo.lock
@@ -443,16 +454,16 @@ jobs:
       - name: Fail if any applicable validation failed or was cancelled
         shell: bash
         env:
-          CHANGES: \${{ needs.changes.result }}
-          RUST_FORMAT: \${{ needs.rust-format.result }}
-          RUST_WORKSPACE: \${{ needs.rust-workspace.result }}
-          Z80: \${{ needs.z80-focused.result }}
-          DOCS: \${{ needs.docs-format.result }}
-          WINDOWS_D3D12: \${{ needs.windows-d3d12.result }}
-          WINDOWS_AUDIO: \${{ needs.windows-audio.result }}
-          WINDOWS_INPUT: \${{ needs.windows-input.result }}
-          WINDOWS_TOOLING: \${{ needs.windows-tooling.result }}
-          SCHEDULER: \${{ needs.scheduler-stress.result }}
+          CHANGES: ${{ needs.changes.result }}
+          RUST_FORMAT: ${{ needs.rust-format.result }}
+          RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
+          Z80: ${{ needs.z80-focused.result }}
+          DOCS: ${{ needs.docs-format.result }}
+          WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
+          WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
+          WINDOWS_INPUT: ${{ needs.windows-input.result }}
+          WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
+          SCHEDULER: ${{ needs.scheduler-stress.result }}
         run: |
           set -euo pipefail
           for result in "$CHANGES" "$RUST_FORMAT" "$RUST_WORKSPACE" "$Z80" "$DOCS" \
