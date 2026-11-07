@@ -20,6 +20,7 @@ pub enum DirectoryKind {
     Logs,
     Saves,
     States,
+    Controls,
     Screenshots,
     VulkanShaders,
     DirectXShaders,
@@ -43,6 +44,7 @@ impl DirectoryKind {
             Self::Logs => "logs",
             Self::Saves => "saves",
             Self::States => "states",
+            Self::Controls => "controls",
             Self::Screenshots => "screenshots",
             Self::VulkanShaders => "shaders_vulkan",
             Self::DirectXShaders => "shaders_directx",
@@ -66,6 +68,7 @@ impl DirectoryKind {
             Self::Logs => "Logs",
             Self::Saves => "SRAM / Saves",
             Self::States => "Save States",
+            Self::Controls => "Configurações de controles",
             Self::Screenshots => "Capturas de tela",
             Self::VulkanShaders => "Shaders — Vulkan",
             Self::DirectXShaders => "Shaders — DirectX 11/12",
@@ -81,13 +84,14 @@ impl DirectoryKind {
     }
 
     /// All supported categories in stable presentation order.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Configuration,
         Self::Roms,
         Self::Bios,
         Self::Logs,
         Self::Saves,
         Self::States,
+        Self::Controls,
         Self::Screenshots,
         Self::VulkanShaders,
         Self::DirectXShaders,
@@ -105,8 +109,8 @@ impl DirectoryKind {
 /// Persistent directory choices and last-visited folder for each category.
 #[derive(Debug, Clone)]
 pub struct DirectoryPreferences {
-    paths: [PathBuf; 17],
-    last_opened: [Option<PathBuf>; 17],
+    paths: [PathBuf; 18],
+    last_opened: [Option<PathBuf>; 18],
     settings_file: PathBuf,
     bootstrap_file: PathBuf,
 }
@@ -140,6 +144,25 @@ impl DirectoryPreferences {
     /// Return the configured storage path for one category.
     pub fn path(&self, kind: DirectoryKind) -> &Path {
         &self.paths[index(kind)]
+    }
+
+    /// Resolve a system-scoped directory below a configured category root.
+    ///
+    /// ROMs, SRAM saves, save states and controls are isolated by a stable
+    /// lowercase system identifier. System configuration lives below
+    /// `config/systems/<id>`; control profiles live below `controls/<id>`.
+    /// This method resolves paths only; it never creates or migrates data.
+    pub fn system_path(&self, kind: DirectoryKind, system_id: &str) -> io::Result<PathBuf> {
+        if !matches!(kind, DirectoryKind::Configuration | DirectoryKind::Roms | DirectoryKind::Saves | DirectoryKind::States | DirectoryKind::Controls) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("The {:?} category is not system-scoped", kind)));
+        }
+        if system_id.is_empty() || system_id.starts_with('-') || system_id.ends_with('-')
+            || !system_id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid system identifier"));
+        }
+        let root = self.path(kind);
+        Ok(if kind == DirectoryKind::Configuration { root.join("systems").join(system_id) } else { root.join(system_id) })
     }
 
     /// Return the last folder visited by the category's native picker.
@@ -284,17 +307,18 @@ fn index(kind: DirectoryKind) -> usize {
         DirectoryKind::Logs => 3,
         DirectoryKind::Saves => 4,
         DirectoryKind::States => 5,
-        DirectoryKind::Screenshots => 6,
-        DirectoryKind::VulkanShaders => 7,
-        DirectoryKind::DirectXShaders => 8,
-        DirectoryKind::SharedShaders => 9,
-        DirectoryKind::ShaderPresets => 10,
-        DirectoryKind::ShaderTextures => 11,
-        DirectoryKind::ShaderCache => 12,
-        DirectoryKind::Patches => 13,
-        DirectoryKind::Cheats => 14,
-        DirectoryKind::Thumbnails => 15,
-        DirectoryKind::Recordings => 16,
+        DirectoryKind::Controls => 6,
+        DirectoryKind::Screenshots => 7,
+        DirectoryKind::VulkanShaders => 8,
+        DirectoryKind::DirectXShaders => 9,
+        DirectoryKind::SharedShaders => 10,
+        DirectoryKind::ShaderPresets => 11,
+        DirectoryKind::ShaderTextures => 12,
+        DirectoryKind::ShaderCache => 13,
+        DirectoryKind::Patches => 14,
+        DirectoryKind::Cheats => 15,
+        DirectoryKind::Thumbnails => 16,
+        DirectoryKind::Recordings => 17,
     }
 }
 
@@ -321,7 +345,7 @@ fn documents_directory() -> Option<PathBuf> {
         .or_else(|| Some(profile.join("Documents")))
 }
 
-fn default_paths(root: &Path) -> [PathBuf; 17] {
+fn default_paths(root: &Path) -> [PathBuf; 18] {
     [
         root.join("config"),
         root.join("roms"),
@@ -329,6 +353,7 @@ fn default_paths(root: &Path) -> [PathBuf; 17] {
         root.join("logs"),
         root.join("saves"),
         root.join("states"),
+        root.join("controls"),
         root.join("screenshots"),
         root.join("shaders").join("vulkan"),
         root.join("shaders").join("directx"),
@@ -355,10 +380,11 @@ mod tests {
 
     #[test]
     fn categories_have_independent_indices_and_labels() {
-        assert_eq!(DirectoryKind::ALL.len(), 17);
+        assert_eq!(DirectoryKind::ALL.len(), 18);
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
+        assert_ne!(index(DirectoryKind::States), index(DirectoryKind::Controls));
         let mut indices = DirectoryKind::ALL.map(index);
         indices.sort_unstable();
         assert!(indices.windows(2).all(|pair| pair[0] != pair[1]));
@@ -371,17 +397,30 @@ mod tests {
         assert_eq!(paths[1], PathBuf::from("root/roms"));
         assert_eq!(paths[4], PathBuf::from("root/saves"));
         assert_eq!(paths[5], PathBuf::from("root/states"));
-        assert_eq!(paths[6], PathBuf::from("root/screenshots"));
-        assert_eq!(paths[7], PathBuf::from("root/shaders/vulkan"));
-        assert_eq!(paths[8], PathBuf::from("root/shaders/directx"));
-        assert_eq!(paths[9], PathBuf::from("root/shaders/shared"));
-        assert_eq!(paths[10], PathBuf::from("root/shaders/presets"));
-        assert_eq!(paths[11], PathBuf::from("root/shaders/textures"));
-        assert_eq!(paths[12], PathBuf::from("root/shaders/cache"));
-        assert_eq!(paths[13], PathBuf::from("root/patches"));
-        assert_eq!(paths[14], PathBuf::from("root/cheats"));
-        assert_eq!(paths[15], PathBuf::from("root/thumbnails"));
-        assert_eq!(paths[16], PathBuf::from("root/recordings"));
+        assert_eq!(paths[6], PathBuf::from("root/controls"));
+        assert_eq!(paths[7], PathBuf::from("root/screenshots"));
+        assert_eq!(paths[8], PathBuf::from("root/shaders/vulkan"));
+        assert_eq!(paths[9], PathBuf::from("root/shaders/directx"));
+        assert_eq!(paths[10], PathBuf::from("root/shaders/shared"));
+        assert_eq!(paths[11], PathBuf::from("root/shaders/presets"));
+        assert_eq!(paths[12], PathBuf::from("root/shaders/textures"));
+        assert_eq!(paths[13], PathBuf::from("root/shaders/cache"));
+        assert_eq!(paths[14], PathBuf::from("root/patches"));
+        assert_eq!(paths[15], PathBuf::from("root/cheats"));
+        assert_eq!(paths[16], PathBuf::from("root/thumbnails"));
+        assert_eq!(paths[17], PathBuf::from("root/recordings"));
+    }
+
+    #[test]
+    fn system_scoped_paths_are_isolated_and_validated() {
+        let preferences = DirectoryPreferences { paths: default_paths(Path::new("root")), last_opened: std::array::from_fn(|_| None), settings_file: PathBuf::from("root/config/directories.ini"), bootstrap_file: PathBuf::from("bootstrap") };
+        assert_eq!(preferences.system_path(DirectoryKind::Roms, "master-system").unwrap(), PathBuf::from("root/roms/master-system"));
+        assert_eq!(preferences.system_path(DirectoryKind::Saves, "sg-1000").unwrap(), PathBuf::from("root/saves/sg-1000"));
+        assert_eq!(preferences.system_path(DirectoryKind::States, "game-gear").unwrap(), PathBuf::from("root/states/game-gear"));
+        assert_eq!(preferences.system_path(DirectoryKind::Configuration, "mega-drive").unwrap(), PathBuf::from("root/config/systems/mega-drive"));
+        assert_eq!(preferences.system_path(DirectoryKind::Controls, "master-system").unwrap(), PathBuf::from("root/controls/master-system"));
+        assert!(preferences.system_path(DirectoryKind::Bios, "master-system").is_err());
+        assert!(preferences.system_path(DirectoryKind::Roms, "../outside").is_err());
     }
 
     #[test]
