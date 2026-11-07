@@ -320,8 +320,81 @@ fn flight_of_pigarus_blocked() -> CartridgeHardwareProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::{CartridgeCatalog, flight_of_pigarus_blocked, sms_profiles};
-    use crate::{CartridgeIdentity, CartridgeRamKind, NoIntroDat, ProfileStatus};
+    use super::{
+        CartridgeCatalog, CatalogLookupError, KnownCartridgeProfile, flight_of_pigarus_blocked,
+        sms_profiles,
+    };
+    use crate::{
+        CartridgeHardwareProfile, CartridgeIdentity, CartridgeMapper, CartridgeRamKind,
+        CartridgeRamMapping, CartridgeRamProfile, CartridgeSystem, DatGameEntry, DatRomEntry,
+        NoIntroDat, ProfileStatus,
+    };
+
+    fn test_battery_profile() -> CartridgeHardwareProfile {
+        CartridgeHardwareProfile {
+            system: CartridgeSystem::MasterSystem,
+            mapper: CartridgeMapper::SmsSega,
+            ram: Some(CartridgeRamProfile {
+                kind: CartridgeRamKind::BatteryBackedSram,
+                capacity_bytes: 0x2000,
+                mapping: CartridgeRamMapping::SegaMapperSlot2,
+                mapped_window_bytes: 0x4000,
+                bank_size_bytes: 0x2000,
+                mirrored: true,
+            }),
+            status: ProfileStatus::Verified,
+            board: None,
+            evidence: vec!["catalog unit test".to_owned()],
+        }
+    }
+
+    fn synthetic_dat(identity: &CartridgeIdentity, crc32: u32) -> NoIntroDat {
+        NoIntroDat {
+            name: Some("Synthetic DAT".to_owned()),
+            version: Some("test".to_owned()),
+            entries: vec![DatGameEntry {
+                name: "Synthetic Cartridge".to_owned(),
+                roms: vec![DatRomEntry {
+                    name: "this-filename-is-not-the-identity.sms".to_owned(),
+                    size_bytes: identity.size_bytes(),
+                    crc32,
+                    md5: None,
+                    sha1: identity.sha1_hex(),
+                    status: Some("verified".to_owned()),
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn lookup_uses_content_hash_and_returns_the_explicit_profile() {
+        let identity = CartridgeIdentity::from_bytes(b"abc");
+        let profile = test_battery_profile();
+        let catalog = CartridgeCatalog::from_dat(
+            synthetic_dat(&identity, identity.crc32()),
+            vec![KnownCartridgeProfile::new(identity.sha1_hex(), profile.clone())],
+        );
+
+        let matched = catalog.lookup(&identity).unwrap().unwrap();
+        assert_eq!(matched.game.name, "Synthetic Cartridge");
+        assert_eq!(matched.rom.name, "this-filename-is-not-the-identity.sms");
+        assert_eq!(matched.profile, Some(&profile));
+        assert!(catalog.lookup_runtime_profile(&identity).unwrap().is_some());
+    }
+
+    #[test]
+    fn matching_sha1_with_inconsistent_crc_or_size_is_rejected() {
+        let identity = CartridgeIdentity::from_bytes(b"abc");
+        let catalog = CartridgeCatalog::from_dat(
+            synthetic_dat(&identity, identity.crc32() ^ 1),
+            Vec::new(),
+        );
+
+        assert!(matches!(
+            catalog.lookup(&identity),
+            Err(CatalogLookupError::DatFingerprintMismatch { .. })
+        ));
+    }
 
     #[test]
     fn every_known_sms_profile_has_an_exact_project_dat_entry() {
