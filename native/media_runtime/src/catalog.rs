@@ -102,8 +102,7 @@ impl CartridgeCatalog {
         match matched {
             None => Ok(None),
             Some((_game, rom))
-                if rom.size_bytes != identity.size_bytes()
-                    || rom.crc32 != identity.crc32() =>
+                if rom.size_bytes != identity.size_bytes() || rom.crc32 != identity.crc32() =>
             {
                 Err(CatalogLookupError::DatFingerprintMismatch {
                     sha1,
@@ -372,7 +371,10 @@ mod tests {
         let profile = test_battery_profile();
         let catalog = CartridgeCatalog::from_dat(
             synthetic_dat(&identity, identity.crc32()),
-            vec![KnownCartridgeProfile::new(identity.sha1_hex(), profile.clone())],
+            vec![KnownCartridgeProfile::new(
+                identity.sha1_hex(),
+                profile.clone(),
+            )],
         );
 
         let matched = catalog.lookup(&identity).unwrap().unwrap();
@@ -385,10 +387,8 @@ mod tests {
     #[test]
     fn matching_sha1_with_inconsistent_crc_or_size_is_rejected() {
         let identity = CartridgeIdentity::from_bytes(b"abc");
-        let catalog = CartridgeCatalog::from_dat(
-            synthetic_dat(&identity, identity.crc32() ^ 1),
-            Vec::new(),
-        );
+        let catalog =
+            CartridgeCatalog::from_dat(synthetic_dat(&identity, identity.crc32() ^ 1), Vec::new());
 
         assert!(matches!(
             catalog.lookup(&identity),
