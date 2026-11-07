@@ -328,11 +328,10 @@ impl SmsMemory {
             && self.control_port & 0x40 == 0
             && matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
             && self.mapper_control & 0x10 != 0
+            && let Some(sram) = self.cartridge_sram.as_mut()
         {
-            if let Some(sram) = self.cartridge_sram.as_mut() {
-                let offset = usize::from(address - RAM_START) % sram.len();
-                sram[offset] = value;
-            }
+            let offset = usize::from(address - RAM_START) % sram.len();
+            sram[offset] = value;
         }
     }
 
