@@ -734,8 +734,7 @@ mod tests {
 
     #[test]
     fn disabled_cartridge_slot_rejects_sram_writes() {
-        let mut memory =
-            SmsMemory::with_bios(patterned_rom(4), Some(vec![0xA5; 0x2000])).unwrap();
+        let mut memory = SmsMemory::with_bios(patterned_rom(4), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0xAB);
         memory.write(0xFFFC, 0x08);
         memory.write(0x8000, 0x11);
