@@ -20,6 +20,11 @@ pub enum DirectoryKind {
     Logs,
     Saves,
     States,
+    Screenshots,
+    VulkanShaders,
+    DirectXShaders,
+    ShaderPresets,
+    ShaderTextures,
 }
 
 impl DirectoryKind {
@@ -32,6 +37,11 @@ impl DirectoryKind {
             Self::Logs => "logs",
             Self::Saves => "saves",
             Self::States => "states",
+            Self::Screenshots => "screenshots",
+            Self::VulkanShaders => "shaders_vulkan",
+            Self::DirectXShaders => "shaders_directx",
+            Self::ShaderPresets => "shader_presets",
+            Self::ShaderTextures => "shader_textures",
         }
     }
 
@@ -44,25 +54,35 @@ impl DirectoryKind {
             Self::Logs => "Logs",
             Self::Saves => "SRAM / Saves",
             Self::States => "Save States",
+            Self::Screenshots => "Capturas de tela",
+            Self::VulkanShaders => "Shaders — Vulkan",
+            Self::DirectXShaders => "Shaders — DirectX 11/12",
+            Self::ShaderPresets => "Presets de shaders",
+            Self::ShaderTextures => "Texturas de shaders",
         }
     }
 
     /// All supported categories in stable presentation order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 11] = [
         Self::Configuration,
         Self::Roms,
         Self::Bios,
         Self::Logs,
         Self::Saves,
         Self::States,
+        Self::Screenshots,
+        Self::VulkanShaders,
+        Self::DirectXShaders,
+        Self::ShaderPresets,
+        Self::ShaderTextures,
     ];
 }
 
 /// Persistent directory choices and last-visited folder for each category.
 #[derive(Debug, Clone)]
 pub struct DirectoryPreferences {
-    paths: [PathBuf; 6],
-    last_opened: [Option<PathBuf>; 6],
+    paths: [PathBuf; 11],
+    last_opened: [Option<PathBuf>; 11],
     settings_file: PathBuf,
     bootstrap_file: PathBuf,
 }
@@ -118,7 +138,7 @@ impl DirectoryPreferences {
         let slot = index(kind);
         let previous_path = self.paths[slot].clone();
         let previous_history = self.last_opened[slot].clone();
-        self.paths[slot] = path.clone();
+        self.paths[slot].clone_from(&path);
         self.last_opened[slot] = Some(path);
 
         if let Err(error) = self.save() {
@@ -240,13 +260,17 @@ fn index(kind: DirectoryKind) -> usize {
         DirectoryKind::Logs => 3,
         DirectoryKind::Saves => 4,
         DirectoryKind::States => 5,
+        DirectoryKind::Screenshots => 6,
+        DirectoryKind::VulkanShaders => 7,
+        DirectoryKind::DirectXShaders => 8,
+        DirectoryKind::ShaderPresets => 9,
+        DirectoryKind::ShaderTextures => 10,
     }
 }
 
 fn app_data_directory() -> PathBuf {
     std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir())
+        .map_or_else(std::env::temp_dir, PathBuf::from)
         .join(APP_DATA_DIRECTORY)
 }
 
@@ -267,7 +291,7 @@ fn documents_directory() -> Option<PathBuf> {
         .or_else(|| Some(profile.join("Documents")))
 }
 
-fn default_paths(root: &Path) -> [PathBuf; 6] {
+fn default_paths(root: &Path) -> [PathBuf; 11] {
     [
         root.join("config"),
         root.join("roms"),
@@ -275,6 +299,11 @@ fn default_paths(root: &Path) -> [PathBuf; 6] {
         root.join("logs"),
         root.join("saves"),
         root.join("states"),
+        root.join("screenshots"),
+        root.join("shaders").join("vulkan"),
+        root.join("shaders").join("directx"),
+        root.join("shaders").join("presets"),
+        root.join("shaders").join("textures"),
     ]
 }
 
@@ -290,7 +319,7 @@ mod tests {
 
     #[test]
     fn categories_have_independent_indices_and_labels() {
-        assert_eq!(DirectoryKind::ALL.len(), 6);
+        assert_eq!(DirectoryKind::ALL.len(), 11);
         assert_eq!(DirectoryKind::Roms.label(), "ROMs");
         assert_ne!(index(DirectoryKind::Roms), index(DirectoryKind::Bios));
         assert_ne!(index(DirectoryKind::Saves), index(DirectoryKind::States));
@@ -303,6 +332,11 @@ mod tests {
         assert_eq!(paths[1], PathBuf::from("root/roms"));
         assert_eq!(paths[4], PathBuf::from("root/saves"));
         assert_eq!(paths[5], PathBuf::from("root/states"));
+        assert_eq!(paths[6], PathBuf::from("root/screenshots"));
+        assert_eq!(paths[7], PathBuf::from("root/shaders/vulkan"));
+        assert_eq!(paths[8], PathBuf::from("root/shaders/directx"));
+        assert_eq!(paths[9], PathBuf::from("root/shaders/presets"));
+        assert_eq!(paths[10], PathBuf::from("root/shaders/textures"));
     }
 
     #[test]
