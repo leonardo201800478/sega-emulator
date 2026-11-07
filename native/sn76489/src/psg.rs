@@ -88,9 +88,8 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
 
     let (cutoff, taps) = if (sample_rate as f64) < internal_rate {
         let transition_width = 0.08 * rate_ratio;
-        let order = ((KAISER_ATTENUATION_DB - 8.0)
-            / (2.285 * 2.0 * PI * transition_width))
-            .ceil() as usize;
+        let order =
+            ((KAISER_ATTENUATION_DB - 8.0) / (2.285 * 2.0 * PI * transition_width)).ceil() as usize;
         let mut taps = (order + 1).max(MIN_FILTER_TAPS);
         if taps.is_multiple_of(2) {
             taps += 1;
@@ -112,7 +111,10 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
         };
         let normalized_position = offset / center;
         let window = bessel_i0(
-            KAISER_BETA * (1.0 - normalized_position * normalized_position).max(0.0).sqrt(),
+            KAISER_BETA
+                * (1.0 - normalized_position * normalized_position)
+                    .max(0.0)
+                    .sqrt(),
         ) / window_denominator;
         coefficients.push(ideal * window);
     }
@@ -540,7 +542,10 @@ mod tests {
             (0.0, 0.0),
             |(real, imaginary), (index, coefficient)| {
                 let phase = std::f64::consts::TAU * frequency * index as f64;
-                (real + coefficient * phase.cos(), imaginary - coefficient * phase.sin())
+                (
+                    real + coefficient * phase.cos(),
+                    imaginary - coefficient * phase.sin(),
+                )
             },
         );
         real.hypot(imaginary)
