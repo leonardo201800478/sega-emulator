@@ -195,20 +195,26 @@ impl SmsTemporalWorker {
                     return Err("cartridge hardware profile is not for Master System".to_owned());
                 }
                 if !profile.is_runtime_usable() {
-                    return Err("cartridge hardware profile is not verified for execution".to_owned());
+                    return Err(
+                        "cartridge hardware profile is not verified for execution".to_owned()
+                    );
                 }
                 let ram = profile
                     .ram
                     .as_ref()
                     .ok_or_else(|| "verified SMS profile has no cartridge RAM".to_owned())?;
                 if initial_sram.is_some() && !ram.is_persistent() {
-                    return Err("volatile cartridge RAM cannot be restored from a save file".to_owned());
+                    return Err(
+                        "volatile cartridge RAM cannot be restored from a save file".to_owned()
+                    );
                 }
                 Some(ram.capacity_bytes)
             }
             None => {
                 if initial_sram.is_some() {
-                    return Err("initial cartridge SRAM requires a verified hardware profile".to_owned());
+                    return Err(
+                        "initial cartridge SRAM requires a verified hardware profile".to_owned(),
+                    );
                 }
                 None
             }
