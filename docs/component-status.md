@@ -1,30 +1,41 @@
-# Component status — migration branch snapshot
+# Status dos componentes — 2026-11-07
 
-**Scope:** this document describes the Rust-only migration branch, not the still-unmodified `main`. The authoritative state becomes `main` only after an authorized merge.
+**Baseline:** `main` em `3ad1781f84b7824b5aa889a583ae6d4545987ec1`.  
+**Regra:** esta tabela descreve código integrado na main. Funcionalidades em PRs são identificadas separadamente.
 
-| Component | Current state | Evidence / remaining gate |
+| Componente | Estado integrado na main | Pendências / evidência |
 |---|---|---|
-| Shared Z80 | Single Rust crate `native/z80_cpu` used by SMS and SG-1000 | Continue E7 semantic audit; E7.7 remains IN_PROGRESS and E8 remains BLOCKED. Temporal sequencer RESET now preserves architectural registers and INT while clearing CPU control state |
-| MachineScheduler | Rust crate remains active | Deterministic stress job passed on the first PR #609 candidate SHA; recheck the latest PR head |
-| SMS core | Temporal-only first vertical slice | The old atomic SMS machine module and its duplicate Z80 facade are absent from the branch; the core composes the shared Z80, mapper-backed memory/I/O, Scheduler, PSG and scanline VDP. Dot/fetch arbitration and physical WAIT remain pending |
-| SMS runtime | `rust/runtime/sms-runtime` contains the extracted worker | New crate is not yet connected to the egui app; exact-head CI is pending |
-| Audio runtime | Rust audio session/mixer crate remains active | Host session is injected through a factory invoked on the worker thread; application host factory integration is pending |
-| Audio output | Standalone Rust WASAPI/XAudio2 workspace | Windows compile/tests remain required; physical audio NOT RUN |
-| Video runtime | Rust frame/mailbox and D3D12 host remain active | Windows compile/tests required; physical GPU presentation NOT RUN |
-| Input runtime | Rust input crate remains in the workspace | Not yet wired to the egui application; physical input/latency NOT RUN |
-| egui application | Native Rust shell only | Does not yet load ROMs or create an SMS machine; runtime integration pending |
-| SG-1000 core | Still in the workspace | Retained temporarily as the existing SG-1000 product/reference while SMS becomes executable; later roadmap step removes it from active workspace before a new SG-1000 runtime is built on the shared Z80 |
-| Python / Qt / PyO3 | Removed from this migration branch | 141 Python/configuration files and the PyO3 extension crate removed; tree scan found no Python source/config files |
-| External Z80 conformance | NOT RUN | Python runner removed; Rust-native ZEXDOC/ZEXALL harness remains pending |
+| Produto / toolchain | Rust-only; toolchain fixada em `rust-toolchain.toml` | Gates devem ser reexecutados no HEAD candidato |
+| Aplicação egui/eframe | Shell nativo integrado | Integração vertical com SMS segue nas PRs #613/#614 |
+| Z80 compartilhado | Um núcleo Rust compartilhado | E7.7 IN_PROGRESS; E8 BLOCKED; consultar scorecard e matriz DD/FD |
+| MachineScheduler | Núcleo e testes determinísticos integrados | Stress longo PASS na evidência de 2026-11-07; não equivale a TEMPORAL_PASS do SMS |
+| SMS core temporal | Base temporal Rust integrada | Precisão VDP ainda parcial; WAIT por fixture; Save States persistentes completos pendentes |
+| SMS runtime worker | Worker Rust puro disponível | Ligação operacional ao shell está em PR #613 |
+| Vídeo / D3D12 | Runtime/host Rust disponível | Viewport integrado ao shell está em PR #613; validação física GPU NOT RUN nesta fotografia |
+| Áudio / PSG | Runtime SN76489 e pipeline Rust integrados; PR #615 melhorou filtro e reset de ruído | Backend físico WASAPI/XAudio2 no shell está em PR #614; endpoint real NOT RUN conforme descrição da PR |
+| Input | Infraestrutura Rust/SDL3 disponível nas mudanças da aplicação | Ligação ao shell em PR #614; gamepad físico/hotplug NOT RUN |
+| SG-1000 | Código legado/atômico fora do runtime ativo inicial SMS | Nova etapa P2; preservar evidências e regressões sem criar fallback |
+| ZEXDOC / ZEXALL | NOT RUN | E8 bloqueada até fechamento E7 e harness Rust completo |
+| Python / Qt / PyO3 / Maturin | Fora da arquitetura ativa; removidos do produto conforme ADR 0010 | Não reintroduzir em runtime, tooling, CI ou distribuição |
 
-## PR #609 validation
+## PRs abertas relacionadas
 
-- On SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, run `42255686065` reported **success** for the required jobs: `cargo fmt --all -- --check`, workspace Clippy with `-D warnings`, workspace tests, Scheduler deterministic stress, Windows PowerShell tooling syntax and Windows x64/D3D12 compile/tests.
-- The workflow aggregate conclusion was `cancelled`, even though those required jobs each concluded `success`; the manual lockfile-refresh job was `skipped`. Treat the individual required-job conclusions as PASS for that SHA, not as a fully successful aggregate workflow.
-- After the validated candidate SHA `4311ec6d41dccee28649f8d687aa1d9ea7a2bd13`, the branch received formatting-only corrections and a temporal CPU RESET implementation with tests for peripheral/timeline preservation and rejection during an in-flight instruction.
-- Those later commits have no confirmed CI result in this audit. Formatting, Clippy, workspace tests, Scheduler stress and Windows/D3D12 on the exact latest HEAD remain NOT RUN until a run is observed. A later run `42263870310` was observed as pending for an earlier branch commit (`8f43fb166f1ddb14b33245edf0802b61297f3f44`); it is not proof for the subsequent HEAD.
-- `scripts/project.ps1 locks -RefreshOffline` now performs `cargo update --offline` for each active workspace and validates the resulting lockfile with locked Cargo metadata.
-- Physical D3D12 presentation, WASAPI/XAudio2 output and input latency: NOT RUN.
-- Local Cargo validation: NOT RUN because the local environment has no Rust toolchain.
+| PR | Estado | Escopo | Observação |
+|---|---|---|---|
+| [#613](https://github.com/leonardo201800478/sega-emulator/pull/613) | OPEN | Runtime SMS + viewport D3D12 no shell | Não integrado; validação física e CI no HEAD final exigidas |
+| [#614](https://github.com/leonardo201800478/sega-emulator/pull/614) | OPEN | WASAPI/XAudio2 + teclado/SDL3 | Empilhada sobre #613; validar em conjunto |
+| [#616](https://github.com/leonardo201800478/sega-emulator/pull/616) | OPEN | Auditoria documental de boot/cartuchos | Não altera runtime |
 
-No component in this table is declared functionally complete solely because its crate compiles.
+## Evidência do Scheduler
+
+A campanha longa executou 320.000 operações e 4.000.000 dispatches em 16 seeds, com 2 testes PASS e 0 falhas. Os arquivos de teste, manifesto e implementação do Scheduler foram comparados por blob SHA com a main e encontrados idênticos. Ver [registro completo](evidence/scheduler-stress-long-2026-11-07.md).
+
+## Classificação de maturidade
+
+- **IMPLEMENTED:** código existe e está integrado.
+- **TESTED:** testes direcionados executados no SHA indicado.
+- **INTEGRATION_PENDING:** depende de integração com outro componente/host.
+- **PHYSICAL_VALIDATION_PENDING:** depende de dispositivo ou GPU real.
+- **NOT RUN / BLOCKED:** teste não executado ou execução impedida; nunca equivale a PASS.
+
+A presença de uma crate ou de um teste não comprova compatibilidade completa. O estado operacional consolidado está em [project-status-2026-11-07.md](project-status-2026-11-07.md).

@@ -7,9 +7,8 @@ Todo resultado deve indicar SHA exato, workflow/run, ambiente, comando, status e
 - `FAIL`
 - `BLOCKED`
 - `NOT RUN`
-- `SKIPPED`
 
-`SKIPPED`, check ausente ou resultado de SHA anterior nunca é PASS.
+`SKIPPED`, check ausente ou resultado de SHA anterior nunca é PASS. Uma execução em branch só pode ser associada aos arquivos da main depois de comparar os blobs relevantes.
 
 ## 2. Testes do temporal core
 
@@ -35,7 +34,8 @@ Todo resultado deve indicar SHA exato, workflow/run, ambiente, comando, status e
 - preflight/atomicidade em overflow;
 - snapshot/restore isolado e completo;
 - codec: versões, CRC, truncamento, trailing bytes, tamanho e payload inválidos;
-- replay diferencial com seed fixo e instâncias independentes.
+- replay diferencial com seed fixo e instâncias independentes;
+- sequências longas de operações e dispatches com restaurações repetidas.
 
 ## 4. Testes de integração por componente
 
@@ -69,9 +69,6 @@ No SHA candidato:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
-python -m pytest
-python -m ruff check .
-python -m ruff format --check .
 ```
 
 Executar também workflows de arquitetura, headless/golden, Windows x64 e stress quando aplicáveis. Documentação-only não prova comportamento temporal e não autoriza TEMPORAL_PASS.
@@ -97,3 +94,5 @@ Registrar evidência em `docs/evidence/` com:
 - seeds/configuração;
 - trace/hash e localização do artefato;
 - limitações e itens UNKNOWN.
+
+**Evidência recente:** [MachineScheduler long stress — 2026-11-07](../../evidence/scheduler-stress-long-2026-11-07.md). Essa campanha recebe LONG_PASS para os dois testes do Scheduler executados, mas não altera a classificação de integração temporal SMS nem autoriza TEMPORAL_PASS.

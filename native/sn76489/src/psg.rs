@@ -34,7 +34,9 @@ fn advance_output_phase(phase: u64, sample_rate: u64, clock_hz: u64) -> (u64, u6
 const TONE_CHANNELS: usize = 3;
 const NOISE_CHANNEL: usize = 3;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
-const FILTER_TAPS: usize = 63;
+const MIN_FILTER_TAPS: usize = 63;
+const KAISER_ATTENUATION_DB: f64 = 80.0;
+const KAISER_BETA: f64 = 7.857_26;
 const ATTENUATION: [f64; 16] = [
     1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
     0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
@@ -59,22 +61,64 @@ impl fmt::Display for PsgError {
 
 impl std::error::Error for PsgError {}
 
+/// Approximate the modified Bessel function I0 for the Kaiser window.
+fn bessel_i0(value: f64) -> f64 {
+    let quarter_square = value * value * 0.25;
+    let mut sum = 1.0;
+    let mut term = 1.0;
+    for order in 1..=32 {
+        term *= quarter_square / (order as f64 * order as f64);
+        sum += term;
+        if term <= sum * f64::EPSILON {
+            break;
+        }
+    }
+    sum
+}
+
+/// Design a normalized low-pass FIR for PSG clock-to-host-rate conversion.
+///
+/// For downsampling, the passband ends at 84% of the output Nyquist frequency
+/// and the stopband begins at output Nyquist. The Kaiser order is selected for
+/// approximately 80 dB stopband attenuation. This avoids asking a short windowed
+/// FIR to make an unrealistically sharp transition at the SMS 5:1 rate ratio.
 fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
     let internal_rate = clock_hz as f64 / CLOCK_DIVIDER as f64;
-    let cutoff = 0.45 * (sample_rate as f64 / internal_rate).min(1.0);
-    let center = (FILTER_TAPS - 1) as f64 / 2.0;
-    let mut coefficients = Vec::with_capacity(FILTER_TAPS);
-    for index in 0..FILTER_TAPS {
+    let rate_ratio = (sample_rate as f64 / internal_rate).min(1.0);
+
+    let (cutoff, taps) = if (sample_rate as f64) < internal_rate {
+        let transition_width = 0.08 * rate_ratio;
+        let order =
+            ((KAISER_ATTENUATION_DB - 8.0) / (2.285 * 2.0 * PI * transition_width)).ceil() as usize;
+        let mut taps = (order + 1).max(MIN_FILTER_TAPS);
+        if taps.is_multiple_of(2) {
+            taps += 1;
+        }
+        (0.46 * rate_ratio, taps)
+    } else {
+        (0.45, MIN_FILTER_TAPS)
+    };
+
+    let center = (taps - 1) as f64 / 2.0;
+    let window_denominator = bessel_i0(KAISER_BETA);
+    let mut coefficients = Vec::with_capacity(taps);
+    for index in 0..taps {
         let offset = index as f64 - center;
         let ideal = if offset == 0.0 {
             2.0 * cutoff
         } else {
             (2.0 * PI * cutoff * offset).sin() / (PI * offset)
         };
-        let position = index as f64 / (FILTER_TAPS - 1) as f64;
-        let window = 0.42 - 0.5 * (2.0 * PI * position).cos() + 0.08 * (4.0 * PI * position).cos();
+        let normalized_position = offset / center;
+        let window = bessel_i0(
+            KAISER_BETA
+                * (1.0 - normalized_position * normalized_position)
+                    .max(0.0)
+                    .sqrt(),
+        ) / window_denominator;
         coefficients.push(ideal * window);
     }
+
     let total: f64 = coefficients.iter().sum();
     for coefficient in &mut coefficients {
         *coefficient /= total;
@@ -165,6 +209,7 @@ impl Sn76489Core {
         let sample_buffer_capacity =
             usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
+        let filter_history = vec![0.0; filter_coefficients.len()];
         let mut device = Self {
             profile,
             clock_hz,
@@ -187,7 +232,7 @@ impl Sn76489Core {
             output_phase: 0,
             noise_period: 0x10,
             filter_coefficients,
-            filter_history: vec![0.0; FILTER_TAPS],
+            filter_history,
             filter_position: 0,
         };
         device.reset_inner();
@@ -383,10 +428,10 @@ impl Sn76489Core {
     }
 
     fn reset_noise_generator(&mut self) {
+        // A noise-register write resets the shift register, not the running
+        // divider. Keep the counter and its phase continuous across the write.
         self.lfsr = self.profile.lfsr_seed();
         self.noise_output = (self.lfsr & 1) as u8;
-        self.noise_counter = self.noise_period;
-        self.noise_counter_phase = 0;
     }
 
     fn shift_noise_register(&mut self) {
@@ -492,6 +537,68 @@ mod tests {
         0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001, 0x5000, 0x2800,
     ];
 
+    fn frequency_response(coefficients: &[f64], frequency: f64) -> f64 {
+        let (real, imaginary) = coefficients.iter().enumerate().fold(
+            (0.0, 0.0),
+            |(real, imaginary), (index, coefficient)| {
+                let phase = std::f64::consts::TAU * frequency * index as f64;
+                (
+                    real + coefficient * phase.cos(),
+                    imaginary - coefficient * phase.sin(),
+                )
+            },
+        );
+        real.hypot(imaginary)
+    }
+
+    #[test]
+    fn psg_fir_preserves_audio_band_and_rejects_the_full_stopband() {
+        for clock_hz in [3_579_545_u64, 3_546_893] {
+            for output_rate in [22_050_u64, 44_100, 48_000, 96_000] {
+                let coefficients = super::design_lowpass(clock_hz, output_rate);
+                let internal_rate = clock_hz as f64 / 16.0;
+                let ratio = output_rate as f64 / internal_rate;
+                let passband = frequency_response(&coefficients, 0.42 * ratio);
+                let stopband = (0..=256)
+                    .map(|index| {
+                        let fraction = index as f64 / 256.0;
+                        let frequency = 0.5 * ratio + (0.5 - 0.5 * ratio) * fraction;
+                        frequency_response(&coefficients, frequency)
+                    })
+                    .fold(0.0_f64, f64::max);
+
+                assert!(
+                    passband > 0.999,
+                    "passband gain too low at {clock_hz} Hz / {output_rate} Hz: {passband:.6}"
+                );
+                assert!(
+                    stopband < 0.000_12,
+                    "stopband attenuation below 78 dB at {clock_hz} Hz / {output_rate} Hz: {stopband:.8}"
+                );
+                assert!(coefficients.len() >= super::MIN_FILTER_TAPS);
+                assert!(!coefficients.len().is_multiple_of(2));
+                assert!(
+                    coefficients
+                        .iter()
+                        .all(|coefficient| coefficient.is_finite())
+                );
+
+                let sum: f64 = coefficients.iter().sum();
+                assert!(
+                    (sum - 1.0).abs() < 1.0e-12,
+                    "DC gain differs from unity at {clock_hz} Hz / {output_rate} Hz"
+                );
+                for index in 0..coefficients.len() / 2 {
+                    let mirrored = coefficients.len() - 1 - index;
+                    assert!(
+                        (coefficients[index] - coefficients[mirrored]).abs() < 1.0e-12,
+                        "FIR is not symmetric at tap {index} for {clock_hz} Hz / {output_rate} Hz"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
         let mut first = Sn76489::new(3_579_545, 44_100).unwrap();
@@ -566,6 +673,29 @@ mod tests {
         device.write_inner(0x12); // period high bits = 0x12
         assert_eq!(device.tone_periods[2], 0x123);
         assert_eq!(device.noise_period, 0x123);
+    }
+
+    #[test]
+    fn noise_register_write_resets_lfsr_without_restarting_noise_divider() {
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.noise_counter = 7;
+        device.noise_counter_phase = 1;
+        device.lfsr = 0x1234;
+        device.noise_output = 1;
+
+        device.write_inner(0xE4); // Latch white noise, fixed rate 0x10.
+        assert_eq!(device.lfsr, 0x8000);
+        assert_eq!(device.noise_output, 0);
+        assert_eq!(device.noise_counter, 7);
+        assert_eq!(device.noise_counter_phase, 1);
+
+        device.noise_counter = 5;
+        device.noise_counter_phase = 0;
+        device.write_inner(0x07); // Data byte updates the latched noise register.
+        assert_eq!(device.noise_control, 0x07);
+        assert_eq!(device.lfsr, 0x8000);
+        assert_eq!(device.noise_counter, 5);
+        assert_eq!(device.noise_counter_phase, 0);
     }
 
     #[test]
