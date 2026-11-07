@@ -105,6 +105,7 @@ impl AudioBackend {
 #[derive(Debug, Clone, Copy)]
 enum AudioCommand {
     Configure,
+    SetVolume(u8),
     Disable,
 }
 
@@ -344,6 +345,7 @@ impl SegaApp {
             AudioCommand::Configure => {
                 configure_audio_output(worker, self.audio_backend, self.audio_volume)
             }
+            AudioCommand::SetVolume(volume) => worker.set_audio_volume(volume),
             AudioCommand::Disable => worker.close_audio_output(),
         };
         if let Err(error) = result {
@@ -653,7 +655,16 @@ impl SegaApp {
                 Some("O worker de apresentação D3D12 foi encerrado".to_owned());
             context.request_repaint();
         } else {
-            context.request_repaint_after(Duration::from_millis(100));
+            let gamepad_connected = self
+                .input_devices
+                .iter()
+                .any(|device| device.class == DeviceClass::Gamepad);
+            let input_poll_interval = if gamepad_connected {
+                Duration::from_millis(16)
+            } else {
+                Duration::from_millis(100)
+            };
+            context.request_repaint_after(input_poll_interval);
         }
     }
 }
@@ -932,7 +943,7 @@ fn render_audio_controls(
             });
         ui.label("Volume:");
         if ui.add(egui::Slider::new(volume, 0..=100)).changed() && *enabled {
-            *command = Some(AudioCommand::Configure);
+            *command = Some(AudioCommand::SetVolume(*volume));
         }
     });
     ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
