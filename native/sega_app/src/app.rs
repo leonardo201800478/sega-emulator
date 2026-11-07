@@ -1594,7 +1594,7 @@ mod tests {
         let error = app
             .persist_current_cartridge()
             .expect_err("invalid save root must fail persistence");
-        assert!(!error.is_empty());
+        assert_ne!(error, "");
         assert!(
             app.native_viewport.worker.as_ref().unwrap().is_running(),
             "persistence failure must restore the worker's previous running state"
