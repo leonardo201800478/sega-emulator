@@ -481,7 +481,12 @@ impl ClockDomain {
     /// so an error leaves the domain unchanged.
     pub fn advance_to(&mut self, target: MachineTime) -> Result<u128, ClockError> {
         let preview = self.preview_advance_to(target)?;
-        self.commit_preview(preview)
+        let elapsed_cycles = preview.elapsed_cycles();
+        let snapshot = preview.snapshot();
+        self.time = snapshot.time;
+        self.total_cycles = snapshot.total_cycles;
+        self.phase = snapshot.phase;
+        Ok(elapsed_cycles)
     }
 
     /// Capture all state required to reproduce future clock conversion.
