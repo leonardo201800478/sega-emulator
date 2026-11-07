@@ -37,7 +37,7 @@ Each category stores its own last-visited directory. When a native picker opens,
 2. Its configured storage directory, if it exists.
 3. Documents, then the current working directory as a final fallback.
 
-The ROM file picker updates only the ROM history; it does not silently change the configured ROM storage path. Selecting a storage directory updates that category's configured path and its picker history.
+The ROM file picker updates only the ROM history; it does not silently change the configured ROM storage path. Selecting a storage directory updates that category's configured path and its picker history. Configured paths and history are retained even while a removable drive or network location is unavailable; the picker falls back to the next valid location without erasing the stored preference.
 
 ## Persistence and bootstrap
 
