@@ -24,7 +24,7 @@ impl fmt::Display for SmsCoreError {
             ),
             Self::InvalidCartridgeRamSize { size, expected } => write!(
                 f,
-                "cartridge SRAM size {size} bytes is invalid; expected 8 KiB or {expected} bytes"
+                "cartridge SRAM size {size} bytes is invalid; expected 8 KiB, 16 KiB or {expected} bytes"
             ),
         }
     }
