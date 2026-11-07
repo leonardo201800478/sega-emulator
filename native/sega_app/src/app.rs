@@ -8,11 +8,11 @@ use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
-use sega_media::{CartridgeCatalog, CartridgeIdentity};
 use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
 };
+use sega_media::{CartridgeCatalog, CartridgeIdentity};
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
@@ -357,12 +357,7 @@ impl SegaApp {
         } else {
             &self.region
         };
-        match SmsTemporalWorker::new_with_cartridge_hardware_profile(
-            rom,
-            region,
-            profile,
-            None,
-        ) {
+        match SmsTemporalWorker::new_with_cartridge_hardware_profile(rom, region, profile, None) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
                 if let Some(notice) = cartridge_notice {
@@ -727,9 +722,8 @@ impl eframe::App for SegaApp {
 fn sms_cartridge_catalog() -> Result<&'static CartridgeCatalog, String> {
     static CATALOG: OnceLock<Result<CartridgeCatalog, String>> = OnceLock::new();
 
-    match CATALOG.get_or_init(|| {
-        CartridgeCatalog::sms_default().map_err(|error| error.to_string())
-    }) {
+    match CATALOG.get_or_init(|| CartridgeCatalog::sms_default().map_err(|error| error.to_string()))
+    {
         Ok(catalog) => Ok(catalog),
         Err(error) => Err(error.clone()),
     }
