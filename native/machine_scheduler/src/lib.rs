@@ -30,6 +30,9 @@ pub struct ClockAdvance {
     pub elapsed_cycles: u128,
     pub total_cycles: u128,
     pub phase: u128,
+    // Retain the opaque preflight token so apply_advances can commit it without
+    // recalculating rational clock conversion.
+    preview: sega_temporal_core::ClockDomainPreview,
 }
 
 /// An event together with all device-clock advances up to its timestamp.
@@ -501,12 +504,14 @@ impl<T> MachineScheduler<T> {
     fn calculate_advances(&self, target: MachineTime) -> Result<Vec<ClockAdvance>, SchedulerError> {
         let mut advances = Vec::with_capacity(self.clocks.len());
         for (&id, domain) in &self.clocks {
-            let (elapsed_cycles, snapshot) = domain.preview_advance_to(target)?;
+            let preview = domain.preview_advance_to(target)?;
+            let snapshot = preview.snapshot();
             advances.push(ClockAdvance {
                 domain: id,
-                elapsed_cycles,
+                elapsed_cycles: preview.elapsed_cycles(),
                 total_cycles: snapshot.total_cycles,
                 phase: snapshot.phase,
+                preview,
             });
         }
         Ok(advances)
@@ -524,7 +529,7 @@ impl<T> MachineScheduler<T> {
                 .clocks
                 .get_mut(&advance.domain)
                 .ok_or(SchedulerError::UnknownClockDomain(advance.domain))?;
-            domain.advance_to(target)?;
+            domain.commit_preview(advance.preview)?;
         }
         self.now = target;
         Ok(())
