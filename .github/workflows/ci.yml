@@ -83,18 +83,17 @@ jobs:
               - 'native/z80_cpu/**'
               - 'native/z80_alu/**'
               - 'native/z80_bus/**'
-              - 'native/sms_core/**'
-              - 'native/sg1000_core/**'
+              - 'native/sms_core/tests/z80_*.rs'
+              - 'native/sms_core/src/temporal*.rs'
+              - 'native/sms_core/src/bin/z80test_runner.rs'
+              - 'native/sg1000_core/src/temporal*.rs'
             video:
-              - 'native/video_core/**'
               - 'native/video_runtime/**/*.rs'
               - 'native/video_runtime/Cargo.toml'
               - 'native/video_runtime/Cargo.lock'
               - 'native/video_runtime/build.rs'
             audio:
               - 'native/sn76489/**'
-              - 'native/sg1000_core/src/audio.rs'
-              - 'rust/runtime/sms-runtime/src/audio.rs'
               - 'native/audio_output/**/*.rs'
               - 'native/audio_output/Cargo.toml'
               - 'native/audio_output/Cargo.lock'
@@ -107,6 +106,7 @@ jobs:
               - 'native/input_runtime/Cargo.lock'
               - 'native/input_runtime/build.rs'
             app:
+              - 'rust/runtime/sms-runtime/**'
               - 'native/sega_app/**/*.rs'
               - 'native/sega_app/Cargo.toml'
               - 'native/sega_app/Cargo.lock'
@@ -114,8 +114,6 @@ jobs:
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
-              - 'native/sms_core/src/temporal*.rs'
-              - 'native/sg1000_core/src/temporal*.rs'
             tooling:
               - 'scripts/**/*.ps1'
             full:
