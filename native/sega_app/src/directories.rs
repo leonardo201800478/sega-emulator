@@ -153,16 +153,37 @@ impl DirectoryPreferences {
     /// `config/systems/<id>`; control profiles live below `controls/<id>`.
     /// This method resolves paths only; it never creates or migrates data.
     pub fn system_path(&self, kind: DirectoryKind, system_id: &str) -> io::Result<PathBuf> {
-        if !matches!(kind, DirectoryKind::Configuration | DirectoryKind::Roms | DirectoryKind::Saves | DirectoryKind::States | DirectoryKind::Controls) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("The {:?} category is not system-scoped", kind)));
+        if !matches!(
+            kind,
+            DirectoryKind::Configuration
+                | DirectoryKind::Roms
+                | DirectoryKind::Saves
+                | DirectoryKind::States
+                | DirectoryKind::Controls
+        ) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("The {kind:?} category is not system-scoped"),
+            ));
         }
-        if system_id.is_empty() || system_id.starts_with('-') || system_id.ends_with('-')
-            || !system_id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        if system_id.is_empty()
+            || system_id.starts_with('-')
+            || system_id.ends_with('-')
+            || !system_id.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+            })
         {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid system identifier"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid system identifier",
+            ));
         }
         let root = self.path(kind);
-        Ok(if kind == DirectoryKind::Configuration { root.join("systems").join(system_id) } else { root.join(system_id) })
+        Ok(if kind == DirectoryKind::Configuration {
+            root.join("systems").join(system_id)
+        } else {
+            root.join(system_id)
+        })
     }
 
     /// Return the last folder visited by the category's native picker.
@@ -234,7 +255,7 @@ impl DirectoryPreferences {
         fs::create_dir_all(&configuration_directory)?;
         let settings_file = configuration_directory.join(SETTINGS_FILE);
         let temporary_file = settings_file.with_extension("ini.tmp");
-        let mut contents = String::from("version=2\n");
+        let mut contents = String::from("version=3\n");
         for kind in DirectoryKind::ALL {
             let slot = index(kind);
             contents.push_str(kind.key());
