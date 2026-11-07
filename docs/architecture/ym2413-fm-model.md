@@ -1,0 +1,431 @@
+# YM2413 / OPLL — Especificação arquitetural e modelo FM
+
+**Projeto:** Sega Emulator — Emulação de Alta Precisão  
+**Escopo:** núcleo compartilhado Rust e integração futura no Master System japonês  
+**Estado:** especificação arquitetural inicial (M0); **não autoriza declarar o chip implementado**  
+**Branch de documentação:** `fix/sn76489-psg-fidelity-20261107`  
+**PR relacionada:** [#615](https://github.com/leonardo201800478/sega-emulator/pull/615)
+
+> Convenção de evidência usada neste documento:
+> - **DOCUMENTADO:** descrito no manual Yamaha ou documentação técnica primária.
+> - **MEDIDO:** resultado de engenharia reversa com observações em hardware real.
+> - **INFERIDO:** hipótese consistente com evidências, ainda não comprovada diretamente no YM2413.
+> - **PENDENTE:** exige medição, comparação diferencial ou decisão arquitetural.
+>
+> Não converter INFERIDO/PENDENTE em comportamento normativo do core.
+
+---
+
+## 1. Objetivo e limites
+
+Modelar o Yamaha YM2413 (OPLL) como um dispositivo digital determinístico, independente de console e host, com estado integral, avanço explícito de clock e integração temporal pelo `MachineScheduler`.
+
+O núcleo deve reproduzir:
+- síntese FM de 9 canais melódicos;
+- dois operadores por canal, com modulator e carrier;
+- 15 instrumentos predefinidos e um instrumento programável;
+- geradores de fase, envelope, AM e PM;
+- feedback do modulator;
+- modo Rhythm com cinco vozes de percussão;
+- registradores, latch, temporização e pipeline interno;
+- saídas digitais que representem os pinos de áudio do chip.
+
+Fora do escopo do core:
+- decodificação de portas específicas do Master System;
+- presença física do FM em cada console;
+- política de seleção PSG/FM;
+- mixer, resampler e dispositivo de áudio do host.
+
+Essas responsabilidades pertencem aos adaptadores e à configuração da máquina.
+
+## 2. Parâmetros fundamentais
+
+| Parâmetro | Valor / regra | Evidência |
+|---|---:|---|
+| Clock de entrada | 3.579.545 Hz | DOCUMENTADO |
+| Slots por período de saída | 18 | DOCUMENTADO |
+| Clocks por slot | 4 | DOCUMENTADO |
+| Clocks por período de saída | 72 | DOCUMENTADO |
+| Taxa interna de saída | 3.579.545 / 72 ≈ 49.716,04 Hz | Derivada |
+| Canais melódicos | 9 | DOCUMENTADO |
+| Operadores lógicos | 18 (2 por canal) | DOCUMENTADO |
+| Células físicas do operador | 1, reutilizada sequencialmente | DOCUMENTADO |
+| Resolução do DAC | 9 bits | DOCUMENTADO |
+| Instrumentos fixos | 15 + patch de usuário | DOCUMENTADO |
+| Saídas | MO e RO | DOCUMENTADO |
+
+A taxa de aproximadamente 49,716 kHz é a taxa interna do gerador, **não** a taxa final do dispositivo de áudio. A conversão para 44,1/48/96 kHz deve preservar fase e histórico do resampler entre blocos.
+
+### 2.1 Ordem dos slots
+
+| Slot físico | Canal | Operador |
+|---:|---:|---|
+| 1 | 1 | Modulator |
+| 2 | 2 | Modulator |
+| 3 | 3 | Modulator |
+| 4 | 1 | Carrier |
+| 5 | 2 | Carrier |
+| 6 | 3 | Carrier |
+| 7 | 4 | Modulator |
+| 8 | 5 | Modulator |
+| 9 | 6 | Modulator |
+| 10 | 4 | Carrier |
+| 11 | 5 | Carrier |
+| 12 | 6 | Carrier |
+| 13 | 7 | Modulator |
+| 14 | 8 | Modulator |
+| 15 | 9 | Modulator |
+| 16 | 7 | Carrier |
+| 17 | 8 | Carrier |
+| 18 | 9 | Carrier |
+
+Cada slot ocupa quatro clocks de entrada. A visita de todos os slots ocupa 72 clocks. O modelo deve manter os 18 estados lógicos, mas executar as operações na ordem sequencial observada. Não implementar 18 engines independentes em paralelo.
+
+O processamento em lote é permitido somente quando preserva a sequência de slots, os pontos de escrita de registradores, os eventos de envelope e os limites de saída. Uma escrita no instante T exige avançar o chip até T, aplicar a escrita na fase correta e continuar a partir dali.
+
+## 3. Modelo de síntese
+
+### 3.1 Caminho de sinal por operador
+
+Cada operador possui, conceitualmente:
+1. Phase Generator (PG);
+2. forma de onda log-sine e conversão exponencial;
+3. Envelope Generator (EG);
+4. controle de amplitude e sinal.
+
+O canal usa modulator seguido de carrier. O modulator pode receber feedback de sua própria saída histórica. A saída do modulator altera a fase do carrier.
+
+Representação matemática conceitual:
+
+\[
+y(t)=A_c(t)\sin(\phi_c(t)+I(t)\sin(\phi_m(t)))
+\]
+
+Essa equação descreve a topologia funcional, não a aritmética interna exata. Larguras, deslocamentos, truncamentos e atrasos devem ser determinados pelas medições e pelo manual.
+
+### 3.2 Phase Generator
+
+**DOCUMENTADO/MEDIDO**
+- O contador de fase identificado nas notas de engenharia reversa tem 19 bits, com representação fixa 10.9.
+- Cada operador lógico mantém seu próprio estado de fase.
+- FNUM, BLOCK e MUL controlam a frequência.
+- PM/VIB pode alterar o incremento de fase.
+
+Tabela de multiplicadores do campo MUL:
+
+| MUL | Multiplicador |
+|---:|---:|
+| 0 | 0,5 |
+| 1–9 | 1–9 |
+| A–B | 10 |
+| C–D | 12 |
+| E–F | 15 |
+
+Fórmula conceitual para o incremento base:
+
+\[
+\Delta P \propto FNUM\times MUL\times 2^{BLOCK}
+\]
+
+**PENDENTE:** escala exata, posição dos bits fracionários, truncamento, tratamento de overflow, fase inicial, cadência de atualização e aplicação precisa de PM. Não codificar a expressão simplificada como fórmula final sem confronto de vetores.
+
+### 3.3 Log-Sine / EXP
+
+O caminho de amplitude deve utilizar representação logarítmica e conversão exponencial por tabelas inteiras. O loop de síntese não deve chamar funções trigonométricas ou logarítmicas de ponto flutuante.
+
+As notas de engenharia reversa documentam uma tabela de seno em domínio logarítmico e uma tabela EXP de 256 entradas. Uma implementação de referência aberta, `emu2413`, contém tabelas concretas e está licenciada sob MIT; deve ser usada como referência diferencial, não como prova isolada do comportamento físico.
+
+**PENDENTE:** estabelecer os vetores oficiais do projeto para cada entrada, convenção de arredondamento, saturação, simetria de quadrantes, meia onda e conversão final para o DAC. Tabelas copiadas de implementações não devem ser aceitas sem comparação.
+
+### 3.4 Envelope Generator
+
+Não usar um ADSR genérico contínuo. O EG é uma máquina de estados discreta e temporizada por hardware.
+
+Fases a modelar:
+- DAMP;
+- ATTACK;
+- DECAY;
+- SUSTAIN;
+- RELEASE;
+- variantes de release e transições dependentes de KEY-ON, KEY-OFF e SUS.
+
+Parâmetros relevantes por operador:
+- AR, DR, RR, SL;
+- EG-TYP;
+- KSR;
+- KSL;
+- AM enable.
+
+Parâmetros por canal:
+- KEY-ON;
+- SUS;
+- BLOCK/FNUM.
+
+A relação de taxa documentada é:
+
+\[
+RATE=4R+R_{ks}
+\]
+
+com taxa nula quando R=0. A implementação ainda precisa reconstruir o gerador de taxas, seus contadores e padrões de incremento. Não aceitar uma tabela inventada ou uma curva exponencial aproximada como substituta.
+
+**DIVERGÊNCIA A RESOLVER:** o manual e as medições/implementações de referência não apresentam a mesma granularidade de nível/atenuação em todas as descrições. As notas de andete descrevem 128 níveis com passo de 0,375 dB; o manual contém uma especificação de atenuação que precisa ser reconciliada com o comportamento medido. Não escolher um valor sem documentar a evidência e o teste que o confirma.
+
+### 3.5 KSR e KSL
+
+KSR afeta a taxa do envelope por meio da escala de nota derivada de BLOCK e FNUM. KSL aplica atenuação dependente da altura da nota.
+
+A expressão simplificada `(BLOCK << 1) | (FNUM >> 8)` pode servir como índice inicial de análise, mas não é por si só a especificação completa. A tabela, o arredondamento e a aplicação de KSR/KSL devem ser confrontados com o manual e as notas de medição.
+
+### 3.6 Feedback
+
+O feedback é aplicado ao modulator. As medições indicam dependência das duas saídas anteriores do modulator, não de uma saída instantânea ideal.
+
+O manual associa os valores FB a índices de modulação:
+
+| FB | Índice documentado |
+|---:|---:|
+| 0 | 0 |
+| 1 | π/16 |
+| 2 | π/8 |
+| 3 | π/4 |
+| 4 | π/2 |
+| 5 | π |
+| 6 | 2π |
+| 7 | 4π |
+
+O estado precisa preservar pelo menos o histórico temporal exigido pelo modelo confirmado. A média das duas últimas amostras aparece nas implementações de referência e nas análises de engenharia reversa.
+
+**PENDENTE:** largura do sinal histórico, ponto exato de truncamento, deslocamento de feedback por FB, sinal, saturação e pipeline por slot. Não fixar `9 - FB` ou qualquer shift simplificado sem vetores diferenciais.
+
+### 3.7 LFO AM e PM
+
+O chip possui modulação de amplitude e de fase. A documentação de aplicação indica modulações lentas; as notas de reverse engineering investigam suas tabelas e sequências.
+
+O estado deverá incluir:
+- contador/posição de AM;
+- contador/posição de PM;
+- fase e divisor de cada LFO;
+- valores efetivos aplicados ao EG e PG.
+
+**PENDENTE:** período exato em clocks, forma da tabela, fase após reset, sequência inicial e ponto de aplicação em cada slot. A frequência aproximada divulgada em documentos não substitui a sequência discreta.
+
+## 4. Instrumentos e registradores
+
+### 4.1 Instrumentos
+
+- Instrument ID 0: patch de usuário programável nos registradores $00–$07.
+- Instrument IDs 1–15: presets internos do YM2413.
+- O instrumento selecionado é aplicado aos operadores do canal.
+- O patch de usuário é global/compartilhado: todos os canais que selecionam ID 0 observam o mesmo conjunto de registradores.
+
+**PENDENTE:** validar byte a byte a ROM dos 15 instrumentos no YM2413 original. Não importar ROM de VRC7, YMF281B ou derivativos FHB013 como se fosse automaticamente a ROM do YM2413. As notas de reverse engineering alertam que algumas imagens de die analisadas são de um derivativo FHB013, não de um YM2413 original.
+
+### 4.2 Mapa funcional de registradores
+
+| Endereço | Função |
+|---|---|
+| $00–$07 | Patch de usuário (parâmetros dos dois operadores) |
+| $0E | Ativação e controles do Rhythm Mode |
+| $0F | Registrador de teste; comportamento não destinado ao uso normal |
+| $10–$18 | FNUM LSB dos canais 1–9 |
+| $20–$28 | FNUM MSB, BLOCK, KEY-ON e SUS dos canais 1–9 |
+| $30–$38 | Instrument ID e volume dos canais 1–9 |
+
+Os campos reservados e os efeitos de escrita nos registradores de teste devem ser tratados como PENDENTES até haver evidência. Não normalizar escritas inválidas para um comportamento conveniente.
+
+## 5. Rhythm Mode
+
+O Rhythm Mode altera a utilização dos canais 7–9 e de seus seis operadores para formar cinco vozes de percussão:
+
+| Voz | Slots envolvidos |
+|---|---|
+| Bass Drum | 13 e 16 |
+| Hi-Hat | 14 |
+| Tom-Tom | 15 |
+| Snare Drum | 17 |
+| Top Cymbal | 18 |
+
+Ao ativar Rhythm Mode, os canais 7–9 deixam de ser três canais melódicos normais. Os registradores de frequência desses canais continuam relevantes para algumas vozes; o controle de volume e disparo das percussões passa a utilizar os campos específicos do registrador de ritmo.
+
+Não presumir que desligar individualmente uma voz de percussão libere seu operador para recuperar um canal melódico.
+
+**PENDENTE:** equações de fase metálica, combinações de ruído e fase, taps e estado inicial do gerador pseudoaleatório, sincronização do LFSR, envelopes e saída duplicada de percussão. O estado de ruído deverá ser serializado integralmente. Não assumir um polinômio ou seed como confirmado sem comparação com hardware.
+
+## 6. Interface de barramento do chip
+
+O core deve expor operações explícitas equivalentes a:
+- reset;
+- escrita de endereço/latch;
+- escrita de dados;
+- avanço de clocks;
+- consulta/retirada de amostras já produzidas;
+- exportação e restauração de estado.
+
+O manual especifica:
+- aguardar 12 clocks mestres entre escrita de endereço e escrita de dados;
+- aguardar 84 clocks mestres depois da escrita de dados antes da próxima escrita de endereço ou dados.
+
+Se os intervalos não forem respeitados, o manual classifica os dados como incertos. Não converter automaticamente esses intervalos em WAIT states de Z80. A camada de barramento deve registrar o timestamp da transação e o core deve modelar o comportamento de escrita no instante correto.
+
+## 7. Integração Master System
+
+### 7.1 Separação de responsabilidades
+
+| Camada | Responsabilidade |
+|---|---|
+| `sega-audio` / core YM2413 | Síntese e estado digital do chip |
+| Adaptador temporal | Relógio e sincronização com o Scheduler |
+| Perfil físico SMS | Modelo, revisão, região e presença do chip |
+| Barramento SMS | Portas e timestamps de I/O |
+| Controle de áudio SMS | Seleção de saída PSG/FM conforme hardware |
+| AudioMixer | Soma das fontes |
+| Resampler | Conversão para a taxa de saída |
+| Host | Dispositivo físico; sem controle de ciclos do chip |
+
+O núcleo YM2413 não deve depender de tipos do Master System.
+
+### 7.2 Portas SMS
+
+- $F0: latch/endereço do YM2413.
+- $F1: dados do YM2413.
+- $F2: detecção/controle de áudio e leitura de bits de contador no hardware correspondente.
+
+A decodificação deve ocorrer no evento de conclusão da transação de I/O, preservando o timestamp. A máscara e os espelhos de portas devem ser confirmados no decodificador real do SMS, não inferidos apenas do byte baixo.
+
+### 7.3 Perfis de hardware e controle $F2
+
+Separar três conceitos:
+1. capacidade física: o YM2413 existe nesta placa/revisão;
+2. seleção/roteamento de saída: PSG e FM estão audíveis ou silenciados;
+3. atividade de síntese: o chip continua avançando seu estado interno.
+
+Tabela de saída documentada para o Japanese Master System:
+
+| Valor escrito em $F2 | PSG | FM |
+|---:|---|---|
+| $00 | habilitado | silenciado |
+| $01 | silenciado | habilitado |
+| $02 | silenciado | silenciado |
+| $03 | habilitado | habilitado |
+
+No Japanese Master System, PSG e FM podem operar simultaneamente. No Mark III com FM Unit, o bit de controle do PSG não tem o mesmo efeito: a seleção é mutuamente exclusiva e o bit correspondente é forçado a zero. Não aplicar esse comportamento do Mark III ao SMS japonês.
+
+A presença de FM não deve ser inferida apenas de `Territory::Japan`. O perfil deve representar explicitamente modelo/revisão e capacidade física. SMS exportação e variantes Tec Toy não devem receber YM2413 por suposição.
+
+Na leitura de $F2, bits 7, 6 e 5 refletem bits 11, 7 e 3 de um contador de 12 bits associado a C-Sync. Os demais bits têm comportamento definido pela documentação de Audio Control Port. A ausência de FM possui comportamento de leitura diferente conforme o modelo; o perfil precisa tratar isso explicitamente.
+
+### 7.4 PSG e FM simultâneos
+
+O PSG e o YM2413:
+- têm clocks e estados internos independentes;
+- não devem ser pausados ou substituídos apenas porque a outra fonte está selecionada;
+- devem gerar amostras de forma determinística;
+- devem entrar no mixer comum com ganho/headroom documentados;
+- precisam preservar a fase de reamostragem entre blocos.
+
+A implementação atual do mixer suporta múltiplas fontes, mas a sessão de áudio deve ser auditada e ampliada para entregar PSG + FM no mesmo intervalo de saída. Não duplicar mixers por console.
+
+## 8. Scheduler e invariância temporal
+
+O `MachineScheduler` existente continua sendo o único dono da linha do tempo.
+
+A integração FM requer:
+- um domínio de clock registrado e validado;
+- razão de clock explícita para o perfil de hardware;
+- prioridade/fase de eventos documentada;
+- avanço do YM2413 até cada timestamp de escrita;
+- preservação de restos de clock, slot e subfase;
+- processamento em lote que não ultrapasse eventos pendentes.
+
+O ID do domínio FM ainda não está reservado nesta especificação. Não codificar um ID arbitrário sem verificar a política central de IDs e a validação do snapshot do coordenador SMS. A restauração atual do coordenador valida exatamente três domínios (Z80, PSG, VDP); adicionar FM exigirá evolução explícita do esquema e versão do estado.
+
+## 9. Save State
+
+Serializar, no mínimo:
+- banco completo de registradores e latch;
+- contador de clock e fase residual;
+- slot corrente e subfase;
+- estado dos 9 canais;
+- estado dos 18 operadores;
+- PG, EG, AM, PM;
+- dois históricos de feedback por operador/canal conforme o modelo final;
+- estado do Rhythm Mode e do gerador pseudoaleatório;
+- pipeline de saída e amostras pendentes necessárias à equivalência;
+- estado do adaptador e domínio de clock;
+- controle $F2, perfil físico e roteamento SMS;
+- estado do resampler e mixer que afete a continuidade.
+
+Restaurar deve validar coerência entre timestamp do Scheduler, clock acumulado do chip, eventos pendentes, estado do barramento e fase do resampler. Não basta serializar registradores visíveis.
+
+## 10. Estratégia de implementação incremental
+
+1. Fechar especificação de PG, EG, AM/PM, feedback e Rhythm com evidências.
+2. Fixar vetores dourados e resultados diferenciais para cada bloco.
+3. Implementar núcleo puro em Rust, sem integração SMS.
+4. Validar reset, registradores, clock, invariância de blocos e snapshots.
+5. Implementar presets e patch de usuário.
+6. Validar síntese melódica e envelopes.
+7. Validar Rhythm Mode.
+8. Implementar adaptador temporal e domínio no Scheduler.
+9. Integrar portas $F0–$F2 por perfil físico.
+10. Integrar fontes PSG + FM no mixer e no resampler.
+11. Executar regressão SMS e SG-1000 e todos os gates do workspace.
+
+## 11. Matriz de aceitação
+
+| ID | Teste | Estado inicial |
+|---|---|---|
+| YM-001 | Clock de entrada e 18 slots / 72 clocks | NOT RUN |
+| YM-002 | Ordem dos slots e correspondência canal/operador | NOT RUN |
+| YM-003 | Escrita de endereço com latência de 12 clocks | NOT RUN |
+| YM-004 | Escrita de dados com latência de 84 clocks | NOT RUN |
+| YM-005 | Tabela MUL e sweep FNUM/BLOCK | NOT RUN |
+| YM-006 | Vetores Log-Sine/EXP | NOT RUN |
+| YM-007 | Attack/Decay/Sustain/Release e DAMP | NOT RUN |
+| YM-008 | KSR/KSL e SUS | NOT RUN |
+| YM-009 | AM/PM e fase inicial | NOT RUN |
+| YM-010 | Feedback com histórico e atrasos | NOT RUN |
+| YM-011 | Presets originais e patch de usuário | NOT RUN |
+| YM-012 | Cinco vozes de Rhythm Mode | NOT RUN |
+| YM-013 | Continuidade de execução contínua vs blocos | NOT RUN |
+| YM-014 | Snapshot/restore bit-exato e continuidade de áudio | NOT RUN |
+| YM-015 | $F2 Japanese SMS: PSG/FM simultâneos | NOT RUN |
+| YM-016 | $F2 Mark III FM Unit: seleção exclusiva | NOT RUN |
+| YM-017 | SMS sem FM e perfis desconhecidos | NOT RUN |
+| YM-018 | Mixagem PSG + FM e resampling | NOT RUN |
+| YM-019 | Regressão SG-1000 e SMS | NOT RUN |
+| YM-020 | Gates Rust do workspace | NOT RUN |
+
+Nenhum teste é PASS por ter sido ignorado ou não executado. Registrar PASS, FAIL, BLOCKED ou NOT RUN com evidência e SHA.
+
+## 12. Referências técnicas
+
+### Documentação primária / técnica
+- Yamaha YM2413 Application Manual, espelhado em SMS Power: https://www.smspower.org/maxim/Documents/YM2413ApplicationManual
+- SMS Power — YM2413: https://www.smspower.org/Development/YM2413
+- SMS Power — Audio Control Port: https://www.smspower.org/Development/AudioControlPort
+- SMS Power — índice das notas de reverse engineering: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes
+- Andete — repositório de medições e notas: https://github.com/andete/ym2413
+
+### Implementações de referência (uso diferencial, não autoridade única)
+- emu2413 (MIT): https://github.com/digital-sound-antiques/emu2413
+- Nuked-OPLL: https://github.com/nukeykt/Nuked-OPLL
+- ymfm: https://github.com/aaronsgiles/ymfm
+- ares: https://github.com/ares-emulator/ares
+
+Antes de reutilizar código, tabelas ou dados, verificar licença, versão/commit e proveniência. O die analisado por andete é de um derivativo FHB013; não tratá-lo como uma fotografia do silício YM2413 original.
+
+---
+
+## 13. Decisões congeladas nesta revisão
+
+- Núcleo YM2413 compartilhado e independente do SMS.
+- Backend de hardware 100% Rust.
+- Scheduler único, sem callbacks por instrução.
+- Operador processado sequencialmente em 18 slots.
+- PSG + FM simultâneos no perfil Japanese SMS.
+- Mark III FM Unit com comportamento exclusivo próprio.
+- Não presumir FM em SMS exportação ou Tec Toy sem evidência.
+- Não iniciar síntese de produção antes de fechar os itens PENDENTES.
+- Nenhuma mudança de hardware é considerada concluída sem testes diferenciais, temporais, de snapshot e regressão.
