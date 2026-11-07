@@ -12,7 +12,7 @@ use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
 };
-use crate::save_ram_store::SaveRamStore;
+use sega_save_runtime::SaveRamStore;
 use sega_media::{CartridgeCatalog, CartridgeHardwareProfile, CartridgeIdentity};
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
