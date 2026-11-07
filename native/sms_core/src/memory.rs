@@ -233,6 +233,7 @@ impl SmsMemory {
         // device mirrors across the 16 KiB CPU window; bit 2 only selects a
         // second 16 KiB page on cartridges that physically provide one.
         if (0x8000..=0xBFFF).contains(&address)
+            && self.control_port & 0x40 == 0
             && matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
             && self.mapper_control & 0x08 != 0
         {
