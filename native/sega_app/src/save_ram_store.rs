@@ -147,7 +147,13 @@ impl SaveRamStore {
             return Err(SaveRamError::IdentityMismatch);
         }
 
-        if stored_capacity != ram.capacity_bytes || payload.len() != ram.capacity_bytes {
+        if stored_capacity != ram.capacity_bytes {
+            return Err(SaveRamError::RamSizeMismatch {
+                expected: ram.capacity_bytes,
+                actual: stored_capacity,
+            });
+        }
+        if payload.len() != ram.capacity_bytes {
             return Err(SaveRamError::RamSizeMismatch {
                 expected: ram.capacity_bytes,
                 actual: payload.len(),
