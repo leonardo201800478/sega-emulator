@@ -478,11 +478,8 @@ impl ClockDomain {
     /// Calls must be monotonic. Arithmetic is checked before state is changed,
     /// so an error leaves the domain unchanged.
     pub fn advance_to(&mut self, target: MachineTime) -> Result<u128, ClockError> {
-        let (new_cycles, snapshot) = self.preview_advance_to(target)?;
-        self.time = snapshot.time;
-        self.total_cycles = snapshot.total_cycles;
-        self.phase = snapshot.phase;
-        Ok(new_cycles)
+        let preview = self.preview_advance_to(target)?;
+        self.commit_preview(preview)
     }
 
     /// Capture all state required to reproduce future clock conversion.
@@ -847,18 +844,19 @@ mod tests {
                         )
                         .unwrap();
                         let before = domain.snapshot();
-                        let (cycles, preview) = domain
+                        let preview = domain
                             .preview_advance_to(MachineTime::from_ticks(elapsed))
                             .unwrap();
+                        let snapshot = preview.snapshot();
                         let scaled = elapsed * u128::from(numerator) + u128::from(initial_phase);
-                        assert_eq!(cycles, scaled / u128::from(denominator));
-                        assert_eq!(preview.phase, scaled % u128::from(denominator));
+                        assert_eq!(preview.elapsed_cycles(), scaled / u128::from(denominator));
+                        assert_eq!(snapshot.phase, scaled % u128::from(denominator));
                         assert_eq!(domain.snapshot(), before);
                         assert_eq!(
                             domain.advance_to(MachineTime::from_ticks(elapsed)),
-                            Ok(cycles)
+                            Ok(preview.elapsed_cycles())
                         );
-                        assert_eq!(domain.snapshot(), preview);
+                        assert_eq!(domain.snapshot(), snapshot);
                     }
 
                     let domain = ClockDomain::with_phase(
