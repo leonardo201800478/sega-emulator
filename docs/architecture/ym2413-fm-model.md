@@ -429,3 +429,158 @@ Antes de reutilizar código, tabelas ou dados, verificar licença, versão/commi
 - Não presumir FM em SMS exportação ou Tec Toy sem evidência.
 - Não iniciar síntese de produção antes de fechar os itens PENDENTES.
 - Nenhuma mudança de hardware é considerada concluída sem testes diferenciais, temporais, de snapshot e regressão.
+
+
+---
+
+## 14. Reconciliação de evidências M1 — PG, PM, EG e feedback (2026-11-06)
+
+Esta revisão transforma parte dos itens pendentes de M0 em modelos candidatos com evidência publicada. Ela **não** declara o core implementado e não substitui vetores do projeto nem validação independente no YM2413 original.
+
+### 14.1 Phase Generator — incremento base
+
+As medições de andete sustentam um acumulador de fase de 19 bits em formato 10.9. Os 10 bits superiores selecionam a posição da tabela seno; os 9 bits inferiores preservam a fração. A ausência de interpolação é uma inferência consistente com as medições, não uma especificação elétrica independente.
+
+Tabela de multiplicadores usada no cálculo:
+
+| MUL | ML |
+|---:|---:|
+| 0 | 1 |
+| 1 | 2 |
+| 2 | 4 |
+| 3 | 6 |
+| 4 | 8 |
+| 5 | 10 |
+| 6 | 12 |
+| 7 | 14 |
+| 8 | 16 |
+| 9 | 18 |
+| A | 20 |
+| B | 20 |
+| C | 24 |
+| D | 24 |
+| E | 30 |
+| F | 30 |
+
+Incremento base medido, sem PM:
+
+`phase_step = ((FNUM * ML[MUL]) << BLOCK) >> 1`
+
+O acumulador deve manter os 19 bits efetivos; o cálculo intermediário do incremento pode exceder 19 bits, mas a soma observável é reduzida ao domínio de fase de 19 bits. FNUM=0 não avança a fase. MUL=0, BLOCK=0, FNUM=1 também resulta em incremento zero por causa do deslocamento à direita.
+
+### 14.2 Phase Modulation / Vibrato
+
+As notas de medição apresentam uma tabela PM de 8 × 8 indexada por `FNUM[8:6]` e pela posição do LFO. O índice de posição avança a cada 1024 amostras internas; o ciclo de oito posições dura 8192 amostras. Com 3.579.545 / 72 ≈ 49.716,04 amostras/s, o período corresponde a aproximadamente 6,069 Hz.
+
+`pm = pmTable[FNUM >> 6][(global_sample_counter >> 10) & 7]`
+
+`phase_step = (((2 * FNUM + pm) * ML[MUL]) << BLOCK) >> 2`
+
+A expressão reduz-se ao incremento base quando PM=0. A tabela medida é:
+
+| FNUM[8:6] | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1 | 0 | 0 | 1 | 0 | 0 | 0 | -1 | 0 |
+| 2 | 0 | 1 | 2 | 1 | 0 | -1 | -2 | -1 |
+| 3 | 0 | 1 | 3 | 1 | 0 | -1 | -3 | -1 |
+| 4 | 0 | 2 | 4 | 2 | 0 | -2 | -4 | -2 |
+| 5 | 0 | 2 | 5 | 2 | 0 | -2 | -5 | -2 |
+| 6 | 0 | 3 | 6 | 3 | 0 | -3 | -6 | -3 |
+| 7 | 0 | 3 | 7 | 3 | 0 | -3 | -7 | -3 |
+
+**PENDENTE:** fase inicial e alinhamento do contador global com reset, slots e atualização dos registradores; ordem exata entre incremento de fase e leitura da fase no mesmo slot; confirmação do comportamento de PM em todas as combinações de frequência/MUL.
+
+### 14.3 Envelope Generator — níveis e escala
+
+As medições publicadas sustentam um nível de envelope de 7 bits (0–127), com passo de 0,375 dB. O nível 127 corresponde a -47,625 dB; 128 níveis cobrem aproximadamente 48 dB. O manual convertido para HTML informa 0,325 dB, valor incompatível com 128 níveis em 48 dB e com as medições. A hipótese de erro de transcrição no manual é forte, mas a divergência deve permanecer registrada até que os vetores de referência do projeto a encerrem.
+
+O sustain level foi medido como:
+
+`EG_sustain_level = 8 * SL`
+
+Cada incremento de SL representa 3 dB. O KSR usa:
+
+`BF = (BLOCK << 1) | FNUM[8]`
+
+`RKS = KSR ? BF : (BF >> 2)`
+
+`RATE = min(63, 4 * R + RKS)`
+
+O texto do manual confirma a relação RATE=4R+RKS e que RATE=0 não altera o envelope. A tabela de medições de andete detalha o escalonamento do RKS e as curvas de ataque/decay.
+
+### 14.4 EG — temporização candidata e transições observadas
+
+O modelo de andete descreve um contador global compartilhado, incrementado uma vez por amostra interna, que distribui as atualizações de envelope. Para as taxas de decay usuais:
+
+- `eg_shift = 13 - (RATE / 4)`
+- `eg_select = RATE & 3`
+- a atualização só ocorre quando os bits inferiores exigidos do contador global são zero;
+- uma tabela 4 × 8 seleciona se o nível avança 0 ou 1 passo.
+
+Para ATTACK, o mesmo escalonamento é usado com exceção de que os dois bits inferiores são ignorados; quando a entrada da tabela permite atualização, o nível é transformado por uma das funções discretas:
+- `f4(x) = x - (x >> 4) - 1`
+- `f3(x) = x - (x >> 3) - 1`
+- `f2(x) = x - (x >> 2) - 1`
+- `f1(x) = x - (x >> 1) - 1`
+
+As taxas rápidas 12–14 usam combinações específicas dessas funções. RATE 15 é instantâneo quando selecionado na transição DAMP→ATTACK; se alterado para 15 durante uma fase ATTACK já iniciada, as medições indicam que o avanço pode ficar parado. Não simplificar as taxas rápidas como uma curva exponencial contínua.
+
+As medições também registram:
+- DAMP com taxa-base 12, aproximadamente 10,22 ms para a queda de 0 a -48 dB; a transição observada para ATTACK pode ocorrer perto de -45 dB.
+- O início do ATTACK pode ser nível 124 ou 127, dependendo se a sequência anterior concluiu RELEASE ou permaneceu em DAMP.
+- EG_TYPE seleciona comportamento percussivo/sustentado: ao atingir SL, o tom sustentado mantém o nível até KEY-OFF; o percussivo passa para RELEASE.
+- O modelo de engenharia reversa atribui estados DAMP, ATTACK, DECAY e SUSTAIN, com RELEASE condicionado a KEY-OFF e aos parâmetros EG_TYPE/SUS.
+
+**PENDENTE:** alinhar exatamente o contador global e as atualizações EG aos 18 slots e aos clocks de entrada; resolver o ponto de amostragem de RATE e dos parâmetros alterados durante uma fase; fixar a semântica do operador modulator em KEY-OFF e os estados de release; criar vetores para todas as taxas 0–63, incluindo transições durante a execução.
+
+### 14.5 Feedback do modulator
+
+O modelo que reproduz as medições usa duas saídas históricas do modulator (`p0`, `p1`), cada uma representada em 12 bits com faixa assinada aproximada -2047…+2047:
+
+`feedback_phase = FB == 0 ? 0 : (p0 + p1) >> (8 - FB)`
+
+O resultado do modulator é reduzido antes de atualizar o histórico; o carrier recebe modulação derivada da saída recente do modulator. As medições mostram FB=0 sem feedback e aumento de instabilidade/caos para feedback alto em determinadas configurações.
+
+**PENDENTE:** inicialização física de p0/p1, ordem de atualização por slot, larguras e truncamentos intermediários, tratamento de overflow e qualquer offset de fase no primeiro ciclo. O modelo de andete reproduz os dados medidos após sincronização, mas reporta divergências iniciais dependentes das condições iniciais.
+
+### 14.6 Log-Sine / EXP e limites de reutilização
+
+As notas de engenharia reversa descrevem duas tabelas de 256 entradas:
+- `logsin[i] = round(-log2(sin((i + 0.5) * PI / 512)) * 256)`
+- `exp[i] = round((2^(i / 256) - 1) * 1024)`
+
+O caminho de lookup usa espelhamento de quadrante e sinal; a conversão EXP usa mantissa, expoente e complemento de um para o sinal negativo. Essas fórmulas constituem um modelo de referência que deve ser transformado em tabelas inteiras fixas e testado por vetor. Não executar trigonometria/logaritmos no caminho de síntese.
+
+### 14.7 Pipeline de slots — refinamento arquitetural
+
+A entrada é dividida por quatro; cada clock interno processa um dos 18 slots. O pipeline não deve ser interpretado como 18 operadores físicos paralelos: PG, EG e operador/DAC são estágios sequenciais com offsets de slot, trabalhando em contextos de slots distintos no mesmo clock interno. Um período completo contém 18 clocks internos, ou 72 clocks de entrada.
+
+A implementação Rust de referência `emu198x_yamaha_ym2413` documenta seguir o pipeline e os offsets de Nuked-OPLL 1.0.2 (commit `1269cf5a`) e comparar os pinos com Nuked clock a clock. É uma referência técnica útil para ordenar os estágios, não prova independente de silício. O crate e Nuked-OPLL são GPL-2.0-or-later: não copiar código ou tabelas para o projeto sem decisão explícita de compatibilidade de licença. A arquitetura do Sega Emulator deve manter implementação própria e vetores de validação independentes.
+
+### 14.8 Critérios de aceitação M1 adicionais
+
+| ID | Critério | Estado |
+|---|---|---|
+| YM-021 | Vetores do incremento base para todos os MUL, FNUM e BLOCK, incluindo casos de incremento zero e wrap de 19 bits | NOT RUN |
+| YM-022 | Sequência PM 8 × 8 e período do LFO, com alinhamento de reset documentado | NOT RUN |
+| YM-023 | Níveis EG 0–127 e escala 0,375 dB reconciliados com vetores | NOT RUN |
+| YM-024 | KSR/RKS e RATE 0–63, inclusive padrões de atualização global | NOT RUN |
+| YM-025 | ATTACK f1–f4, taxas 12–15 e condições de início 124/127 | NOT RUN |
+| YM-026 | DAMP, KEY-ON/OFF, EG_TYPE, SUS, DECAY e RELEASE por operador | NOT RUN |
+| YM-027 | Feedback p0/p1 com reset, FB 0–7, TL e alinhamento por slot | NOT RUN |
+| YM-028 | Pipeline PG/EG/OP por slot e saídas MO/RO em cada clock interno | NOT RUN |
+
+### 14.9 Fontes desta revisão
+
+- Yamaha YM2413 Application Manual, seções PG, EG e OP/DAC: https://www.smspower.org/maxim/Documents/YM2413ApplicationManual
+- Andete, phase counter / fórmula base: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-03-16
+- Andete, PM/vibrato: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-12-01
+- Andete, decay/release: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-03-20
+- Andete, SL/KSR: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-12-24
+- Andete, feedback: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-12-12
+- Andete, envelope, ATTACK e transições: https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2015-12-31 e https://www.smspower.org/Development/YM2413ReverseEngineeringNotes2017-01-26
+- Pipeline Rust comparativo (Nuked-OPLL 1.0.2): https://docs.rs/emu198x-yamaha-ym2413/latest/emu198x_yamaha_ym2413/
+- Implementação de referência emu2413 (MIT; usar somente para comparação e conferir branch/commit): https://github.com/digital-sound-antiques/emu2413
+
+**Status M1:** PG base e PM têm fórmulas candidatas com suporte de medições; a escala EG de 0,375 dB e a temporização por tabela estão caracterizadas; feedback possui modelo que reproduz medições após sincronização. Pipeline exato, estados iniciais, todos os offsets, integração de slots e vetores completos continuam pendentes. Nenhum core YM2413 foi implementado por esta atualização documental.
