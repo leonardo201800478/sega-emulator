@@ -162,8 +162,10 @@ mod tests {
 
         assert_eq!(session.sink.blocks.len(), 2);
         assert!(!session.sink.closed);
-        let full_volume = i16::from_le_bytes([session.sink.blocks[0][0], session.sink.blocks[0][1]]);
-        let half_volume = i16::from_le_bytes([session.sink.blocks[1][0], session.sink.blocks[1][1]]);
+        let full_volume =
+            i16::from_le_bytes([session.sink.blocks[0][0], session.sink.blocks[0][1]]);
+        let half_volume =
+            i16::from_le_bytes([session.sink.blocks[1][0], session.sink.blocks[1][1]]);
         assert!(half_volume.abs() < full_volume.abs());
     }
 
