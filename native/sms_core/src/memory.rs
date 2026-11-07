@@ -165,9 +165,7 @@ impl SmsMemory {
         }
 
         if sram_size.is_some_and(|size| {
-            size != CARTRIDGE_SRAM_8K
-                && size != CARTRIDGE_SRAM_16K
-                && size != CARTRIDGE_SRAM_32K
+            size != CARTRIDGE_SRAM_8K && size != CARTRIDGE_SRAM_16K && size != CARTRIDGE_SRAM_32K
         }) {
             return Err(SmsCoreError::InvalidCartridgeRamSize {
                 size: sram_size.unwrap_or_default(),
@@ -252,7 +250,17 @@ impl SmsMemory {
             }
             0xC000..=0xFFFF => {
                 if self.control_port & 0x10 != 0 {
-                    0xFF
+                    if self.control_port & 0x40 == 0
+                        && matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
+                        && self.mapper_control & 0x10 != 0
+                    {
+                        self.cartridge_sram.as_ref().map_or(0xFF, |sram| {
+                            let offset = usize::from(address - RAM_START) % sram.len();
+                            sram[offset]
+                        })
+                    } else {
+                        0xFF
+                    }
                 } else {
                     self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)]
                 }
@@ -308,6 +316,22 @@ impl SmsMemory {
                 && matches!(address, 0xFFFD..=0xFFFF)
             {
                 self.mapper_register_write_count += 1;
+            }
+        }
+
+        // $FFFC bit 4 selects cartridge RAM in $C000-$FFFF. The 16 KiB
+        // window always addresses the lower 16 KiB; 8 KiB devices mirror,
+        // 16 KiB devices fill the window, and 32 KiB devices expose their
+        // lower page here. Bit 2 only selects the slot-2 page.
+        if address >= RAM_START
+            && self.control_port & 0x10 != 0
+            && self.control_port & 0x40 == 0
+            && matches!(self.mapper, MapperKind::Sega | MapperKind::SegaExtended)
+            && self.mapper_control & 0x10 != 0
+        {
+            if let Some(sram) = self.cartridge_sram.as_mut() {
+                let offset = usize::from(address - RAM_START) % sram.len();
+                sram[offset] = value;
             }
         }
     }
@@ -413,8 +437,8 @@ impl SmsMemory {
 mod tests {
     use super::{
         BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_SRAM_8K, CARTRIDGE_SRAM_16K,
-        CARTRIDGE_SRAM_32K,
-        MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
+        CARTRIDGE_SRAM_32K, MAX_EXTENDED_BANKS, MAX_EXTENDED_ROM_SIZE, MAX_ROM_SIZE, MapperKind,
+        RAM_SIZE, SmsMemory,
     };
     use crate::{CartridgeImage, SmsCoreError};
 
@@ -757,8 +781,7 @@ mod tests {
     #[test]
     fn sega_mapper_maps_and_mirrors_eight_kib_cartridge_sram() {
         let mut memory =
-            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K))
-                .unwrap();
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         assert_eq!(memory.cartridge_sram().unwrap().len(), CARTRIDGE_SRAM_8K);
         assert_eq!(memory.read(0x8000), 0);
 
@@ -796,6 +819,85 @@ mod tests {
 
         memory.write(0xFFFC, 0x08);
         assert_eq!(memory.read(0x8000), 0x11, "first SRAM bank is retained");
+    }
+
+    #[test]
+    fn mapper_bit_four_maps_cartridge_sram_into_high_window_when_system_ram_is_disabled() {
+        let mut memory =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_16K))
+                .unwrap();
+
+        // Port $3E bit 4 disables internal work RAM; bit 6 remains clear
+        // so the cartridge is connected.
+        memory.write_control_port(0x18);
+        memory.write(0xFFFC, 0x10);
+        memory.write(0xC000, 0xA5);
+        memory.write(0xDFFF, 0x5A);
+        memory.write(0xE000, 0x3C);
+        memory.write(0xFFFF, 0xC3);
+
+        assert_eq!(memory.read(0xC000), 0xA5);
+        assert_eq!(memory.read(0xDFFF), 0x5A);
+        assert_eq!(memory.read(0xE000), 0x3C);
+        assert_eq!(memory.read(0xFFFF), 0xC3);
+        assert_eq!(memory.work_ram()[0], 0, "internal work RAM remains isolated");
+    }
+
+    #[test]
+    fn mapper_bit_four_high_window_mirrors_eight_kib_and_uses_lower_page_of_32k() {
+        let mut eight_k =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K))
+                .unwrap();
+        eight_k.write_control_port(0x18);
+        eight_k.write(0xFFFC, 0x10);
+        eight_k.write(0xC123, 0x61);
+        assert_eq!(eight_k.read(0xE123), 0x61);
+
+        let mut thirty_two_k =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_32K))
+                .unwrap();
+        thirty_two_k.write_control_port(0x18);
+        thirty_two_k.write(0xFFFC, 0x14);
+        thirty_two_k.write(0xC000, 0x11);
+        thirty_two_k.write(0x8000, 0x22);
+        assert_eq!(thirty_two_k.read(0xC000), 0x11);
+        assert_eq!(thirty_two_k.read(0x8000), 0x22);
+        thirty_two_k.write(0xFFFC, 0x10);
+        assert_eq!(thirty_two_k.read(0xC000), 0x11);
+    }
+
+    #[test]
+    fn mapper_register_overlay_reads_and_writes_the_selected_high_window_ram() {
+        let mut memory =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_16K))
+                .unwrap();
+        memory.write_control_port(0x18);
+
+        memory.write(0xFFFC, 0x10);
+        memory.write(0xFFFD, 0x23);
+        memory.write(0xFFFE, 0x34);
+        memory.write(0xFFFF, 0x45);
+
+        assert_eq!(memory.mapper_control(), 0x10);
+        assert_eq!(memory.selected_banks(), [0x23, 0x34, 0x45]);
+        assert_eq!(memory.read(0xFFFC), 0x10);
+        assert_eq!(memory.read(0xFFFD), 0x23);
+        assert_eq!(memory.read(0xFFFE), 0x34);
+        assert_eq!(memory.read(0xFFFF), 0x45);
+    }
+
+    #[test]
+    fn high_window_sram_is_not_visible_when_system_ram_or_cartridge_is_disabled() {
+        let mut memory =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_16K))
+                .unwrap();
+        memory.write(0xC000, 0xA5);
+        memory.write_control_port(0x08);
+        memory.write(0xFFFC, 0x10);
+        assert_eq!(memory.read(0xC000), 0xA5, "enabled internal RAM has priority");
+
+        memory.write_control_port(0x58);
+        assert_eq!(memory.read(0xC000), 0xFF, "disabled cartridge does not expose SRAM");
     }
 
     #[test]
