@@ -1,9 +1,9 @@
 # SMS SRAM — auditoria de mapeamento e identidade de cartuchos
 
-**Data da auditoria:** 2026-11-07  
-**PR de implementação:** #643  
-**SHA de código analisado:** `80aa2caebb61639b1f018982fb9c162127559eba`  
-**Base remota:** `f47f71830344b85f72329376505d400bfbfaae69`  
+**Data da auditoria:** 2026-11-07
+**PR de implementação:** #643
+**SHA de código analisado:** `80aa2caebb61639b1f018982fb9c162127559eba`
+**Base remota:** `f47f71830344b85f72329376505d400bfbfaae69`
 **Estado:** bit 4 implementado na branch; catálogo e persistência ainda não implementados.
 
 ## 1. Evidências e proveniência
@@ -141,4 +141,3 @@ A ausência de `battery=yes` não prova ausência de RAM; apenas impede classifi
 | SaveRamStore / integração host | NOT IMPLEMENTED |
 
 **Próximo gate:** executar CI no novo HEAD da PR, revisar os testes de janela alta e só então avançar para catálogo. Nenhum merge é autorizado por este documento.
-
