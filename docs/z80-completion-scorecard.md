@@ -103,3 +103,20 @@ A main atual consultada é `3ad1781f84b7824b5aa889a583ae6d4545987ec1`. As PRs #6
 - E7.7 permanece IN_PROGRESS.
 - E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL antes do fechamento E7.
 - A auditoria semântica deve continuar com lacunas específicas, incluindo `OUT (C),0` variante-dependente, sem exigir microsequenciamento universal.
+
+
+## 11. Reconciliação documental — baseline `main` de 2026-11-07
+
+**Baseline auditada:** `e77eff26d80fd77a64546373c3e92326a0cc4e7a` (merge da PR #628).
+
+Esta seção supersede as referências anteriores de baseline como fotografia corrente; as seções históricas permanecem preservadas para rastreabilidade.
+
+- PR #613 (`ec08703d8e07ed7f91283e7db0787d2457273853`) integrou o runtime SMS temporal/vídeo à aplicação e alterou `native/sega_app`, `native/video_runtime` e `rust/runtime/sms-runtime/src/worker.rs`. Não alterou `native/z80_cpu`, o decoder DD/FD ou as fórmulas de flags do Z80.
+- PR #614 (`63eb154acedb993cdaf944746cb1f46cc8ccb3c6`) integrou áudio e controles na aplicação; não alterou o núcleo Z80.
+- PR #628 (`e77eff26d80fd77a64546373c3e92326a0cc4e7a`) alterou o workflow CI e documentação de validação; não alterou runtime Z80, decoder DD/FD, microsequenciador ou evidências semânticas.
+- As conclusões de E4C, E5 e E6 permanecem as registradas nas auditorias anteriores. Esta reconciliação não reexecuta nem promove seus testes.
+- **E7.7 permanece IN_PROGRESS.** A auditoria semântica global não está encerrada; continuam pendentes comprovação para variantes CMOS/clones, validação direta em hardware SMS e decisão variante-dependente para `OUT (C),0`.
+- **E8 permanece BLOCKED.** Não iniciar ZEXDOC/ZEXALL antes do fechamento documentado de E7.
+- A integração de aplicação/runtime SMS não comprova por si só a precisão temporal sistêmica do Z80. Não declarar TEMPORAL_PASS global nem equivalência contínua/em blocos sem testes específicos.
+
+Nenhuma alteração de código Z80 decorre desta reconciliação documental.
