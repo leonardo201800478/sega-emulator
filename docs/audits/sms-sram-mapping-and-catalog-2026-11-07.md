@@ -21,7 +21,7 @@
 
 - A página Mappers é a especificação de referência para a função dos bits.
 - SMS Plus GX é uma implementação comparativa; não é substituto de documentação elétrica.
-- O MAME classifica a presença de bateria quando `feature battery=yes`, mas nem sempre informa capacidade SRAM.
+- O MAME usa `feature battery=yes` como indicador de memória persistente no software list; isso não prova, isoladamente, a existência de bateria física. Flight of Pigarus é o contraexemplo documentado: usa FeRAM sem bateria.
 - O DAT No-Intro do Master System não foi encontrado no branch `main` do projeto. As pesquisas do repositório localizaram DATs de 32X e SG-1000, mas não o DAT SMS.
 - Foi feito confronto independente com o espelho público do DAT No-Intro em `libretro/libretro-database`, arquivo `metadat/no-intro/Sega - Master System - Mark III.dat`, versão `2026.10.07`, blob SHA `7b4e4ac75edb2ba33900d78b19f87602785bb47d`. Os SHA-1/CRC32/tamanhos das variantes comerciais base dos oito títulos coincidem com os registros MAME correspondentes. Isso é uma validação cruzada externa, não substitui a inclusão/versão do DAT no projeto.
 - Os arquivos técnicos locais enviados nesta conversa não contêm uma especificação de mapper/cartucho SMS; os documentos Z80 são manuais de CPU.
