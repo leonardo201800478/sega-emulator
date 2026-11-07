@@ -107,8 +107,8 @@ impl NoIntroDat {
                     }
                     _ => {}
                 },
-                Ok(Event::Empty(element)) => match element.name().as_ref() {
-                    b"rom" => {
+                Ok(Event::Empty(element)) => {
+                    if element.name().as_ref() == b"rom" {
                         let rom = parse_rom(&element, reader.decoder())?;
                         current_game
                             .as_mut()
@@ -116,8 +116,7 @@ impl NoIntroDat {
                             .roms
                             .push(rom);
                     }
-                    _ => {}
-                },
+                }
                 Ok(Event::Text(text)) => {
                     if let Some(field) = header_field {
                         let decoded = text
