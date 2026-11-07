@@ -101,7 +101,7 @@ impl CartridgeCatalog {
 
         match matched {
             None => Ok(None),
-            Some((game, rom))
+            Some((_game, rom))
                 if rom.size_bytes != identity.size_bytes()
                     || rom.crc32 != identity.crc32() =>
             {
