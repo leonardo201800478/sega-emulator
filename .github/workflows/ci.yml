@@ -20,9 +20,7 @@ on:
         default: false
 
 permissions:
-  actions: write
   contents: read
-  pull-requests: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -31,11 +29,20 @@ concurrency:
 jobs:
   changes:
     name: Change impact classification
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
-      windows_native: ${{ steps.filter.outputs.windows_native }}
+      other_rust: ${{ steps.filter.outputs.other_rust }}
+      z80: ${{ steps.filter.outputs.z80 }}
+      docs: ${{ steps.filter.outputs.docs }}
+      video: ${{ steps.filter.outputs.video }}
+      audio: ${{ steps.filter.outputs.audio }}
+      input: ${{ steps.filter.outputs.input }}
+      app: ${{ steps.filter.outputs.app }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
       full: ${{ steps.filter.outputs.full }}
@@ -45,23 +52,67 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 (Node.js 24)
         with:
           filters: |
+            docs:
+              - '**/*.md'
+              - '**/*.mdx'
+              - '**/*.rst'
+              - '**/*.txt'
+              - 'docs/**'
             rust:
-              - 'rust/**/*.rs'
-              - 'rust/**/Cargo.toml'
               - 'native/**/*.rs'
-              - 'native/sega_app/**'
+              - 'rust/**/*.rs'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
               - '.cargo/**'
               - 'rust-toolchain*'
               - 'build.rs'
-            windows_native:
-              - 'rust/runtime/sms-runtime/**'
-              - 'native/video_runtime/**'
-              - 'native/audio_output/**'
-              - 'native/audio_runtime/**'
-              - 'native/sega_app/**'
+            other_rust:
+              - 'native/**/*.rs'
+              - 'rust/**/*.rs'
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+              - '.cargo/**'
               - 'rust-toolchain*'
+              - 'build.rs'
+              - '!native/z80_cpu/**'
+              - '!native/z80_alu/**'
+              - '!native/z80_bus/**'
+              - '!native/sega_app/**'
+              - '!native/audio_output/**'
+            z80:
+              - 'native/z80_cpu/**'
+              - 'native/z80_alu/**'
+              - 'native/z80_bus/**'
+              - 'native/sms_core/Cargo.toml'
+              - 'native/sg1000_core/Cargo.toml'
+              - 'native/sms_core/tests/z80_*.rs'
+              - 'native/sms_core/src/temporal*.rs'
+              - 'native/sms_core/src/bin/z80test_runner.rs'
+              - 'native/sg1000_core/src/temporal*.rs'
+            video:
+              - 'native/video_runtime/**/*.rs'
+              - 'native/video_runtime/Cargo.toml'
+              - 'native/video_runtime/Cargo.lock'
+              - 'native/video_runtime/build.rs'
+            audio:
+              - 'native/sn76489/**'
+              - 'native/audio_output/**/*.rs'
+              - 'native/audio_output/Cargo.toml'
+              - 'native/audio_output/Cargo.lock'
+              - 'native/audio_output/build.rs'
+              - 'native/audio_runtime/**/*.rs'
+              - 'native/audio_runtime/Cargo.toml'
+            input:
+              - 'native/input_runtime/**/*.rs'
+              - 'native/input_runtime/Cargo.toml'
+              - 'native/input_runtime/Cargo.lock'
+              - 'native/input_runtime/build.rs'
+            app:
+              - 'rust/runtime/sms-runtime/**'
+              - 'native/sega_app/**/*.rs'
+              - 'native/sega_app/Cargo.toml'
+              - 'native/sega_app/Cargo.lock'
+              - 'native/sega_app/build.rs'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
@@ -75,28 +126,23 @@ jobs:
               - '.cargo/**'
               - 'scripts/common.ps1'
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  rust:
+  rust-workspace:
+    name: Rust workspace regression
     needs: [changes]
-    # Required by the main ruleset: run on every PR; do not path-filter.
     if: |
-      always() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
-    name: Rust quality and unit regression
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Discover and validate active Cargo workspaces
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Validate active Cargo workspaces and lockfiles
         shell: bash
         run: |
           set -euo pipefail
@@ -106,28 +152,236 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
-      - name: Formatting
+      - name: Format root Rust workspace
         run: cargo fmt --all -- --check
-      - name: Clippy
+      - name: Clippy workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Workspace unit tests
+      - name: Workspace unit and integration tests
         run: cargo test --workspace --locked
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
+  z80-focused:
+    name: Z80 focused validation
+    needs: [changes]
+    if: |
+      github.event_name != 'workflow_dispatch' &&
+      needs.changes.outputs.z80 == 'true' &&
+      needs.changes.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format root Rust workspace
+        run: cargo fmt --all -- --check
+      - name: Clippy Z80 and console integration packages
+        run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
+      - name: Test Z80, SMS and SG-1000 integration packages
+        run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
+
+  docs-format:
+    name: Documentation patch hygiene
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check documentation patch formatting
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="$BASE_SHA...$HEAD_SHA"
+          else
+            range="$BASE_SHA..$HEAD_SHA"
+          fi
+          git diff --check "$range"
+
+  windows-d3d12:
+    name: Windows x64 D3D12 compile
+    needs: [changes]
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.video == 'true' ||
+        needs.changes.outputs.app == 'true' ||
+        needs.changes.outputs.full == 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Validate Cargo workspace discovery and lockfiles
+        shell: pwsh
+        run: |
+          ./scripts/project.ps1 audit
+          ./scripts/project.ps1 locks
+      - name: Format native egui application
+        if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
+        run: cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
+      - name: Clippy native egui application and Windows dependencies
+        if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
+        run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Clippy native D3D12 and DXGI runtime
+        if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
+        run: cargo clippy --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test native D3D12 and DXGI runtime
+        if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
+        run: cargo test --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
+
+  windows-audio:
+    name: Windows WASAPI and XAudio2 validation
+    needs: [changes]
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format standalone audio-output workspace
+        run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
+      - name: Clippy WASAPI and XAudio2 output
+        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test WASAPI and XAudio2 output
+        run: cargo test --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+
+  windows-input:
+    name: Windows SDL3 input validation
+    needs: [changes]
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Clippy native SDL3 input runtime
+        run: cargo clippy --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test native SDL3 input runtime
+        run: cargo test --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc
+
+  windows-tooling:
+    name: Windows PowerShell tooling syntax
+    needs: [changes]
+    if: |
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Parse changed project PowerShell scripts
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $files = @(Get-ChildItem -Path scripts -Filter *.ps1 -Recurse | ForEach-Object FullName)
+          } else {
+            if ($env:EVENT_NAME -eq "pull_request") {
+              $range = "$($env:BASE_SHA)...$($env:HEAD_SHA)"
+            } else {
+              $range = "$($env:BASE_SHA)..$($env:HEAD_SHA)"
+            }
+            $paths = git diff --name-only $range -- scripts
+            if ($LASTEXITCODE -ne 0) { throw "Could not discover changed PowerShell scripts" }
+            $files = @($paths | Where-Object { $_.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) })
+            if (-not $files) { Write-Host "No PowerShell scripts changed."; exit 0 }
+          }
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$($file): $($_.Message)" }
+              throw "PowerShell parse failed: $file"
+            }
+            Write-Host "PASS $file"
+          }
+
+  scheduler-stress:
+    name: Scheduler deterministic stress
+    needs: [changes]
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
+      (github.event_name != 'workflow_dispatch' &&
+       (needs.changes.outputs.scheduler == 'true' ||
+        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
+        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
+        (github.event.action == 'labeled' &&
+         (github.event.label.name == 'scheduler-stress-short' ||
+          github.event.label.name == 'scheduler-stress-long'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Compile deterministic stress replay
+        run: cargo test --locked -p sega-machine-scheduler --test stress_replay --no-run
+      - name: Run deterministic stress replay with bounded memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_bin="$(find target/debug/deps -maxdepth 1 -type f -name 'stress_replay-*' -perm -111 -print -quit)"
+          test -n "$test_bin"
+          if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
+          "$test_bin" --ignored --nocapture
+
   refresh-lockfiles:
     name: Refresh Cargo lockfiles (manual artifact)
     if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - name: Refresh root workspace dependencies
         run: cargo update --workspace
       - name: Refresh standalone audio-output workspace
@@ -143,7 +397,7 @@ jobs:
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
       - name: Upload generated Cargo lockfiles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-lockfiles-${{ github.run_id }}
           path: |
@@ -152,140 +406,44 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  scheduler-stress:
-    needs: [changes]
-    name: Scheduler deterministic stress
-    if: |
-      always() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles) &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
-        (github.event_name == 'pull_request' && (
-          needs.changes.outputs.scheduler == 'true' ||
-          needs.changes.outputs.full == 'true' ||
-          contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
-          contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
-          (github.event.action == 'labeled' && (
-            github.event.label.name == 'scheduler-stress-short' ||
-            github.event.label.name == 'scheduler-stress-long'
-          ))
-        ))
-      )
+  quality-gate:
+    name: Rust quality and unit regression
+    needs:
+      - changes
+      - rust-workspace
+      - z80-focused
+      - docs-format
+      - windows-d3d12
+      - windows-audio
+      - windows-input
+      - windows-tooling
+      - scheduler-stress
+      - refresh-lockfiles
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.99.1
-      - uses: Swatinem/rust-cache@v2
-      - name: Compile deterministic stress replay
-        run: cargo test -p sega-machine-scheduler --test stress_replay --no-run
-      - name: Run deterministic stress replay with bounded memory
-        run: |
-          test_bin="$(find target/debug/deps -maxdepth 1 -type f -name 'stress_replay-*' -perm -111 -print -quit)"
-          test -n "$test_bin"
-          if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
-          "$test_bin" --ignored --nocapture
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
+      - name: Fail if any applicable validation failed or was cancelled
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  windows-tooling:
-    needs: [changes]
-    if: |
-      always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.tooling == 'true' ||
-       needs.changes.outputs.full == 'true') &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
-    name: Windows PowerShell tooling syntax
-    runs-on: windows-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Parse all project PowerShell scripts
-        shell: pwsh
+          CHANGES: ${{ needs.changes.result }}
+          RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
+          Z80: ${{ needs.z80-focused.result }}
+          DOCS: ${{ needs.docs-format.result }}
+          WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
+          WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
+          WINDOWS_INPUT: ${{ needs.windows-input.result }}
+          WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
+          SCHEDULER: ${{ needs.scheduler-stress.result }}
         run: |
-          $files = Get-ChildItem -Path scripts -Filter *.ps1 -Recurse
-          if (-not $files) { throw "No PowerShell scripts found under scripts/" }
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              $file.FullName,
-              [ref]$tokens,
-              [ref]$errors
-            ) | Out-Null
-            if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error "$($file.FullName): $($_.Message)" }
-              throw "PowerShell parse failed: $($file.FullName)"
-            }
-            Write-Host "PASS $($file.FullName)"
-          }
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-  windows-d3d12:
-    needs: [changes]
-    # Required by the main ruleset: run on every PR; do not path-filter.
-    if: |
-      always() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
-    name: Windows x64 D3D12 compile
-    runs-on: windows-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.99.1
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Validate PowerShell Cargo workspace discovery and lockfiles
-        shell: pwsh
-        run: |
-          ./scripts/project.ps1 audit
-          ./scripts/project.ps1 locks
-      - name: Format native egui application
-        run: cargo fmt --all --manifest-path native/sega_app/Cargo.toml -- --check
-      - name: Check native egui application
-        run: cargo check --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-      - name: Clippy native egui application
-        run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Test native egui application headlessly
-        run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-      - name: Compile SMS temporal runtime with Windows D3D12
-        run: cargo check --locked --all-targets -p sega-sms-runtime --target x86_64-pc-windows-msvc
-      - name: Clippy SMS temporal runtime with Windows D3D12
-        run: cargo clippy --locked --all-targets -p sega-sms-runtime --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Compile native video runtime for Windows x64
-        run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
-      - name: Clippy native video runtime for Windows x64
-        run: cargo clippy --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Run Windows video-runtime unit tests
-        run: cargo test --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
-      - name: Compile native WASAPI and XAudio2 output
-        run: cargo check --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
-      - name: Clippy native WASAPI and XAudio2 output
-        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Run native audio-output unit tests
-        run: cargo test --locked --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
-
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+          set -euo pipefail
+          for result in "$CHANGES" "$RUST_WORKSPACE" "$Z80" "$DOCS" \
+                        "$WINDOWS_D3D12" "$WINDOWS_AUDIO" "$WINDOWS_INPUT" \
+                        "$WINDOWS_TOOLING" "$SCHEDULER"; do
+            case "$result" in
+              failure|cancelled|timed_out)
+                echo "Validation failed or was cancelled: $result"
+                exit 1
+                ;;
+            esac
+          done
+          echo "All applicable validation jobs passed or were correctly skipped."
