@@ -1,0 +1,13 @@
+[package]
+name = "sega-save-runtime"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Host-side persistent cartridge RAM storage"
+
+[lib]
+name = "sega_save_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+sega-media = { path = "../media_runtime" }
