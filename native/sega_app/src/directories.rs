@@ -215,15 +215,11 @@ impl DirectoryPreferences {
             for kind in DirectoryKind::ALL {
                 let slot = index(kind);
                 if key == kind.key() {
-                    let candidate = PathBuf::from(value);
-                    if candidate.is_dir() || kind == DirectoryKind::Configuration {
-                        self.paths[slot] = candidate;
-                    }
+                    // Keep unavailable paths: removable drives and network shares
+                    // may be disconnected temporarily and must not lose settings.
+                    self.paths[slot] = PathBuf::from(value);
                 } else if key == format!("last_{}", kind.key()) {
-                    let candidate = PathBuf::from(value);
-                    if candidate.is_dir() {
-                        self.last_opened[slot] = Some(candidate);
-                    }
+                    self.last_opened[slot] = Some(PathBuf::from(value));
                 }
             }
         }
