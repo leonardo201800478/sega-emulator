@@ -206,7 +206,10 @@ fn sms_profiles() -> Vec<KnownCartridgeProfile> {
         "3bd03c3be402b90e61e6be5b67216c0c6d8056e6", // v1.10
         "e53a16f5bf4a2d804b26c359cf3a727c06379e6d", // v1.00
     ] {
-        profiles.push(KnownCartridgeProfile::new(sha1, flight_of_pigarus_blocked()));
+        profiles.push(KnownCartridgeProfile::new(
+            sha1,
+            flight_of_pigarus_blocked(),
+        ));
     }
 
     profiles
@@ -314,9 +317,7 @@ fn flight_of_pigarus_blocked() -> CartridgeHardwareProfile {
 #[cfg(test)]
 mod tests {
     use super::{CartridgeCatalog, flight_of_pigarus_blocked, sms_profiles};
-    use crate::{
-        CartridgeIdentity, CartridgeRamKind, NoIntroDat, ProfileStatus,
-    };
+    use crate::{CartridgeIdentity, CartridgeRamKind, NoIntroDat, ProfileStatus};
 
     #[test]
     fn every_known_sms_profile_has_an_exact_project_dat_entry() {
