@@ -102,3 +102,12 @@ The aggregate job log explicitly printed PASS for each required suite and NOT RU
 - [dorny/paths-filter — predicate quantifier](https://github.com/dorny/paths-filter#predicate-quantifier)
 - [GitHub Actions — job dependencies and skipped jobs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)
 - [CI validation policy](ci-validation-policy.md)
+
+
+## Manual workflow_dispatch — 2026-11-07
+
+- Run [#5475 / 42379089121](https://github.com/leonardo201800478/sega-emulator/actions/runs/42379089121): **SUCCESS**.
+- Event: `workflow_dispatch`; branch: `main`; exact SHA: `e77eff26d80fd77a64546373c3e92326a0cc4e7a`.
+- Rust workspace regression, Rust quality and unit regression, Windows D3D12, WASAPI/XAudio2, SDL3 input, PowerShell tooling and change-impact classification: **PASS**.
+- Z80 focused, Scheduler deterministic stress, Documentation patch hygiene and Cargo lockfile refresh: **NOT RUN** (jobs skipped for the selected default profile and inputs).
+- This run validates the manually dispatched workflow on the audited main SHA; it does not replace dedicated Z80 semantic or Scheduler stress validation.
