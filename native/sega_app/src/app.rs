@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Seek};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use eframe::egui;
@@ -26,9 +26,7 @@ pub struct SegaApp {
     rom_path: String,
     region: String,
     directory_preferences: DirectoryPreferences,
-    settings_open: bool,
-    directory_picker_requested: Option<DirectoryKind>,
-    rom_dialog_requested: bool,
+    ui_state: AppUiState,
     aspect_ratio: AspectRatioMode,
     audio_enabled: bool,
     audio_backend: AudioBackend,
@@ -42,15 +40,20 @@ pub struct SegaApp {
     native_viewport: NativeViewportState,
 }
 
+#[derive(Default)]
+struct AppUiState {
+    settings_open: bool,
+    directory_picker_requested: Option<DirectoryKind>,
+    rom_dialog_requested: bool,
+}
+
 impl Default for SegaApp {
     fn default() -> Self {
         Self {
             rom_path: String::new(),
             region: String::new(),
             directory_preferences: DirectoryPreferences::load(),
-            settings_open: false,
-            directory_picker_requested: None,
-            rom_dialog_requested: false,
+            ui_state: AppUiState::default(),
             aspect_ratio: AspectRatioMode::FourThree,
             audio_enabled: true,
             audio_backend: AudioBackend::Wasapi,
@@ -229,8 +232,8 @@ impl SegaApp {
         let mut directory_picker_requested = None;
 
         ui.vertical(|ui| {
-            render_header(ui, &mut self.settings_open);
-            if self.settings_open {
+            render_header(ui, &mut self.ui_state.settings_open);
+            if self.ui_state.settings_open {
                 render_directory_settings(
                     ui,
                     &self.directory_preferences,
@@ -241,7 +244,7 @@ impl SegaApp {
                 ui,
                 &mut self.rom_path,
                 &mut self.region,
-                &mut self.rom_dialog_requested,
+                &mut self.ui_state.rom_dialog_requested,
                 &mut self.aspect_ratio,
                 &mut load_requested,
             );
@@ -271,7 +274,7 @@ impl SegaApp {
         if load_requested {
             self.load_rom_from_path();
         }
-        self.directory_picker_requested = directory_picker_requested;
+        self.ui_state.directory_picker_requested = directory_picker_requested;
         if let Some(command) = command {
             self.apply_command(command);
         }
@@ -302,16 +305,15 @@ impl SegaApp {
 
         if let Some(path) = dialog.set_parent(window).pick_file() {
             self.rom_path = path.to_string_lossy().into_owned();
-            if let Some(directory) = path.parent().filter(|path| path.is_dir()) {
-                if let Err(error) = self
+            if let Some(directory) = path.parent().filter(|path| path.is_dir())
+                && let Err(error) = self
                     .directory_preferences
                     .record_last_opened(DirectoryKind::Roms, directory.to_path_buf())
-                {
-                    self.native_viewport.error = Some(format!(
-                        "ROM selecionada, mas não foi possível salvar o histórico de diretórios: {error}"
-                    ));
-                    return;
-                }
+            {
+                self.native_viewport.error = Some(format!(
+                    "ROM selecionada, mas não foi possível salvar o histórico de diretórios: {error}"
+                ));
+                return;
             }
             self.native_viewport.error = None;
         }
@@ -716,11 +718,11 @@ impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let viewport_rect = self.render(ui);
         self.update_keyboard_input(ui.ctx());
-        if self.rom_dialog_requested {
-            self.rom_dialog_requested = false;
+        if self.ui_state.rom_dialog_requested {
+            self.ui_state.rom_dialog_requested = false;
             self.open_rom_dialog(frame);
         }
-        if let Some(kind) = self.directory_picker_requested.take() {
+        if let Some(kind) = self.ui_state.directory_picker_requested.take() {
             self.open_directory_dialog(frame, kind);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
