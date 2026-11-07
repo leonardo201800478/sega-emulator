@@ -165,7 +165,7 @@ Fontes comparativas:
 | PSG-F14 | Sampling | 44.1/48/96 kHz e clocks NTSC/PAL | Sample count/phase exatos sem comandar o chip pelo host | MODEL + TEST |
 | PSG-F15 | Filter | FIR history/position e continuidade em blocos | Sem descontinuidade ao mudar o tamanho do bloco; filtro identificado como output stage, não circuito analógico físico | TEST |
 | PSG-F16 | Save state | Durante tom, ruído e fase intermediária do divisor | Restore reproduz exatamente a sequência digital e amostras futuras | TEST |
-| PSG-F17 | FIR espectral | NTSC/PAL em 22,05/44,1/48/96 kHz | Ganho DC unitário, simetria, ganho de banda passante ≥ 0,999 e rejeição ≥ 78 dB em toda a banda a partir de Nyquist da saída; filtro é estágio de conversão, não circuito analógico | MODEL + TEST |
+| PSG-F17 | FIR espectral | NTSC/PAL em 22,05/44,1/48/96 kHz | Ganho DC unitário, simetria, ganho de banda passante ≥ 0,999 e rejeição ≥ 78 dB na varredura de 257 pontos da banda a partir de Nyquist da saída; filtro é estágio de conversão, não circuito analógico | MODEL + TEST |
 
 ## 5. PSG — integração temporal
 
