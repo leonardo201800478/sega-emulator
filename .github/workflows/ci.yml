@@ -80,9 +80,9 @@ jobs:
               - '!native/sega_app/**'
               - '!native/audio_output/**'
             z80:
-              - 'native/z80_cpu/**'
-              - 'native/z80_alu/**'
-              - 'native/z80_bus/**'
+              - 'native/z80_cpu/**/*.rs'
+              - 'native/z80_alu/**/*.rs'
+              - 'native/z80_bus/**/*.rs'
             video:
               - 'native/video_runtime/**/*.rs'
               - 'native/video_runtime/Cargo.toml'
@@ -106,8 +106,8 @@ jobs:
               - 'native/sega_app/Cargo.lock'
               - 'native/sega_app/build.rs'
             scheduler:
-              - 'native/machine_scheduler/**'
-              - 'native/temporal_core/**'
+              - 'native/machine_scheduler/**/*.rs'
+              - 'native/temporal_core/**/*.rs'
             tooling:
               - 'scripts/**/*.ps1'
             full:
