@@ -63,7 +63,6 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
     .map_err(|error| error.to_string())
 }
 
-
 /// Rebuild the machine at its power-on state while preserving battery-backed
 /// cartridge SRAM. A reset must not behave like replacing the cartridge.
 fn reset_sms_temporal_machine(
@@ -735,16 +734,18 @@ fn handle_command(
             telemetry.running.store(false, Ordering::Release);
             let _ = reply.send(Ok(()));
         }
-        WorkerCommand::Reset(reply) => match reset_sms_temporal_machine(machine, rom.clone(), region) {
-            Ok(reset_machine) => {
-                *machine = reset_machine;
-                telemetry.reset_machine_counters();
-                let _ = reply.send(Ok(()));
+        WorkerCommand::Reset(reply) => {
+            match reset_sms_temporal_machine(machine, rom.clone(), region) {
+                Ok(reset_machine) => {
+                    *machine = reset_machine;
+                    telemetry.reset_machine_counters();
+                    let _ = reply.send(Ok(()));
+                }
+                Err(error) => {
+                    let _ = reply.send(Err(error));
+                }
             }
-            Err(error) => {
-                let _ = reply.send(Err(error));
-            }
-        },
+        }
         WorkerCommand::LoadRom(new_rom, reply) => {
             match build_sms_temporal_machine(new_rom.clone(), region) {
                 Ok(new_machine) => {
@@ -934,7 +935,6 @@ mod tests {
         worker.step_frame(100_000).unwrap();
         assert_eq!(worker.frame_number(), paused_frame + 1);
     }
-
 
     #[test]
     fn reset_preserves_battery_backed_cartridge_sram() {
