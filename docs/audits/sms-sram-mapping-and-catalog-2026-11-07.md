@@ -134,13 +134,13 @@ O MAME informa `dataarea ram size=8192` e `feature battery=yes` para os cartucho
 
 ## 4. Flight of Pigarus — perfil isolado e BLOCKED
 
-MAME `hash/sms.xml` lista três ROMs de Flight of Pigarus com `battery=yes`:
+O DAT SMS do projeto lista as mesmas três ROMs; SHA-1, CRC32 e tamanho coincidem com MAME. O MAME lista `dataarea ram size=32768` e `battery=yes` para as três variantes:
 
-| Variante | Tamanho | CRC32 | SHA-1 |
-|---|---:|---|---|
-| v1.11 | 262144 | `60B86F18` | `46941B6CA4C38B07FA55987D3F30C249D5674E2A` |
-| v1.10 | 262144 | `1950005D` | `3BD03C3BE402B90E61E6BE5B67216C0C6D8056E6` |
-| v1.00 | 262144 | `838574D1` | `E53A16F5BF4A2D804B26C359CF3A727C06379E6D` |
+| Variante | Tamanho | CRC32 | SHA-1 | MAME |
+|---|---:|---|---|---|
+| v1.11 | 262144 | `60B86F18` | `46941B6CA4C38B07FA55987D3F30C249D5674E2A` | RAM 32768; dump digital não verificado contra cartucho físico |
+| v1.10 | 262144 | `1950005D` | `3BD03C3BE402B90E61E6BE5B67216C0C6D8056E6` | RAM 32768 |
+| v1.00 | 262144 | `838574D1` | `E53A16F5BF4A2D804B26C359CF3A727C06379E6D` | RAM 32768 |
 
 A evidência independente agora confirma que o jogo utiliza duas páginas lógicas de 16 KiB: o autor Kagesan afirma que os 15.000 frames de replay cabem em uma página de 16 KiB e que o high score comprimido é armazenado na outra; Ichigo, responsável pela PCB, afirma que precisou alterar mapper e SRAM para disponibilizar duas páginas. Isso sustenta 32 KiB de armazenamento acessível pelo software, mas não revela os endereços de decodificação nem prova que o circuito é idêntico ao Sega mapper padrão.
 
