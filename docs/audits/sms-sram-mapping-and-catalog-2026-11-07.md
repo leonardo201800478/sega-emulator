@@ -2,9 +2,9 @@
 
 **Data da auditoria:** 2026-11-07
 **PR de implementação:** #643
-**SHA de código analisado:** `80aa2caebb61639b1f018982fb9c162127559eba`
+**SHA de código auditado nesta revisão:** `e6a0384036ee3b13aa45324904988219d41fa6e0`
 **Base remota:** `f47f71830344b85f72329376505d400bfbfaae69`
-**Estado:** bit 4 implementado na branch; catálogo e persistência ainda não implementados.
+**Estado:** mapeamento, catálogo inicial, store host-side e integração do carregador implementados na PR; validação CI do HEAD final ainda pendente.
 
 ## 1. Evidências e proveniência
 
@@ -166,28 +166,68 @@ Evidências:
 
 A ausência de `battery=yes` não prova ausência de RAM: MAME lista RAM de 8 KiB em Desert Speedtrap/Flash, The e RAM de 32 KiB em The Terminator sem flag de persistência. Da mesma forma, `battery=yes` é um marcador do software list MAME para dados persistentes e não prova sozinho que a PCB possua uma bateria física; Flight of Pigarus é o contraexemplo documentado, com FeRAM.
 
-## 6. Arquitetura e sequência de implementação
+## 6. Arquitetura implementada na PR #643
 
-- `CartridgeIdentity`: SHA-1 para compatibilidade DAT/oráculos; SHA-256 para identidade local/armazenamento; CRC32 e tamanho como auxiliares; variante regional/revisão explícita.
-- `CartridgeHardwareProfile`: mapper, classe de RAM, capacidade, battery-backed, janelas, seleção de bancos, variante de placa, proveniência e confiança.
-- `SaveRamStore`: filesystem na camada host, carregamento/validação, metadados versionados, gravação atômica e associação inequívoca por SHA-256.
-- Nenhum I/O no caminho CPU/barramento. O runtime recebe bytes de SRAM antes da execução e expõe snapshots/dirty state para a camada host.
-- Reset de hardware preserva SRAM. Troca de ROM constrói novo estado de cartucho e salva a SRAM anterior antes de descartá-la.
-- O DAT SMS atual já está no projeto e foi reconciliado com MAME; o próximo passo é implementar o catálogo em crate compartilhada de mídia usando SHA-1 do DAT para seleção exata e SHA-256 calculado dos bytes carregados para a chave de armazenamento.
-- Não implementar persistência até auditar o carregador/runtime e o limite host existente; evitar duplicar catálogo ou store.
+### `CartridgeIdentity` — `native/media_runtime/src/identity.rs`
+
+- Calcula SHA-1, SHA-256, CRC32 e tamanho diretamente dos bytes exatos da ROM já descompactada/carregada.
+- SHA-1 seleciona a entrada do DAT No-Intro; CRC32 e tamanho são verificações auxiliares obrigatórias.
+- SHA-256 é a chave estável para o caminho do arquivo `.srm`.
+- A entrada canônica e o nome da variante permanecem associados ao `CartridgeMatch` retornado pelo catálogo (game + ROM DAT); não são inferidos pelo nome do arquivo local.
+
+### `CartridgeHardwareProfile` — `native/media_runtime/src/profile.rs`
+
+- Separa mapper, classe de RAM (`VolatileSram`, `BatteryBackedSram`, `FeRam`), capacidade, mapeamento, janela, tamanho de banco, espelhamento, estado de evidência e proveniência.
+- Somente perfis `Verified`, com mapper/mapeamento conhecidos e capacidade positiva, podem configurar o runtime.
+- Protótipos e variantes sem prova suficiente ficam em `EvidenceOnly`; Flight of Pigarus permanece `Blocked`.
+
+### `CartridgeCatalog` — `native/media_runtime/src/catalog.rs`
+
+- Usa o DAT SMS versionado no projeto (`20261013-064924`) e associa perfis por SHA-1 exato.
+- Valida CRC32 e tamanho antes de aceitar a correspondência.
+- Recusa SHA-1 duplicado no DAT e perfis duplicados para a mesma identidade, em vez de escolher silenciosamente a primeira entrada.
+- Os oito títulos comerciais pedidos têm perfis persistentes verificados de 8 KiB; variantes adicionais só são ativadas quando há identidade exata e evidência suficiente.
+- Desert Speedtrap e The Flash têm perfil volátil de 8 KiB; The Terminator (32 KiB) permanece `EvidenceOnly` por falta de mapeamento confirmado. Othello não recebe perfil SMS.
+
+### `SaveRamStore` — `native/save_runtime/src/lib.rs`
+
+- I/O exclusivamente host-side; nenhuma operação de arquivo foi adicionada ao caminho CPU, mapper, barramento ou scheduler.
+- Arquivo `.srm` associado ao SHA-256 da ROM, com cabeçalho versionado, identidade SHA-1/SHA-256/CRC32/tamanho, tipo/capacidade de RAM e checksums CRC32/SHA-256 do payload.
+- Valida assinatura, versão, flags, identidade, tipo de memória, capacidade, tamanho exato do payload e integridade.
+- Grava em arquivo temporário exclusivo no mesmo diretório, executa `sync_all` e substitui o destino por rename.
+- Recusa gravação de RAM volátil e perfis não executáveis.
+
+### Integração no carregador/runtime
+
+- `native/sega_app/src/app.rs` identifica a ROM, consulta o catálogo, carrega o save antes de iniciar o worker e salva o cartucho anterior antes da troca.
+- `rust/runtime/sms-runtime/src/worker.rs` recebe o perfil e bytes iniciais antes de sinalizar prontidão; expõe snapshot por comando coarse-grained.
+- O host pausa o worker antes de exportar a SRAM para persistência, evitando uma escrita de frame entre o snapshot e a troca/parada.
+- Reset reconstrói a máquina preservando os bytes de RAM do cartucho.
+- Stop, fechamento da máquina, troca de ROM e encerramento controlado passam pelo store; RAM volátil nunca cria `.srm`.
+
+### Limites ainda não comprovados
+
+- A identidade SHA-256 é calculada sobre os bytes efetivamente carregados, mas os dumps comerciais correspondentes não foram fornecidos nesta sessão; não há confronto independente de SHA-256 dos oito títulos.
+- Ainda faltam testes de integração ponta a ponta para troca de ROM, parada/encerramento, reabertura do processo e execução contínua versus blocos.
+- A atomicidade de rename precisa passar no workflow Windows do HEAD final; não declarar persistência durável/atômica validada até esse gate.
+- Não há validação em hardware físico nem gameplay com ROMs legais de teste nesta etapa.
 
 ## 7. Estado desta etapa
 
 | Item | Estado |
 |---|---|
-| Semântica documentada de `$FFFC` bit 4 | PASS — fontes SMS Power e SMS Plus GX confrontadas |
-| Implementação da janela alta na PR #643 | PASS — CI Rust workspace no SHA `a6987ae3bbdc1cae2d12e7b91f7e50f83bc82bcf` |
-| Testes unitários de 8/16/32 KiB e overlay | PASS — CI focused e workspace |
-| Conflito elétrico com work RAM habilitada | MODELADO conservadoramente; hardware value não reivindicado |
-| Catálogo de identidades MAME | REFERÊNCIA DOCUMENTAL, não runtime |
-| Comparação com DAT SMS versionado no projeto | PASS — versão `20261013-064924`, blob `9528da45f7e341ff642164ddbd58f93dfc353338` |
-| SHA-256 das variantes locais | BLOCKED — dumps exatos não fornecidos |
-| Flight of Pigarus | BLOCKED — FRAM 32 KiB provável; mapper não confirmado |
-| SaveRamStore / integração host | NOT IMPLEMENTED |
+| Semântica documentada de `$FFFC` bits 2/3/4 e janela alta | PASS documental — SMS Power + SMS Plus GX confrontados |
+| Matriz de prioridade, overlay e portas | IMPLEMENTADA; validação final de CI ainda pendente |
+| Mapeamento SRAM 8/16/32 KiB e work RAM independente | IMPLEMENTADO; suíte do HEAD final ainda NOT RUN |
+| Catálogo SHA-1 + validação CRC32/tamanho + SHA-256 de armazenamento | IMPLEMENTADO; testes de colisão adicionados, CI NOT RUN |
+| Oito famílias comerciais persistentes 8 KiB | PASS no confronto DAT: oito SHA-1 presentes no DAT atual com CRC32/tamanho correspondentes |
+| Variantes regionais/revisões/protótipos | Parcial: perfis exatos; variantes sem evidência executável permanecem EvidenceOnly |
+| RAM volátil | IMPLEMENTADA para Desert Speedtrap/The Flash; The Terminator EvidenceOnly; Othello sem perfil SMS |
+| Flight of Pigarus | BLOCKED — FeRAM 32 KiB provável; decodificação e seleção de páginas não confirmadas |
+| SaveRamStore e ciclo host | IMPLEMENTAÇÃO INICIAL presente; CI e integração ponta a ponta pendentes |
+| SHA-256 de dumps comerciais | BLOCKED — ROMs exatas não foram disponibilizadas para auditoria independente |
+| Testes locais | NOT RUN — ambiente desta sessão sem acesso de rede para clonar o workspace |
+| CI do HEAD `e6a0384036ee3b13aa45324904988219d41fa6e0` | NOT RUN — não foi criada execução de workflow para os commits via API |
+| CI do HEAD anterior `27b534acc2e6f1179d72a6fe857ba899a4e0e6aa` | FAIL — erros de imports em testes do worker e rustfmt Windows; correções publicadas depois |
 
-**Próximo gate:** implementar `CartridgeIdentity` e `CartridgeHardwareProfile` em crate compartilhada de mídia, mantendo variantes sem evidência fora do catálogo executável. Em seguida, implementar `SaveRamStore` na camada host. Nenhum merge é autorizado por este documento.
+**Próximo gate:** obter CI 100% verde no HEAD final; executar integração host/runtime para troca, stop, shutdown e reopen; validar os hashes SHA-256 com dumps exatos; manter Flight of Pigarus bloqueado até evidência elétrica independente. Nenhum merge é autorizado por este documento.
