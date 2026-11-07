@@ -1,5 +1,5 @@
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::{Reader, escape};
+use quick_xml::{Reader, XmlVersion, escape};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -202,7 +202,7 @@ fn optional_attribute(
         let attribute = attribute.map_err(|error| DatParseError::Xml(error.to_string()))?;
         if attribute.key.as_ref() == attribute_name.as_bytes() {
             let value = attribute
-                .decode_and_unescape_value(decoder)
+                .decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)
                 .map_err(|error| DatParseError::Xml(error.to_string()))?;
             return Ok(Some(value.into_owned()));
         }
