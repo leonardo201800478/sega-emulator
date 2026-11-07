@@ -2,7 +2,7 @@
 
 ## Scope
 
-The native egui application exposes seventeen independent user-selected directories:
+The native egui application exposes eighteen independent user-selected directories:
 
 - Configuration
 - ROMs
@@ -10,6 +10,7 @@ The native egui application exposes seventeen independent user-selected director
 - Logs
 - SRAM / saves
 - Save states
+- Controller profiles
 - Screenshots / captures
 - Vulkan shader packs
 - DirectX 11/12 shader packs
@@ -31,11 +32,33 @@ The initial layout is rooted at `Documents/Sega Emulator`:
 ```text
 Sega Emulator/
   config/
+    systems/
+      sg-1000/
+      master-system/
+      game-gear/
+      mega-drive/
   roms/
+    sg-1000/
+    master-system/
+    game-gear/
+    mega-drive/
   bios/
   logs/
   saves/
+    sg-1000/
+    master-system/
+    game-gear/
+    mega-drive/
   states/
+    sg-1000/
+    master-system/
+    game-gear/
+    mega-drive/
+  controls/
+    sg-1000/
+    master-system/
+    game-gear/
+    mega-drive/
   screenshots/
   patches/
   cheats/
@@ -51,6 +74,24 @@ Sega Emulator/
 ```
 
 The application checks the OneDrive and OneDriveCommercial environment paths for a redirected Documents folder before falling back to `%USERPROFILE%/Documents`. Each path can be changed independently through the general settings screen.
+
+## System-scoped storage
+
+ROM libraries, battery-backed saves (SRAM), save states and controller profiles are separated by system identifier. The system configuration namespace is also separated under `config/systems/` while global application preferences remain directly under `config/`.
+
+```text
+config/systems/<system-id>/
+roms/<system-id>/
+saves/<system-id>/
+states/<system-id>/
+controls/<system-id>/
+```
+
+Identifiers are stable lowercase slugs (for example `sg-1000`, `master-system`, `game-gear`, `mega-drive`), not localized display names. The path resolver accepts only lowercase ASCII letters, digits and hyphens, preventing path traversal. The resolver does not create directories or move existing files; consumers must explicitly create and use the resolved directory when their integration is implemented.
+
+BIOS, logs, screenshots, recordings, patches, cheats, artwork and shader assets remain global configurable categories by default. This avoids unnecessary duplication where the data is not inherently system-specific.
+
+Existing version-2 preferences remain readable: the new `controls` root receives its default path, while existing ROM/save/state roots are retained as roots and become system-scoped only when consumers call the system path resolver. No legacy files are moved automatically.
 
 ## Shader organization
 
