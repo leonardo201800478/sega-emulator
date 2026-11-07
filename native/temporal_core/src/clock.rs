@@ -199,7 +199,9 @@ impl fmt::Display for ClockError {
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
             Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
-            Self::InvalidPreview => write!(f, "clock-domain preview is stale or belongs to another domain"),
+            Self::InvalidPreview => {
+                write!(f, "clock-domain preview is stale or belongs to another domain")
+            }
         }
     }
 }

@@ -32,7 +32,7 @@ pub struct ClockAdvance {
     pub phase: u128,
     // Retain the opaque preflight token so apply_advances can commit it without
     // recalculating rational clock conversion.
-    preview: sega_temporal_core::ClockDomainPreview,
+    preview: Option<sega_temporal_core::ClockDomainPreview>,
 }
 
 /// An event together with all device-clock advances up to its timestamp.
@@ -456,8 +456,8 @@ impl<T> MachineScheduler<T> {
             1
         };
 
-        let advances = self.calculate_advances(timestamp)?;
-        self.apply_advances(timestamp, &advances)?;
+        let mut advances = self.calculate_advances(timestamp)?;
+        self.apply_advances(timestamp, &mut advances)?;
         let event = self
             .events
             .pop_next()
@@ -486,8 +486,8 @@ impl<T> MachineScheduler<T> {
         {
             return Err(SchedulerError::EventPendingBeforeTarget);
         }
-        let advances = self.calculate_advances(target)?;
-        self.apply_advances(target, &advances)?;
+        let mut advances = self.calculate_advances(target)?;
+        self.apply_advances(target, &mut advances)?;
         Ok(advances)
     }
 
@@ -511,7 +511,7 @@ impl<T> MachineScheduler<T> {
                 elapsed_cycles: preview.elapsed_cycles(),
                 total_cycles: snapshot.total_cycles,
                 phase: snapshot.phase,
-                preview,
+                preview: Some(preview),
             });
         }
         Ok(advances)
@@ -520,16 +520,20 @@ impl<T> MachineScheduler<T> {
     fn apply_advances(
         &mut self,
         target: MachineTime,
-        advances: &[ClockAdvance],
+        advances: &mut [ClockAdvance],
     ) -> Result<(), SchedulerError> {
-        // All arithmetic was preflighted by calculate_advances. Repeating the
-        // checked operation here cannot fail unless an internal invariant broke.
+        // All domains were preflighted before any commit. Each opaque token is
+        // consumed exactly once, so no rational conversion is repeated here.
         for advance in advances {
             let domain = self
                 .clocks
                 .get_mut(&advance.domain)
                 .ok_or(SchedulerError::UnknownClockDomain(advance.domain))?;
-            domain.commit_preview(advance.preview)?;
+            let preview = advance
+                .preview
+                .take()
+                .ok_or(SchedulerError::Clock(ClockError::InvalidPreview))?;
+            domain.commit_preview(preview)?;
         }
         self.now = target;
         Ok(())
