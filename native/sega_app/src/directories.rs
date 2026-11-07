@@ -116,12 +116,14 @@ impl DirectoryPreferences {
         }
 
         let slot = index(kind);
-        let previous = self.paths[slot].clone();
+        let previous_path = self.paths[slot].clone();
+        let previous_history = self.last_opened[slot].clone();
         self.paths[slot] = path.clone();
         self.last_opened[slot] = Some(path);
 
         if let Err(error) = self.save() {
-            self.paths[slot] = previous;
+            self.paths[slot] = previous_path;
+            self.last_opened[slot] = previous_history;
             return Err(error);
         }
         Ok(())
@@ -256,9 +258,12 @@ fn documents_directory() -> Option<PathBuf> {
         std::env::var_os("OneDriveCommercial")
             .map(PathBuf::from)
             .map(|path| path.join("Documents")),
-        Some(profile.join("Documents")),
     ];
-    candidates.into_iter().flatten().find(|path| path.is_dir())
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|path| path.is_dir())
+        .or_else(|| Some(profile.join("Documents")))
 }
 
 fn default_paths(root: &Path) -> [PathBuf; 6] {
@@ -273,9 +278,8 @@ fn default_paths(root: &Path) -> [PathBuf; 6] {
 }
 
 fn replace_file(source: &Path, destination: &Path) -> io::Result<()> {
-    if destination.exists() {
-        fs::remove_file(destination)?;
-    }
+    // std::fs::rename replaces an existing file on supported desktop targets;
+    // do not remove the destination first, which would create a data-loss gap.
     fs::rename(source, destination)
 }
 
