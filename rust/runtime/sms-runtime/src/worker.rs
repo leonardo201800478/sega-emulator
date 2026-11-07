@@ -950,8 +950,8 @@ mod tests {
     };
     use sega_audio_runtime::{NativeAudioSession, PcmSink};
     use sega_media::{
-        CartridgeMapper, CartridgeRamKind, CartridgeRamMapping, CartridgeRamProfile,
-        CartridgeSystem, ProfileStatus,
+        CartridgeHardwareProfile, CartridgeMapper, CartridgeRamKind, CartridgeRamMapping,
+        CartridgeRamProfile, CartridgeSystem, ProfileStatus,
     };
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
