@@ -1493,7 +1493,6 @@ mod tests {
         assert!(error.contains("mais de um arquivo .sms"));
     }
 
-
     static SRAM_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     fn temporary_test_directory(label: &str) -> PathBuf {
@@ -1584,11 +1583,7 @@ mod tests {
         fs::write(&invalid_save_root, b"file blocks directory creation")
             .expect("blocking file should be created");
         let initial = vec![0x3C; 0x2000];
-        let (mut app, _, _) = persistent_test_app(
-            invalid_save_root,
-            vec![0xC3; 0x4000],
-            initial,
-        );
+        let (mut app, _, _) = persistent_test_app(invalid_save_root, vec![0xC3; 0x4000], initial);
 
         let worker = app.native_viewport.worker.as_ref().unwrap();
         worker.start().expect("worker should start");
@@ -1603,7 +1598,9 @@ mod tests {
             "persistence failure must restore the worker's previous running state"
         );
 
-        worker.pause().expect("worker should pause for test cleanup");
+        worker
+            .pause()
+            .expect("worker should pause for test cleanup");
         app.current_cartridge = None;
         drop(app);
         let _ = fs::remove_dir_all(directory);
@@ -1613,11 +1610,8 @@ mod tests {
     fn stop_persists_sram_before_stopping_the_worker() {
         let directory = temporary_test_directory("stop");
         let initial = vec![0x69; 0x2000];
-        let (mut app, identity, profile) = persistent_test_app(
-            directory.join("saves"),
-            vec![0x96; 0x4000],
-            initial.clone(),
-        );
+        let (mut app, identity, profile) =
+            persistent_test_app(directory.join("saves"), vec![0x96; 0x4000], initial.clone());
 
         app.native_viewport
             .worker
@@ -1640,11 +1634,8 @@ mod tests {
     fn controlled_shutdown_persists_sram_before_worker_teardown() {
         let directory = temporary_test_directory("shutdown");
         let initial = vec![0x87; 0x2000];
-        let (mut app, identity, profile) = persistent_test_app(
-            directory.join("saves"),
-            vec![0x78; 0x4000],
-            initial.clone(),
-        );
+        let (mut app, identity, profile) =
+            persistent_test_app(directory.join("saves"), vec![0x78; 0x4000], initial.clone());
 
         assert!(app.shutdown_native_viewport_with_save());
         assert!(app.native_viewport.worker.is_none());
@@ -1678,7 +1669,9 @@ mod tests {
             "unknown incoming ROM must not inherit the previous cartridge profile"
         );
         assert_eq!(
-            app.save_ram_store.load(&old_identity, &old_profile).unwrap(),
+            app.save_ram_store
+                .load(&old_identity, &old_profile)
+                .unwrap(),
             Some(initial)
         );
         drop(app);
