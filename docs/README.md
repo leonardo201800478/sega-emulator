@@ -28,6 +28,7 @@ Uma PR aberta, Draft, branch local, teste em branch ou documentação proposta n
 
 ## Arquitetura e decisões
 
+- [ADRs normativas do produto](adr/README.md)
 - [Arquitetura — visão geral](architecture.md)
 - [ADRs de arquitetura](architecture/adr/README.md)
 - [Scheduler — contratos, integração e validação](architecture/scheduler/README.md)
