@@ -1585,20 +1585,25 @@ mod tests {
         let initial = vec![0x3C; 0x2000];
         let (mut app, _, _) = persistent_test_app(invalid_save_root, vec![0xC3; 0x4000], initial);
 
-        let worker = app.native_viewport.worker.as_ref().unwrap();
-        worker.start().expect("worker should start");
-        assert!(worker.is_running());
+        {
+            let worker = app.native_viewport.worker.as_ref().unwrap();
+            worker.start().expect("worker should start");
+            assert!(worker.is_running());
+        }
 
         let error = app
             .persist_current_cartridge()
             .expect_err("invalid save root must fail persistence");
         assert!(!error.is_empty());
         assert!(
-            worker.is_running(),
+            app.native_viewport.worker.as_ref().unwrap().is_running(),
             "persistence failure must restore the worker's previous running state"
         );
 
-        worker
+        app.native_viewport
+            .worker
+            .as_ref()
+            .unwrap()
             .pause()
             .expect("worker should pause for test cleanup");
         app.current_cartridge = None;
