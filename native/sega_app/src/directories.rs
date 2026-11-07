@@ -130,11 +130,7 @@ impl DirectoryPreferences {
     }
 
     /// Record the most recently visited directory without changing storage.
-    pub fn record_last_opened(
-        &mut self,
-        kind: DirectoryKind,
-        path: PathBuf,
-    ) -> io::Result<()> {
+    pub fn record_last_opened(&mut self, kind: DirectoryKind, path: PathBuf) -> io::Result<()> {
         if !path.is_dir() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -196,7 +192,10 @@ impl DirectoryPreferences {
             .ok_or_else(|| io::Error::other("Diretório bootstrap inválido"))?;
         fs::create_dir_all(bootstrap_directory)?;
         let temporary_bootstrap = self.bootstrap_file.with_extension("tmp");
-        fs::write(&temporary_bootstrap, configuration_directory.to_string_lossy().as_bytes())?;
+        fs::write(
+            &temporary_bootstrap,
+            configuration_directory.to_string_lossy().as_bytes(),
+        )?;
         replace_file(&temporary_bootstrap, &self.bootstrap_file)?;
         self.settings_file = settings_file;
         Ok(())
@@ -229,7 +228,11 @@ impl DirectoryPreferences {
             }
         }
         // The bootstrap-selected directory is authoritative for this session.
-        self.paths[0] = self.settings_file.parent().unwrap_or(Path::new(".")).to_path_buf();
+        self.paths[0] = self
+            .settings_file
+            .parent()
+            .unwrap_or(Path::new("."))
+            .to_path_buf();
     }
 }
 
@@ -254,7 +257,9 @@ fn app_data_directory() -> PathBuf {
 fn documents_directory() -> Option<PathBuf> {
     let profile = std::env::var_os("USERPROFILE").map(PathBuf::from)?;
     let candidates = [
-        std::env::var_os("OneDrive").map(PathBuf::from).map(|path| path.join("Documents")),
+        std::env::var_os("OneDrive")
+            .map(PathBuf::from)
+            .map(|path| path.join("Documents")),
         std::env::var_os("OneDriveCommercial")
             .map(PathBuf::from)
             .map(|path| path.join("Documents")),
