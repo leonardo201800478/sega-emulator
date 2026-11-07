@@ -1,12 +1,14 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
+use sega_media::{CartridgeCatalog, CartridgeIdentity};
 use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
@@ -317,14 +319,55 @@ impl SegaApp {
             }
         };
 
+        let identity = CartridgeIdentity::from_bytes(&rom);
+        let catalog = match sms_cartridge_catalog() {
+            Ok(catalog) => catalog,
+            Err(error) => {
+                self.native_viewport.error =
+                    Some(format!("Catálogo de cartuchos indisponível: {error}"));
+                return;
+            }
+        };
+        let matched = match catalog.lookup(&identity) {
+            Ok(matched) => matched,
+            Err(error) => {
+                self.native_viewport.error =
+                    Some(format!("Falha na validação da identidade da ROM: {error}"));
+                return;
+            }
+        };
+
+        let (profile, cartridge_notice) = match matched {
+            Some(matched) => match matched.profile {
+                Some(profile) if profile.is_runtime_usable() => (Some(profile.clone()), None),
+                Some(profile) => (
+                    None,
+                    Some(format!(
+                        "Cartucho {} identificado, mas o perfil de RAM está {:?}; RAM adicional desativada.",
+                        matched.game.name, profile.status
+                    )),
+                ),
+                None => (None, None),
+            },
+            None => (None, None),
+        };
+
         let region = if self.region.is_empty() {
             "usa"
         } else {
             &self.region
         };
-        match SmsTemporalWorker::new(rom, region) {
+        match SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            rom,
+            region,
+            profile,
+            None,
+        ) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                if let Some(notice) = cartridge_notice {
+                    self.native_viewport.error = Some(notice);
+                }
                 self.last_controller = None;
                 self.pause_key_down = false;
                 if self.audio_enabled {
@@ -678,6 +721,17 @@ impl eframe::App for SegaApp {
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+    }
+}
+
+fn sms_cartridge_catalog() -> Result<&'static CartridgeCatalog, String> {
+    static CATALOG: OnceLock<Result<CartridgeCatalog, String>> = OnceLock::new();
+
+    match CATALOG.get_or_init(|| {
+        CartridgeCatalog::sms_default().map_err(|error| error.to_string())
+    }) {
+        Ok(catalog) => Ok(catalog),
+        Err(error) => Err(error.clone()),
     }
 }
 
