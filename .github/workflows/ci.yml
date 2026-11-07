@@ -20,9 +20,7 @@ on:
         default: false
 
 permissions:
-  actions: write
   contents: read
-  pull-requests: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -32,6 +30,9 @@ jobs:
   changes:
     name: Change impact classification
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event_name == 'pull_request'
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
@@ -75,11 +76,6 @@ jobs:
               - '.cargo/**'
               - 'scripts/common.ps1'
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   rust:
     needs: [changes]
     # Required by the main ruleset: run on every PR; do not path-filter.
@@ -90,12 +86,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Discover and validate active Cargo workspaces
         shell: bash
         run: |
@@ -113,21 +109,17 @@ jobs:
       - name: Workspace unit tests
         run: cargo test --workspace --locked
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   refresh-lockfiles:
     name: Refresh Cargo lockfiles (manual artifact)
     if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - name: Refresh root workspace dependencies
         run: cargo update --workspace
       - name: Refresh standalone audio-output workspace
@@ -143,7 +135,7 @@ jobs:
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
       - name: Upload generated Cargo lockfiles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-lockfiles-${{ github.run_id }}
           path: |
@@ -152,11 +144,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   scheduler-stress:
     needs: [changes]
     name: Scheduler deterministic stress
@@ -181,11 +168,12 @@ jobs:
     env:
       SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Compile deterministic stress replay
         run: cargo test -p sega-machine-scheduler --test stress_replay --no-run
       - name: Run deterministic stress replay with bounded memory
@@ -195,11 +183,6 @@ jobs:
           if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
           "$test_bin" --ignored --nocapture
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-tooling:
     needs: [changes]
     if: |
@@ -212,7 +195,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Parse all project PowerShell scripts
         shell: pwsh
         run: |
@@ -233,11 +218,6 @@ jobs:
             Write-Host "PASS $($file.FullName)"
           }
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-d3d12:
     needs: [changes]
     # Required by the main ruleset: run on every PR; do not path-filter.
@@ -248,12 +228,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: 1.99.1
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Validate PowerShell Cargo workspace discovery and lockfiles
         shell: pwsh
         run: |
@@ -284,8 +264,3 @@ jobs:
       - name: Run native audio-output unit tests
         run: cargo test --locked --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
