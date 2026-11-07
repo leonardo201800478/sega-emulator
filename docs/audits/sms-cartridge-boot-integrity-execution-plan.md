@@ -245,3 +245,71 @@ Foram localizadas duas propostas históricas que impedem uma implementação par
 - Nenhum dump de ROM comercial foi obtido ou analisado; nenhum fingerprint foi validado.
 - Nenhum teste local foi executado nesta sessão; CI não pode ser inferido a partir de PRs históricas.
 - Próximo passo permitido: reconciliar os diffs completos de #424/#543 e a implementação atual do ciclo de vida de mídia/save states. Não iniciar mapper MSX/Korean/Janggun antes dessa auditoria, porque o caminho comum de identidade/SRAM ainda está em aberto.
+
+
+## 12. Reconciliação efetiva das PRs históricas #424 e #543 (2026-11-07)
+
+A busca por PR retornou os corpos completos das duas propostas e os SHAs de código declarados em suas descrições. Os commits candidatos foram comparados com a baseline atual `main` = `3ca0f648c841bfe7c85a301fb561273e5c62f676`.
+
+### 12.1 PR #424 — candidata funcional mais completa, mas branch obsoleta
+
+- PR: https://github.com/leonardo201800478/sega-emulator/pull/424
+- SHA de código declarado como validado: `a69356f0797518fc9036d01555f3b79aa32cf453`.
+- Compare com main: `diverged`; candidato possui 50 commits exclusivos e está 849 commits atrás (merge-base `9c9b6dcad052193b81de33845b6bf94bd5f927c0`).
+- Arquivos no delta reportado: 13, incluindo `native/sms_core/src/cartridge_ram_file.rs` (437 linhas), `memory.rs`, máquinas convencional/temporal, adaptador PyO3, adaptador Python, frontend Qt, testes e CI.
+- Contrato proposto: SRAM explícita de 8/16/32 KiB; bit 3 de `$FFFC` seleciona slot 2; bit 2 seleciona bancos; bit 4 habilita slot 3; capacidade não é inventada para ROM sem configuração.
+- Persistência: formato `.srm` próprio, versionado, CRC32, capacidade explícita, detecção de corrupção/incompatibilidade e recuperação via temporário/backup; I/O apenas em checkpoints do host.
+- Limitações declaradas: tamanho e caminho ainda precisam ser configurados pelo host; alocação automática por DAT/metadata pendente; SRAM Codemasters não suportada; sem garantia contra encerramento forçado; sem teste in-game; Scheduler deterministic stress foi SKIPPED.
+- O commit final `a69356f` é apenas formatação de teste; o código funcional validado indicado na PR é `a69356f`? **Não**: a descrição distingue SHA de código `a69356f0797518fc9036d01555f3b79aa32cf453` como SHA validado, enquanto o commit mostrado tem apenas alteração de formatação. Essa cadeia de evidência precisa ser conferida nos checks históricos antes de reutilizar o código.
+
+### 12.2 PR #543 — fatia mínima, empilhada e igualmente obsoleta
+
+- PR: https://github.com/leonardo201800478/sega-emulator/pull/543
+- SHA declarado no texto de validação: `3bb07dc981d22d4242e86bd89090ed212d3e4f71`.
+- Compare com main: `diverged`; candidato possui 26 commits exclusivos e está 321 commits atrás (merge-base `1da784f556b9524f5a6f43ce8a7c525e68354f9e`).
+- O delta inclui 9 arquivos, mas não é isolado: contém alterações em VDP, Z80 CPU/bus, máquina temporal, PyO3 e adaptador Python. A descrição confirma que foi empilhada sobre #542.
+- Contrato: SRAM fixa de 8 KiB; bit 3 de `$FFFC` seleciona slot 2 e espelha 8 KiB em 16 KiB; bit 4 seleciona janela alta quando RAM interna está desabilitada por `$3E`; export/restore via API; host fica responsável pelo arquivo `.sav`.
+- Não cobre 16/32 KiB, seleção bit 2, descoberta de capacidade, persistência automática ou SRAM Codemasters.
+- O próprio texto declara jogos reais/save-load NOT RUN; Qt smoke, Scheduler stress e PowerShell tooling SKIPPED/NOT RUN.
+- O commit `3bb07dc` apenas move testes de módulo; a validação declarada refere-se ao HEAD `3bb07dc...`, mas não demonstra integração sobre a arquitetura atual.
+
+### 12.3 Decisão comparativa
+
+| Critério | #424 | #543 |
+|---|---|---|
+| Capacidades | 8/16/32 KiB | 8 KiB |
+| Banking bit 2 | Sim, proposto | Não |
+| Slot alto bit 4 | Sim | Sim |
+| Persistência host | `.srm` versionado/CRC/backup | API; arquivo pelo host |
+| PyO3/Python | Sim | Sim |
+| Integração frontend | Ciclo de vida Qt | Não automática |
+| SRAM Codemasters | Não | Não |
+| Teste in-game | NOT RUN | NOT RUN |
+| Base atual | 849 commits atrás | 321 commits atrás |
+| Dependência empilhada | Não identificada no resumo | #542 |
+
+**Escolha:** adotar #424 como referência de requisitos e possível fonte seletiva de algoritmos/contratos; não reutilizar sua branch ou aplicar seu delta de 50 commits. A #543 é útil como referência mais estreita para os bits de mapeamento e casos de teste, mas seu acoplamento a #542 impede cherry-pick isolado sem análise do diff completo.
+
+**Importante:** os deltas do endpoint compare não fornecem patch por arquivo. Os resumos acima vêm das descrições das PRs e da leitura pontual de arquivos nos SHAs históricos. A auditoria integral linha a linha de todos os arquivos e commits continua PENDENTE; não declarar que as implementações foram formalmente equivalidas.
+
+### 12.4 Próxima implementação limpa
+
+1. Manter o contrato de hardware de #424 como alvo inicial, sujeito à conferência de SMS Power e revisão de cada bit.
+2. Separar três camadas: (a) RAM emulada no `SmsMemory`, (b) serialização do estado interno/save state, (c) persistência de arquivo pelo host em checkpoint.
+3. Integrar primeiro 8 KiB do Sega Mapper e seus bits de habilitação no runtime atual, com estado temporal e snapshot completo.
+4. Não habilitar 16/32 KiB nem bit 2 até vetores independentes confirmarem o comportamento de placas suportadas.
+5. Adicionar formato de arquivo versionado somente após estabilizar a API de bytes e os erros de corrupção/capacidade.
+6. Manter descoberta automática de capacidade fora do mapper: requer registry de mídia separado e fail-closed.
+7. Fazer regressão do caminho convencional e temporal, PyO3, SG-1000 e frontend; não reivindicar compatibilidade de jogos sem teste real.
+
+### 12.5 Gate técnico para começar o port
+
+- [ ] Inspecionar integralmente os diffs por arquivo de #424 e #543 (incluindo commits empilhados).
+- [ ] Auditar código atual de Save State/serde e ciclo de vida de `SmsTemporalBusState` / `SmsTemporalMachineState`.
+- [ ] Confirmar se o estado de SRAM já é capturado automaticamente por clone/serde ou precisa ser adicionado explicitamente.
+- [ ] Confirmar semântica de `$FFFC` bits 2/3/4 e prioridade entre SRAM, ROM, work RAM e port `$3E`.
+- [ ] Definir compatibilidade dos construtores sem quebrar consumidores existentes.
+- [ ] Definir testes de unidade e integração com timestamps/WAIT e snapshot em troca de mapeamento.
+- [ ] Só depois abrir branch de runtime baseada no SHA atual da `main`.
+
+**Estado desta reconciliação:** comparação estrutural PASS; decisão de não cherry-pick PASS; auditoria integral dos patches NOT RUN; port de runtime NOT STARTED; teste in-game NOT RUN.
