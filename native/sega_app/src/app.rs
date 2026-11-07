@@ -303,10 +303,10 @@ impl SegaApp {
         if let Some(path) = dialog.set_parent(window).pick_file() {
             self.rom_path = path.to_string_lossy().into_owned();
             if let Some(directory) = path.parent().filter(|path| path.is_dir()) {
-                if let Err(error) = self.directory_preferences.record_last_opened(
-                    DirectoryKind::Roms,
-                    directory.to_path_buf(),
-                ) {
+                if let Err(error) = self
+                    .directory_preferences
+                    .record_last_opened(DirectoryKind::Roms, directory.to_path_buf())
+                {
                     self.native_viewport.error = Some(format!(
                         "ROM selecionada, mas não foi possível salvar o histórico de diretórios: {error}"
                     ));
@@ -828,7 +828,14 @@ fn render_header(ui: &mut egui::Ui, settings_open: &mut bool) {
         ui.heading("Sega Emulator");
         ui.separator();
         ui.label("Rust · egui/eframe");
-        if ui.button(if *settings_open { "Fechar configurações" } else { "Configurações" }).clicked() {
+        if ui
+            .button(if *settings_open {
+                "Fechar configurações"
+            } else {
+                "Configurações"
+            })
+            .clicked()
+        {
             *settings_open = !*settings_open;
         }
         if ui.button("Sair").clicked() {
