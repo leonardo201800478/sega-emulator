@@ -522,11 +522,11 @@ jobs:
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' && needs.changes.outputs.full != 'true' }}
           Z80: ${{ needs.z80-focused.result }}
           EXPECT_PSG: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.psg == 'true' && needs.changes.outputs.full != 'true' }}
-      PSG: ${{ needs.psg-focused.result }}
-      EXPECT_VDP: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.vdp == 'true' && needs.changes.outputs.full != 'true' }}
-      VDP: ${{ needs.vdp-focused.result }}
-      EXPECT_INPUT: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true' && needs.changes.outputs.full != 'true' }}
-      INPUT: ${{ needs.input-focused.result }}
+          PSG: ${{ needs.psg-focused.result }}
+          EXPECT_VDP: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.vdp == 'true' && needs.changes.outputs.full != 'true' }}
+          VDP: ${{ needs.vdp-focused.result }}
+          EXPECT_INPUT: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true' && needs.changes.outputs.full != 'true' }}
+          INPUT: ${{ needs.input-focused.result }}
       EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
