@@ -184,11 +184,11 @@ Fontes comparativas:
 
 ### 5.1 Nota de evidência — continuidade do divisor e rate = Tone2
 
-A documentação SMS Power afirma que a escrita no noise register reinicia o shift register, sem especificar reinício do contador/divisor. A implementação comparativa MAME atualiza o período de ruído e reinicia o RNG, mas não reinicia o contador de ruído. O RTL MiSTer mantém o contador de ruído em execução e seleciona o flip-flop do canal C quando o rate é Tone2. Essas referências sustentam separar o reset do LFSR da continuidade do divisor, mas não substituem medição de hardware SMS.
+A documentação SMS Power afirma que a escrita no noise register reinicia o shift register, sem especificar reinício do contador/divisor. A implementação comparativa MAME atualiza o período de ruído e reinicia o RNG, mas não reinicia o contador de ruído. O RTL MiSTer do projeto ColecoVision mantém o contador de ruído em execução e seleciona o flip-flop do canal C quando o rate é Tone2; trata-se de um perfil TI/15-bit e serve apenas como exemplo de arquitetura alternativa, não como prova direta do Sega PSG de 16 bits. Essas referências sustentam separar o reset do LFSR da continuidade do divisor, mas não substituem medição de hardware SMS.
 
 Há duas realizações comparativas para o rate Tone2:
 - MAME: contador de ruído dedicado com período equivalente a duas vezes o período do canal Tone2.
-- MiSTer RTL: seleciona diretamente o flip-flop interno do canal C como fonte de clock do LFSR.
+- RTL MiSTer/ColecoVision (perfil TI/15-bit): seleciona diretamente o flip-flop interno do canal C como fonte de clock do LFSR; referência arquitetural comparativa, não oráculo do perfil Sega/SMS de 16 bits.
 
 Ambas podem produzir a mesma frequência média, mas podem divergir na fase após writes e na relação de fase entre os contadores. A implementação atual mantém contador dedicado; o alinhamento de fase com Tone2 permanece PENDENTE até vetor independente ou medição física. Não declarar PSG-T05 fechado apenas pela igualdade da frequência média.
 
