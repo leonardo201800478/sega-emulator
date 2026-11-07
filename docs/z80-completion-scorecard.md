@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).  
+**Baseline documental atual:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
@@ -134,4 +134,3 @@ Nenhuma alteração de código Z80 decorre desta reconciliação documental.
 - O runtime integrado escreve `0x00` para ED 71 e tem teste de I/O que confirma a transação `(BC, 0x00)`. Esse comportamento corresponde ao perfil NMOS das placas SMS documentadas. Não foi necessária alteração de runtime.
 - **Limite:** o levantamento de placas não é um censo de todas as unidades/revisões produzidas. Não inferir que todos os clones CMOS ou todas as variantes Z80 tenham comportamento idêntico. A exceção Sharp LH5080A demonstra que uma regra binária “CMOS = FF” não é universal.
 - **Estado E7.7:** a subquestão ED 71 fica RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE, com evidência documental de componentes e regressão de runtime. A auditoria semântica integral E7.7 continua IN_PROGRESS; CMOS/clones em geral e outras famílias/efeitos ainda exigem reconciliação. **E8 permanece BLOCKED.**
-
