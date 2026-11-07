@@ -314,6 +314,17 @@ impl SegaApp {
         }
     }
 
+    fn shutdown_native_viewport_with_save(&mut self) -> bool {
+        if let Err(error) = self.persist_current_cartridge() {
+            self.native_viewport.error =
+                Some(format!("Não foi possível salvar a SRAM antes do encerramento: {error}"));
+            return false;
+        }
+        self.native_viewport.shutdown();
+        self.current_cartridge = None;
+        true
+    }
+
     fn persist_current_cartridge(&mut self) -> Result<(), String> {
         let Some(current) = self.current_cartridge.as_ref() else {
             return Ok(());
@@ -644,7 +655,9 @@ impl SegaApp {
             return true;
         }
 
-        self.native_viewport.shutdown();
+        if !self.shutdown_native_viewport_with_save() {
+            return false;
+        }
         self.native_viewport.error = None;
 
         let child = match D3d12ChildWindow::create(parent_hwnd) {
@@ -764,7 +777,10 @@ impl SegaApp {
                 .as_ref()
                 .is_some_and(|session| !session.is_running())
         {
-            self.native_viewport.shutdown();
+            if !self.shutdown_native_viewport_with_save() {
+                context.request_repaint_after(Duration::from_millis(250));
+                return;
+            }
             self.native_viewport.error =
                 Some("O worker de apresentação D3D12 foi encerrado".to_owned());
             context.request_repaint();
