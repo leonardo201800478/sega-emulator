@@ -843,7 +843,8 @@ mod tests {
         let cloned = memory.clone();
         assert_eq!(cloned.cartridge_sram().unwrap()[0x123], 0xC7);
 
-        let mut reloaded = SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
+        let mut reloaded =
+            SmsMemory::with_cartridge_sram_size(patterned_rom(4), Some(CARTRIDGE_SRAM_8K)).unwrap();
         reloaded
             .load_cartridge_sram(memory.cartridge_sram().unwrap())
             .unwrap();
