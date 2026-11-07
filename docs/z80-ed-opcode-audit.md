@@ -225,3 +225,23 @@ O README do corpus SingleStepTests/Z80 no commit fixado `ebe1875d48f374bcfd4b505
 - A implementação atual segue essa fórmula secundária para flags de I/O em bloco. Os vetores SingleStepTests existentes passam, mas sua ancestralidade em Ares impede tratá-los como confirmação independente dessa mesma fórmula.
 
 **Conclusão de engenharia:** manter o comportamento atual para não introduzir uma regressão especulativa, mas rotular as fórmulas como hipótese de compatibilidade para a variante-alvo, não como comportamento universal demonstrado. Para resolver a questão, precisamos de um exercitador de hardware/ROM independente com procedência verificável, ou de um segundo oráculo sem ancestralidade comum conhecida, e vetores discriminantes para C/H/PV em INI/IND/OUTI/OUTD e suas variantes repetidas. Nenhum teste atual prova a resposta do silício físico.
+
+---
+
+## Atualização E7.7 — wrap de transferências absolutas (2026-11-07)
+
+Baseline de origem: `main` `ae90f82b991dc6c85d7386ef7d4b11594473af51`.
+
+A lacuna histórica de teste para `nn = 0xFFFF` nas famílias ED 43/53/63/73 e ED 4B/5B/6B/7B recebeu cobertura candidata em `native/z80_cpu/src/cpu.rs`, teste `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff`.
+
+A matriz cobre BC, DE, HL e SP:
+- store little-endian em FFFF/0000;
+- load little-endian de FFFF/0000;
+- WZ = 0000 após wrap;
+- PC = início + 4;
+- 20 T-states;
+- flags F preservadas.
+
+A implementação de runtime já usava `wrapping_add(1)`; esta alteração adiciona evidência de borda e não altera código de produção. A execução do teste e os gates Rust dependem do CI no HEAD final da PR.
+
+E7.7 continua IN_PROGRESS. E8 permanece BLOCKED.
