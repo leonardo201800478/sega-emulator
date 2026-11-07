@@ -380,7 +380,7 @@ mod tests {
         let second_identity = CartridgeIdentity::from_bytes(b"rom-two");
         let profile = battery_profile();
         store
-            .save(&first_identity, &profile, &vec![0x33; 0x2000])
+            .save(&first_identity, &profile, &[0x33; 0x2000])
             .unwrap();
 
         fs::copy(
@@ -411,7 +411,7 @@ mod tests {
         );
 
         store
-            .save(&identity, &profile, &vec![0x55; 0x2000])
+            .save(&identity, &profile, &[0x55; 0x2000])
             .unwrap();
         let mut encoded = fs::read(&path).unwrap();
         *encoded.last_mut().unwrap() ^= 0xFF;
