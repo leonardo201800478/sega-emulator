@@ -149,9 +149,13 @@ impl<S: PcmSink> NativeAudioSession<S> {
         if self.closed {
             return;
         }
-        let tail = self.resampler.flush();
-        if !tail.is_empty() {
-            let _ = self.sink.write_pcm(tail);
+        if self.discarded_since_suspend {
+            self.resampler.reset();
+        } else {
+            let tail = self.resampler.flush();
+            if !tail.is_empty() {
+                let _ = self.sink.write_pcm(tail);
+            }
         }
         self.sink.close();
         self.closed = true;
