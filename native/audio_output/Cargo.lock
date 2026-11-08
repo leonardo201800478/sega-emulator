@@ -64,6 +64,7 @@ dependencies = [
  "sega-audio-runtime",
  "wasapi",
  "windows",
+ "windows-core",
 ]
 
 [[package]]
