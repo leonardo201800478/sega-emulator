@@ -628,7 +628,7 @@ mod tests {
             let (sample_count, next_phase) =
                 super::advance_output_phase(previous_phase, sample_rate, clock_hz);
             for sample_index in 0..sample_count {
-                let nearest_tick_sample = current_filtered;
+                let quantized_tick_sample = current_filtered;
                 let interpolated_sample = super::interpolate_output_sample(
                     previous_filtered,
                     current_filtered,
@@ -647,7 +647,7 @@ mod tests {
                     .sum::<f64>();
 
                 if tick > (taps * 2) as u64 {
-                    nearest_error_squared += (nearest_tick_sample - reference).powi(2);
+                    nearest_error_squared += (quantized_tick_sample - reference).powi(2);
                     interpolated_error_squared += (interpolated_sample - reference).powi(2);
                     reference_squared += reference.powi(2);
                     measured_samples += 1;
@@ -673,7 +673,7 @@ mod tests {
 
         assert!(
             nearest_error_rms > 0.05,
-            "test must reproduce material nearest-tick error, got {nearest_error_rms:.4}"
+            "test must reproduce material tick-quantization error, got {nearest_error_rms:.4}"
         );
         assert!(
             interpolated_error_rms < 0.01,
