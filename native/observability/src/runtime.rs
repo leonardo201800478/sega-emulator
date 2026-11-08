@@ -134,9 +134,11 @@ impl LoggingHandle {
 
     pub fn set_filter(&self, directives: &str) -> Result<(), String> {
         let filter = EnvFilter::try_new(directives).map_err(|error| error.to_string())?;
-        self.filter
-            .reload(filter)
-            .map_err(|error| error.to_string())?;
+        if self.is_enabled() {
+            self.filter
+                .reload(filter)
+                .map_err(|error| error.to_string())?;
+        }
         self.config
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
