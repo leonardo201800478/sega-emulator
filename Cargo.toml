@@ -32,3 +32,8 @@ default-members = [
     "native/video_runtime",
     "rust/runtime/sms-runtime",
 ]
+
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
