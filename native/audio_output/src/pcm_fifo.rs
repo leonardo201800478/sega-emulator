@@ -214,45 +214,40 @@ fn metrics_snapshot(
     }
 }
 
-/// Factory for a fixed-capacity, lock-free SPSC PCM frame queue.
-pub struct PcmFrameQueue;
-
-impl PcmFrameQueue {
-    /// Allocate the queue and return its unique producer and consumer endpoints.
-    pub fn new(
-        capacity_frames: usize,
-    ) -> Result<(PcmFrameProducer, PcmFrameConsumer), PcmFrameQueueError> {
-        if capacity_frames == 0 {
-            return Err(PcmFrameQueueError::ZeroCapacity);
-        }
-
-        let (producer, consumer) = RingBuffer::<StereoFrame>::new(capacity_frames);
-        let metrics = Arc::new(SharedMetrics::default());
-        Ok((
-            PcmFrameProducer {
-                producer,
-                metrics: Arc::clone(&metrics),
-                capacity_frames,
-            },
-            PcmFrameConsumer {
-                consumer,
-                metrics,
-                capacity_frames,
-            },
-        ))
+/// Allocate a fixed-capacity SPSC queue and return its unique endpoints.
+pub fn pcm_frame_queue(
+    capacity_frames: usize,
+) -> Result<(PcmFrameProducer, PcmFrameConsumer), PcmFrameQueueError> {
+    if capacity_frames == 0 {
+        return Err(PcmFrameQueueError::ZeroCapacity);
     }
+
+    let (producer, consumer) = RingBuffer::<StereoFrame>::new(capacity_frames);
+    let metrics = Arc::new(SharedMetrics::default());
+    Ok((
+        PcmFrameProducer {
+            producer,
+            metrics: Arc::clone(&metrics),
+            capacity_frames,
+        },
+        PcmFrameConsumer {
+            consumer,
+            metrics,
+            capacity_frames,
+        },
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        PcmFrameQueue, PcmFrameQueueError, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
+        pcm_frame_queue, PcmFrameQueueError, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
     };
 
     #[test]
     fn rejects_zero_capacity() {
         assert_eq!(
-            PcmFrameQueue::new(0).err(),
+            pcm_frame_queue(0).err(),
             Some(PcmFrameQueueError::ZeroCapacity)
         );
     }
