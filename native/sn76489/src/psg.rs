@@ -47,8 +47,7 @@ fn interpolate_output_sample(
 ) -> f64 {
     debug_assert!(phase < clock_hz);
     let increment = u128::from(sample_rate) * u128::from(CLOCK_DIVIDER);
-    let crossing = u128::from(clock_hz - phase)
-        + u128::from(sample_index) * u128::from(clock_hz);
+    let crossing = u128::from(clock_hz - phase) + u128::from(sample_index) * u128::from(clock_hz);
     let fraction = crossing as f64 / increment as f64;
     debug_assert!((0.0..=1.0).contains(&fraction));
     previous + (current - previous) * fraction
@@ -637,8 +636,7 @@ mod tests {
                     clock_hz,
                     sample_index,
                 );
-                let target_tick = (output_index + 1) as f64 * internal_rate
-                    / sample_rate as f64;
+                let target_tick = (output_index + 1) as f64 * internal_rate / sample_rate as f64;
                 let reference = coefficients
                     .iter()
                     .enumerate()
