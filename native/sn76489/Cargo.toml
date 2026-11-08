@@ -7,3 +7,6 @@ publish = false
 [lib]
 name = "sega_sn76489"
 path = "src/lib.rs"
+
+[dependencies]
+sega-observability.workspace = true
