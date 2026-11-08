@@ -31,7 +31,7 @@ pub struct SegaApp {
     rom_dialog_requested: bool,
     recent_roms: Vec<PathBuf>,
     recent_rom_requested: Option<PathBuf>,
-    show_status: bool,
+    footer_mode: FooterMode,
     aspect_ratio: AspectRatioMode,
     audio_enabled: bool,
     audio_backend: AudioBackend,
@@ -54,7 +54,7 @@ impl Default for SegaApp {
             rom_dialog_requested: false,
             recent_roms: load_recent_roms(),
             recent_rom_requested: None,
-            show_status: true,
+            footer_mode: FooterMode::Visible,
             aspect_ratio: AspectRatioMode::FourThree,
             audio_enabled: true,
             audio_backend: AudioBackend::Wasapi,
@@ -214,29 +214,30 @@ impl SegaApp {
         let mut audio_command = None;
 
         ui.vertical(|ui| {
-            render_header(
-                ui,
-                &mut self.rom_dialog_requested,
-                &self.recent_roms,
-                &mut self.recent_rom_requested,
-                &mut self.show_status,
-                &mut self.region,
-                &mut self.aspect_ratio,
-                &mut self.audio_enabled,
-                &mut self.audio_backend,
-                &mut self.audio_volume,
-                &mut audio_command,
-                &self.native_viewport,
-                &mut command,
-                &self.input_devices,
-                &mut self.selected_gamepad,
-                self.input_backend
+            let mut header_state = HeaderState {
+                browse_requested: &mut self.rom_dialog_requested,
+                recent_roms: &self.recent_roms,
+                recent_rom_requested: &mut self.recent_rom_requested,
+                footer_mode: &mut self.footer_mode,
+                region: &mut self.region,
+                aspect_ratio: &mut self.aspect_ratio,
+                audio_enabled: &mut self.audio_enabled,
+                audio_backend: &mut self.audio_backend,
+                audio_volume: &mut self.audio_volume,
+                audio_command: &mut audio_command,
+                viewport: &self.native_viewport,
+                machine_command: &mut command,
+                devices: &self.input_devices,
+                selected_gamepad: &mut self.selected_gamepad,
+                input_error: self.input_backend
                     .as_ref()
                     .and_then(|state| state.as_ref().err())
                     .map(String::as_str),
-            );
-            viewport_rect = render_video_viewport(ui, self.aspect_ratio, self.show_status);
-            if self.show_status {
+            };
+            render_header(ui, &mut header_state);
+            let show_status = self.footer_mode.is_visible();
+            viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
+            if show_status {
                 render_footer(ui, &self.native_viewport, &self.rom_path);
             }
         });
@@ -862,136 +863,174 @@ fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FooterMode {
+    Visible,
+    Hidden,
+}
+
+impl FooterMode {
+    const fn is_visible(self) -> bool {
+        matches!(self, Self::Visible)
+    }
+}
+
+/// Borrowed presentation state shared by the compact top-level menu renderers.
+struct HeaderState<'a> {
+    browse_requested: &'a mut bool,
+    recent_roms: &'a [PathBuf],
+    recent_rom_requested: &'a mut Option<PathBuf>,
+    footer_mode: &'a mut FooterMode,
+    region: &'a mut String,
+    aspect_ratio: &'a mut AspectRatioMode,
+    audio_enabled: &'a mut bool,
+    audio_backend: &'a mut AudioBackend,
+    audio_volume: &'a mut u8,
+    audio_command: &'a mut Option<AudioCommand>,
+    viewport: &'a NativeViewportState,
+    machine_command: &'a mut Option<UiCommand>,
+    devices: &'a [DeviceDescriptor],
+    selected_gamepad: &'a mut Option<DeviceId>,
+    input_error: Option<&'a str>,
+}
+
 /// Render the minimal immersive menu bar; configuration stays outside the game viewport.
-fn render_header(
-    ui: &mut egui::Ui,
-    browse_requested: &mut bool,
-    recent_roms: &[PathBuf],
-    recent_rom_requested: &mut Option<PathBuf>,
-    show_status: &mut bool,
-    region: &mut String,
-    aspect_ratio: &mut AspectRatioMode,
-    audio_enabled: &mut bool,
-    audio_backend: &mut AudioBackend,
-    audio_volume: &mut u8,
-    audio_command: &mut Option<AudioCommand>,
-    viewport: &NativeViewportState,
-    machine_command: &mut Option<UiCommand>,
-    devices: &[DeviceDescriptor],
-    selected_gamepad: &mut Option<DeviceId>,
-    input_error: Option<&str>,
-) {
+fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         ui.small("SEGA · SMS");
-
-        ui.menu_button("Arquivo", |ui| {
-            if ui.button("Abrir ROM…").clicked() {
-                *browse_requested = true;
-                ui.close();
-            }
-            ui.menu_button("Recentes", |ui| {
-                if recent_roms.is_empty() {
-                    ui.label("Nenhuma ROM recente");
-                } else {
-                    for path in recent_roms {
-                        let name = path
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .unwrap_or("ROM sem nome");
-                        if ui
-                            .button(name)
-                            .on_hover_text(path.display().to_string())
-                            .clicked()
-                        {
-                            *recent_rom_requested = Some(path.clone());
-                            ui.close();
-                        }
-                    }
-                }
-            });
-            ui.separator();
-            add_machine_button(
-                ui,
-                "Fechar ROM",
-                viewport.worker.is_some(),
-                UiCommand::CloseMachine,
-                machine_command,
-            );
-            ui.separator();
-            if ui.button("Sair").clicked() {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
-
-        ui.menu_button("Vídeo", |ui| {
-            ui.radio_value(aspect_ratio, AspectRatioMode::FourThree, "Original (4:3)");
-            ui.radio_value(aspect_ratio, AspectRatioMode::OneToOne, "1:1");
-            ui.radio_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
-        });
-
-        ui.menu_button("Som", |ui| {
-            if ui.checkbox(audio_enabled, "Áudio ativo").changed() {
-                *audio_command = Some(if *audio_enabled {
-                    AudioCommand::Configure
-                } else {
-                    AudioCommand::Disable
-                });
-            }
-            ui.separator();
-            ui.label("Saída");
-            if ui
-                .radio_value(audio_backend, AudioBackend::Wasapi, "WASAPI Shared")
-                .changed()
-                || ui
-                    .radio_value(audio_backend, AudioBackend::XAudio2, "XAudio2")
-                    .changed()
-            {
-                *audio_enabled = true;
-                *audio_command = Some(AudioCommand::Configure);
-            }
-            if ui
-                .add(egui::Slider::new(audio_volume, 0..=100).text("Volume"))
-                .changed()
-                && *audio_enabled
-            {
-                *audio_command = Some(AudioCommand::SetVolume(*audio_volume));
-            }
-        });
-
-        ui.menu_button("Opções", |ui| {
-            ui.checkbox(show_status, "Exibir status no rodapé");
-            let mut fullscreen = ui
-                .ctx()
-                .input(|input| input.viewport().fullscreen.unwrap_or(false));
-            if ui.checkbox(&mut fullscreen, "Tela cheia (F11)").changed() {
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
-            }
-            ui.separator();
-            ui.menu_button("Região / padrão de vídeo", |ui| {
-                ui.radio_value(region, "usa".to_owned(), "USA / NTSC");
-                ui.radio_value(region, "brazil".to_owned(), "Brasil / PAL-M");
-                ui.radio_value(region, "europe".to_owned(), "Europa / PAL");
-                ui.radio_value(region, "japan".to_owned(), "Japão / NTSC");
-            });
-            ui.menu_button("Execução", |ui| {
-                render_machine_controls(ui, viewport, machine_command);
-            });
-            ui.menu_button("Controles", |ui| {
-                render_input_controls(ui, devices, selected_gamepad, input_error);
-                ui.separator();
-                ui.small("Jogo: setas / Z / X · P solicita NMI");
-                ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
-                ui.small("F8 reset · F9 quadro · F11 tela cheia");
-                ui.small("Gamepad: direcional / analógico · A / B · Start");
-            });
-            ui.menu_button("Diagnóstico", |ui| {
-                render_runtime_status(ui, viewport);
-            });
-        });
+        ui.menu_button("Arquivo", |ui| render_file_menu(ui, state));
+        ui.menu_button("Vídeo", |ui| render_video_menu(ui, state));
+        ui.menu_button("Som", |ui| render_audio_menu(ui, state));
+        ui.menu_button("Opções", |ui| render_options_menu(ui, state));
     });
     ui.separator();
+}
+
+/// Render ROM loading/history and application lifecycle actions.
+fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    if ui.button("Abrir ROM…").clicked() {
+        *state.browse_requested = true;
+        ui.close();
+    }
+    ui.menu_button("Recentes", |ui| {
+        if state.recent_roms.is_empty() {
+            ui.label("Nenhuma ROM recente");
+        } else {
+            for path in state.recent_roms {
+                let name = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("ROM sem nome");
+                if ui
+                    .button(name)
+                    .on_hover_text(path.display().to_string())
+                    .clicked()
+                {
+                    *state.recent_rom_requested = Some(path.clone());
+                    ui.close();
+                }
+            }
+        }
+    });
+    ui.separator();
+    add_machine_button(
+        ui,
+        "Fechar ROM",
+        state.viewport.worker.is_some(),
+        UiCommand::CloseMachine,
+        state.machine_command,
+    );
+    ui.separator();
+    if ui.button("Sair").clicked() {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+}
+
+/// Render display aspect-ratio selection.
+fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.radio_value(
+        state.aspect_ratio,
+        AspectRatioMode::FourThree,
+        "Original (4:3)",
+    );
+    ui.radio_value(state.aspect_ratio, AspectRatioMode::OneToOne, "1:1");
+    ui.radio_value(state.aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
+}
+
+/// Render audio output configuration without consuming permanent viewport space.
+fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    if ui.checkbox(state.audio_enabled, "Áudio ativo").changed() {
+        *state.audio_command = Some(if *state.audio_enabled {
+            AudioCommand::Configure
+        } else {
+            AudioCommand::Disable
+        });
+    }
+    ui.separator();
+    ui.label("Saída");
+    if ui
+        .radio_value(state.audio_backend, AudioBackend::Wasapi, "WASAPI Shared")
+        .changed()
+        || ui
+            .radio_value(state.audio_backend, AudioBackend::XAudio2, "XAudio2")
+            .changed()
+    {
+        *state.audio_enabled = true;
+        *state.audio_command = Some(AudioCommand::Configure);
+    }
+    if ui
+        .add(egui::Slider::new(state.audio_volume, 0..=100).text("Volume"))
+        .changed()
+        && *state.audio_enabled
+    {
+        *state.audio_command = Some(AudioCommand::SetVolume(*state.audio_volume));
+    }
+}
+
+/// Render less frequently used machine, input and diagnostics options.
+fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    let mut show_status = state.footer_mode.is_visible();
+    if ui.checkbox(&mut show_status, "Exibir status no rodapé").changed() {
+        *state.footer_mode = if show_status {
+            FooterMode::Visible
+        } else {
+            FooterMode::Hidden
+        };
+    }
+    let mut fullscreen = ui
+        .ctx()
+        .input(|input| input.viewport().fullscreen.unwrap_or(false));
+    if ui.checkbox(&mut fullscreen, "Tela cheia (F11)").changed() {
+        ui.ctx()
+            .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+    }
+    ui.separator();
+    ui.menu_button("Região / padrão de vídeo", |ui| {
+        ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
+        ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
+        ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
+        ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
+    });
+    ui.menu_button("Execução", |ui| {
+        render_machine_controls(ui, state.viewport, state.machine_command);
+    });
+    ui.menu_button("Controles", |ui| {
+        render_input_controls(
+            ui,
+            state.devices,
+            state.selected_gamepad,
+            state.input_error,
+        );
+        ui.separator();
+        ui.small("Jogo: setas / Z / X · P solicita NMI");
+        ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
+        ui.small("F8 reset · F9 quadro · F11 tela cheia");
+        ui.small("Gamepad: direcional / analógico · A / B · Start");
+    });
+    ui.menu_button("Diagnóstico", |ui| {
+        render_runtime_status(ui, state.viewport);
+    });
 }
 
 fn render_machine_controls(
