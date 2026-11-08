@@ -402,7 +402,7 @@ impl SegaApp {
                                     if menu_ui
                                         .input(|input| input.viewport().focused.unwrap_or(false))
                                     {
-                                        self.update_keyboard_input(menu_ui.ctx());
+                                        self.update_keyboard_input(menu_ui.ctx(), context);
                                         input_updated = true;
                                     }
                                 });
@@ -661,9 +661,13 @@ impl SegaApp {
     ///
     /// F5 starts, F6 pauses, F7 stops, F8 resets, F9 advances one frame and F11
     /// toggles borderless fullscreen. Commands remain coarse-grained UI requests.
-    fn update_keyboard_input(&mut self, context: &egui::Context) {
+    fn update_keyboard_input(
+        &mut self,
+        input_context: &egui::Context,
+        root_context: &egui::Context,
+    ) {
         let (keyboard_buttons, keyboard_pause, shortcut, toggle_fullscreen) =
-            context.input(|input| {
+            input_context.input(|input| {
                 let shortcut = if input.key_pressed(egui::Key::F5) {
                     Some(UiCommand::Start)
                 } else if input.key_pressed(egui::Key::F6) {
@@ -715,8 +719,9 @@ impl SegaApp {
             self.apply_command(command);
         }
         if toggle_fullscreen {
-            let fullscreen = context.input(|input| !input.viewport().fullscreen.unwrap_or(false));
-            context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+            let fullscreen =
+                root_context.input(|input| !input.viewport().fullscreen.unwrap_or(false));
+            root_context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
         }
     }
 
@@ -903,7 +908,7 @@ impl eframe::App for SegaApp {
             };
 
         if !input_updated {
-            self.update_keyboard_input(ui.ctx());
+            self.update_keyboard_input(ui.ctx(), ui.ctx());
         }
         if self.rom_dialog_requested {
             self.rom_dialog_requested = false;
