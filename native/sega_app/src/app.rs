@@ -761,11 +761,16 @@ impl Drop for SegaApp {
                     event = "application_shutdown",
                     session_id = %logging.session().session_id,
                 );
+            }
+            // Drop the non-blocking worker guard first so all queued records,
+            // including application_shutdown, reach the recent-event buffer
+            // and rotating log before the final snapshot is serialized.
+            logging.shutdown();
+            if logging.is_enabled() {
                 if let Err(error) = logging.write_diagnostics_json() {
                     eprintln!("Unable to write diagnostics snapshot: {error}");
                 }
             }
-            logging.shutdown();
         }
     }
 }
