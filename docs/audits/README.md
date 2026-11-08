@@ -18,4 +18,4 @@ Esta pasta registra investigações delimitadas, com evidências, hipóteses, re
 - Uma PR aberta ou Draft não é integração.
 - Uma investigação de jogo não prova compatibilidade geral.
 - Resultados de CI só valem para o SHA exato e para os jobs efetivamente executados.
-- Documentos de arquitetura antiga (Qt/PySide6, Python/PyO3 ou workspaces anteriores) permanecem como histórico quando ajudam a explicar decisões e migrações. A arquitetura normativa atual está em [ADRs](../architecture/adr/README.md), [roadmap](../project-roadmap.md) e [status atual](../project-status-2026-11-07.md).
+- Documentos de arquitetura antiga (Qt/PySide6, Python/PyO3 ou workspaces anteriores) permanecem como histórico quando ajudam a explicar decisões e migrações. A arquitetura normativa atual está em [ADRs](../architecture/adr/README.md), [roadmap](../project-roadmap.md) e [status dos componentes](../component-status.md).
