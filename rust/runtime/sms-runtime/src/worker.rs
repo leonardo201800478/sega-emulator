@@ -519,6 +519,7 @@ impl Drop for SmsTemporalWorker {
 fn execute_frame(
     machine: &mut SmsTemporalMachine,
     max_instructions: usize,
+    publish_audio: bool,
     audio_session: &mut Option<Box<dyn AudioSession>>,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
@@ -570,9 +571,13 @@ fn execute_frame(
     }
 
     let samples = machine.drain_audio_samples(None);
-    let audio_result = audio_session
-        .as_mut()
-        .map(|session| session.process_samples(&samples));
+    let audio_result = audio_session.as_mut().map(|session| {
+        if publish_audio {
+            session.process_samples(&samples)
+        } else {
+            session.process_samples_discarding_output(&samples)
+        }
+    });
     match audio_result {
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
@@ -643,6 +648,7 @@ fn worker_loop(
         match execute_frame(
             &mut machine,
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            true,
             &mut audio_session,
             &mut video_mailbox,
             &mut video_sequence,
@@ -709,20 +715,50 @@ fn handle_command(
 ) -> bool {
     match command {
         WorkerCommand::Start(reply) => {
-            *running = true;
-            telemetry.running.store(true, Ordering::Release);
-            let _ = reply.send(Ok(()));
+            let result = audio_session.as_mut().map_or(Ok(()), |session| session.resume());
+            match result {
+                Ok(()) => {
+                    *running = true;
+                    telemetry.running.store(true, Ordering::Release);
+                    let _ = reply.send(Ok(()));
+                }
+                Err(error) => {
+                    telemetry.set_audio_error(Some(error.clone()));
+                    let _ = reply.send(Err(error));
+                }
+            }
         }
         WorkerCommand::Pause(reply) | WorkerCommand::Stop(reply) => {
             *running = false;
             telemetry.running.store(false, Ordering::Release);
-            let _ = reply.send(Ok(()));
+            let result = audio_session
+                .as_mut()
+                .map_or(Ok(()), |session| session.suspend_and_flush());
+            if let Err(error) = &result {
+                telemetry.set_audio_error(Some(error.clone()));
+            }
+            let _ = reply.send(result);
         }
         WorkerCommand::Reset(reply) => match build_sms_temporal_machine(rom.clone(), region) {
             Ok(reset_machine) => {
-                *machine = reset_machine;
-                telemetry.reset_machine_counters();
-                let _ = reply.send(Ok(()));
+                let result = audio_session.as_mut().map_or(Ok(()), |session| {
+                    session.suspend_and_flush()?;
+                    session.reset_dsp();
+                    Ok(())
+                });
+                match result {
+                    Ok(()) => {
+                        *running = false;
+                        telemetry.running.store(false, Ordering::Release);
+                        *machine = reset_machine;
+                        telemetry.reset_machine_counters();
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        telemetry.set_audio_error(Some(error.clone()));
+                        let _ = reply.send(Err(error));
+                    }
+                }
             }
             Err(error) => {
                 let _ = reply.send(Err(error));
@@ -731,12 +767,25 @@ fn handle_command(
         WorkerCommand::LoadRom(new_rom, reply) => {
             match build_sms_temporal_machine(new_rom.clone(), region) {
                 Ok(new_machine) => {
-                    *running = false;
-                    telemetry.running.store(false, Ordering::Release);
-                    *machine = new_machine;
-                    *rom = new_rom;
-                    telemetry.reset_machine_counters();
-                    let _ = reply.send(Ok(()));
+                    let result = audio_session.as_mut().map_or(Ok(()), |session| {
+                        session.suspend_and_flush()?;
+                        session.reset_dsp();
+                        Ok(())
+                    });
+                    match result {
+                        Ok(()) => {
+                            *running = false;
+                            telemetry.running.store(false, Ordering::Release);
+                            *machine = new_machine;
+                            *rom = new_rom;
+                            telemetry.reset_machine_counters();
+                            let _ = reply.send(Ok(()));
+                        }
+                        Err(error) => {
+                            telemetry.set_audio_error(Some(error.clone()));
+                            let _ = reply.send(Err(error));
+                        }
+                    }
                 }
                 Err(error) => {
                     let _ = reply.send(Err(error));
@@ -754,6 +803,7 @@ fn handle_command(
                 match execute_frame(
                     machine,
                     max_instructions,
+                    false,
                     audio_session,
                     video_mailbox,
                     video_sequence,
@@ -777,13 +827,27 @@ fn handle_command(
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
         WorkerCommand::ConfigureAudio(factory, reply) => match factory() {
-            Ok(session) => {
-                if let Some(mut previous) = audio_session.replace(session) {
-                    previous.close();
+            Ok(mut session) => {
+                let result = if *running {
+                    session.resume()
+                } else {
+                    session.suspend_and_flush()
+                };
+                match result {
+                    Ok(()) => {
+                        if let Some(mut previous) = audio_session.replace(session) {
+                            previous.close();
+                        }
+                        telemetry.set_audio_error(None);
+                        telemetry.set_audio_metrics((0, 0));
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        session.close();
+                        telemetry.set_audio_error(Some(error.clone()));
+                        let _ = reply.send(Err(error));
+                    }
                 }
-                telemetry.set_audio_error(None);
-                telemetry.set_audio_metrics((0, 0));
-                let _ = reply.send(Ok(()));
             }
             Err(error) => {
                 telemetry.set_audio_error(Some(error.clone()));
@@ -799,6 +863,7 @@ fn handle_command(
         }
         WorkerCommand::CloseAudio(reply) => {
             if let Some(mut session) = audio_session.take() {
+                let _ = session.suspend_and_flush();
                 session.close();
             }
             telemetry.set_audio_error(None);
@@ -829,6 +894,7 @@ fn handle_command(
             *running = false;
             telemetry.running.store(false, Ordering::Release);
             if let Some(mut session) = audio_session.take() {
+                let _ = session.suspend_and_flush();
                 session.close();
             }
             // Do not close a mailbox supplied by an external presentation host.
