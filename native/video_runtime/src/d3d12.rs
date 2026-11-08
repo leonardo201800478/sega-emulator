@@ -63,6 +63,7 @@ use windows::Win32::UI::HiDpi::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, GA_ROOT, GWL_STYLE, GetAncestor, GetWindowLongPtrW, GetWindowThreadProcessId,
+    HWND_BOTTOM,
     IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW, SWP_FRAMECHANGED,
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW,
     SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
@@ -337,14 +338,17 @@ impl D3d12ChildWindow {
         }
 
         unsafe {
+            // The egui overlay is a sibling child HWND of the same eframe
+            // parent. Keep the D3D12 surface at the bottom of the sibling
+            // z-order so transparent egui menus and panels remain visible.
             SetWindowPos(
                 self.hwnd,
-                None,
+                Some(HWND_BOTTOM),
                 x,
                 y,
                 width,
                 height,
-                SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW,
             )?;
         }
         Ok(())
