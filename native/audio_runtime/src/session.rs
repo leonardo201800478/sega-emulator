@@ -43,18 +43,14 @@ impl AudioOutputMetrics {
     /// unavailable.
     pub fn queue_duration_micros(self) -> Option<u64> {
         (self.sample_rate_hz > 0).then(|| {
-            self.queue_queued_frames
-                .saturating_mul(1_000_000)
-                / u64::from(self.sample_rate_hz)
+            self.queue_queued_frames.saturating_mul(1_000_000) / u64::from(self.sample_rate_hz)
         })
     }
 
     /// Estimate the maximum observed SPSC queue backlog duration.
     pub fn queue_high_water_duration_micros(self) -> Option<u64> {
         (self.sample_rate_hz > 0).then(|| {
-            self.queue_high_water_frames
-                .saturating_mul(1_000_000)
-                / u64::from(self.sample_rate_hz)
+            self.queue_high_water_frames.saturating_mul(1_000_000) / u64::from(self.sample_rate_hz)
         })
     }
 }
@@ -342,10 +338,7 @@ mod tests {
 
         assert_eq!(metrics.queue_duration_micros(), Some(10_000));
         assert_eq!(metrics.queue_high_water_duration_micros(), Some(20_000));
-        assert_eq!(
-            AudioOutputMetrics::default().queue_duration_micros(),
-            None
-        );
+        assert_eq!(AudioOutputMetrics::default().queue_duration_micros(), None);
     }
 
     #[test]
