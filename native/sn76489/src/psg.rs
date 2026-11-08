@@ -610,7 +610,8 @@ mod tests {
         let angular_frequency = std::f64::consts::TAU * frequency_hz / internal_rate;
 
         for tick in 0..internal_ticks {
-            let input = (angular_frequency * tick as f64).sin();
+            // The first FIR sample is captured after the first internal clock edge.
+            let input = (angular_frequency * (tick as f64 + 1.0)).sin();
             history[filter_position] = input;
             filter_position = (filter_position + 1) % taps;
 
