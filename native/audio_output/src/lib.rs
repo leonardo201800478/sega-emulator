@@ -454,7 +454,9 @@ impl NativeWasapiOutput {
             if !backend_accepts_pcm(
                 self.shutdown.load(Ordering::Acquire),
                 self.control.failed.load(Ordering::Acquire),
-                self.worker.as_ref().is_none_or(|worker| worker.is_finished()),
+                self.worker
+                    .as_ref()
+                    .is_none_or(|worker| worker.is_finished()),
             ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
@@ -1253,9 +1255,7 @@ fn run_xaudio2_worker(
         if shutdown.load(Ordering::Acquire) {
             break;
         }
-        if signals.voice_error.load(Ordering::Acquire)
-            || control.failed.load(Ordering::Acquire)
-        {
+        if signals.voice_error.load(Ordering::Acquire) || control.failed.load(Ordering::Acquire) {
             control.failed.store(true, Ordering::Release);
             break;
         }
