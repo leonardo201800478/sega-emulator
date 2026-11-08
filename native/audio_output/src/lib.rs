@@ -1124,6 +1124,7 @@ mod tests {
             Err(AudioOutputError::InvalidBalance)
         ));
     }
+
     #[test]
     fn xaudio2_staging_keeps_frame_memory_stable_until_callback_completion() {
         let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
@@ -1133,15 +1134,24 @@ mod tests {
         assert_eq!(first_bytes, 8);
         assert_eq!(staging.submitted_len(), 1);
         unsafe {
-            assert_eq!(std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4), &[1, 2, 3, 4]);
+            assert_eq!(
+                std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4),
+                &[1, 2, 3, 4]
+            );
         }
 
         let (second_ptr, second_bytes) = staging.stage_next(&mut consumer, 2).unwrap();
         assert_eq!(second_bytes, 4);
         assert_eq!(staging.submitted_len(), 2);
         unsafe {
-            assert_eq!(std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4), &[1, 2, 3, 4]);
-            assert_eq!(std::slice::from_raw_parts(second_ptr.cast::<i16>(), 2), &[5, 6]);
+            assert_eq!(
+                std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4),
+                &[1, 2, 3, 4]
+            );
+            assert_eq!(
+                std::slice::from_raw_parts(second_ptr.cast::<i16>(), 2),
+                &[5, 6]
+            );
         }
 
         assert_eq!(staging.reclaim_completed(0), 0);
@@ -1207,7 +1217,9 @@ mod tests {
             bytes.extend_from_slice(&left.to_le_bytes());
             bytes.extend_from_slice(&right.to_le_bytes());
         }
-        assert_eq!(bytes, [0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80]);
+        assert_eq!(
+            bytes,
+            [0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80]
+        );
     }
-
 }
