@@ -65,6 +65,36 @@ fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
     frames
 }
 
+/// Maximum number of PCM frames converted before publishing to the SPSC queue.
+/// This bounds temporary conversion storage independently of caller block size.
+const PCM_FRAME_BATCH_SIZE: usize = 256;
+
+/// Convert and publish mono PCM16 in fixed-size batches without allocating.
+/// Returns the exact number of frames rejected by the queue's drop-newest policy.
+fn push_mono_pcm16_bounded(
+    producer: &mut PcmFrameProducer,
+    pcm: &[u8],
+    balance: i8,
+) -> Result<usize, PcmFrameQueueError> {
+    debug_assert!(pcm.len().is_multiple_of(2));
+
+    let mut frames = [[0_i16; 2]; PCM_FRAME_BATCH_SIZE];
+    let mut dropped_frames = 0_usize;
+
+    for batch in pcm.chunks(PCM_FRAME_BATCH_SIZE * 2) {
+        let frame_count = batch.len() / 2;
+        for (index, sample) in batch.chunks_exact(2).enumerate() {
+            let mono = i16::from_le_bytes([sample[0], sample[1]]);
+            frames[index] = mono_sample_to_stereo_frame(mono, balance);
+        }
+
+        let report = producer.push_frames(&frames[..frame_count])?;
+        dropped_frames += report.dropped_frames;
+    }
+
+    Ok(dropped_frames)
+}
+
 /// Legacy byte-layout oracle retained only for equivalence tests.
 #[cfg(test)]
 fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
@@ -308,11 +338,9 @@ impl NativeWasapiOutput {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            let frames = mono_pcm16_to_stereo_frames(&pcm, self.balance);
-            let report = producer
-                .push_frames(&frames)
+            let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
-            if report.dropped_frames > 0 {
+            if dropped_frames > 0 {
                 self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
             }
             Ok(())
@@ -709,7 +737,6 @@ impl NativeXAudio2Output {
         if pcm.is_empty() {
             return Ok(());
         }
-        let frames = mono_pcm16_to_stereo_frames(&pcm, self.balance);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
@@ -719,10 +746,9 @@ impl NativeXAudio2Output {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            let report = producer
-                .push_frames(&frames)
+            let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
-            if report.dropped_frames > 0 {
+            if dropped_frames > 0 {
                 self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
             }
             Ok(())
@@ -1124,6 +1150,42 @@ mod tests {
             NativeXAudio2Output::new_with_balance(44_100, 512, 4, -101),
             Err(AudioOutputError::InvalidBalance)
         ));
+    }
+
+    #[test]
+    fn bounded_pcm_conversion_preserves_samples_across_batch_boundary() {
+        let (mut producer, mut consumer) = pcm_frame_queue(PCM_FRAME_BATCH_SIZE + 1).unwrap();
+        let pcm: Vec<u8> = (0..=PCM_FRAME_BATCH_SIZE as i16)
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+
+        assert_eq!(push_mono_pcm16_bounded(&mut producer, &pcm, 0), Ok(0));
+        let mut output = vec![[0_i16; 2]; PCM_FRAME_BATCH_SIZE + 1];
+        let report = consumer.read_frames(&mut output);
+        assert_eq!(report.queued_frames, PCM_FRAME_BATCH_SIZE + 1);
+        assert_eq!(report.silence_frames, 0);
+        for (index, frame) in output.iter().enumerate() {
+            let expected = index as i16;
+            assert_eq!(*frame, [expected, expected]);
+        }
+    }
+
+    #[test]
+    fn bounded_pcm_conversion_counts_all_frames_rejected_by_small_fifo() {
+        let (mut producer, mut consumer) = pcm_frame_queue(3).unwrap();
+        let frame_count = PCM_FRAME_BATCH_SIZE * 2 + 1;
+        let pcm: Vec<u8> = (0..frame_count as i16)
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+
+        assert_eq!(
+            push_mono_pcm16_bounded(&mut producer, &pcm, 0),
+            Ok(frame_count - 3)
+        );
+        let mut output = [[0_i16; 2]; 3];
+        assert_eq!(consumer.read_frames(&mut output).queued_frames, 3);
+        assert_eq!(output, [[0, 0], [1, 1], [2, 2]]);
+        assert_eq!(consumer.metrics().dropped_frames, (frame_count - 3) as u64);
     }
 
     #[test]
