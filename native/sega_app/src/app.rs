@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
-use egui::containers::menu::{MenuButton, MenuConfig};
-use egui::PopupCloseBehavior;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
@@ -22,6 +20,8 @@ const MAX_ROM_SIZE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ROM_SIZE_BYTES_U64: u64 = 16 * 1024 * 1024;
 const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
+const RECENT_ROM_LIST_FILE: &str = "recent_roms.txt";
+const MAX_RECENT_ROMS: usize = 10;
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
@@ -29,6 +29,9 @@ pub struct SegaApp {
     region: String,
     last_rom_directory: Option<PathBuf>,
     rom_dialog_requested: bool,
+    recent_roms: Vec<PathBuf>,
+    recent_rom_requested: Option<PathBuf>,
+    show_status: bool,
     aspect_ratio: AspectRatioMode,
     audio_enabled: bool,
     audio_backend: AudioBackend,
@@ -49,6 +52,9 @@ impl Default for SegaApp {
             region: String::new(),
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
+            recent_roms: load_recent_roms(),
+            recent_rom_requested: None,
+            show_status: true,
             aspect_ratio: AspectRatioMode::FourThree,
             audio_enabled: true,
             audio_backend: AudioBackend::Wasapi,
@@ -212,6 +218,9 @@ impl SegaApp {
             render_header(
                 ui,
                 &mut self.rom_dialog_requested,
+                &self.recent_roms,
+                &mut self.recent_rom_requested,
+                &mut self.show_status,
                 &mut self.region,
                 &mut self.aspect_ratio,
                 &mut self.audio_enabled,
@@ -227,9 +236,16 @@ impl SegaApp {
                     .and_then(|state| state.as_ref().err())
                     .map(String::as_str),
             );
-            viewport_rect = render_video_viewport(ui, self.aspect_ratio);
-            render_footer(ui, &self.native_viewport, &self.rom_path);
+            viewport_rect = render_video_viewport(ui, self.aspect_ratio, self.show_status);
+            if self.show_status {
+                render_footer(ui, &self.native_viewport, &self.rom_path);
+            }
         });
+
+        if let Some(path) = self.recent_rom_requested.take() {
+            self.rom_path = path.to_string_lossy().into_owned();
+            self.load_rom_from_path();
+        }
 
         if let Some(command) = command {
             self.apply_command(command);
@@ -298,6 +314,7 @@ impl SegaApp {
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
                 if self.audio_enabled {
@@ -441,20 +458,40 @@ impl SegaApp {
         map_sdl3_gamepad(reading.state)
     }
 
+    /// Poll gameplay input and dispatch edge-triggered emulator shortcuts.
+    ///
+    /// F5 starts, F6 pauses, F7 stops, F8 resets, F9 advances one frame and F11
+    /// toggles borderless fullscreen. Commands remain coarse-grained UI requests.
     fn update_keyboard_input(&mut self, context: &egui::Context) {
-        let (keyboard_buttons, keyboard_pause) = context.input(|input| {
-            (
-                ControllerButtons {
-                    up: input.key_down(egui::Key::ArrowUp),
-                    down: input.key_down(egui::Key::ArrowDown),
-                    left: input.key_down(egui::Key::ArrowLeft),
-                    right: input.key_down(egui::Key::ArrowRight),
-                    button_1: input.key_down(egui::Key::Z),
-                    button_2: input.key_down(egui::Key::X),
-                },
-                input.key_down(egui::Key::P),
-            )
-        });
+        let (keyboard_buttons, keyboard_pause, shortcut, toggle_fullscreen) =
+            context.input(|input| {
+                let shortcut = if input.key_pressed(egui::Key::F5) {
+                    Some(UiCommand::Start)
+                } else if input.key_pressed(egui::Key::F6) {
+                    Some(UiCommand::Pause)
+                } else if input.key_pressed(egui::Key::F7) {
+                    Some(UiCommand::Stop)
+                } else if input.key_pressed(egui::Key::F8) {
+                    Some(UiCommand::Reset)
+                } else if input.key_pressed(egui::Key::F9) {
+                    Some(UiCommand::StepFrame)
+                } else {
+                    None
+                };
+                (
+                    ControllerButtons {
+                        up: input.key_down(egui::Key::ArrowUp),
+                        down: input.key_down(egui::Key::ArrowDown),
+                        left: input.key_down(egui::Key::ArrowLeft),
+                        right: input.key_down(egui::Key::ArrowRight),
+                        button_1: input.key_down(egui::Key::Z),
+                        button_2: input.key_down(egui::Key::X),
+                    },
+                    input.key_down(egui::Key::P),
+                    shortcut,
+                    input.key_pressed(egui::Key::F11),
+                )
+            });
         let (gamepad_buttons, gamepad_pause) = self.update_gamepad_input();
         let buttons = ControllerButtons {
             up: keyboard_buttons.up || gamepad_buttons.up,
@@ -474,6 +511,14 @@ impl SegaApp {
             }
         }
         self.pause_key_down = pause_down;
+
+        if let Some(command) = shortcut {
+            self.apply_command(command);
+        }
+        if toggle_fullscreen {
+            let fullscreen = context.input(|input| !input.viewport().fullscreen.unwrap_or(false));
+            context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+        }
     }
 
     fn update_native_viewport(
@@ -764,6 +809,44 @@ fn load_last_rom_directory() -> Option<PathBuf> {
     directory.is_dir().then_some(directory)
 }
 
+/// Restore recent ROM paths, retaining existing files and the newest ten entries.
+fn load_recent_roms() -> Vec<PathBuf> {
+    let Some(directory) = rom_settings_directory() else {
+        return Vec::new();
+    };
+    let content = fs::read_to_string(directory.join(RECENT_ROM_LIST_FILE)).unwrap_or_default();
+    content
+        .lines()
+        .map(PathBuf::from)
+        .filter(|path| path.is_file())
+        .take(MAX_RECENT_ROMS)
+        .collect()
+}
+
+/// Persist recent ROM paths without copying or modifying ROM data.
+fn save_recent_roms(recent_roms: &[PathBuf]) -> std::io::Result<()> {
+    let directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&directory)?;
+    let contents = recent_roms
+        .iter()
+        .map(|path| path.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(directory.join(RECENT_ROM_LIST_FILE), contents)
+}
+
+/// Move a successfully loaded ROM to the front of the bounded recent-file list.
+fn remember_recent_rom(recent_roms: &mut Vec<PathBuf>, path: &Path) {
+    let normalized = path.to_string_lossy();
+    recent_roms.retain(|recent| !recent.to_string_lossy().eq_ignore_ascii_case(&normalized));
+    recent_roms.insert(0, path.to_path_buf());
+    recent_roms.truncate(MAX_RECENT_ROMS);
+    if let Err(error) = save_recent_roms(recent_roms) {
+        eprintln!("Não foi possível salvar a lista de ROMs recentes: {error}");
+    }
+}
+
 /// Persist only the last selected directory; the ROM itself is not copied.
 fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     let settings_directory = rom_settings_directory()
@@ -775,10 +858,13 @@ fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     )
 }
 
-/// Render the four compact top-level menus; no configuration panel consumes game area.
+/// Render the minimal immersive menu bar; configuration stays outside the game viewport.
 fn render_header(
     ui: &mut egui::Ui,
     browse_requested: &mut bool,
+    recent_roms: &[PathBuf],
+    recent_rom_requested: &mut Option<PathBuf>,
+    show_status: &mut bool,
     region: &mut String,
     aspect_ratio: &mut AspectRatioMode,
     audio_enabled: &mut bool,
@@ -792,14 +878,30 @@ fn render_header(
     input_error: Option<&str>,
 ) {
     ui.horizontal(|ui| {
-        ui.heading("SEGA");
-        ui.label("Master System");
-        ui.separator();
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.small("SEGA · SMS");
 
         ui.menu_button("Arquivo", |ui| {
-            if ui.button("Abrir ROM...").clicked() {
+            if ui.button("Abrir ROM…").clicked() {
                 *browse_requested = true;
+                ui.close();
             }
+            ui.menu_button("Recentes", |ui| {
+                if recent_roms.is_empty() {
+                    ui.label("Nenhuma ROM recente");
+                } else {
+                    for path in recent_roms {
+                        let name = path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or("ROM sem nome");
+                        if ui.button(name).on_hover_text(path.display().to_string()).clicked() {
+                            *recent_rom_requested = Some(path.clone());
+                            ui.close();
+                        }
+                    }
+                }
+            });
             ui.separator();
             add_machine_button(
                 ui,
@@ -815,15 +917,12 @@ fn render_header(
         });
 
         ui.menu_button("Vídeo", |ui| {
-            ui.label("Proporção da imagem");
-            ui.radio_value(aspect_ratio, AspectRatioMode::FourThree, "Original do console (4:3)");
+            ui.radio_value(aspect_ratio, AspectRatioMode::FourThree, "Original (4:3)");
             ui.radio_value(aspect_ratio, AspectRatioMode::OneToOne, "1:1");
             ui.radio_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
         });
 
-        MenuButton::new("Som")
-            .config(MenuConfig::new().close_behavior(PopupCloseBehavior::CloseOnClickOutside))
-            .ui(ui, |ui| {
+        ui.menu_button("Som", |ui| {
             if ui.checkbox(audio_enabled, "Áudio ativo").changed() {
                 *audio_command = Some(if *audio_enabled {
                     AudioCommand::Configure
@@ -832,38 +931,47 @@ fn render_header(
                 });
             }
             ui.separator();
-            ui.label("Dispositivo de saída");
+            ui.label("Saída");
             if ui.radio_value(audio_backend, AudioBackend::Wasapi, "WASAPI Shared").changed()
                 || ui.radio_value(audio_backend, AudioBackend::XAudio2, "XAudio2").changed()
             {
                 *audio_enabled = true;
                 *audio_command = Some(AudioCommand::Configure);
             }
-            ui.separator();
-            if ui.add(egui::Slider::new(audio_volume, 0..=100).text("Volume")).changed()
+            if ui
+                .add(egui::Slider::new(audio_volume, 0..=100).text("Volume"))
+                .changed()
                 && *audio_enabled
             {
                 *audio_command = Some(AudioCommand::SetVolume(*audio_volume));
             }
         });
 
-        MenuButton::new("Opções")
-            .config(MenuConfig::new().close_behavior(PopupCloseBehavior::CloseOnClickOutside))
-            .ui(ui, |ui| {
+        ui.menu_button("Opções", |ui| {
+            ui.checkbox(show_status, "Exibir status no rodapé");
+            let mut fullscreen = ui
+                .ctx()
+                .input(|input| input.viewport().fullscreen.unwrap_or(false));
+            if ui.checkbox(&mut fullscreen, "Tela cheia (F11)").changed() {
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+            }
+            ui.separator();
             ui.menu_button("Região / padrão de vídeo", |ui| {
                 ui.radio_value(region, "usa".to_owned(), "USA / NTSC");
                 ui.radio_value(region, "brazil".to_owned(), "Brasil / PAL-M");
                 ui.radio_value(region, "europe".to_owned(), "Europa / PAL");
                 ui.radio_value(region, "japan".to_owned(), "Japão / NTSC");
             });
-            ui.separator();
             ui.menu_button("Execução", |ui| {
                 render_machine_controls(ui, viewport, machine_command);
             });
             ui.menu_button("Controles", |ui| {
                 render_input_controls(ui, devices, selected_gamepad, input_error);
                 ui.separator();
-                ui.small("Teclado: setas / Z / X · P solicita NMI");
+                ui.small("Jogo: setas / Z / X · P solicita NMI");
+                ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
+                ui.small("F8 reset · F9 quadro · F11 tela cheia");
                 ui.small("Gamepad: direcional / analógico · A / B · Start");
             });
             ui.menu_button("Diagnóstico", |ui| {
@@ -1063,12 +1171,18 @@ fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     }
 }
 
-fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> egui::Rect {
-    ui.add_space(3.0);
+fn render_video_viewport(
+    ui: &mut egui::Ui,
+    aspect_ratio: AspectRatioMode,
+    show_status: bool,
+) -> egui::Rect {
+    ui.add_space(1.0);
 
-    // Reserve only the compact status line; the remaining central area belongs to the game.
+    // Use all remaining height unless the compact status footer is enabled.
     let available = ui.available_size().max(egui::Vec2::splat(1.0));
-    let viewport_available = egui::vec2(available.x, (available.y - 25.0).max(1.0));
+    let reserved_footer_height = if show_status { 25.0 } else { 0.0 };
+    let viewport_available =
+        egui::vec2(available.x, (available.y - reserved_footer_height).max(1.0));
     let viewport_size = fit_viewport_size(viewport_available, aspect_ratio.value());
     let horizontal_padding = ((available.x - viewport_size.x) * 0.5).max(0.0);
 
