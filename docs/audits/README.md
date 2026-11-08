@@ -6,6 +6,7 @@ Esta pasta registra investigações delimitadas, com evidências, hipóteses, re
 
 - **Estado geral e integração:** `master-system-codebase-audit.md`, `project-state-2026-11-05.md`, `pr-integration-audit-2026-11-06.md`.
 - **Runtime SMS e hosts:** `sms-runtime-functional-baseline-2026-11-06.md`, auditorias D3D12, áudio/vídeo e mailbox.
+- **Áudio SMS:** [investigação de qualidade sonora, descompasso e distorção — 2026-11-08](sms-audio-quality-investigation-2026-11-08.md).
 - **VDP e raster:** investigações de latches, H-counter, R0/R8, VBlank, raster e acesso à VRAM.
 - **Compatibilidade de cartuchos/boot:** auditorias de mapper, BIOS, região e investigações por jogo.
 - **Z80:** auditorias E3/E4/E7, prefixos, interrupções, flags, barramento e estados indexados.
