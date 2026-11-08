@@ -1412,8 +1412,28 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
         NativeXAudio2Output::resume(self).map_err(|error| error.to_string())
     }
 
-    fn metrics(&self) -> (u64, u64) {
-        (self.underrun_count(), self.dropped_block_count())
+    fn metrics(&self) -> sega_audio_runtime::AudioOutputMetrics {
+        #[cfg(windows)]
+        let queue = self
+            .producer
+            .as_ref()
+            .map(PcmFrameProducer::metrics)
+            .unwrap_or_default();
+        #[cfg(not(windows))]
+        let queue = PcmFrameQueueMetrics::default();
+
+        sega_audio_runtime::AudioOutputMetrics {
+            sample_rate_hz: self.sample_rate,
+            queue_capacity_frames: queue.capacity_frames as u64,
+            queue_queued_frames: queue.queued_frames as u64,
+            queue_high_water_frames: queue.high_water_frames as u64,
+            accepted_frames: queue.accepted_frames,
+            consumed_frames: queue.consumed_frames,
+            dropped_frames: queue.dropped_frames,
+            underrun_frames: queue.underrun_frames,
+            underrun_events: queue.underrun_events,
+            dropped_blocks: self.dropped_block_count(),
+        }
     }
 
     fn close(&mut self) {
