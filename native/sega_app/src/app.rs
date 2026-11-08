@@ -396,7 +396,7 @@ impl SegaApp {
     /// Render menu controls inside the dedicated native popup viewport.
     fn render_menu_popup_contents(
         &mut self,
-        menu_ui: &egui::Context,
+        menu_ui: &mut egui::Ui,
         root_context: &egui::Context,
         menu: TopLevelMenu,
         actions: &mut MenuPopupActions,
@@ -471,7 +471,7 @@ impl SegaApp {
                                     self.update_keyboard_input(menu_ui.ctx(), root_context);
                                     actions.input_updated = true;
                                 }
-                            });
+                            })
                         });
                 measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
             });
