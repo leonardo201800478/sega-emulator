@@ -1104,8 +1104,7 @@ mod tests {
         worker
             .configure_audio_output(move || -> Result<Box<dyn super::AudioSession>, String> {
                 let sink = ControlSink(Arc::clone(&factory_events));
-                let session =
-                    NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink)?;
+                let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink)?;
                 Ok(Box::new(session))
             })
             .unwrap();
