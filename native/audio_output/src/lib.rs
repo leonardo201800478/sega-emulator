@@ -54,7 +54,18 @@ impl std::fmt::Display for AudioOutputError {
 
 impl std::error::Error for AudioOutputError {}
 
-/// Expand mono signed PCM16 to interleaved stereo, duplicating each sample.
+/// Convert mono PCM16 bytes into a producer-side batch of stereo frames.
+/// The allocation is confined to the producer path, never the WASAPI consumer.
+fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
+    let mut frames = Vec::with_capacity(pcm.len() / 2);
+    for sample in pcm.as_chunks::<2>().0 {
+        let value = i16::from_le_bytes([sample[0], sample[1]]);
+        frames.push(mono_sample_to_stereo_frame(value, balance));
+    }
+    frames
+}
+
+/// Expand mono signed PCM16 to interleaved stereo bytes for the XAudio2 path.
 /// The emulated PSG remains mono; channel routing is handled only at the output boundary.
 fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
@@ -70,7 +81,7 @@ fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
 pub struct NativeWasapiOutput {
     #[cfg(windows)]
-    producer: Option<rtrb::Producer<Vec<u8>>>,
+    producer: Option<PcmFrameProducer>,
     #[cfg(windows)]
     worker: Option<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
@@ -111,7 +122,9 @@ impl NativeWasapiOutput {
 
         #[cfg(windows)]
         {
-            let (producer, consumer) = rtrb::RingBuffer::<Vec<u8>>::new(queue_blocks);
+            let capacity_frames = (buffer_size as usize) * queue_blocks;
+            let (producer, consumer) = pcm_frame_queue(capacity_frames)
+                .map_err(|error| AudioOutputError::Device(error.to_string()))?;
             let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
@@ -176,7 +189,6 @@ impl NativeWasapiOutput {
         if pcm.is_empty() {
             return Ok(());
         }
-        let pcm = mono_pcm16_to_stereo(&pcm, self.balance);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
@@ -186,20 +198,17 @@ impl NativeWasapiOutput {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            if producer.is_abandoned() {
-                return Err(AudioOutputError::WorkerStopped);
+            let frames = mono_pcm16_to_stereo_frames(&pcm, self.balance);
+            let report = producer
+                .push_frames(&frames)
+                .map_err(|_| AudioOutputError::WorkerStopped)?;
+            if report.dropped_frames > 0 {
+                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
             }
-            match producer.push(pcm) {
-                Ok(()) => Ok(()),
-                Err(rtrb::PushError::Full(_block)) => {
-                    self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
-                    Ok(())
-                }
-            }
+            Ok(())
         }
         #[cfg(not(windows))]
         {
-            let _ = pcm;
             Err(AudioOutputError::Device(
                 "native WASAPI output is available only on Windows".to_owned(),
             ))
@@ -267,7 +276,7 @@ impl Drop for ComApartment {
 
 #[cfg(windows)]
 fn run_wasapi_worker(
-    mut consumer: rtrb::Consumer<Vec<u8>>,
+    mut consumer: PcmFrameConsumer,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
@@ -299,6 +308,9 @@ fn run_wasapi_worker(
                 .map_err(|error| error.to_string())?;
             let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 2, None);
             let block_align = format.get_blockalign() as usize;
+            if block_align != 4 {
+                return Err("WASAPI format must use stereo PCM16 (4 bytes per frame)".to_owned());
+            }
             let (default_period, _minimum_period) = audio_client
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
@@ -366,8 +378,20 @@ fn run_wasapi_worker(
             }
         };
 
-        let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
-        pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
+        let staging_bytes = match initial_buffer_frames.checked_mul(block_align) {
+            Some(bytes) => bytes,
+            None => {
+                if first_start {
+                    let _ = ready.send(Err("WASAPI staging size overflow".to_owned()));
+                    return;
+                }
+                thread::sleep(Duration::from_millis(250));
+                continue;
+            }
+        };
+        let mut scratch_frames = vec![[0_i16; 2]; initial_buffer_frames];
+        let mut pending = VecDeque::<u8>::with_capacity(staging_bytes);
+        pending.resize(staging_bytes, 0);
         if render_client
             .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
             .is_err()
@@ -379,6 +403,7 @@ fn run_wasapi_worker(
             thread::sleep(Duration::from_millis(250));
             continue;
         }
+        pending.clear();
         if let Err(error) = audio_client.start_stream() {
             if first_start {
                 let _ = ready.send(Err(error.to_string()));
@@ -409,28 +434,32 @@ fn run_wasapi_worker(
             if frames == 0 {
                 continue;
             }
-            let required = frames.saturating_mul(block_align);
-            while pending.len() < required {
-                match consumer.pop() {
-                    Ok(block) => pending.extend(block),
-                    Err(rtrb::PopError::Empty) => {
-                        if consumer.is_abandoned() {
-                            disconnected = true;
-                            break;
-                        }
-                        pending.resize(required, 0);
-                        underruns.fetch_add(1, Ordering::Relaxed);
-                        break;
-                    }
-                }
+            if frames > scratch_frames.len() {
+                // The endpoint reported a period larger than its initialized
+                // buffer; leave this stream and let the recovery path reopen it.
+                break;
             }
-            if disconnected || shutdown.load(Ordering::Acquire) {
+            let report = consumer.read_frames(&mut scratch_frames[..frames]);
+            if report.silence_frames > 0 {
+                underruns.fetch_add(1, Ordering::Relaxed);
+            }
+
+            pending.clear();
+            for [left, right] in &scratch_frames[..frames] {
+                pending.extend(left.to_le_bytes());
+                pending.extend(right.to_le_bytes());
+            }
+            if pending.len() != frames.saturating_mul(block_align) {
                 break;
             }
             if render_client
                 .write_to_device_from_deque(frames, &mut pending, None)
                 .is_err()
             {
+                break;
+            }
+            if report.producer_closed {
+                disconnected = true;
                 break;
             }
         }
@@ -845,6 +874,19 @@ mod tests {
         assert_eq!(select_shared_period(512, 49, 50, 48), None);
         assert_eq!(select_shared_period(100, 0, 448, 4), None);
         assert_eq!(select_shared_period(100, 48, 448, 0), None);
+    }
+
+    #[test]
+    fn wasapi_mono_conversion_produces_stereo_frames_and_preserves_extremes() {
+        let mono = [0x00, 0x80, 0xff, 0x7f, 0x00, 0x00];
+        assert_eq!(
+            mono_pcm16_to_stereo_frames(&mono, 0),
+            vec![[i16::MIN, i16::MIN], [i16::MAX, i16::MAX], [0, 0]]
+        );
+        assert_eq!(
+            mono_pcm16_to_stereo_frames(&mono, 100),
+            vec![[0, i16::MIN], [0, i16::MAX], [0, 0]]
+        );
     }
 
     #[test]
