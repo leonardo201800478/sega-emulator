@@ -950,12 +950,14 @@ fn render_audio_controls(
     if let Some(worker) = viewport.worker.as_ref() {
         let metrics = worker.audio_output_metrics();
         if let Some(backlog_micros) = metrics.queue_duration_micros() {
-            let backlog_ms = backlog_micros as f64 / 1_000.0;
+            let backlog_ms = backlog_micros / 1_000;
+            let backlog_fraction = (backlog_micros % 1_000) / 10;
             ui.small(format!(
-                "FIFO de áudio: {} / {} frames · backlog estimado {:.2} ms · pico {} frames",
+                "FIFO de áudio: {} / {} frames · backlog estimado {}.{:02} ms · pico {} frames",
                 metrics.queue_queued_frames,
                 metrics.queue_capacity_frames,
                 backlog_ms,
+                backlog_fraction,
                 metrics.queue_high_water_frames
             ));
             ui.small(format!(
