@@ -3,6 +3,23 @@
 mod pcm_convert;
 mod pcm_fifo;
 
+fn record_audio_underrun(
+    underruns: &AtomicU64,
+    backend: &'static str,
+    inserted_silence_frames: u64,
+) {
+    let count = underruns.fetch_add(1, Ordering::Relaxed) + 1;
+    if count.is_power_of_two() {
+        sega_observability::tracing::warn!(
+            target: "sega::audio::backend",
+            backend,
+            underrun_events = count,
+            inserted_silence_frames,
+            "audio output underrun detected"
+        );
+    }
+}
+
 fn audio_output_metrics_from_queue(
     sample_rate_hz: u32,
     queue: PcmFrameQueueMetrics,
@@ -360,6 +377,15 @@ impl NativeWasapiOutput {
         queue_blocks: usize,
         balance: i8,
     ) -> Result<Self, AudioOutputError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            balance,
+            "native audio backend initialization requested"
+        );
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
@@ -405,7 +431,17 @@ impl NativeWasapiOutput {
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => Ok(Self {
+                Ok(Ok(())) => {
+                    sega_observability::tracing::info!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        sample_rate,
+                        buffer_size,
+                        queue_blocks,
+                        balance,
+                        "WASAPI render endpoint initialized"
+                    );
+                    Ok(Self {
                     producer: Some(producer),
                     worker: Some(worker),
                     shutdown,
@@ -415,14 +451,27 @@ impl NativeWasapiOutput {
                     buffer_size,
                     balance,
                     control,
-                }),
+                    })
+                },
                 Ok(Err(message)) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %message,
+                        "WASAPI initialization failed"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI initialization timed out"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
@@ -467,7 +516,20 @@ impl NativeWasapiOutput {
             let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
             if dropped_frames > 0 {
-                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                let dropped_blocks = self.dropped_blocks.fetch_add(1, Ordering::Relaxed) + 1;
+                if dropped_blocks.is_power_of_two() {
+                    let metrics = producer.metrics();
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        dropped_frames,
+                        dropped_blocks,
+                        queued_frames = metrics.queued_frames,
+                        capacity_frames = metrics.capacity_frames,
+                        high_water_mark_frames = metrics.high_water_mark_frames,
+                        "WASAPI producer queue saturated; oldest frames discarded"
+                    );
+                }
             }
             Ok(())
         }
@@ -783,7 +845,11 @@ fn run_wasapi_worker(
                 let prebuffer = &mut scratch_frames[..prebuffer_frames];
                 let report = consumer.read_frames(prebuffer);
                 if report.silence_frames > 0 {
-                    underruns.fetch_add(1, Ordering::Relaxed);
+                    record_audio_underrun(
+                        &underruns,
+                        "WASAPI",
+                        report.silence_frames as u64,
+                    );
                 }
                 pending.clear();
                 for [left, right] in prebuffer.iter() {
@@ -834,7 +900,11 @@ fn run_wasapi_worker(
             }
             let report = consumer.read_frames(&mut scratch_frames[..frames]);
             if report.silence_frames > 0 {
-                underruns.fetch_add(1, Ordering::Relaxed);
+                record_audio_underrun(
+                    &underruns,
+                    "WASAPI",
+                    report.silence_frames as u64,
+                );
             }
 
             pending.clear();
