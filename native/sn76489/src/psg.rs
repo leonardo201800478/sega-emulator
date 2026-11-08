@@ -370,12 +370,21 @@ impl Sn76489Core {
     }
 
     pub fn drain_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        let available_samples = self.pending_samples.len();
         let count = max_samples
-            .unwrap_or(self.pending_samples.len())
-            .min(self.pending_samples.len());
-        (0..count)
+            .unwrap_or(available_samples)
+            .min(available_samples);
+        let samples = (0..count)
             .filter_map(|_| self.pending_samples.pop_front())
-            .collect()
+            .collect::<Vec<_>>();
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            available_samples,
+            drained_samples = samples.len(),
+            remaining_samples = self.pending_samples.len(),
+            "SN76489 sample queue drained"
+        );
+        samples
     }
 
     pub fn render(&mut self, sample_count: usize) -> Vec<f64> {
