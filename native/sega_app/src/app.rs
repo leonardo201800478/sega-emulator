@@ -1237,16 +1237,13 @@ fn top_level_menu_button(
     let response = ui.button(label);
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
-    let switch_by_hover = state.active_menu.is_some()
-        && *state.active_menu != Some(menu)
-        && response.hovered();
+    let switch_by_hover =
+        state.active_menu.is_some() && *state.active_menu != Some(menu) && response.hovered();
     if response.clicked() || switch_by_hover {
         let previous = *state.active_menu;
         state.diagnostics.record(
             "menu.button.activated",
-            format!(
-                "label={label} menu={menu:?} previous={previous:?} by_hover={switch_by_hover}"
-            ),
+            format!("label={label} menu={menu:?} previous={previous:?} by_hover={switch_by_hover}"),
         );
         if response.clicked() && previous == Some(menu) {
             *state.active_menu = None;
@@ -1849,11 +1846,7 @@ mod tests {
     fn stale_popup_close_does_not_clear_newly_selected_menu() {
         let mut active_menu = Some(super::TopLevelMenu::Video);
 
-        super::close_menu_if_current(
-            &mut active_menu,
-            super::TopLevelMenu::File,
-            true,
-        );
+        super::close_menu_if_current(&mut active_menu, super::TopLevelMenu::File, true);
 
         assert_eq!(active_menu, Some(super::TopLevelMenu::Video));
     }
@@ -1862,11 +1855,7 @@ mod tests {
     fn current_popup_close_clears_active_menu() {
         let mut active_menu = Some(super::TopLevelMenu::Audio);
 
-        super::close_menu_if_current(
-            &mut active_menu,
-            super::TopLevelMenu::Audio,
-            true,
-        );
+        super::close_menu_if_current(&mut active_menu, super::TopLevelMenu::Audio, true);
 
         assert_eq!(active_menu, None);
     }
@@ -1875,11 +1864,7 @@ mod tests {
     fn popup_remains_open_when_no_close_was_requested() {
         let mut active_menu = Some(super::TopLevelMenu::Options);
 
-        super::close_menu_if_current(
-            &mut active_menu,
-            super::TopLevelMenu::Options,
-            false,
-        );
+        super::close_menu_if_current(&mut active_menu, super::TopLevelMenu::Options, false);
 
         assert_eq!(active_menu, Some(super::TopLevelMenu::Options));
     }
