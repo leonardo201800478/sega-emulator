@@ -157,7 +157,7 @@ impl LoggingHandle {
             session: &'a SessionMetadata,
             logging: DiagnosticConfig<'a>,
             dropped_log_lines: usize,
-            recent_events: Vec<String>,
+            recent_events: Vec<serde_json::Value>,
         }
 
         let config = self
@@ -165,7 +165,13 @@ impl LoggingHandle {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        let recent_events = self.recent_events();
+        let recent_events = self
+            .recent_events()
+            .into_iter()
+            .map(|line| {
+                serde_json::from_str(&line).unwrap_or(serde_json::Value::String(line))
+            })
+            .collect();
         let snapshot = Snapshot {
             session: &self.session,
             logging: DiagnosticConfig {
