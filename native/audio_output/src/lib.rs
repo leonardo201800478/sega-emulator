@@ -473,16 +473,19 @@ fn run_wasapi_worker(
 }
 
 #[cfg(windows)]
+use std::ffi::c_void;
+#[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
-    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER,
-    XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
+    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback,
+    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE,
+    XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
 #[cfg(windows)]
 use windows::Win32::System::SystemInformation::NTDDI_WIN10_RS5;
 #[cfg(windows)]
-use windows::core::PCWSTR;
+use windows::core::{HRESULT, PCWSTR};
 
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
@@ -661,6 +664,28 @@ impl Drop for NativeXAudio2Output {
 }
 
 #[cfg(windows)]
+struct XAudio2VoiceCallbackState {
+    completed_buffers: Arc<AtomicU64>,
+    voice_error: Arc<AtomicBool>,
+}
+
+#[cfg(windows)]
+#[allow(non_snake_case)]
+impl IXAudio2VoiceCallback_Impl for XAudio2VoiceCallbackState {
+    fn OnVoiceProcessingPassStart(&self, _bytesrequired: u32) {}
+    fn OnVoiceProcessingPassEnd(&self) {}
+    fn OnStreamEnd(&self) {}
+    fn OnBufferStart(&self, _pbuffercontext: *mut c_void) {}
+    fn OnBufferEnd(&self, _pbuffercontext: *mut c_void) {
+        self.completed_buffers.fetch_add(1, Ordering::Release);
+    }
+    fn OnLoopEnd(&self, _pbuffercontext: *mut c_void) {}
+    fn OnVoiceError(&self, _pbuffercontext: *mut c_void, _error: HRESULT) {
+        self.voice_error.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(windows)]
 fn run_xaudio2_worker(
     mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
@@ -674,6 +699,17 @@ fn run_xaudio2_worker(
         return;
     }
     let _com_apartment = ComApartment;
+
+    let completed_buffers = Arc::new(AtomicU64::new(0));
+    let voice_error = Arc::new(AtomicBool::new(false));
+    let callback_state = XAudio2VoiceCallbackState {
+        completed_buffers: Arc::clone(&completed_buffers),
+        voice_error: Arc::clone(&voice_error),
+    };
+    // `new` builds the scoped COM interface adapter for this classic XAudio2
+    // callback. Keep both the adapter and its borrowed state alive until after
+    // DestroyVoice has completed.
+    let callback = IXAudio2VoiceCallback::new(&callback_state);
 
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
@@ -722,7 +758,7 @@ fn run_xaudio2_worker(
                     &format,
                     0,
                     2.0,
-                    None::<&IXAudio2VoiceCallback>,
+                    Some(&*callback),
                     None,
                     None,
                 )
@@ -749,19 +785,23 @@ fn run_xaudio2_worker(
     let _ = ready.send(Ok(()));
 
     let mut submitted = VecDeque::<Vec<u8>>::with_capacity(max_queued_buffers);
+    let mut reclaimed_completions = 0_u64;
     let mut was_underrun = false;
     loop {
-        if shutdown.load(Ordering::Acquire) {
+        if shutdown.load(Ordering::Acquire) || voice_error.load(Ordering::Acquire) {
             break;
         }
 
-        let mut state = XAUDIO2_VOICE_STATE::default();
-        unsafe {
-            source_voice.GetState(&mut state, 0);
-        }
-        while submitted.len() > state.BuffersQueued as usize {
+        // OnBufferEnd is the documented lifetime signal for pAudioData. The
+        // callback only increments an atomic counter; this worker alone frees
+        // the corresponding Vec allocations.
+        let completed = completed_buffers.load(Ordering::Acquire);
+        let completed_delta = completed.wrapping_sub(reclaimed_completions);
+        let reclaim_count = completed_delta.min(submitted.len() as u64);
+        for _ in 0..reclaim_count {
             submitted.pop_front();
         }
+        reclaimed_completions = reclaimed_completions.wrapping_add(reclaim_count);
 
         let mut submitted_new = false;
         while submitted.len() < max_queued_buffers {
@@ -798,11 +838,16 @@ fn run_xaudio2_worker(
     }
 
     unsafe {
+        // Keep callback and all submitted audio allocations alive through voice
+        // destruction. Flush callbacks may complete out of submission order;
+        // no per-buffer reclamation is attempted during shutdown.
         let _ = source_voice.Stop(0, 0);
         let _ = source_voice.FlushSourceBuffers();
         source_voice.DestroyVoice();
         engine.StopEngine();
     }
+    drop(submitted);
+    drop(callback);
 }
 // The output crate owns these concrete sink types, so it implements the
 // runtime's sink contract here without introducing a dependency cycle.
