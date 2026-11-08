@@ -148,6 +148,16 @@ enum UiCommand {
     CloseMachine,
 }
 
+#[derive(Default)]
+struct MenuPopupActions {
+    command: Option<UiCommand>,
+    audio_command: Option<AudioCommand>,
+    fullscreen_requested: Option<bool>,
+    exit_requested: bool,
+    input_updated: bool,
+    root_fullscreen: bool,
+}
+
 /// Owns the UI-thread HWND child, SMS worker and D3D12 presentation session.
 ///
 /// Shutdown order is deliberate: stop the machine, detach its borrowed mailbox,
@@ -261,7 +271,8 @@ impl SegaApp {
         let root_fullscreen = ui
             .ctx()
             .input(|input| input.viewport().fullscreen.unwrap_or(false));
-        let mut header_state = HeaderState {
+        {
+            let mut header_state = HeaderState {
             browse_requested: &mut self.rom_dialog_requested,
             recent_roms: &self.recent_roms,
             recent_rom_requested: &mut self.recent_rom_requested,
@@ -288,8 +299,8 @@ impl SegaApp {
             fullscreen_requested: &mut fullscreen_requested,
             exit_requested: &mut exit_requested,
         };
-        render_header(ui, &mut header_state);
-        drop(header_state);
+            render_header(ui, &mut header_state);
+        }
 
         if let Some(path) = self.recent_rom_requested.take() {
             self.rom_path = path.to_string_lossy().into_owned();
@@ -332,88 +343,18 @@ impl SegaApp {
         );
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
-
-        let mut command = None;
-        let mut audio_command = None;
-        let mut fullscreen_requested = None;
-        let mut exit_requested = false;
+        let mut actions = MenuPopupActions {
+            root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
+            ..MenuPopupActions::default()
+        };
         let mut measured_size = popup_size;
-        let mut input_updated = false;
-        let root_fullscreen = context.input(|input| input.viewport().fullscreen.unwrap_or(false));
 
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
             |menu_ui, _class| {
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::popup(&menu_ui.style()))
-                    .show(menu_ui, |menu_ui| {
-                        let scroll = egui::ScrollArea::both().auto_shrink([false, false]).show(
-                            menu_ui,
-                            |menu_ui| {
-                                let inner = menu_ui.vertical(|menu_ui| {
-                                    menu_ui.horizontal(|menu_ui| {
-                                        menu_ui.strong(menu.title());
-                                        if menu_ui.small_button("×").clicked() {
-                                            self.active_menu = None;
-                                        }
-                                    });
-                                    menu_ui.separator();
-
-                                    let mut header_state = HeaderState {
-                                        browse_requested: &mut self.rom_dialog_requested,
-                                        recent_roms: &self.recent_roms,
-                                        recent_rom_requested: &mut self.recent_rom_requested,
-                                        footer_mode: &mut self.footer_mode,
-                                        region: &mut self.region,
-                                        aspect_ratio: &mut self.aspect_ratio,
-                                        audio_enabled: &mut self.audio_enabled,
-                                        audio_backend: &mut self.audio_backend,
-                                        audio_volume: &mut self.audio_volume,
-                                        audio_command: &mut audio_command,
-                                        viewport: &self.native_viewport,
-                                        machine_command: &mut command,
-                                        devices: &self.input_devices,
-                                        selected_gamepad: &mut self.selected_gamepad,
-                                        input_error: self
-                                            .input_backend
-                                            .as_ref()
-                                            .and_then(|state| state.as_ref().err())
-                                            .map(String::as_str),
-                                        active_menu: &mut self.active_menu,
-                                        menu_anchor: &mut self.menu_anchor,
-                                        menu_popup_size: &mut self.menu_popup_size,
-                                        root_fullscreen,
-                                        fullscreen_requested: &mut fullscreen_requested,
-                                        exit_requested: &mut exit_requested,
-                                    };
-                                    render_menu_content(menu_ui, menu, &mut header_state);
-
-                                    let close_requested = menu_ui.input(|input| {
-                                        input.key_pressed(egui::Key::Escape)
-                                            || input.viewport().close_requested()
-                                    });
-                                    let action_selected = header_state.machine_command.is_some()
-                                        || *header_state.browse_requested
-                                        || header_state.recent_rom_requested.is_some()
-                                        || *header_state.exit_requested;
-                                    if close_requested || action_selected {
-                                        *header_state.active_menu = None;
-                                    }
-                                    drop(header_state);
-
-                                    if menu_ui
-                                        .input(|input| input.viewport().focused.unwrap_or(false))
-                                    {
-                                        self.update_keyboard_input(menu_ui.ctx(), context);
-                                        input_updated = true;
-                                    }
-                                });
-                                inner
-                            },
-                        );
-                        measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
-                    });
+                measured_size =
+                    self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
             },
         );
 
@@ -430,26 +371,110 @@ impl SegaApp {
             self.load_rom_from_path();
             self.active_menu = None;
         }
-        if let Some(command) = command {
+        if let Some(command) = actions.command {
             self.apply_command(command);
             self.active_menu = None;
         }
-        if let Some(audio_command) = audio_command {
+        if let Some(audio_command) = actions.audio_command {
             self.apply_audio_command(audio_command);
         }
-        if let Some(fullscreen) = fullscreen_requested {
+        if let Some(fullscreen) = actions.fullscreen_requested {
             context.send_viewport_cmd_to(
                 egui::ViewportId::ROOT,
                 egui::ViewportCommand::Fullscreen(fullscreen),
             );
         }
-        if exit_requested {
+        if actions.exit_requested {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
             self.active_menu = None;
         }
-        input_updated
+        actions.input_updated
+    }
+
+    /// Render menu controls inside the dedicated native popup viewport.
+    fn render_menu_popup_contents(
+        &mut self,
+        menu_ui: &egui::Context,
+        root_context: &egui::Context,
+        menu: TopLevelMenu,
+        actions: &mut MenuPopupActions,
+    ) -> egui::Vec2 {
+        let mut measured_size = egui::Vec2::ZERO;
+        egui::CentralPanel::default()
+            .frame(egui::Frame::popup(menu_ui.style()))
+            .show(menu_ui, |menu_ui| {
+                let scroll = egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .show(menu_ui, |menu_ui| {
+                        menu_ui.vertical(|menu_ui| {
+                            menu_ui.horizontal(|menu_ui| {
+                                menu_ui.strong(menu.title());
+                                if menu_ui.small_button("×").clicked() {
+                                    self.active_menu = None;
+                                }
+                            });
+                            menu_ui.separator();
+
+                            let (should_close, focused) = {
+                                let mut header_state = HeaderState {
+                                    browse_requested: &mut self.rom_dialog_requested,
+                                    recent_roms: &self.recent_roms,
+                                    recent_rom_requested: &mut self.recent_rom_requested,
+                                    footer_mode: &mut self.footer_mode,
+                                    region: &mut self.region,
+                                    aspect_ratio: &mut self.aspect_ratio,
+                                    audio_enabled: &mut self.audio_enabled,
+                                    audio_backend: &mut self.audio_backend,
+                                    audio_volume: &mut self.audio_volume,
+                                    audio_command: &mut actions.audio_command,
+                                    viewport: &self.native_viewport,
+                                    machine_command: &mut actions.command,
+                                    devices: &self.input_devices,
+                                    selected_gamepad: &mut self.selected_gamepad,
+                                    input_error: self
+                                        .input_backend
+                                        .as_ref()
+                                        .and_then(|state| state.as_ref().err())
+                                        .map(String::as_str),
+                                    active_menu: &mut self.active_menu,
+                                    menu_anchor: &mut self.menu_anchor,
+                                    menu_popup_size: &mut self.menu_popup_size,
+                                    root_fullscreen: actions.root_fullscreen,
+                                    fullscreen_requested: &mut actions.fullscreen_requested,
+                                    exit_requested: &mut actions.exit_requested,
+                                };
+                                render_menu_content(menu_ui, menu, &mut header_state);
+
+                                let close_requested = menu_ui.input(|input| {
+                                    input.key_pressed(egui::Key::Escape)
+                                        || input.viewport().close_requested()
+                                });
+                                let action_selected = header_state.machine_command.is_some()
+                                    || *header_state.browse_requested
+                                    || header_state.recent_rom_requested.is_some()
+                                    || *header_state.exit_requested;
+                                (
+                                    close_requested || action_selected,
+                                    menu_ui.input(|input| {
+                                        input.viewport().focused.unwrap_or(false)
+                                    }),
+                                )
+                            };
+
+                            if should_close {
+                                self.active_menu = None;
+                            }
+                            if focused {
+                                self.update_keyboard_input(menu_ui, root_context);
+                                actions.input_updated = true;
+                            }
+                        });
+                    });
+                measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
+            });
+        measured_size
     }
 
     /// Render the game viewport and optional status footer in the root window.
