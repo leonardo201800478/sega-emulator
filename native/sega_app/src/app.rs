@@ -714,14 +714,15 @@ impl eframe::App for SegaApp {
                 builder,
                 |overlay_ui, class| {
                     if class != egui::ViewportClass::EmbeddedWindow {
-                        egui::CentralPanel::default()
-                            .frame(egui::Frame::NONE)
-                            .show(overlay_ui, |overlay_ui| {
+                        egui::CentralPanel::default().frame(egui::Frame::NONE).show(
+                            overlay_ui,
+                            |overlay_ui| {
                                 overlay_ui.vertical(|overlay_ui| {
                                     self.render_header_controls(overlay_ui);
                                     self.update_keyboard_input(overlay_ui.ctx());
                                 });
-                            });
+                            },
+                        );
                     }
                     class
                 },
@@ -1427,10 +1428,7 @@ mod tests {
 
     #[test]
     fn overlay_viewport_matches_root_client_geometry_and_is_transparent() {
-        let bounds = egui::Rect::from_min_size(
-            egui::pos2(120.0, 80.0),
-            egui::vec2(1280.0, 720.0),
-        );
+        let bounds = egui::Rect::from_min_size(egui::pos2(120.0, 80.0), egui::vec2(1280.0, 720.0));
         let builder = super::overlay_viewport_builder(bounds);
 
         assert_eq!(builder.position, Some(bounds.min));
