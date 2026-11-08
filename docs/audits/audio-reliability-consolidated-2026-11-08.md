@@ -1,8 +1,8 @@
 # Auditoria consolidada — confiabilidade de áudio e estado da integração SMS
 
-**Data:** 2026-11-08  
-**Baseline auditada:** `main` — `9731b37098e7937fa92fffc15007a7c79aac4e4c`  
-**Escopo:** comparação das auditorias independentes (Claude, Gemini, DeepSeek e Manus), inspeção estática dos caminhos de áudio PCM/WASAPI/XAudio2, worker SMS, UI egui e documentação de roadmap/telemetria.  
+**Data:** 2026-11-08
+**Baseline auditada:** `main` — `9731b37098e7937fa92fffc15007a7c79aac4e4c`
+**Escopo:** comparação das auditorias independentes (Claude, Gemini, DeepSeek e Manus), inspeção estática dos caminhos de áudio PCM/WASAPI/XAudio2, worker SMS, UI egui e documentação de roadmap/telemetria.
 **Natureza:** revisão documental e estática. Não constitui correção, benchmark, teste de gameplay ou certificação de áudio.
 
 ## 1. Decisão executiva
