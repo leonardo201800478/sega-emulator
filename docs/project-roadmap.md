@@ -56,7 +56,9 @@ Os estados de CI e validação física devem ser reconsultados no HEAD exato ant
 - Z80 compartilhado como única CPU.
 - Um único MachineScheduler coordenando os componentes temporais.
 - Framebuffer real apresentado pelo host gráfico.
-- PCM não silencioso, com taxa/cadência/fase validadas, entregue ao backend nativo e validado em endpoint físico.\n- Métricas distinguem FIFO underflow, endpoint starvation, frames em voo, flush e reprodução efetiva.\n- Falhas terminais WASAPI/XAudio2 são propagadas; nenhuma escrita pode retornar sucesso sem consumidor ativo.
+- PCM não silencioso, com taxa/cadência/fase validadas, entregue ao backend nativo e validado em endpoint físico.
+- Métricas distinguem FIFO underflow, endpoint starvation, frames em voo, flush e reprodução efetiva.
+- Falhas terminais WASAPI/XAudio2 são propagadas; nenhuma escrita pode retornar sucesso sem consumidor ativo.
 - Input nativo validado com teclado e gamepad.
 - Start/pause/resume/stop/reset/close sem threads órfãs.
 - Execução contínua versus em blocos com equivalência demonstrada.
@@ -123,7 +125,10 @@ Toda validação deve indicar SHA, ambiente, comando, escopo e limitações. Tes
 - Não inferir integração a partir de PR aberta, branch, build local ou documentação.
 - Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
 
-## 9. Documentos operacionais\n\n- [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md)\n- [Auditoria consolidada das análises independentes](audits/audio-reliability-consolidated-2026-11-08.md)
+## 9. Documentos operacionais
+
+- [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md)
+- [Auditoria consolidada das análises independentes](audits/audio-reliability-consolidated-2026-11-08.md)
 
 - [Mapa de documentação](README.md)
 - [Status atual](project-status-2026-11-07.md)
