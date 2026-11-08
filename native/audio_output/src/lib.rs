@@ -988,6 +988,15 @@ impl NativeXAudio2Output {
         queue_blocks: usize,
         balance: i8,
     ) -> Result<Self, AudioOutputError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "XAudio2",
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            balance,
+            "native audio backend initialization requested"
+        );
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
@@ -1036,7 +1045,17 @@ impl NativeXAudio2Output {
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => Ok(Self {
+                Ok(Ok(())) => {
+                    sega_observability::tracing::info!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        sample_rate,
+                        buffer_size,
+                        queue_blocks,
+                        balance,
+                        "XAudio2 mastering and source voices initialized"
+                    );
+                    Ok(Self {
                     producer: Some(producer),
                     worker: Some(worker),
                     shutdown,
@@ -1047,14 +1066,27 @@ impl NativeXAudio2Output {
                     buffer_size,
                     balance,
                     control,
-                }),
+                    })
+                },
                 Ok(Err(message)) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        error = %message,
+                        "XAudio2 initialization failed"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        error = %error,
+                        "XAudio2 initialization timed out"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
@@ -1099,7 +1131,20 @@ impl NativeXAudio2Output {
             let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
             if dropped_frames > 0 {
-                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                let dropped_blocks = self.dropped_blocks.fetch_add(1, Ordering::Relaxed) + 1;
+                if dropped_blocks.is_power_of_two() {
+                    let metrics = producer.metrics();
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        dropped_frames,
+                        dropped_blocks,
+                        queued_frames = metrics.queued_frames,
+                        capacity_frames = metrics.capacity_frames,
+                        high_water_mark_frames = metrics.high_water_mark_frames,
+                        "XAudio2 producer queue saturated; oldest frames discarded"
+                    );
+                }
             }
             Ok(())
         }
@@ -1225,6 +1270,12 @@ fn run_xaudio2_worker(
     let frames_per_buffer = config.buffer_size as usize;
     let max_queued_buffers = config.queue_blocks;
     if let Err(error) = initialize_mta().ok() {
+        sega_observability::tracing::error!(
+            target: "sega::audio::backend",
+            backend = "XAudio2",
+            error = %error,
+            "XAudio2 COM apartment initialization failed"
+        );
         let _ = ready.send(Err(error.to_string()));
         return;
     }
@@ -1328,6 +1379,12 @@ fn run_xaudio2_worker(
             break;
         }
         if signals.voice_error.load(Ordering::Acquire) || control.failed.load(Ordering::Acquire) {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                callback_error = signals.voice_error.load(Ordering::Relaxed),
+                "XAudio2 voice callback or backend control reported failure"
+            );
             control.failed.store(true, Ordering::Release);
             break;
         }
@@ -1418,7 +1475,17 @@ fn run_xaudio2_worker(
             };
             if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
                 let lost_frames = submitted.rollback_last_submission();
-                submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed);
+                let total_failed_frames =
+                    submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed)
+                        + lost_frames as u64;
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    lost_frames,
+                    total_failed_frames,
+                    error = %unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.unwrap_err(),
+                    "XAudio2 buffer submission failed"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
@@ -1426,7 +1493,13 @@ fn run_xaudio2_worker(
         }
 
         if !voice_started && submitted_new {
-            if unsafe { source_voice.Start(0, 0) }.is_err() {
+            if let Err(error) = unsafe { source_voice.Start(0, 0) } {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 source voice failed to start"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
@@ -1439,7 +1512,7 @@ fn run_xaudio2_worker(
         }
         let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
-            underruns.fetch_add(1, Ordering::Relaxed);
+            record_audio_underrun(&underruns, "XAudio2", 0);
         }
         was_underrun = is_underrun;
         thread::sleep(Duration::from_millis(2));
