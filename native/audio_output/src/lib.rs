@@ -1014,7 +1014,7 @@ impl NativeXAudio2Output {
             if !backend_accepts_pcm(
                 self.shutdown.load(Ordering::Acquire),
                 self.control.failed.load(Ordering::Acquire),
-                self.worker.as_ref().map_or(true, |worker| worker.is_finished()),
+                self.worker.as_ref().is_none_or(|worker| worker.is_finished()),
             ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
