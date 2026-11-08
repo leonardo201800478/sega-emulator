@@ -2,7 +2,7 @@
 
 **Status:** rota normativa de implementação.  
 **Baseline de reconciliação:** main `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).
-**Regra:** o roadmap define sequência e gates; o [status datado](project-status-2026-11-07.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
+**Regra:** o roadmap define sequência e gates; o [status dos componentes](component-status.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
 
 **Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).  
 **Política de fidelidade:** [ADR-0016 — fidelidade observável e temporização proporcional](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
