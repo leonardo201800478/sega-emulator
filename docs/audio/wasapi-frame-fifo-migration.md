@@ -33,6 +33,11 @@
 - [ ] Regressão global do workspace — NOT RUN; o classificador de impacto não a selecionou para esta alteração.
 - [ ] Validação física WASAPI em hardware real — NOT RUN.
 
+## Contrato XAudio2 relacionado
+
+- A auditoria de ownership/lifetime de `XAUDIO2_BUFFER::pAudioData` foi formalizada na PR #652 e integrada à `main` pelo merge commit `a940a18cf3692f017e9b47f7bfec7f48858c90ba`.
+- A especificação estabelece `OnBufferEnd` como autoridade de conclusão durante playback normal e mantém a política de shutdown/flush separada da migração do transporte.
+
 ## Próximos incrementos
 
 1. XAudio2: manter memória própria de cada `XAUDIO2_BUFFER::pAudioData` até `OnBufferEnd` ou parada/destruição segura da voz; nunca submeter ponteiro diretamente para memória reutilizável da FIFO.
