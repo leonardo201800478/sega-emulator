@@ -1,8 +1,8 @@
 # Scorecard — confiabilidade de áudio (SMS / Hosts compartilhados)
 
-**Baseline de referência:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).  
-**Estado geral: BLOCKED** — investigação de qualidade sonora e validação física pendentes.  
-**Escopo:** geração digital, conversão/resampling, transporte PCM, worker e saídas WASAPI/XAudio2.  
+**Baseline de referência:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).
+**Estado geral: BLOCKED** — investigação de qualidade sonora e validação física pendentes.
+**Escopo:** geração digital, conversão/resampling, transporte PCM, worker e saídas WASAPI/XAudio2.
 **Autoridade temporal:** MachineScheduler; backend de áudio não pode modificar clocks da máquina.
 
 Este scorecard acompanha o trabalho de áudio separado do scorecard Z80. Não altera a sequência E4C→E5→E6→E7→E8→E9 nem libera E8.
