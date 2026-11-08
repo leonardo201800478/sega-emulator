@@ -135,6 +135,12 @@ mod tests {
             self.blocks.lock().unwrap().push(pcm);
             Ok(())
         }
+        fn suspend_and_flush(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+        fn resume(&mut self) -> Result<(), String> {
+            Ok(())
+        }
         fn metrics(&self) -> (u64, u64) {
             (0, 0)
         }
