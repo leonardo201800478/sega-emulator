@@ -19,7 +19,7 @@ use std::thread::{self, JoinHandle};
 #[cfg(windows)]
 use std::time::Duration;
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::collections::VecDeque;
 #[cfg(windows)]
 use wasapi::{
@@ -65,8 +65,8 @@ fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
     frames
 }
 
-/// Expand mono signed PCM16 to interleaved stereo bytes for the XAudio2 path.
-/// The emulated PSG remains mono; channel routing is handled only at the output boundary.
+/// Legacy byte-layout oracle retained only for equivalence tests.
+#[cfg(test)]
 fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
     for sample in pcm.as_chunks::<2>().0 {
@@ -76,6 +76,115 @@ fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
         stereo.extend_from_slice(&right.to_le_bytes());
     }
     stereo
+}
+
+/// Fixed staging pool for XAudio2 buffers. Submitted allocations remain owned
+/// by the worker until matching normal-playback completion notifications arrive.
+#[cfg(any(windows, test))]
+struct XAudio2SubmittedBuffers {
+    available: VecDeque<Vec<StereoFrame>>,
+    submitted: VecDeque<Vec<StereoFrame>>,
+    reclaimed_completions: u64,
+}
+
+#[cfg(any(windows, test))]
+impl XAudio2SubmittedBuffers {
+    fn new(max_buffers: usize, frames_per_buffer: usize) -> Self {
+        let mut available = VecDeque::with_capacity(max_buffers);
+        for _ in 0..max_buffers {
+            available.push_back(Vec::with_capacity(frames_per_buffer));
+        }
+        Self {
+            available,
+            submitted: VecDeque::with_capacity(max_buffers),
+            reclaimed_completions: 0,
+        }
+    }
+
+    fn stage_next(
+        &mut self,
+        consumer: &mut PcmFrameConsumer,
+        max_frames: usize,
+    ) -> Option<(*const u8, u32)> {
+        let mut staging = self.available.pop_front()?;
+        let frame_count = consumer
+            .metrics()
+            .queued_frames
+            .min(max_frames)
+            .min(staging.capacity());
+        if frame_count == 0 {
+            self.available.push_front(staging);
+            return None;
+        }
+        let audio_bytes = frame_count
+            .checked_mul(std::mem::size_of::<StereoFrame>())
+            .and_then(|bytes| u32::try_from(bytes).ok());
+        let Some(audio_bytes) = audio_bytes else {
+            self.available.push_front(staging);
+            return None;
+        };
+
+        staging.resize(frame_count, [0, 0]);
+        let report = consumer.read_frames(&mut staging);
+        debug_assert_eq!(report.queued_frames, frame_count);
+        debug_assert_eq!(report.silence_frames, 0);
+        self.submitted.push_back(staging);
+        let submitted = self.submitted.back().expect("just staged XAudio2 frames");
+        Some((submitted.as_ptr().cast::<u8>(), audio_bytes))
+    }
+
+    fn rollback_last_submission(&mut self) {
+        if let Some(mut staging) = self.submitted.pop_back() {
+            staging.clear();
+            self.available.push_back(staging);
+        }
+    }
+
+    fn reclaim_completed(&mut self, completed_buffers: u64) -> usize {
+        let completion_delta = completed_buffers.wrapping_sub(self.reclaimed_completions);
+        let reclaim_count = completion_delta.min(self.submitted.len() as u64) as usize;
+        for _ in 0..reclaim_count {
+            if let Some(mut staging) = self.submitted.pop_front() {
+                staging.clear();
+                self.available.push_back(staging);
+            }
+        }
+        self.reclaimed_completions =
+            self.reclaimed_completions.wrapping_add(reclaim_count as u64);
+        reclaim_count
+    }
+
+    fn submitted_len(&self) -> usize {
+        self.submitted.len()
+    }
+
+    #[cfg(test)]
+    fn available_len(&self) -> usize {
+        self.available.len()
+    }
+
+    #[cfg(test)]
+    fn seed_reclaimed_completions(&mut self, value: u64) {
+        self.reclaimed_completions = value;
+    }
+}
+
+#[cfg(any(windows, test))]
+#[derive(Default)]
+struct XAudio2CallbackSignals {
+    completed_buffers: AtomicU64,
+    voice_error: AtomicBool,
+}
+
+#[cfg(any(windows, test))]
+impl XAudio2CallbackSignals {
+    fn signal_buffer_end(&self) {
+        self.completed_buffers.fetch_add(1, Ordering::Release);
+    }
+
+    fn signal_voice_error(&self) {
+        self.voice_error.store(true, Ordering::Release);
+    }
 }
 
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
@@ -490,7 +599,7 @@ use windows::core::{HRESULT, PCWSTR};
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
     #[cfg(windows)]
-    producer: Option<rtrb::Producer<Vec<u8>>>,
+    producer: Option<PcmFrameProducer>,
     #[cfg(windows)]
     worker: Option<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
@@ -531,7 +640,9 @@ impl NativeXAudio2Output {
 
         #[cfg(windows)]
         {
-            let (producer, consumer) = rtrb::RingBuffer::<Vec<u8>>::new(queue_blocks);
+            let capacity_frames = (buffer_size as usize) * queue_blocks;
+            let (producer, consumer) = pcm_frame_queue(capacity_frames)
+                .map_err(|error| AudioOutputError::Device(error.to_string()))?;
             let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
@@ -547,6 +658,7 @@ impl NativeXAudio2Output {
                         worker_shutdown,
                         worker_underruns,
                         sample_rate,
+                        buffer_size as usize,
                         queue_blocks,
                     );
                 })
@@ -596,7 +708,7 @@ impl NativeXAudio2Output {
         if pcm.is_empty() {
             return Ok(());
         }
-        let pcm = mono_pcm16_to_stereo(&pcm, self.balance);
+        let frames = mono_pcm16_to_stereo_frames(&pcm, self.balance);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
@@ -606,23 +718,17 @@ impl NativeXAudio2Output {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            let max_block_bytes = (self.buffer_size as usize).saturating_mul(4).max(4);
-            for block in pcm.chunks(max_block_bytes) {
-                if producer.is_abandoned() {
-                    return Err(AudioOutputError::WorkerStopped);
-                }
-                match producer.push(block.to_vec()) {
-                    Ok(()) => {}
-                    Err(rtrb::PushError::Full(_block)) => {
-                        self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
+            let report = producer
+                .push_frames(&frames)
+                .map_err(|_| AudioOutputError::WorkerStopped)?;
+            if report.dropped_frames > 0 {
+                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
             }
             Ok(())
         }
         #[cfg(not(windows))]
         {
-            let _ = pcm;
+            let _ = frames;
             Err(AudioOutputError::Device(
                 "native XAudio2 output is available only on Windows".to_owned(),
             ))
@@ -665,8 +771,7 @@ impl Drop for NativeXAudio2Output {
 
 #[cfg(windows)]
 struct XAudio2VoiceCallbackState {
-    completed_buffers: Arc<AtomicU64>,
-    voice_error: Arc<AtomicBool>,
+    signals: Arc<XAudio2CallbackSignals>,
 }
 
 #[cfg(windows)]
@@ -677,21 +782,22 @@ impl IXAudio2VoiceCallback_Impl for XAudio2VoiceCallbackState {
     fn OnStreamEnd(&self) {}
     fn OnBufferStart(&self, _pbuffercontext: *mut c_void) {}
     fn OnBufferEnd(&self, _pbuffercontext: *mut c_void) {
-        self.completed_buffers.fetch_add(1, Ordering::Release);
+        self.signals.signal_buffer_end();
     }
     fn OnLoopEnd(&self, _pbuffercontext: *mut c_void) {}
     fn OnVoiceError(&self, _pbuffercontext: *mut c_void, _error: HRESULT) {
-        self.voice_error.store(true, Ordering::Release);
+        self.signals.signal_voice_error();
     }
 }
 
 #[cfg(windows)]
 fn run_xaudio2_worker(
-    mut consumer: rtrb::Consumer<Vec<u8>>,
+    mut consumer: PcmFrameConsumer,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
     sample_rate: u32,
+    frames_per_buffer: usize,
     max_queued_buffers: usize,
 ) {
     if let Err(error) = initialize_mta().ok() {
@@ -700,11 +806,9 @@ fn run_xaudio2_worker(
     }
     let _com_apartment = ComApartment;
 
-    let completed_buffers = Arc::new(AtomicU64::new(0));
-    let voice_error = Arc::new(AtomicBool::new(false));
+    let signals = Arc::new(XAudio2CallbackSignals::default());
     let callback_state = XAudio2VoiceCallbackState {
-        completed_buffers: Arc::clone(&completed_buffers),
-        voice_error: Arc::clone(&voice_error),
+        signals: Arc::clone(&signals),
     };
     // `new` builds the scoped COM interface adapter for this classic XAudio2
     // callback. Keep both the adapter and its borrowed state alive until after
@@ -775,7 +879,7 @@ fn run_xaudio2_worker(
         Ok((engine, mastering_voice, source_voice))
     })();
 
-    let (engine, _mastering_voice, source_voice) = match setup {
+    let (engine, mastering_voice, source_voice) = match setup {
         Ok(state) => state,
         Err(message) => {
             let _ = ready.send(Err(message));
@@ -784,45 +888,33 @@ fn run_xaudio2_worker(
     };
     let _ = ready.send(Ok(()));
 
-    let mut submitted = VecDeque::<Vec<u8>>::with_capacity(max_queued_buffers);
-    let mut reclaimed_completions = 0_u64;
+    let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
     let mut was_underrun = false;
     loop {
-        if shutdown.load(Ordering::Acquire) || voice_error.load(Ordering::Acquire) {
+        if shutdown.load(Ordering::Acquire) || signals.voice_error.load(Ordering::Acquire) {
             break;
         }
 
-        // OnBufferEnd is the documented lifetime signal for pAudioData. The
-        // callback only increments an atomic counter; this worker alone frees
-        // the corresponding Vec allocations.
-        let completed = completed_buffers.load(Ordering::Acquire);
-        let completed_delta = completed.wrapping_sub(reclaimed_completions);
-        let reclaim_count = completed_delta.min(submitted.len() as u64);
-        for _ in 0..reclaim_count {
-            submitted.pop_front();
-        }
-        reclaimed_completions = reclaimed_completions.wrapping_add(reclaim_count);
+        let completed = signals.completed_buffers.load(Ordering::Acquire);
+        submitted.reclaim_completed(completed);
 
         let mut submitted_new = false;
-        while submitted.len() < max_queued_buffers {
-            match consumer.pop() {
-                Ok(block) => {
-                    submitted.push_back(block);
-                    let block = submitted.back().expect("just inserted XAudio2 block");
-                    let buffer = XAUDIO2_BUFFER {
-                        AudioBytes: block.len() as u32,
-                        pAudioData: block.as_ptr(),
-                        ..Default::default()
-                    };
-                    let result = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) };
-                    if result.is_err() {
-                        submitted.pop_back();
-                        break;
-                    }
-                    submitted_new = true;
-                }
-                Err(_) => break,
+        while submitted.submitted_len() < max_queued_buffers {
+            let Some((audio_data, audio_bytes)) =
+                submitted.stage_next(&mut consumer, frames_per_buffer)
+            else {
+                break;
+            };
+            let buffer = XAUDIO2_BUFFER {
+                AudioBytes: audio_bytes,
+                pAudioData: audio_data,
+                ..Default::default()
+            };
+            if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
+                submitted.rollback_last_submission();
+                break;
             }
+            submitted_new = true;
         }
 
         let mut current_state = XAUDIO2_VOICE_STATE::default();
@@ -843,11 +935,15 @@ fn run_xaudio2_worker(
         // no per-buffer reclamation is attempted during shutdown.
         let _ = source_voice.Stop(0, 0);
         let _ = source_voice.FlushSourceBuffers();
+        // DestroyVoice waits for the processing thread to become idle. Once it
+        // returns, no callback can run and no submitted audio memory is accessed.
         source_voice.DestroyVoice();
+        mastering_voice.DestroyVoice();
         engine.StopEngine();
     }
     drop(submitted);
     drop(callback);
+    drop(callback_state);
 }
 // The output crate owns these concrete sink types, so it implements the
 // runtime's sink contract here without introducing a dependency cycle.
@@ -1013,4 +1109,90 @@ mod tests {
             Err(AudioOutputError::InvalidBalance)
         ));
     }
+    #[test]
+    fn xaudio2_staging_keeps_frame_memory_stable_until_callback_completion() {
+        let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
+        producer.push_frames(&[[1, 2], [3, 4], [5, 6]]).unwrap();
+        let mut staging = XAudio2SubmittedBuffers::new(2, 2);
+        let (first_ptr, first_bytes) = staging.stage_next(&mut consumer, 2).unwrap();
+        assert_eq!(first_bytes, 8);
+        assert_eq!(staging.submitted_len(), 1);
+        unsafe {
+            assert_eq!(std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4), &[1, 2, 3, 4]);
+        }
+
+        let (second_ptr, second_bytes) = staging.stage_next(&mut consumer, 2).unwrap();
+        assert_eq!(second_bytes, 4);
+        assert_eq!(staging.submitted_len(), 2);
+        unsafe {
+            assert_eq!(std::slice::from_raw_parts(first_ptr.cast::<i16>(), 4), &[1, 2, 3, 4]);
+            assert_eq!(std::slice::from_raw_parts(second_ptr.cast::<i16>(), 2), &[5, 6]);
+        }
+
+        assert_eq!(staging.reclaim_completed(0), 0);
+        assert_eq!(staging.submitted_len(), 2);
+        assert_eq!(staging.reclaim_completed(2), 2);
+        assert_eq!(staging.submitted_len(), 0);
+        assert_eq!(staging.available_len(), 2);
+    }
+
+    #[test]
+    fn xaudio2_submit_failure_rolls_back_staging_without_callback() {
+        let (mut producer, mut consumer) = pcm_frame_queue(4).unwrap();
+        producer.push_frames(&[[10, 20]]).unwrap();
+        let mut staging = XAudio2SubmittedBuffers::new(1, 4);
+        assert!(staging.stage_next(&mut consumer, 4).is_some());
+        assert_eq!(staging.submitted_len(), 1);
+        staging.rollback_last_submission();
+        assert_eq!(staging.submitted_len(), 0);
+        assert_eq!(staging.available_len(), 1);
+    }
+
+    #[test]
+    fn xaudio2_completion_counter_handles_u64_wrapping() {
+        let (mut producer, mut consumer) = pcm_frame_queue(2).unwrap();
+        producer.push_frames(&[[7, 8]]).unwrap();
+        let mut staging = XAudio2SubmittedBuffers::new(1, 2);
+        staging.seed_reclaimed_completions(u64::MAX);
+        assert!(staging.stage_next(&mut consumer, 2).is_some());
+        assert_eq!(staging.reclaim_completed(0), 1);
+        assert_eq!(staging.submitted_len(), 0);
+    }
+
+    #[test]
+    fn xaudio2_callback_signals_survive_concurrent_worker_observation() {
+        const COMPLETIONS: u64 = 50_000;
+        let signals = Arc::new(XAudio2CallbackSignals::default());
+        let callback_signals = Arc::clone(&signals);
+        let worker_signals = Arc::clone(&signals);
+        let callback = std::thread::spawn(move || {
+            for _ in 0..COMPLETIONS {
+                callback_signals.signal_buffer_end();
+            }
+        });
+        let worker = std::thread::spawn(move || {
+            let mut observed = 0;
+            while observed < COMPLETIONS {
+                observed = worker_signals.completed_buffers.load(Ordering::Acquire);
+                std::thread::yield_now();
+            }
+            observed
+        });
+        callback.join().unwrap();
+        assert_eq!(worker.join().unwrap(), COMPLETIONS);
+        signals.signal_voice_error();
+        assert!(signals.voice_error.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn xaudio2_frame_bytes_match_interleaved_stereo_pcm16_layout() {
+        let frames = mono_pcm16_to_stereo_frames(&[0x34, 0x12, 0x00, 0x80], 0);
+        let mut bytes = Vec::new();
+        for [left, right] in frames {
+            bytes.extend_from_slice(&left.to_le_bytes());
+            bytes.extend_from_slice(&right.to_le_bytes());
+        }
+        assert_eq!(bytes, [0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80]);
+    }
+
 }
