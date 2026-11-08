@@ -224,26 +224,17 @@ impl SegaApp {
         let mut load_requested = false;
 
         ui.vertical(|ui| {
-            render_header(ui);
-            render_rom_controls(
+            render_header(
                 ui,
-                &mut self.rom_path,
-                &mut self.region,
                 &mut self.rom_dialog_requested,
+                &mut self.region,
                 &mut self.aspect_ratio,
-                &mut load_requested,
-            );
-            render_machine_controls(ui, &self.native_viewport, &mut command);
-            render_audio_controls(
-                ui,
-                &self.native_viewport,
                 &mut self.audio_enabled,
                 &mut self.audio_backend,
                 &mut self.audio_volume,
                 &mut audio_command,
-            );
-            render_input_controls(
-                ui,
+                &self.native_viewport,
+                &mut command,
                 &self.input_devices,
                 &mut self.selected_gamepad,
                 self.input_backend
@@ -251,9 +242,8 @@ impl SegaApp {
                     .and_then(|state| state.as_ref().err())
                     .map(String::as_str),
             );
-            render_runtime_status(ui, &self.native_viewport);
             viewport_rect = render_video_viewport(ui, self.aspect_ratio);
-            render_footer(ui);
+            render_footer(ui, &self.native_viewport, &self.rom_path);
         });
 
         if load_requested {
@@ -281,7 +271,7 @@ impl SegaApp {
 
         let mut dialog = FileDialog::new()
             .set_title("Selecionar ROM do Sega Master System")
-            .add_filter("ROM do Master System", &["sms", "zip"]);
+            .add_filter("ROM do Master System", &["sms", "zip", "bin"]);
         if let Some(directory) = self.last_rom_directory.as_ref() {
             dialog = dialog.set_directory(directory);
         }
@@ -298,6 +288,7 @@ impl SegaApp {
                 }
             }
             self.native_viewport.error = None;
+            self.load_rom_from_path();
         }
     }
 
@@ -802,60 +793,99 @@ fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     )
 }
 
-fn render_header(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.heading("Sega Emulator");
-        ui.separator();
-        ui.label("Rust · egui/eframe");
-        if ui.button("Sair").clicked() {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-        }
-    });
-    ui.separator();
-    ui.heading("Sega Master System");
-}
-
-fn render_rom_controls(
+/// Render the four compact top-level menus; no configuration panel consumes game area.
+fn render_header(
     ui: &mut egui::Ui,
-    rom_path: &mut String,
-    region: &mut String,
     browse_requested: &mut bool,
+    region: &mut String,
     aspect_ratio: &mut AspectRatioMode,
-    load_requested: &mut bool,
+    audio_enabled: &mut bool,
+    audio_backend: &mut AudioBackend,
+    audio_volume: &mut u8,
+    audio_command: &mut Option<AudioCommand>,
+    viewport: &NativeViewportState,
+    machine_command: &mut Option<UiCommand>,
+    devices: &[DeviceDescriptor],
+    selected_gamepad: &mut Option<DeviceId>,
+    input_error: Option<&str>,
 ) {
     ui.horizontal(|ui| {
-        ui.label("ROM:");
-        ui.add(
-            egui::TextEdit::singleline(rom_path)
-                .desired_width(420.0)
-                .hint_text("Cole o caminho ou procure um arquivo .sms/.zip"),
-        );
-        *browse_requested = ui.button("Procurar...").clicked();
-        *load_requested = ui.button("Carregar ROM").clicked();
-    });
-    ui.horizontal(|ui| {
-        ui.label("Região:");
-        egui::ComboBox::from_id_salt("sms_region")
-            .selected_text(if region.is_empty() {
-                "USA / NTSC".to_owned()
-            } else {
-                region.clone()
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(region, "usa".to_owned(), "USA / NTSC");
-                ui.selectable_value(region, "brazil".to_owned(), "Brasil / PAL-M");
-                ui.selectable_value(region, "europe".to_owned(), "Europa / PAL");
-                ui.selectable_value(region, "japan".to_owned(), "Japão / NTSC");
+        ui.heading("SEGA");
+        ui.label("Master System");
+        ui.separator();
+
+        ui.menu_button("Arquivo", |ui| {
+            if ui.button("Abrir ROM...").clicked() {
+                *browse_requested = true;
+            }
+            ui.separator();
+            add_machine_button(
+                ui,
+                "Fechar ROM",
+                viewport.worker.is_some(),
+                UiCommand::CloseMachine,
+                machine_command,
+            );
+            ui.separator();
+            if ui.button("Sair").clicked() {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
+
+        ui.menu_button("Vídeo", |ui| {
+            ui.label("Proporção da imagem");
+            ui.radio_value(aspect_ratio, AspectRatioMode::FourThree, "Original do console (4:3)");
+            ui.radio_value(aspect_ratio, AspectRatioMode::OneToOne, "1:1");
+            ui.radio_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
+        });
+
+        ui.menu_button("Som", |ui| {
+            if ui.checkbox(audio_enabled, "Áudio ativo").changed() {
+                *audio_command = Some(if *audio_enabled {
+                    AudioCommand::Configure
+                } else {
+                    AudioCommand::Disable
+                });
+            }
+            ui.separator();
+            ui.label("Dispositivo de saída");
+            if ui.radio_value(audio_backend, AudioBackend::Wasapi, "WASAPI Shared").changed()
+                || ui.radio_value(audio_backend, AudioBackend::XAudio2, "XAudio2").changed()
+            {
+                *audio_enabled = true;
+                *audio_command = Some(AudioCommand::Configure);
+            }
+            ui.separator();
+            if ui.add(egui::Slider::new(audio_volume, 0..=100).text("Volume")).changed()
+                && *audio_enabled
+            {
+                *audio_command = Some(AudioCommand::SetVolume(*audio_volume));
+            }
+        });
+
+        ui.menu_button("Opções", |ui| {
+            ui.menu_button("Região / padrão de vídeo", |ui| {
+                ui.radio_value(region, "usa".to_owned(), "USA / NTSC");
+                ui.radio_value(region, "brazil".to_owned(), "Brasil / PAL-M");
+                ui.radio_value(region, "europe".to_owned(), "Europa / PAL");
+                ui.radio_value(region, "japan".to_owned(), "Japão / NTSC");
             });
-        ui.label("Proporção:");
-        egui::ComboBox::from_id_salt("sms_aspect_ratio")
-            .selected_text(aspect_ratio.label())
-            .show_ui(ui, |ui| {
-                ui.selectable_value(aspect_ratio, AspectRatioMode::OneToOne, "1:1");
-                ui.selectable_value(aspect_ratio, AspectRatioMode::FourThree, "4:3");
-                ui.selectable_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
+            ui.separator();
+            ui.menu_button("Execução", |ui| {
+                render_machine_controls(ui, viewport, machine_command);
             });
+            ui.menu_button("Controles", |ui| {
+                render_input_controls(ui, devices, selected_gamepad, input_error);
+                ui.separator();
+                ui.small("Teclado: setas / Z / X · P solicita NMI");
+                ui.small("Gamepad: direcional / analógico · A / B · Start");
+            });
+            ui.menu_button("Diagnóstico", |ui| {
+                render_runtime_status(ui, viewport);
+            });
+        });
     });
+    ui.separator();
 }
 
 fn render_machine_controls(
@@ -863,39 +893,30 @@ fn render_machine_controls(
     viewport: &NativeViewportState,
     command: &mut Option<UiCommand>,
 ) {
-    ui.horizontal(|ui| {
-        let worker = viewport.worker.as_ref();
-        add_machine_button(
-            ui,
-            "Iniciar",
-            worker.is_some_and(|worker| !worker.is_running()),
-            UiCommand::Start,
-            command,
-        );
-        add_machine_button(
-            ui,
-            "Pausar",
-            worker.is_some_and(SmsTemporalWorker::is_running),
-            UiCommand::Pause,
-            command,
-        );
-        add_machine_button(ui, "Parar", worker.is_some(), UiCommand::Stop, command);
-        add_machine_button(ui, "Reset", worker.is_some(), UiCommand::Reset, command);
-        add_machine_button(
-            ui,
-            "Avançar quadro",
-            worker.is_some_and(|worker| !worker.is_running()),
-            UiCommand::StepFrame,
-            command,
-        );
-        add_machine_button(
-            ui,
-            "Fechar ROM",
-            worker.is_some(),
-            UiCommand::CloseMachine,
-            command,
-        );
-    });
+    let worker = viewport.worker.as_ref();
+    add_machine_button(
+        ui,
+        "Iniciar",
+        worker.is_some_and(|worker| !worker.is_running()),
+        UiCommand::Start,
+        command,
+    );
+    add_machine_button(
+        ui,
+        "Pausar",
+        worker.is_some_and(SmsTemporalWorker::is_running),
+        UiCommand::Pause,
+        command,
+    );
+    add_machine_button(ui, "Parar", worker.is_some(), UiCommand::Stop, command);
+    add_machine_button(ui, "Reset", worker.is_some(), UiCommand::Reset, command);
+    add_machine_button(
+        ui,
+        "Avançar quadro",
+        worker.is_some_and(|worker| !worker.is_running()),
+        UiCommand::StepFrame,
+        command,
+    );
 }
 
 fn add_machine_button(
@@ -907,75 +928,6 @@ fn add_machine_button(
 ) {
     if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
         *command = Some(value);
-    }
-}
-
-fn render_audio_controls(
-    ui: &mut egui::Ui,
-    viewport: &NativeViewportState,
-    enabled: &mut bool,
-    backend: &mut AudioBackend,
-    volume: &mut u8,
-    command: &mut Option<AudioCommand>,
-) {
-    ui.horizontal(|ui| {
-        if ui.checkbox(enabled, "Áudio ativo").changed() {
-            *command = Some(if *enabled {
-                AudioCommand::Configure
-            } else {
-                AudioCommand::Disable
-            });
-        }
-        ui.label("Saída:");
-        egui::ComboBox::from_id_salt("sms_audio_backend")
-            .selected_text(backend.label())
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_value(backend, AudioBackend::Wasapi, "WASAPI Shared")
-                    .changed()
-                    || ui
-                        .selectable_value(backend, AudioBackend::XAudio2, "XAudio2")
-                        .changed()
-                {
-                    *command = Some(AudioCommand::Configure);
-                    *enabled = true;
-                }
-            });
-        ui.label("Volume:");
-        if ui.add(egui::Slider::new(volume, 0..=100)).changed() && *enabled {
-            *command = Some(AudioCommand::SetVolume(*volume));
-        }
-    });
-    ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
-    if let Some(worker) = viewport.worker.as_ref() {
-        let metrics = worker.audio_output_metrics();
-        if let Some(backlog_micros) = metrics.queue_duration_micros() {
-            let backlog_ms = backlog_micros / 1_000;
-            let backlog_fraction = (backlog_micros % 1_000) / 10;
-            ui.small(format!(
-                "FIFO de áudio: {} / {} frames · backlog estimado {}.{:02} ms · pico {} frames",
-                metrics.queue_queued_frames,
-                metrics.queue_capacity_frames,
-                backlog_ms,
-                backlog_fraction,
-                metrics.queue_high_water_frames
-            ));
-            ui.small(format!(
-                "Underrun: {} eventos / {} frames de silêncio · overflow: {} frames em {} chamadas de escrita",
-                metrics.underrun_events,
-                metrics.underrun_frames,
-                metrics.dropped_frames,
-                metrics.dropped_blocks
-            ));
-            ui.small(format!(
-                "FIFO: {} frames publicados · {} retirados pelo consumidor",
-                metrics.accepted_frames, metrics.consumed_frames
-            ));
-        } else {
-            ui.small("Áudio: sessão ainda não configurada ou telemetria indisponível");
-        }
-    } else {
-        ui.small("Áudio: aguardando ROM");
     }
 }
 
@@ -1125,10 +1077,12 @@ fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
 }
 
 fn render_video_viewport(ui: &mut egui::Ui, aspect_ratio: AspectRatioMode) -> egui::Rect {
-    ui.add_space(6.0);
+    ui.add_space(3.0);
 
+    // Reserve only the compact status line; the remaining central area belongs to the game.
     let available = ui.available_size().max(egui::Vec2::splat(1.0));
-    let viewport_size = fit_viewport_size(available, aspect_ratio.value());
+    let viewport_available = egui::vec2(available.x, (available.y - 25.0).max(1.0));
+    let viewport_size = fit_viewport_size(viewport_available, aspect_ratio.value());
     let horizontal_padding = ((available.x - viewport_size.x) * 0.5).max(0.0);
 
     let mut viewport_rect = egui::Rect::NOTHING;
@@ -1150,10 +1104,16 @@ fn fit_viewport_size(available: egui::Vec2, aspect_ratio: f32) -> egui::Vec2 {
     egui::vec2(width, height)
 }
 
-fn render_footer(ui: &mut egui::Ui) {
-    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-        ui.separator();
-        ui.small("SMS temporal runtime · framebuffer RGB888 256×192 · proporção configurável");
+fn render_footer(ui: &mut egui::Ui, viewport: &NativeViewportState, rom_path: &str) {
+    ui.horizontal(|ui| {
+        ui.small(viewport.status());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let rom_name = Path::new(rom_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Nenhuma ROM aberta");
+            ui.small(format!("ROM: {rom_name}"));
+        });
     });
 }
 
