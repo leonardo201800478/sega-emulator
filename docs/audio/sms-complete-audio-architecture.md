@@ -1,8 +1,8 @@
 # Arquitetura do subsistema de áudio — Master System
 
-**Status:** proposta arquitetural inicial; não representa implementação concluída nem certificação de fidelidade.  
-**Plataforma-alvo:** Sega Master System / Mark III, com reutilização dos componentes compartilhados também pelo SG-1000 e, quando aplicável, Game Gear.  
-**Crates atuais auditados:** `native/sn76489`, `native/audio_runtime`, `native/audio_output`, `native/machine_scheduler`, `native/temporal_core` e `native/sms_core`.  
+**Status:** proposta arquitetural inicial; não representa implementação concluída nem certificação de fidelidade.
+**Plataforma-alvo:** Sega Master System / Mark III, com reutilização dos componentes compartilhados também pelo SG-1000 e, quando aplicável, Game Gear.
+**Crates atuais auditados:** `native/sn76489`, `native/audio_runtime`, `native/audio_output`, `native/machine_scheduler`, `native/temporal_core` e `native/sms_core`.
 **Baseline:** `main` em `f47f71830344b85f72329376505d400bfbfaae69` (2026-11-07).
 
 ## 1. Objetivo e limites desta proposta
@@ -243,4 +243,3 @@ Antes de cada implementação de hardware, os links/documentos específicos, rev
 - Manter saída física, DSP e GUI fora dos núcleos de síntese.
 - Não incluir ROMs, BIOS ou dumps protegidos.
 - Não realizar merge automaticamente; integração depende de revisão e CI verde no HEAD final.
-
