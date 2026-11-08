@@ -1281,7 +1281,8 @@ mod tests {
         D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE, ShowWindow, WS_CLIPCHILDREN,
+        CreateWindowExW, GetTopWindow, GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE,
+        ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_VISIBLE,
     };
 
     #[test]
@@ -1291,6 +1292,34 @@ mod tests {
 
         assert!(unsafe { IsWindow(Some(child.hwnd)).as_bool() });
         child.set_bounds(8, 12, 256, 192).unwrap();
+    }
+
+    #[test]
+    fn child_viewport_stays_below_native_egui_popup_siblings() {
+        let parent = NativeVideoWindow::create(640, 480).unwrap();
+        let parent_hwnd = parent.hwnd();
+        let overlay = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                windows::core::w!("STATIC"),
+                windows::core::w!("egui-overlay-test"),
+                WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+                0,
+                0,
+                200,
+                160,
+                Some(parent_hwnd),
+                None,
+                None,
+                None,
+            )
+        }
+        .unwrap();
+
+        let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
+        child.set_bounds(0, 0, 320, 240).unwrap();
+
+        assert_eq!(unsafe { GetTopWindow(Some(parent_hwnd)) }, Some(overlay));
     }
 
     #[test]
