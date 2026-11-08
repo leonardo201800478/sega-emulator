@@ -222,13 +222,14 @@ impl XAudio2CallbackSignals {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn wait_for_flush_acknowledgement(
     acknowledged: &AtomicBool,
     failed: &AtomicBool,
     shutdown: &AtomicBool,
+    timeout: Duration,
 ) -> Result<(), AudioOutputError> {
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + timeout;
     while !acknowledged.load(Ordering::Acquire) {
         if shutdown.load(Ordering::Acquire) {
             return Err(AudioOutputError::WorkerStopped);
@@ -246,6 +247,17 @@ fn wait_for_flush_acknowledgement(
         ));
     }
     Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn xaudio2_flush_barrier_reached(
+    completed_before_flush: u64,
+    completed_now: u64,
+    pending_buffers: usize,
+    buffers_queued: u32,
+) -> bool {
+    completed_now.wrapping_sub(completed_before_flush) >= pending_buffers as u64
+        && buffers_queued == 0
 }
 
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
@@ -437,6 +449,7 @@ impl NativeWasapiOutput {
                 &self.flush_acknowledged,
                 &self.control_failed,
                 &self.shutdown,
+                Duration::from_secs(2),
             )
         }
         #[cfg(not(windows))]
@@ -1200,10 +1213,14 @@ fn run_xaudio2_worker(
                 let deadline = std::time::Instant::now() + Duration::from_secs(2);
                 loop {
                     let completed = signals.completed_buffers.load(Ordering::Acquire);
-                    let callbacks_seen = completed.wrapping_sub(completed_before_flush);
                     let mut state = XAUDIO2_VOICE_STATE::default();
                     unsafe { source_voice.GetState(&mut state, 0) };
-                    if callbacks_seen >= pending_before_flush as u64 && state.BuffersQueued == 0 {
+                    if xaudio2_flush_barrier_reached(
+                        completed_before_flush,
+                        completed,
+                        pending_before_flush,
+                        state.BuffersQueued,
+                    ) {
                         submitted.reclaim_completed(completed);
                         break;
                     }
@@ -1374,6 +1391,47 @@ impl NativeXAudio2Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flush_acknowledgement_reports_failure_and_timeout() {
+        let shutdown = AtomicBool::new(false);
+        let failed = AtomicBool::new(false);
+        let acknowledged = AtomicBool::new(true);
+        assert!(wait_for_flush_acknowledgement(
+            &acknowledged,
+            &failed,
+            &shutdown,
+            Duration::from_millis(1),
+        )
+        .is_ok());
+
+        failed.store(true, Ordering::Release);
+        assert!(wait_for_flush_acknowledgement(
+            &acknowledged,
+            &failed,
+            &shutdown,
+            Duration::from_millis(1),
+        )
+        .is_err());
+
+        failed.store(false, Ordering::Release);
+        acknowledged.store(false, Ordering::Release);
+        assert!(wait_for_flush_acknowledgement(
+            &acknowledged,
+            &failed,
+            &shutdown,
+            Duration::ZERO,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn xaudio2_flush_barrier_uses_aggregate_callbacks_not_callback_order() {
+        assert!(xaudio2_flush_barrier_reached(10, 13, 3, 0));
+        assert!(!xaudio2_flush_barrier_reached(10, 12, 3, 0));
+        assert!(!xaudio2_flush_barrier_reached(10, 13, 3, 1));
+        assert!(xaudio2_flush_barrier_reached(u64::MAX - 1, 1, 3, 0));
+    }
 
     #[test]
     fn iaudio_client3_period_is_clamped_and_aligned_to_fundamental() {
