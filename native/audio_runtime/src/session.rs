@@ -69,6 +69,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Advance the same mixer/resampler state without publishing PCM to the
     /// physical endpoint. Used by deterministic debugger StepFrame execution.
     pub fn process_samples_discarding_output(&mut self, samples: &[f64]) -> Result<(), String> {
+        if samples.is_empty() {
+            return Ok(());
+        }
         self.process_samples_with_policy(samples, false)?;
         self.discarded_since_suspend = true;
         Ok(())
@@ -284,14 +287,22 @@ mod tests {
     fn pause_flush_resume_preserves_dsp_history_and_acknowledges_sink_controls() {
         let mut session = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.05).sin()).collect();
+        let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.05).sin()).collect();
         session.process_samples(&first).unwrap();
         session.suspend_and_flush().unwrap();
         assert!(session.sink.suspended);
         session.resume().unwrap();
         assert!(!session.sink.suspended);
+        session.process_samples(&second).unwrap();
+
+        let mut reference =
+            NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        reference.process_samples(&first).unwrap();
+        reference.process_samples(&second).unwrap();
+
         assert_eq!(session.sink.flush_count, 1);
         assert_eq!(session.sink.resume_count, 1);
-        assert_eq!(session.sink.blocks.len(), 1);
+        assert_eq!(session.sink.blocks, reference.sink.blocks);
     }
 
     #[test]
