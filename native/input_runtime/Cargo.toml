@@ -7,3 +7,6 @@ publish = false
 [lib]
 name = "sega_input_runtime"
 path = "src/lib.rs"
+
+[dependencies]
+sega-observability.workspace = true
