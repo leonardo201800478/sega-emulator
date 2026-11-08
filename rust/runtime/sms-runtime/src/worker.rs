@@ -721,6 +721,7 @@ fn worker_loop(
                 if let Some(mut session) = audio_session.take() {
                     session.close();
                 }
+                telemetry.set_audio_metrics(AudioOutputMetrics::default());
             }
         }
     }
@@ -876,6 +877,7 @@ fn handle_command(
                         previous.close();
                     }
                     session.close();
+                    telemetry.set_audio_metrics(AudioOutputMetrics::default());
                     telemetry.set_audio_error(Some(error.clone()));
                     let _ = reply.send(Err(error));
                 } else {
@@ -896,6 +898,7 @@ fn handle_command(
                         }
                         Err(error) => {
                             session.close();
+                            telemetry.set_audio_metrics(AudioOutputMetrics::default());
                             telemetry.set_audio_error(Some(error.clone()));
                             let _ = reply.send(Err(error));
                         }
