@@ -94,3 +94,20 @@ botões padronizados South/East para os dois botões SMS e Start para Pause/NMI.
 Teclado e gamepad são combinados por OR no snapshot do jogador 1. O backend
 preserva capacidades e estados brutos; gyro, touchpad, eixos de volante,
 perfis configuráveis e jogador 2 ainda não fazem parte desta fatia.
+
+
+## Captura de diagnóstico da interface (opt-in)
+
+A captura fica desativada por padrão. Para investigar problemas de menus/viewport,
+abra **Diagnostics** e marque **Capturar logs de diagnóstico**. Os arquivos são
+gravados em `%APPDATA%\\Sega Emulator\\logs\\debug-session-*.jsonl`.
+
+A gravação usa uma fila limitada a 2.048 eventos e uma thread dedicada. O produtor
+usa inserção não bloqueante; eventos excedentes são descartados e contabilizados.
+Os arquivos giram ao atingir 8 MiB, mantendo até três backups. Ao desmarcar a opção,
+a fila é drenada e o arquivo é fechado em segundo plano.
+
+Os eventos incluem cliques e transições do menu, classe do viewport egui, medidas
+do popup, solicitações de fechamento e eventos de criação/redimensionamento do
+HWND D3D12. A captura não registra instruções Z80, ciclos do Scheduler, conteúdo
+de ROM ou áudio/vídeo bruto. Os logs permanecem locais e não devem ser versionados.
