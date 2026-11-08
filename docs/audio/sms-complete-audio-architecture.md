@@ -259,7 +259,7 @@ A taxa média não era o problema: a fase inteira preservava a contagem. O defei
 
 O teste `fractional_output_sampling_reduces_clock_quantization_error` reproduz o filtro Kaiser NTSC/44,1 kHz atual (321 taps), aplica um tom sintético de 10 kHz e compara:
 
-1. valor do FIR no tick interno mais próximo (algoritmo anterior);
+1. valor do FIR no primeiro tick interno após o cruzamento da fase (algoritmo anterior);
 2. interpolação entre as saídas FIR dos ticks adjacentes no instante fracionário calculado pelo acumulador;
 3. referência do mesmo FIR avaliado no instante ideal.
 
