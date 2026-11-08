@@ -235,6 +235,14 @@ impl Sn76489Core {
             usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let filter_history = vec![0.0; filter_coefficients.len()];
+        sega_observability::tracing::info!(
+            target: "sega::psg",
+            clock_hz,
+            sample_rate,
+            profile = ?profile,
+            sample_buffer_capacity,
+            "SN76489 PSG initialized"
+        );
         let mut device = Self {
             profile,
             clock_hz,
@@ -341,10 +349,19 @@ impl Sn76489Core {
     }
 
     pub fn reset(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::psg",
+            "SN76489 PSG reset"
+        );
         self.reset_inner();
     }
 
     pub fn write(&mut self, value: u8) {
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            value,
+            "SN76489 register write"
+        );
         self.write_inner(value);
     }
 
@@ -526,6 +543,11 @@ impl Sn76489Core {
                         self.render_pending.push_back(sample);
                     } else {
                         if self.pending_samples.len() == self.sample_buffer_capacity {
+                            sega_observability::tracing::trace!(
+                                target: "sega::psg",
+                                capacity = self.sample_buffer_capacity,
+                                "PSG sample queue overflow; oldest pending sample discarded"
+                            );
                             self.pending_samples.pop_front();
                             self.dropped_samples += 1;
                         }
