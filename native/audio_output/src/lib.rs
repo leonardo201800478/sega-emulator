@@ -678,6 +678,7 @@ fn run_wasapi_worker(
                 })();
                 if flush_result.is_err() {
                     control_failed.store(true, Ordering::Release);
+                    disconnected = true;
                 }
                 flush_acknowledged.store(true, Ordering::Release);
                 if flush_result.is_err() {
@@ -692,6 +693,7 @@ fn run_wasapi_worker(
                         .and_then(|()| audio_client.reset_stream());
                     if stopped.is_err() {
                         control_failed.store(true, Ordering::Release);
+                        disconnected = true;
                         break;
                     }
                     stream_started = false;
