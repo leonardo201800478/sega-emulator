@@ -485,7 +485,7 @@ use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, W
 #[cfg(windows)]
 use windows::Win32::System::SystemInformation::NTDDI_WIN10_RS5;
 #[cfg(windows)]
-use windows::core::{HRESULT, PCWSTR, implement};
+use windows::core::{HRESULT, PCWSTR};
 
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
@@ -664,7 +664,6 @@ impl Drop for NativeXAudio2Output {
 }
 
 #[cfg(windows)]
-#[implement(IXAudio2VoiceCallback)]
 struct XAudio2VoiceCallbackState {
     completed_buffers: Arc<AtomicU64>,
     voice_error: Arc<AtomicBool>,
@@ -707,7 +706,10 @@ fn run_xaudio2_worker(
         completed_buffers: Arc::clone(&completed_buffers),
         voice_error: Arc::clone(&voice_error),
     };
-    let callback: IXAudio2VoiceCallback = callback_state.into();
+    // `new` builds the scoped COM interface adapter for this classic XAudio2
+    // callback. Keep both the adapter and its borrowed state alive until after
+    // DestroyVoice has completed.
+    let callback = IXAudio2VoiceCallback::new(&callback_state);
 
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
