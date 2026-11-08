@@ -442,17 +442,17 @@ impl NativeWasapiOutput {
                         "WASAPI render endpoint initialized"
                     );
                     Ok(Self {
-                    producer: Some(producer),
-                    worker: Some(worker),
-                    shutdown,
-                    underruns,
-                    dropped_blocks,
-                    sample_rate,
-                    buffer_size,
-                    balance,
-                    control,
-                    })
-                },
+                        producer: Some(producer),
+                        worker: Some(worker),
+                        shutdown,
+                        underruns,
+                        dropped_blocks,
+                        sample_rate,
+                        buffer_size,
+                        balance,
+                        control,
+                })
+                }
                 Ok(Err(message)) => {
                     sega_observability::tracing::error!(
                         target: "sega::audio::backend",
@@ -907,11 +907,7 @@ fn run_wasapi_worker(
                 let prebuffer = &mut scratch_frames[..prebuffer_frames];
                 let report = consumer.read_frames(prebuffer);
                 if report.silence_frames > 0 {
-                    record_audio_underrun(
-                        &underruns,
-                        "WASAPI",
-                        report.silence_frames as u64,
-                    );
+                    record_audio_underrun(&underruns, "WASAPI", report.silence_frames as u64);
                 }
                 pending.clear();
                 for [left, right] in prebuffer.iter() {
@@ -1003,11 +999,7 @@ fn run_wasapi_worker(
             }
             let report = consumer.read_frames(&mut scratch_frames[..frames]);
             if report.silence_frames > 0 {
-                record_audio_underrun(
-                    &underruns,
-                    "WASAPI",
-                    report.silence_frames as u64,
-                );
+                record_audio_underrun(&underruns, "WASAPI", report.silence_frames as u64);
             }
 
             pending.clear();
@@ -1026,8 +1018,7 @@ fn run_wasapi_worker(
                 disconnected = true;
                 break;
             }
-            if let Err(error) =
-                render_client.write_to_device_from_deque(frames, &mut pending, None)
+            if let Err(error) = render_client.write_to_device_from_deque(frames, &mut pending, None)
             {
                 sega_observability::tracing::warn!(
                     target: "sega::audio::backend",
@@ -1189,18 +1180,18 @@ impl NativeXAudio2Output {
                         "XAudio2 mastering and source voices initialized"
                     );
                     Ok(Self {
-                    producer: Some(producer),
-                    worker: Some(worker),
-                    shutdown,
-                    underruns,
-                    dropped_blocks,
-                    submission_failed_frames,
-                    sample_rate,
-                    buffer_size,
-                    balance,
-                    control,
-                    })
-                },
+                        producer: Some(producer),
+                        worker: Some(worker),
+                        shutdown,
+                        underruns,
+                        dropped_blocks,
+                        submission_failed_frames,
+                        sample_rate,
+                        buffer_size,
+                        balance,
+                        control,
+                })
+                }
                 Ok(Err(message)) => {
                     sega_observability::tracing::error!(
                         target: "sega::audio::backend",
@@ -1636,9 +1627,9 @@ fn run_xaudio2_worker(
             };
             if let Err(error) = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) } {
                 let lost_frames = submitted.rollback_last_submission();
-                let total_failed_frames =
-                    submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed)
-                        + lost_frames as u64;
+                let total_failed_frames = submission_failed_frames
+                    .fetch_add(lost_frames as u64, Ordering::Relaxed)
+                    + lost_frames as u64;
                 sega_observability::tracing::error!(
                     target: "sega::audio::backend",
                     backend = "XAudio2",
