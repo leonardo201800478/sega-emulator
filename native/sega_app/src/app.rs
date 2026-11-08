@@ -22,6 +22,7 @@ const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 const RECENT_ROM_LIST_FILE: &str = "recent_roms.txt";
 const MAX_RECENT_ROMS: usize = 10;
+const MENU_BAR_HEIGHT: f32 = 32.0;
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
@@ -324,7 +325,7 @@ impl SegaApp {
             self.menu_popup_size
                 .y
                 .max(minimum_size.y)
-                .min(root_bounds.height()),
+                .min((root_bounds.height() - MENU_BAR_HEIGHT).max(1.0)),
         );
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
@@ -344,16 +345,19 @@ impl SegaApp {
                 egui::CentralPanel::default()
                     .frame(egui::Frame::popup(&menu_ui.style()))
                     .show(menu_ui, |menu_ui| {
-                        let inner = menu_ui.vertical(|menu_ui| {
-                            menu_ui.horizontal(|menu_ui| {
-                                menu_ui.strong(menu.title());
-                                if menu_ui.small_button("×").clicked() {
-                                    self.active_menu = None;
-                                }
-                            });
-                            menu_ui.separator();
+                        let scroll = egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(menu_ui, |menu_ui| {
+                                let inner = menu_ui.vertical(|menu_ui| {
+                                    menu_ui.horizontal(|menu_ui| {
+                                        menu_ui.strong(menu.title());
+                                        if menu_ui.small_button("×").clicked() {
+                                            self.active_menu = None;
+                                        }
+                                    });
+                                    menu_ui.separator();
 
-                            let mut header_state = HeaderState {
+                                    let mut header_state = HeaderState {
                                 browse_requested: &mut self.rom_dialog_requested,
                                 recent_roms: &self.recent_roms,
                                 recent_rom_requested: &mut self.recent_rom_requested,
@@ -380,20 +384,22 @@ impl SegaApp {
                                 fullscreen_requested: &mut fullscreen_requested,
                                 exit_requested: &mut exit_requested,
                             };
-                            render_menu_content(menu_ui, menu, &mut header_state);
+                                    render_menu_content(menu_ui, menu, &mut header_state);
 
-                            if menu_ui.input(|input| input.key_pressed(egui::Key::Escape))
-                                || command.is_some()
-                                || *header_state.browse_requested
-                                || header_state.recent_rom_requested.is_some()
-                                || exit_requested
-                            {
-                                *header_state.active_menu = None;
-                            }
-                            drop(header_state);
-                            self.update_keyboard_input(menu_ui.ctx());
-                        });
-                        measured_size = inner.response.rect.size() + egui::vec2(24.0, 24.0);
+                                    if menu_ui.input(|input| input.key_pressed(egui::Key::Escape))
+                                        || command.is_some()
+                                        || *header_state.browse_requested
+                                        || header_state.recent_rom_requested.is_some()
+                                        || exit_requested
+                                    {
+                                        *header_state.active_menu = None;
+                                    }
+                                    drop(header_state);
+                                    self.update_keyboard_input(menu_ui.ctx());
+                                });
+                                inner
+                            });
+                        measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
                     });
             },
         );
@@ -406,7 +412,7 @@ impl SegaApp {
             measured_size
                 .y
                 .max(minimum_size.y)
-                .min(root_bounds.height()),
+                .min((root_bounds.height() - MENU_BAR_HEIGHT).max(1.0)),
         );
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -1151,7 +1157,8 @@ fn menu_popup_position(
         .min((root_bounds.right() - size.x).max(root_bounds.left()));
     position.y = position
         .y
-        .min((root_bounds.bottom() - size.y).max(root_bounds.top()));
+        .min((root_bounds.bottom() - size.y).max(root_bounds.top() + MENU_BAR_HEIGHT))
+        .max(root_bounds.top() + MENU_BAR_HEIGHT);
     position
 }
 
@@ -1621,7 +1628,7 @@ mod tests {
         let position = super::menu_popup_position(root, anchor, size);
 
         assert!(position.x >= root.left());
-        assert!(position.y >= root.top());
+        assert!(position.y >= root.top() + super::MENU_BAR_HEIGHT);
         assert!(position.x + size.x <= root.right());
         assert!(position.y + size.y <= root.bottom());
     }
