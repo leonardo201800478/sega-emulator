@@ -468,7 +468,9 @@ impl NativeWasapiOutput {
                 return Err(AudioOutputError::WorkerStopped);
             }
             self.control.suspended.store(true, Ordering::Release);
-            self.control.flush_acknowledged.store(false, Ordering::Release);
+            self.control
+                .flush_acknowledged
+                .store(false, Ordering::Release);
             self.control.flush_requested.store(true, Ordering::Release);
             wait_for_flush_acknowledgement(
                 &self.control.flush_acknowledged,
@@ -1019,7 +1021,9 @@ impl NativeXAudio2Output {
                 return Err(AudioOutputError::WorkerStopped);
             }
             self.control.suspended.store(true, Ordering::Release);
-            self.control.flush_acknowledged.store(false, Ordering::Release);
+            self.control
+                .flush_acknowledged
+                .store(false, Ordering::Release);
             self.control.flush_requested.store(true, Ordering::Release);
             wait_for_flush_acknowledgement(
                 &self.control.flush_acknowledged,
