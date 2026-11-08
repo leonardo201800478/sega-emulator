@@ -29,7 +29,6 @@ pub(super) struct DiagnosticsCapture {
     sequence: Arc<AtomicU64>,
     dropped: Arc<AtomicU64>,
     file_path: Option<PathBuf>,
-    last_error: Option<String>,
 }
 
 impl DiagnosticsCapture {
@@ -65,7 +64,6 @@ impl DiagnosticsCapture {
             self.file_path = Some(path);
             self.sequence.store(0, Ordering::Relaxed);
             self.dropped.store(0, Ordering::Relaxed);
-            self.last_error = None;
             return Ok(());
         }
 
@@ -102,10 +100,6 @@ impl DiagnosticsCapture {
     pub(super) fn dropped_events(&self) -> u64 {
         self.dropped.load(Ordering::Relaxed)
     }
-
-    pub(super) fn last_error(&self) -> Option<&str> {
-        self.last_error.as_deref()
-    }
 }
 
 impl Drop for DiagnosticsCapture {
@@ -139,7 +133,8 @@ fn write_events(receiver: mpsc::Receiver<DiagnosticEvent>, path: PathBuf) {
             json_escape(&event.details),
             event.dropped_before
         );
-        if bytes_written.saturating_add(line.len() as u64) > MAX_FILE_BYTES {
+        let line_bytes = u64::try_from(line.len()).unwrap_or(u64::MAX);
+        if bytes_written.saturating_add(line_bytes) > MAX_FILE_BYTES {
             if writer.flush().is_err() || rotate_files(&path).is_err() {
                 return;
             }
@@ -152,7 +147,7 @@ fn write_events(receiver: mpsc::Receiver<DiagnosticEvent>, path: PathBuf) {
         if writer.write_all(line.as_bytes()).is_err() {
             return;
         }
-        bytes_written = bytes_written.saturating_add(line.len() as u64);
+        bytes_written = bytes_written.saturating_add(line_bytes);
     }
     let _ = writer.flush();
 }
