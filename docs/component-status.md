@@ -1,34 +1,66 @@
-# Status dos componentes — 2026-11-07
+# Status dos componentes — 2026-11-08
 
-**Baseline:** `main` em `3ad1781f84b7824b5aa889a583ae6d4545987ec1`.  
-**Regra:** esta tabela descreve código integrado na main. Funcionalidades em PRs são identificadas separadamente.
+**Baseline:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c`.
+**Regra:** descreve somente código integrado na main; PRs abertas, evidência manual e validação física são classificadas separadamente.
 
 | Componente | Estado integrado na main | Pendências / evidência |
 |---|---|---|
 | Produto / toolchain | Rust-only; toolchain fixada em `rust-toolchain.toml` | Gates devem ser reexecutados no HEAD candidato |
-| Aplicação egui/eframe | Shell nativo integrado | Integração vertical com SMS segue nas PRs #613/#614 |
+| Aplicação egui/eframe | Shell nativo e integração SMS na main | UI é apresentação/comandos coarse-grained; validação Windows ainda parcial |
 | Z80 compartilhado | Um núcleo Rust compartilhado | E7.7 IN_PROGRESS; E8 BLOCKED; consultar scorecard e matriz DD/FD |
-| MachineScheduler | Núcleo e testes determinísticos integrados | Stress longo PASS na evidência de 2026-11-07; não equivale a TEMPORAL_PASS do SMS |
+| MachineScheduler | Núcleo e testes determinísticos integrados | Stress do Scheduler não comprova sincronismo físico do áudio nem TEMPORAL_PASS sistêmico |
 | SMS core temporal | Base temporal Rust integrada | Precisão VDP ainda parcial; WAIT por fixture; Save States persistentes completos pendentes |
-| SMS runtime worker | Worker Rust puro disponível | Ligação operacional ao shell está em PR #613 |
-| Vídeo / D3D12 | Runtime/host Rust disponível | Viewport integrado ao shell está em PR #613; validação física GPU NOT RUN nesta fotografia |
-| Áudio / PSG | Runtime SN76489 e pipeline Rust integrados; PR #615 melhorou filtro e reset de ruído | Backend físico WASAPI/XAudio2 no shell está em PR #614; endpoint real NOT RUN conforme descrição da PR |
-| Input | Infraestrutura Rust/SDL3 disponível nas mudanças da aplicação | Ligação ao shell em PR #614; gamepad físico/hotplug NOT RUN |
-| SG-1000 | Código legado/atômico fora do runtime ativo inicial SMS | Nova etapa P2; preservar evidências e regressões sem criar fallback |
+| SMS runtime worker | Worker Rust puro integrado | Lifecycle e áudio físico precisam de validação no mesmo SHA |
+| Vídeo / D3D12 | Runtime/viewport integrados | Validação física GPU e regressões visuais permanecem pendentes; issue #641 aberta |
+| Áudio / PSG | SN76489 e pipeline de áudio Rust integrados; melhorias #615/#661 e lifecycle de epoch #658 integradas | **BLOCKED para release físico:** #640/#659 abertas. PR #666 corrige falha terminal XAudio2, submit loss, starvation e snapshot flush; CI PASS, ainda não integrada. Validação física WASAPI/XAudio2 NOT RUN |
+| Input | Teclado e SDL3 integrados ao shell | Foco/consumo de teclado requer teste Windows; gamepad físico/hotplug NOT RUN |
+| SG-1000 | Implementação preservada fora da trilha de expansão SMS atual | Regressão obrigatória em cada alteração compartilhada; não criar fallback duplicado |
 | ZEXDOC / ZEXALL | NOT RUN | E8 bloqueada até fechamento E7 e harness Rust completo |
-| Python / Qt / PyO3 / Maturin | Fora da arquitetura ativa; removidos do produto conforme ADR 0010 | Não reintroduzir em runtime, tooling, CI ou distribuição |
+| Python / Qt / PyO3 / Maturin | Fora da arquitetura ativa | Não reintroduzir em runtime, tooling, CI ou distribuição |
 
-## PRs abertas relacionadas
+## Prioridade operacional — áudio
 
-| PR | Estado | Escopo | Observação |
-|---|---|---|---|
-| [#613](https://github.com/leonardo201800478/sega-emulator/pull/613) | OPEN | Runtime SMS + viewport D3D12 no shell | Não integrado; validação física e CI no HEAD final exigidas |
-| [#614](https://github.com/leonardo201800478/sega-emulator/pull/614) | OPEN | WASAPI/XAudio2 + teclado/SDL3 | Empilhada sobre #613; validar em conjunto |
-| [#616](https://github.com/leonardo201800478/sega-emulator/pull/616) | OPEN | Auditoria documental de boot/cartuchos | Não altera runtime |
+Consultar [scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md) e [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md).
+
+- AUDIO-00 a AUDIO-05 são a trilha imediata.
+- A issue #659 demonstra sintomas semelhantes em WASAPI e XAudio2 mesmo sem underruns frequentes; investigar primeiro a cadeia compartilhada de geração PCM/resampler.
+- A issue #640 permanece aberta; contagem de underrun isolada não prova causa raiz.
+- Não ajustar clocks do PSG/Scheduler, pitch, velocidade, buffer ou prebuffer sem evidência reproduzível.
+- Não considerar `consumed_frames` como frames reproduzidos nem `queue_duration_micros` como latência ponta a ponta.
+
+## PRs e issues relevantes
+
+| Referência | Estado em 2026-11-08 | Consequência |
+|---|---|---|
+| [PR #613](https://github.com/leonardo201800478/sega-emulator/pull/613) | MERGED | Runtime SMS e viewport D3D12 integrados |
+| [PR #614](https://github.com/leonardo201800478/sega-emulator/pull/614) | MERGED | Áudio nativo e controles integrados; não é aceite físico |
+| [PR #657](https://github.com/leonardo201800478/sega-emulator/pull/657) | CLOSED / NOT MERGED | Não atribuir a esta PR a integração do código atual |
+| [PR #658](https://github.com/leonardo201800478/sega-emulator/pull/658) | MERGED | Descarte da cauda do resampler após invalidação de epoch |
+| [PR #661](https://github.com/leonardo201800478/sega-emulator/pull/661) | MERGED | Amostragem SN76489 em posições fracionárias do clock de saída |
+| [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666) | OPEN / CI SUCCESS | Correções de falha/telemetria; validação física pendente |
+| [PR #643](https://github.com/leonardo201800478/sega-emulator/pull/643) | OPEN / mergeable=false | Base antiga; não integrada |
+| [PR #644](https://github.com/leonardo201800478/sega-emulator/pull/644) | OPEN / mergeable=false | Base antiga; não integrada |
+| [PR #645](https://github.com/leonardo201800478/sega-emulator/pull/645) | OPEN / mergeable=false | Base antiga; não integrada |
+| [Issue #640](https://github.com/leonardo201800478/sega-emulator/issues/640) | OPEN | Underruns WASAPI; causa não confirmada |
+| [Issue #659](https://github.com/leonardo201800478/sega-emulator/issues/659) | OPEN | Distorção/descompasso em ambos os backends; causa não determinada |
+| [Issue #641](https://github.com/leonardo201800478/sega-emulator/issues/641) | OPEN | Corrupção visual; fora da trilha de áudio |
+
+## CI da baseline
+
+Workflow [42484594809](https://github.com/leonardo201800478/sega-emulator/actions/runs/42484594809), SHA `9731b37098e7937fa92fffc15007a7c79aac4e4c`, conclusão geral SUCCESS.
+
+- **PASS:** Rust quality and unit regression; Documentation patch hygiene; Change impact classification.
+- **SKIPPED / NOT RUN:** Rust workspace regression; Linux audio-output host validation; Windows WASAPI/XAudio2 validation; Windows x64 D3D12 compile; Windows SDL3 input; Scheduler deterministic stress; Z80 focused validation; PowerShell tooling; refresh manual de lockfiles.
+
+Não interpretar o sucesso geral como validação das suítes ignoradas.
+
+## CI da correção de áudio — PR #666
+
+Workflow [42489225235](https://github.com/leonardo201800478/sega-emulator/actions/runs/42489225235), HEAD `29916f7ddb27a069b385a57e53d04760de5e01ed`, conclusão SUCCESS. PASS: workspace fmt/Clippy/testes; Linux audio-output; Windows WASAPI/XAudio2 fmt/Clippy/testes; formatação e Clippy da aplicação Windows; documentação e classificação de impacto. SKIPPED: Scheduler stress, Z80 focused, SDL3, PowerShell e refresh manual de lockfiles. A CI não executa áudio em endpoint físico nem loopback.
 
 ## Evidência do Scheduler
 
-A campanha longa executou 320.000 operações e 4.000.000 dispatches em 16 seeds, com 2 testes PASS e 0 falhas. Os arquivos de teste, manifesto e implementação do Scheduler foram comparados por blob SHA com a main e encontrados idênticos. Ver [registro completo](evidence/scheduler-stress-long-2026-11-07.md).
+A campanha longa anterior executou 320.000 operações e 4.000.000 dispatches em 16 seeds, com 2 testes PASS e 0 falhas, conforme [registro de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md). Essa evidência é restrita ao Scheduler e não comprova áudio físico.
 
 ## Classificação de maturidade
 
@@ -37,5 +69,3 @@ A campanha longa executou 320.000 operações e 4.000.000 dispatches em 16 seeds
 - **INTEGRATION_PENDING:** depende de integração com outro componente/host.
 - **PHYSICAL_VALIDATION_PENDING:** depende de dispositivo ou GPU real.
 - **NOT RUN / BLOCKED:** teste não executado ou execução impedida; nunca equivale a PASS.
-
-A presença de uma crate ou de um teste não comprova compatibilidade completa. O estado operacional consolidado está em [project-status-2026-11-07.md](project-status-2026-11-07.md).

@@ -1,10 +1,10 @@
 # Roadmap mestre — Sega Emulator
 
-**Status:** rota normativa de implementação.  
-**Baseline documental:** main `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
-**Regra:** o roadmap define sequência e gates; o [status datado](project-status-2026-11-07.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
+**Status:** rota normativa de implementação.
+**Baseline de reconciliação:** main `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).
+**Regra:** o roadmap define sequência e gates; o [status dos componentes](component-status.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
 
-**Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).  
+**Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).
 **Política de fidelidade:** [ADR-0016 — fidelidade observável e temporização proporcional](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
 ## 1. Diretriz vigente
@@ -13,7 +13,7 @@ O produto é integralmente Rust, com interface desktop egui/eframe. Python, PySi
 
 O primeiro runtime executável é o Master System temporal, composto pelo Z80 compartilhado, barramento/memória/mapper, PSG, VDP e MachineScheduler. O Scheduler é a autoridade única da ordem temporal. A GUI não executa hardware, avança clocks ou realiza callbacks por instrução.
 
-O shell egui está integrado à main. A integração vertical do shell com ROM/runtime SMS, viewport D3D12, áudio e input está em PRs abertas (#613 e #614), empilhadas; não considerar essas funcionalidades integradas até os merges e validações correspondentes.
+O shell egui, runtime SMS, viewport D3D12, áudio WASAPI/XAudio2 e controles teclado/SDL3 foram integrados pelas PRs #613 e #614. A integração no código não equivale a aceite físico: a qualidade sonora continua bloqueada pelas issues #640 e #659 e pelos gates de host ainda não executados na baseline.
 
 ## 2. Sequência normativa
 
@@ -32,38 +32,56 @@ Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriore
 
 ## 3. Estado da prioridade imediata — P1 / SMS
 
-### 3.1 Integrado na main
+**Prioridade operacional atual: confiabilidade de áudio.** Antes de retomar expansão de plataforma ou tarefas não bloqueadoras do SMS, executar a trilha AUDIO-00 a AUDIO-10 do [scorecard de áudio](audio/audio-reliability-scorecard.md). O confronto das quatro auditorias independentes está em [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md).
+
+### 3.1 Estado integrado
 
 - Produto e shell nativos Rust/egui.
-- Worker/runtime SMS temporal em Rust.
+- Runtime SMS temporal, worker, viewport D3D12, áudio WASAPI/XAudio2 e controles teclado/SDL3 integrados pelas PRs #613 e #614.
 - Componentes compartilhados sem runtime atômico SMS como fallback.
-- CI Rust-first e contratos de validação.
-- Melhoria de fidelidade do SN76489 integrada pela PR #615.
-- Esclarecimento da arquitetura Rust-only integrado pela PR #617.
-- MachineScheduler com testes de determinismo, codec e restauração; campanha longa documentada em [evidência de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md).
+- Melhoria de fidelidade SN76489 integrada pela PR #615.
+- Correção de ciclo de saída/epoch do resampler integrada pela PR #658.
+- Amostragem SN76489 em posições fracionárias do clock de saída integrada pela PR #661.
+- MachineScheduler com testes de determinismo, codec e restauração; a campanha longa documentada em [evidência de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md) é evidência do Scheduler isolado, não de áudio físico ou TEMPORAL_PASS sistêmico.
 
-### 3.2 Em PRs abertas — não integradas
+### 3.2 Sprint transversal AUDIO — prioridade imediata
 
-- **PR #613:** integração do runtime SMS temporal, carregamento de ROM e viewport D3D12 no shell.
-- **PR #614:** integração de áudio WASAPI/XAudio2 e controles de teclado/SDL3; branch empilhada sobre #613.
-- **PR #616:** reconciliação documental da auditoria de boot/cartuchos.
+A issue #659 relata áudio distorcido, fora de ritmo e aparentemente lento em WASAPI e XAudio2, mesmo quando os underruns são raros ou não observados. Portanto, investigar primeiro a geração PCM compartilhada, não presumir que a FIFO ou um backend isolado seja a causa.
 
-Os estados de CI e validação física devem ser reconsultados no HEAD exato antes de qualquer merge.
+1. **AUDIO-00 — baseline e contrato:** fixar SHA, dispositivo, taxa, cenário, unidades, epochs e semântica dos contadores.
+2. **AUDIO-01 — geração e taxa efetiva:** rastrear PSG → conversão → resampler → blocos PCM; medir taxa, cadência, fase, amplitude e clipping.
+3. **AUDIO-02 — resampler/epoch:** provar continuidade de fase, equivalência por chunking e comportamento em flush/reset/load.
+4. **AUDIO-03 — transporte/backends:** corrigir underflow, starvation XAudio2, flush, falha terminal e submit; separar métricas por camada.
+5. **AUDIO-04 — lifecycle:** validar Pause/Resume/Stop/Reset/Load/Close/StepFrame e atualizar snapshots após transições confirmadas.
+6. **AUDIO-05 — validação física:** comparar WASAPI e XAudio2 no Windows com a mesma sequência PCM, captura de loopback e métricas sincronizadas.
 
-### 3.3 Gates de aceitação SMS
+**Correções de primeira rodada:** a [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666) implementa rejeição de escrita após falha terminal, contabilidade de flush/submissão, starvation XAudio2 separado e snapshots do worker após lifecycle. O HEAD `29916f7ddb27a069b385a57e53d04760de5e01ed` passou workspace fmt/Clippy/testes, Linux audio-output e Windows WASAPI/XAudio2; a PR está aberta, não integrada. Isso fecha parte dos achados estáticos, mas não determina a causa da distorção/ritmo lento reportada em #659.
+
+**Gate de saída:** causa raiz demonstrada para #640/#659; ausência de perda/duplicação silenciosa; taxa/cadência coerentes; testes automatizados PASS; validação física dos dois backends PASS; regressão SG-1000 preservada. Até lá, áudio permanece BLOCKED para aceite de release e novas plataformas ficam congeladas. Não alterar clocks do PSG/MachineScheduler nem aumentar buffers por tentativa e erro.
+
+### 3.3 PRs e issues relevantes
+
+- **PRs #613 e #614:** MERGED; integram runtime/viewport e áudio/input. Merge não equivale a aceite físico.
+- **PR #657:** CLOSED / NOT MERGED; não atribuir a ela estado de integração.
+- **PR #666:** OPEN, CI SUCCESS no HEAD `29916f7d`; correções iniciais de falha/telemetria aguardam merge; validação física NOT RUN.
+- **PRs #643, #644 e #645:** OPEN, base antiga e `mergeable=false`; não fazem parte da main e exigem reconciliação independente.
+- **Issues #640 e #659:** OPEN; underruns e qualidade sonora sem causa raiz confirmada.
+- **Issue #641:** OPEN; corrupção visual, trilha independente de áudio.
+
+### 3.4 Gates de aceitação SMS
 
 - ROM sintética/homebrew carregada sem depender de ROM comercial versionada.
 - Z80 compartilhado como única CPU.
 - Um único MachineScheduler coordenando os componentes temporais.
 - Framebuffer real apresentado pelo host gráfico.
-- PCM não silencioso entregue ao backend nativo e validado em endpoint físico.
+- PCM não silencioso, com taxa/cadência/fase validadas, entregue ao backend nativo e validado em endpoint físico.
+- Métricas distinguem FIFO underflow, endpoint starvation, frames em voo, flush e reprodução efetiva.
+- Falhas terminais WASAPI/XAudio2 são propagadas; nenhuma escrita pode retornar sucesso sem consumidor ativo.
 - Input nativo validado com teclado e gamepad.
 - Start/pause/resume/stop/reset/close sem threads órfãs.
 - Execução contínua versus em blocos com equivalência demonstrada.
 - Snapshot/restore determinístico dos estados que integram a máquina.
 - Regressões e gates Rust/Windows no mesmo SHA final.
-
-A campanha de stress do Scheduler é uma evidência de robustez do Scheduler isolado; não substitui os gates de integração acima.
 
 ## 4. Z80 — sequência obrigatória
 
@@ -124,6 +142,9 @@ Toda validação deve indicar SHA, ambiente, comando, escopo e limitações. Tes
 - Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
 
 ## 9. Documentos operacionais
+
+- [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md)
+- [Auditoria consolidada das análises independentes](audits/audio-reliability-consolidated-2026-11-08.md)
 
 - [Mapa de documentação](README.md)
 - [Status atual](project-status-2026-11-07.md)
