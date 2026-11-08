@@ -227,24 +227,28 @@ impl Z80 {
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
     pub fn request_nmi(&mut self) {
-        sega_observability::tracing::trace!(
-            target: "sega::z80",
-            pc = self.registers.pc,
-            total_tstates = self.total_tstates,
-            "NMI request latched"
-        );
+        if !self.nmi_pending {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                "NMI request latched"
+            );
+        }
         self.nmi_pending = true;
     }
 
     /// Latch a maskable interrupt and the byte supplied by the external data bus.
     pub fn request_int(&mut self, data_bus: u8) {
-        sega_observability::tracing::trace!(
-            target: "sega::z80",
-            pc = self.registers.pc,
-            data_bus,
-            interrupt_mode = self.interrupt_mode,
-            "INT request latched"
-        );
+        if self.int_pending != Some(data_bus) {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                data_bus,
+                interrupt_mode = self.interrupt_mode,
+                "INT request latched or vector changed"
+            );
+        }
         self.int_pending = Some(data_bus);
     }
 
