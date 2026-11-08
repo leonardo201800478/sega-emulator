@@ -1,7 +1,7 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** rota normativa de implementação.  
-**Baseline documental:** main `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
+**Baseline de reconciliação:** main `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).  
 **Regra:** o roadmap define sequência e gates; o [status datado](project-status-2026-11-07.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
 
 **Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).  
@@ -13,7 +13,7 @@ O produto é integralmente Rust, com interface desktop egui/eframe. Python, PySi
 
 O primeiro runtime executável é o Master System temporal, composto pelo Z80 compartilhado, barramento/memória/mapper, PSG, VDP e MachineScheduler. O Scheduler é a autoridade única da ordem temporal. A GUI não executa hardware, avança clocks ou realiza callbacks por instrução.
 
-O shell egui está integrado à main. A integração vertical do shell com ROM/runtime SMS, viewport D3D12, áudio e input está em PRs abertas (#613 e #614), empilhadas; não considerar essas funcionalidades integradas até os merges e validações correspondentes.
+O shell egui, runtime SMS, viewport D3D12, áudio WASAPI/XAudio2 e controles teclado/SDL3 foram integrados pelas PRs #613 e #614. A integração no código não equivale a aceite físico: a qualidade sonora continua bloqueada pelas issues #640 e #659 e pelos gates de host ainda não executados na baseline.
 
 ## 2. Sequência normativa
 
@@ -56,7 +56,7 @@ Os estados de CI e validação física devem ser reconsultados no HEAD exato ant
 - Z80 compartilhado como única CPU.
 - Um único MachineScheduler coordenando os componentes temporais.
 - Framebuffer real apresentado pelo host gráfico.
-- PCM não silencioso entregue ao backend nativo e validado em endpoint físico.
+- PCM não silencioso, com taxa/cadência/fase validadas, entregue ao backend nativo e validado em endpoint físico.\n- Métricas distinguem FIFO underflow, endpoint starvation, frames em voo, flush e reprodução efetiva.\n- Falhas terminais WASAPI/XAudio2 são propagadas; nenhuma escrita pode retornar sucesso sem consumidor ativo.
 - Input nativo validado com teclado e gamepad.
 - Start/pause/resume/stop/reset/close sem threads órfãs.
 - Execução contínua versus em blocos com equivalência demonstrada.
@@ -123,7 +123,7 @@ Toda validação deve indicar SHA, ambiente, comando, escopo e limitações. Tes
 - Não inferir integração a partir de PR aberta, branch, build local ou documentação.
 - Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
 
-## 9. Documentos operacionais
+## 9. Documentos operacionais\n\n- [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md)\n- [Auditoria consolidada das análises independentes](audits/audio-reliability-consolidated-2026-11-08.md)
 
 - [Mapa de documentação](README.md)
 - [Status atual](project-status-2026-11-07.md)
