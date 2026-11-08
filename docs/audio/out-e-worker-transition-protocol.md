@@ -39,7 +39,7 @@ Esta auditoria é estática. Ela não demonstra o instante exato em que o endpoi
 1. A thread do worker SMS continua sendo o único produtor da FIFO; a thread backend continua sendo o único consumidor.
 2. Nenhum comando de Pause/Stop/Reset pode acessar diretamente o endpoint consumidor nem manipular o cursor interno da FIFO pelo lado produtor.
 3. Uma operação de flush é um comando coarse-grained enviado ao worker do backend, com confirmação síncrona de que a epoch anterior foi invalidada.
-4. O identificador de epoch é monotônico e não pode sofrer wrap silencioso; overflow deve ser erro explícito ou transição controlada.
+4. A fronteira entre epochs é estabelecida por uma barreira síncrona serializada no worker SMS: enquanto `suspend_and_flush` aguarda a confirmação, o único produtor não publica novos frames. Um contador numérico não é necessário neste modelo de produtor único e transições não reentrantes; se o controle se tornar assíncrono/multifonte, deverá ser introduzido um identificador monotônico com rejeição explícita de comandos obsoletos.
 5. O worker SMS não pode publicar novos frames entre emitir flush e receber a confirmação do backend.
 6. O backend deve descartar os frames ainda na FIFO e limpar o áudio já submetido ao endpoint segundo o contrato específico da API.
 7. Nenhuma API, lock, espera ou alocação nova pode ser introduzida no caminho de instruções ou no callback XAudio2.
