@@ -855,26 +855,41 @@ fn run_xaudio2_worker(
             cbSize: 0,
         };
         let mut source_voice: Option<IXAudio2SourceVoice> = None;
-        unsafe {
-            engine
-                .CreateSourceVoice(
-                    &mut source_voice,
-                    &format,
-                    0,
-                    2.0,
-                    Some(&*callback),
-                    None,
-                    None,
-                )
-                .map_err(|error| error.to_string())?;
-            engine.StartEngine().map_err(|error| error.to_string())?;
+        let create_result = unsafe {
+            engine.CreateSourceVoice(
+                &mut source_voice,
+                &format,
+                0,
+                2.0,
+                Some(&*callback),
+                None,
+                None,
+            )
+        };
+        if let Err(error) = create_result {
+            unsafe { mastering_voice.DestroyVoice() };
+            return Err(error.to_string());
         }
-        let source_voice =
-            source_voice.ok_or_else(|| "XAudio2 did not create a source voice".to_owned())?;
-        unsafe {
-            source_voice
-                .Start(0, 0)
-                .map_err(|error| error.to_string())?;
+        let Some(source_voice) = source_voice else {
+            unsafe { mastering_voice.DestroyVoice() };
+            return Err("XAudio2 did not create a source voice".to_owned());
+        };
+
+        if let Err(error) = unsafe { engine.StartEngine() } {
+            unsafe {
+                source_voice.DestroyVoice();
+                mastering_voice.DestroyVoice();
+                engine.StopEngine();
+            }
+            return Err(error.to_string());
+        }
+        if let Err(error) = unsafe { source_voice.Start(0, 0) } {
+            unsafe {
+                source_voice.DestroyVoice();
+                mastering_voice.DestroyVoice();
+                engine.StopEngine();
+            }
+            return Err(error.to_string());
         }
         Ok((engine, mastering_voice, source_voice))
     })();
