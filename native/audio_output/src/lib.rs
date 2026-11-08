@@ -233,6 +233,11 @@ fn wait_for_flush_acknowledgement(
 ) -> Result<(), AudioOutputError> {
     let deadline = std::time::Instant::now() + timeout;
     while !acknowledged.load(Ordering::Acquire) {
+        if failed.load(Ordering::Acquire) {
+            return Err(AudioOutputError::Device(
+                "audio backend worker failed during an epoch transition".to_owned(),
+            ));
+        }
         if shutdown.load(Ordering::Acquire) {
             return Err(AudioOutputError::WorkerStopped);
         }
@@ -400,7 +405,9 @@ impl NativeWasapiOutput {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire) {
+            if self.shutdown.load(Ordering::Acquire)
+                || self.worker.as_ref().is_some_and(|worker| worker.is_finished())
+            {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -1197,7 +1204,11 @@ fn run_xaudio2_worker(
     let mut was_underrun = false;
     let mut voice_started = false;
     loop {
-        if shutdown.load(Ordering::Acquire) || signals.voice_error.load(Ordering::Acquire) {
+        if shutdown.load(Ordering::Acquire) {
+            break;
+        }
+        if signals.voice_error.load(Ordering::Acquire) {
+            control_failed.store(true, Ordering::Release);
             break;
         }
 
