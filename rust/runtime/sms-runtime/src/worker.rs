@@ -162,9 +162,7 @@ impl WorkerTelemetry {
             endpoint_starvation_events: self
                 .audio_endpoint_starvation_events
                 .load(Ordering::Acquire),
-            submission_failed_frames: self
-                .audio_submission_failed_frames
-                .load(Ordering::Acquire),
+            submission_failed_frames: self.audio_submission_failed_frames.load(Ordering::Acquire),
         }
     }
 
