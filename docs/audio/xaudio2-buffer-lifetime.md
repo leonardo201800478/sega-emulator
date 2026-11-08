@@ -1,9 +1,9 @@
 # OUT-D — ownership e conclusão de buffers XAudio2
 
-**Status:** contrato aplicado no backend XAudio2; validação Windows da migração PCM FIFO pendente.
+**Status:** contrato de lifetime aplicado; migração PCM FIFO implementada na branch da PR #654, aguardando CI final e revisão.
 **Base do contrato:** PR #652, integrada na main.
 **Implementação de callback:** PR #653, integrada na main.
-**Migração PCM FIFO:** PR em preparação sobre a main `604346b9abd8d7b9505ced8ae9007927f9e32535`.
+**Migração PCM FIFO:** PR #654 sobre a main `604346b9abd8d7b9505ced8ae9007927f9e32535`.
 
 ## 1. Contrato Microsoft
 
@@ -46,6 +46,7 @@ A migração OUT-B mantém o contrato de lifetime e altera apenas a origem dos d
 5. O callback somente incrementa o contador; o worker remove buffers concluídos e os devolve ao pool.
 6. Se `SubmitSourceBuffer` falhar, o worker remove o staging recém-inserido. A submissão rejeitada não é aguardada como se houvesse callback pendente.
 7. O pool tem capacidade fixa; as coleções `VecDeque` são reservadas antes do loop. Nenhuma alocação é feita no callback.
+8. O produtor converte PCM16 mono em lotes de até 256 frames usando buffer temporário de tamanho fixo. A memória temporária não cresce com o tamanho do bloco recebido, tanto em WASAPI quanto em XAudio2. A FIFO recebe cada lote e mantém a política drop-newest com contagem exata dos frames descartados.
 
 A contagem simples de conclusões é válida apenas no playback FIFO normal. O worker não faz Flush durante reprodução normal.
 
@@ -61,6 +62,7 @@ A contagem simples de conclusões é válida apenas no playback FIFO normal. O w
 ## 5. Limites e validação
 
 - OUT-B só será concluída após CI Windows aprovado no HEAD final e regressão aplicável.
+- A CI anterior ao incremento de conversão limitada validou 21 testes; os dois testes novos ainda aguardam execução no HEAD atualizado.
 - Testes unitários do bookkeeping não substituem compilação Windows real.
 - CI não comprova saída audível em hardware físico.
 - Flush/epoch/mute/prebuffer continuam fora do escopo (OUT-E).
