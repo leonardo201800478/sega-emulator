@@ -85,7 +85,7 @@ A implementação introduzida na PR #656 cobre os seguintes pontos:
 - O worker SMS serializa Start/Pause/Stop/Reset/LoadRom/ConfigureAudio e aguarda a confirmação do backend antes de concluir as transições relevantes.
 - WASAPI executa Stop → Reset → descarte pelo consumidor. A espera do evento tem timeout de 10 ms para observar comandos de controle; o restart espera o prebuffer em frames, limitado à capacidade efetiva da FIFO.
 - XAudio2 executa Stop → FlushSourceBuffers e aguarda o número agregado de callbacks esperado e `BuffersQueued == 0`. Não libera staging individualmente por callback durante Flush.
-- A barreira de flush tem timeout de 2 s. Falha ou timeout é propagado como erro e não é convertido em sucesso.
+- A barreira de flush tem timeout de 5 s. Falha ou timeout é propagado como erro e não é convertido em sucesso.
 - StepFrame processa mixer/resampler, mas não envia PCM ao sink. A história FIR dos frames depurados é descartada antes do primeiro bloco audível após Resume.
 - Pause/Resume sem StepFrame preserva a história FIR; Reset/LoadRom a reinicializam.
 
