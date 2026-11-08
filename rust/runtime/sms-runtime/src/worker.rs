@@ -877,11 +877,12 @@ fn handle_command(
             let _ = reply.send(result);
         }
         WorkerCommand::CloseAudio(reply) => {
-            if let Some(mut session) = audio_session.take() {
-                let _ = session.suspend_and_flush();
+            let close_error = audio_session.take().and_then(|mut session| {
+                let error = session.suspend_and_flush().err();
                 session.close();
-            }
-            telemetry.set_audio_error(None);
+                error
+            });
+            telemetry.set_audio_error(close_error);
             telemetry.set_audio_metrics((0, 0));
             let _ = reply.send(());
         }
