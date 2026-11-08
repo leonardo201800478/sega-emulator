@@ -338,7 +338,10 @@ impl SegaApp {
         let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
-        self.diagnostics.record("menu.popup.requested", format!("menu={menu:?} position={position:?} size={popup_size:?}"));
+        self.diagnostics.record(
+            "menu.popup.requested",
+            format!("menu={menu:?} position={position:?} size={popup_size:?}"),
+        );
         let mut actions = MenuPopupActions {
             root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
             ..MenuPopupActions::default()
@@ -367,10 +370,16 @@ impl SegaApp {
         );
 
         if self.menu_last_focused != Some(popup_focused) {
-            self.diagnostics.record("menu.viewport.focus_changed", format!("menu={menu:?} focused={popup_focused}"));
+            self.diagnostics.record(
+                "menu.viewport.focus_changed",
+                format!("menu={menu:?} focused={popup_focused}"),
+            );
             self.menu_last_focused = Some(popup_focused);
         }
-        self.diagnostics.record("menu.popup.measured", format!("menu={menu:?} measured={measured_size:?}"));
+        self.diagnostics.record(
+            "menu.popup.measured",
+            format!("menu={menu:?} measured={measured_size:?}"),
+        );
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -395,7 +404,10 @@ impl SegaApp {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
-            self.diagnostics.record("menu.popup.closed", format!("menu={menu:?} reason=rom_dialog"));
+            self.diagnostics.record(
+                "menu.popup.closed",
+                format!("menu={menu:?} reason=rom_dialog"),
+            );
             self.active_menu = None;
         }
         actions.input_updated
@@ -788,7 +800,8 @@ impl SegaApp {
             return;
         }
 
-        self.diagnostics.record("native.root.hwnd", format!("hwnd=0x{parent_hwnd:X}"));
+        self.diagnostics
+            .record("native.root.hwnd", format!("hwnd=0x{parent_hwnd:X}"));
         self.update_child_bounds(context, viewport_rect);
         self.poll_native_startup(context);
         self.connect_worker_video(context);
@@ -805,9 +818,15 @@ impl SegaApp {
 
         let child = match D3d12ChildWindow::create(parent_hwnd) {
             Ok(child) => {
-                self.diagnostics.record("native.d3d12_child.created", format!("parent_hwnd=0x{parent_hwnd:X} child_hwnd=0x{:X}", child.handle()));
+                self.diagnostics.record(
+                    "native.d3d12_child.created",
+                    format!(
+                        "parent_hwnd=0x{parent_hwnd:X} child_hwnd=0x{:X}",
+                        child.handle()
+                    ),
+                );
                 child
-            },
+            }
             Err(error) => {
                 self.native_viewport.error =
                     Some(format!("Falha ao criar HWND filho D3D12: {error}"));
@@ -849,10 +868,17 @@ impl SegaApp {
             match child.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
                 Ok(()) => {
                     self.native_viewport.last_bounds = Some(bounds);
-                    self.diagnostics.record("native.d3d12_child.bounds", format!("x={} y={} width={} height={}", bounds.0, bounds.1, bounds.2, bounds.3));
-                },
+                    self.diagnostics.record(
+                        "native.d3d12_child.bounds",
+                        format!(
+                            "x={} y={} width={} height={}",
+                            bounds.0, bounds.1, bounds.2, bounds.3
+                        ),
+                    );
+                }
                 Err(error) => {
-                    self.diagnostics.record("native.d3d12_child.bounds_error", error.to_string());
+                    self.diagnostics
+                        .record("native.d3d12_child.bounds_error", error.to_string());
                     self.native_viewport.error =
                         Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
                     context.request_repaint();
@@ -952,7 +978,10 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-            self.diagnostics.record("menu.popup.closed", format!("menu={:?} reason=root_escape", self.active_menu));
+            self.diagnostics.record(
+                "menu.popup.closed",
+                format!("menu={:?} reason=root_escape", self.active_menu),
+            );
             self.active_menu = None;
             self.menu_last_focused = None;
         }
@@ -1201,13 +1230,24 @@ fn top_level_menu_button(
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
     if response.clicked() {
-        state.diagnostics.record("menu.button.clicked", format!("label={label} menu={menu:?} active_before={:?}", *state.active_menu));
+        state.diagnostics.record(
+            "menu.button.clicked",
+            format!(
+                "label={label} menu={menu:?} active_before={:?}",
+                *state.active_menu
+            ),
+        );
         if *state.active_menu == Some(menu) {
             *state.active_menu = None;
-            state.diagnostics.record("menu.state.changed", format!("active=None toggled={menu:?}"));
+            state.diagnostics.record(
+                "menu.state.changed",
+                format!("active=None toggled={menu:?}"),
+            );
         } else {
             *state.active_menu = Some(menu);
-            state.diagnostics.record("menu.state.changed", format!("active=Some({menu:?})"));
+            state
+                .diagnostics
+                .record("menu.state.changed", format!("active=Some({menu:?})"));
             *state.menu_anchor = response.rect.left_bottom();
             *state.menu_popup_size = menu.minimum_size();
         }
@@ -1542,7 +1582,9 @@ fn render_diagnostics_capture(
             "Arquivo: {}",
             diagnostics
                 .file_path()
-                .map_or("indisponível".to_owned(), |path| path.display().to_string())
+                .map_or("indisponível".to_owned(), |path| path
+                    .display()
+                    .to_string())
         ));
         ui.small(format!(
             "Eventos descartados por fila cheia: {}",

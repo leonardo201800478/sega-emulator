@@ -39,7 +39,11 @@ impl DiagnosticsCapture {
             if self.sender.is_some() {
                 return Ok(());
             }
-            if self.writer.as_ref().is_some_and(|writer| !writer.is_finished()) {
+            if self
+                .writer
+                .as_ref()
+                .is_some_and(|writer| !writer.is_finished())
+            {
                 return Err("A gravação anterior ainda está finalizando".to_owned());
             }
             if let Some(writer) = self.writer.take() {
@@ -58,13 +62,17 @@ impl DiagnosticsCapture {
             let (sender, receiver) = mpsc::sync_channel(QUEUE_CAPACITY);
             let writer_path = path.clone();
             let writer_error = Arc::clone(&self.writer_error);
-            if let Ok(mut error) = self.writer_error.lock() { *error = None; }
-            self.writer = Some(thread::Builder::new()
-                .name("sega-ui-diagnostics".to_owned())
-                .spawn(move || {
-                    write_events(&receiver, &writer_path, writer_error.as_ref())
-                })
-                .map_err(|error| format!("Não foi possível iniciar a thread de logs: {error}"))?);
+            if let Ok(mut error) = self.writer_error.lock() {
+                *error = None;
+            }
+            self.writer = Some(
+                thread::Builder::new()
+                    .name("sega-ui-diagnostics".to_owned())
+                    .spawn(move || write_events(&receiver, &writer_path, writer_error.as_ref()))
+                    .map_err(|error| {
+                        format!("Não foi possível iniciar a thread de logs: {error}")
+                    })?,
+            );
             self.sender = Some(sender);
             self.file_path = Some(path);
             self.sequence.store(0, Ordering::Relaxed);
@@ -107,7 +115,10 @@ impl DiagnosticsCapture {
     }
 
     pub(super) fn writer_error(&self) -> Option<String> {
-        self.writer_error.lock().ok().and_then(|error| error.clone())
+        self.writer_error
+            .lock()
+            .ok()
+            .and_then(|error| error.clone())
     }
 }
 
@@ -133,9 +144,18 @@ fn write_events(
 ) {
     let mut writer = match open_writer(path) {
         Ok(writer) => writer,
-        Err(error) => { set_writer_error(writer_error, format!("Falha ao abrir arquivo de log: {error}")); return; }
+        Err(error) => {
+            set_writer_error(
+                writer_error,
+                format!("Falha ao abrir arquivo de log: {error}"),
+            );
+            return;
+        }
     };
-    let mut bytes_written = writer.get_ref().metadata().map_or(0, |metadata| metadata.len());
+    let mut bytes_written = writer
+        .get_ref()
+        .metadata()
+        .map_or(0, |metadata| metadata.len());
 
     while let Ok(event) = receiver.recv() {
         let line = format!(
@@ -149,28 +169,45 @@ fn write_events(
         let line_bytes = u64::try_from(line.len()).unwrap_or(u64::MAX);
         if bytes_written.saturating_add(line_bytes) > MAX_FILE_BYTES {
             if let Err(error) = writer.flush().and_then(|()| rotate_files(path)) {
-                set_writer_error(writer_error, format!("Falha ao girar arquivo de log: {error}"));
+                set_writer_error(
+                    writer_error,
+                    format!("Falha ao girar arquivo de log: {error}"),
+                );
                 return;
             }
             writer = match open_writer(path) {
                 Ok(writer) => writer,
-                Err(error) => { set_writer_error(writer_error, format!("Falha ao reabrir arquivo de log: {error}")); return; }
+                Err(error) => {
+                    set_writer_error(
+                        writer_error,
+                        format!("Falha ao reabrir arquivo de log: {error}"),
+                    );
+                    return;
+                }
             };
             bytes_written = 0;
         }
         if let Err(error) = writer.write_all(line.as_bytes()) {
-            set_writer_error(writer_error, format!("Falha ao gravar evento de log: {error}"));
+            set_writer_error(
+                writer_error,
+                format!("Falha ao gravar evento de log: {error}"),
+            );
             return;
         }
         bytes_written = bytes_written.saturating_add(line_bytes);
     }
     if let Err(error) = writer.flush() {
-        set_writer_error(writer_error, format!("Falha ao finalizar arquivo de log: {error}"));
+        set_writer_error(
+            writer_error,
+            format!("Falha ao finalizar arquivo de log: {error}"),
+        );
     }
 }
 
 fn set_writer_error(target: &Mutex<Option<String>>, message: String) {
-    if let Ok(mut error) = target.lock() { *error = Some(message); }
+    if let Ok(mut error) = target.lock() {
+        *error = Some(message);
+    }
 }
 
 fn open_writer(path: &std::path::Path) -> std::io::Result<BufWriter<File>> {
