@@ -40,6 +40,7 @@ struct SharedMetrics {
     dropped_frames: AtomicU64,
     underrun_frames: AtomicU64,
     underrun_events: AtomicU64,
+    flushed_frames: AtomicU64,
     high_water_frames: AtomicUsize,
 }
 
@@ -62,6 +63,8 @@ pub struct PcmFrameQueueMetrics {
     pub underrun_frames: u64,
     /// Consumer read operations that required at least one silence frame.
     pub underrun_events: u64,
+    /// Frames intentionally discarded when invalidating an output epoch.
+    pub flushed_frames: u64,
 }
 
 /// Result of publishing a batch of stereo frames.
@@ -195,6 +198,9 @@ impl PcmFrameConsumer {
         while self.consumer.pop().is_ok() {
             discarded += 1;
         }
+        self.metrics
+            .flushed_frames
+            .fetch_add(discarded as u64, Ordering::Relaxed);
         discarded
     }
 
@@ -218,6 +224,7 @@ fn metrics_snapshot(
         consumed_frames: metrics.consumed_frames.load(Ordering::Relaxed),
         underrun_frames: metrics.underrun_frames.load(Ordering::Relaxed),
         underrun_events: metrics.underrun_events.load(Ordering::Relaxed),
+        flushed_frames: metrics.flushed_frames.load(Ordering::Relaxed),
     }
 }
 
@@ -326,6 +333,7 @@ mod tests {
         assert_eq!(metrics.accepted_frames, 3);
         assert_eq!(metrics.dropped_frames, 2);
         assert_eq!(metrics.consumed_frames, 3);
+        assert_eq!(metrics.flushed_frames, 0);
     }
 
     #[test]
@@ -390,6 +398,7 @@ mod tests {
         assert_eq!(consumer.discard_queued_frames(), 3);
         assert_eq!(consumer.metrics().queued_frames, 0);
         assert_eq!(consumer.metrics().consumed_frames, 0);
+        assert_eq!(consumer.metrics().flushed_frames, 3);
 
         producer.push_frames(&[[9, -9]]).unwrap();
         let mut output = [[0, 0]; 1];
