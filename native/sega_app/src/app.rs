@@ -99,6 +99,7 @@ enum TopLevelMenu {
     Video,
     Audio,
     Options,
+    Diagnostics,
 }
 
 impl TopLevelMenu {
@@ -108,15 +109,17 @@ impl TopLevelMenu {
             Self::Video => "Vídeo",
             Self::Audio => "Som",
             Self::Options => "Opções",
+            Self::Diagnostics => "Diagnostics",
         }
     }
 
     fn minimum_size(self) -> egui::Vec2 {
         match self {
-            Self::File => egui::vec2(360.0, 220.0),
+            Self::File => egui::vec2(420.0, 280.0),
             Self::Video => egui::vec2(240.0, 150.0),
             Self::Audio => egui::vec2(300.0, 240.0),
-            Self::Options => egui::vec2(480.0, 460.0),
+            Self::Options => egui::vec2(520.0, 480.0),
+            Self::Diagnostics => egui::vec2(640.0, 540.0),
         }
     }
 }
@@ -1106,6 +1109,7 @@ fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         top_level_menu_button(ui, "Vídeo", TopLevelMenu::Video, state);
         top_level_menu_button(ui, "Som", TopLevelMenu::Audio, state);
         top_level_menu_button(ui, "Opções", TopLevelMenu::Options, state);
+        top_level_menu_button(ui, "Diagnostics", TopLevelMenu::Diagnostics, state);
     });
     ui.separator();
 }
@@ -1134,6 +1138,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
         TopLevelMenu::Options => render_options_menu(ui, state),
+        TopLevelMenu::Diagnostics => render_runtime_status(ui, state.viewport),
     }
 }
 
@@ -1284,9 +1289,6 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
         ui.small("F8 reset · F9 quadro · F11 tela cheia");
         ui.small("Gamepad: direcional / analógico · A / B · Start");
-    });
-    ui.menu_button("Diagnóstico", |ui| {
-        render_runtime_status(ui, state.viewport);
     });
 }
 
