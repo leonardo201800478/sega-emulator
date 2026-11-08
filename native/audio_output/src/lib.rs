@@ -475,8 +475,7 @@ fn run_wasapi_worker(
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback,
-    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR,
-    XAudio2CreateWithVersionInfo,
+    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR, XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
