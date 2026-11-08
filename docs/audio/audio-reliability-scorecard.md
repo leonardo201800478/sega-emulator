@@ -1,7 +1,7 @@
 # Scorecard — confiabilidade de áudio (SMS / Hosts compartilhados)
 
 **Baseline de referência:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).  
-**Estado geral:** <span>BLOCKED — investigação de qualidade sonora e validação física pendentes</span>.  
+**Estado geral: BLOCKED** — investigação de qualidade sonora e validação física pendentes.  
 **Escopo:** geração digital, conversão/resampling, transporte PCM, worker e saídas WASAPI/XAudio2.  
 **Autoridade temporal:** MachineScheduler; backend de áudio não pode modificar clocks da máquina.
 
