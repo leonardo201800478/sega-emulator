@@ -6,7 +6,7 @@ mod session;
 
 pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
 pub use psg::{PsgClockError, ScheduledPsg};
-pub use session::{NativeAudioSession, PcmSink};
+pub use session::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
 use std::f64::consts::PI;
 

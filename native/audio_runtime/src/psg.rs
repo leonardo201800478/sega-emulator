@@ -118,7 +118,7 @@ impl ScheduledPsg {
 #[cfg(test)]
 mod tests {
     use super::{PsgClockError, ScheduledPsg};
-    use crate::{NativeAudioSession, PcmSink};
+    use crate::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_machine_scheduler::{
         ClockDomainId, ClockRatio, EventPriority, MachineScheduler, MachineTime,
     };
@@ -141,8 +141,8 @@ mod tests {
         fn resume(&mut self) -> Result<(), String> {
             Ok(())
         }
-        fn metrics(&self) -> (u64, u64) {
-            (0, 0)
+        fn metrics(&self) -> AudioOutputMetrics {
+            AudioOutputMetrics::default()
         }
         fn close(&mut self) {}
     }

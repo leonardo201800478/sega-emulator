@@ -6,7 +6,56 @@
 
 use crate::{AudioMixer, MixSource, PcmResampler};
 
-/// Host-output boundary consumed by the Python-independent audio session.
+/// Copyable snapshot of host PCM output telemetry.
+///
+/// Queue counters use stereo PCM frames, not scalar samples or bytes.
+/// The queue-duration helpers estimate only the backlog held in the SPSC
+/// transport; they are not end-to-end device latency measurements.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AudioOutputMetrics {
+    /// Configured host output rate in frames per second; zero means unavailable.
+    pub sample_rate_hz: u32,
+    /// Fixed SPSC queue capacity in stereo frames.
+    pub queue_capacity_frames: u64,
+    /// Approximate instantaneous SPSC queue occupancy in stereo frames.
+    pub queue_queued_frames: u64,
+    /// Maximum observed SPSC queue occupancy in stereo frames.
+    pub queue_high_water_frames: u64,
+    /// Total frames successfully published by the producer.
+    pub accepted_frames: u64,
+    /// Total frames removed from the SPSC queue by the backend consumer.
+    pub consumed_frames: u64,
+    /// Total newest frames rejected because the SPSC queue was full.
+    pub dropped_frames: u64,
+    /// Total frames replaced with digital silence when the consumer needed data.
+    pub underrun_frames: u64,
+    /// Consumer read operations that needed at least one silence frame.
+    pub underrun_events: u64,
+    /// PCM write calls in which at least one frame was rejected.
+    pub dropped_blocks: u64,
+}
+
+impl AudioOutputMetrics {
+    /// Estimate the duration represented by the current SPSC queue backlog.
+    ///
+    /// This excludes endpoint/driver/device buffering and is not a physical
+    /// playback-latency measurement. Returns None when the sample rate is
+    /// unavailable.
+    pub fn queue_duration_micros(self) -> Option<u64> {
+        (self.sample_rate_hz > 0).then(|| {
+            self.queue_queued_frames.saturating_mul(1_000_000) / u64::from(self.sample_rate_hz)
+        })
+    }
+
+    /// Estimate the maximum observed SPSC queue backlog duration.
+    pub fn queue_high_water_duration_micros(self) -> Option<u64> {
+        (self.sample_rate_hz > 0).then(|| {
+            self.queue_high_water_frames.saturating_mul(1_000_000) / u64::from(self.sample_rate_hz)
+        })
+    }
+}
+
+/// Host-output boundary consumed by the Rust audio session.
 pub trait PcmSink {
     /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
     fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
@@ -22,8 +71,8 @@ pub trait PcmSink {
     /// for its configured prebuffer threshold before starting.
     fn resume(&mut self) -> Result<(), String>;
 
-    /// Return (underruns, dropped blocks) observed by the sink.
-    fn metrics(&self) -> (u64, u64);
+    /// Return a nonblocking snapshot of queue and host-output counters.
+    fn metrics(&self) -> AudioOutputMetrics;
 
     /// Stop the host stream and release its resources.
     fn close(&mut self);
@@ -147,7 +196,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
     }
 
     /// Return backend underrun and dropped-block counters.
-    pub fn metrics(&self) -> (u64, u64) {
+    pub fn metrics(&self) -> AudioOutputMetrics {
         self.sink.metrics()
     }
 
@@ -179,7 +228,7 @@ impl<S: PcmSink> Drop for NativeAudioSession<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::{NativeAudioSession, PcmSink};
+    use super::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
     #[derive(Default)]
     struct RecordingSink {
@@ -213,8 +262,12 @@ mod tests {
             Ok(())
         }
 
-        fn metrics(&self) -> (u64, u64) {
-            (self.underruns, self.dropped)
+        fn metrics(&self) -> AudioOutputMetrics {
+            AudioOutputMetrics {
+                underrun_events: self.underruns,
+                dropped_blocks: self.dropped,
+                ..AudioOutputMetrics::default()
+            }
         }
 
         fn close(&mut self) {
@@ -289,7 +342,23 @@ mod tests {
             ..RecordingSink::default()
         };
         let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
-        assert_eq!(session.metrics(), (3, 2));
+        let metrics = session.metrics();
+        assert_eq!(metrics.underrun_events, 3);
+        assert_eq!(metrics.dropped_blocks, 2);
+    }
+
+    #[test]
+    fn queue_duration_estimates_only_the_fifo_backlog() {
+        let metrics = AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            queue_queued_frames: 480,
+            queue_high_water_frames: 960,
+            ..AudioOutputMetrics::default()
+        };
+
+        assert_eq!(metrics.queue_duration_micros(), Some(10_000));
+        assert_eq!(metrics.queue_high_water_duration_micros(), Some(20_000));
+        assert_eq!(AudioOutputMetrics::default().queue_duration_micros(), None);
     }
 
     #[test]
