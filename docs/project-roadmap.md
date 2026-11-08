@@ -55,12 +55,15 @@ A issue #659 relata áudio distorcido, fora de ritmo e aparentemente lento em WA
 5. **AUDIO-04 — lifecycle:** validar Pause/Resume/Stop/Reset/Load/Close/StepFrame e atualizar snapshots após transições confirmadas.
 6. **AUDIO-05 — validação física:** comparar WASAPI e XAudio2 no Windows com a mesma sequência PCM, captura de loopback e métricas sincronizadas.
 
+**Correções de primeira rodada:** a [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666) implementa rejeição de escrita após falha terminal, contabilidade de flush/submissão, starvation XAudio2 separado e snapshots do worker após lifecycle. O HEAD `29916f7ddb27a069b385a57e53d04760de5e01ed` passou workspace fmt/Clippy/testes, Linux audio-output e Windows WASAPI/XAudio2; a PR está aberta, não integrada. Isso fecha parte dos achados estáticos, mas não determina a causa da distorção/ritmo lento reportada em #659.
+
 **Gate de saída:** causa raiz demonstrada para #640/#659; ausência de perda/duplicação silenciosa; taxa/cadência coerentes; testes automatizados PASS; validação física dos dois backends PASS; regressão SG-1000 preservada. Até lá, áudio permanece BLOCKED para aceite de release e novas plataformas ficam congeladas. Não alterar clocks do PSG/MachineScheduler nem aumentar buffers por tentativa e erro.
 
 ### 3.3 PRs e issues relevantes
 
 - **PRs #613 e #614:** MERGED; integram runtime/viewport e áudio/input. Merge não equivale a aceite físico.
 - **PR #657:** CLOSED / NOT MERGED; não atribuir a ela estado de integração.
+- **PR #666:** OPEN, CI SUCCESS no HEAD `29916f7d`; correções iniciais de falha/telemetria aguardam merge; validação física NOT RUN.
 - **PRs #643, #644 e #645:** OPEN, base antiga e `mergeable=false`; não fazem parte da main e exigem reconciliação independente.
 - **Issues #640 e #659:** OPEN; underruns e qualidade sonora sem causa raiz confirmada.
 - **Issue #641:** OPEN; corrupção visual, trilha independente de áudio.
