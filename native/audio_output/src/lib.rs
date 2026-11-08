@@ -465,47 +465,6 @@ impl NativeWasapiOutput {
         }
     }
 
-    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
-        #[cfg(windows)]
-        {
-            if self.shutdown.load(Ordering::Acquire) {
-                return Err(AudioOutputError::WorkerStopped);
-            }
-            self.suspended.store(true, Ordering::Release);
-            self.flush_acknowledged.store(false, Ordering::Release);
-            self.flush_requested.store(true, Ordering::Release);
-            wait_for_flush_acknowledgement(
-                &self.flush_acknowledged,
-                &self.control_failed,
-                &self.shutdown,
-            )
-        }
-        #[cfg(not(windows))]
-        {
-            Err(AudioOutputError::WorkerStopped)
-        }
-    }
-
-    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
-        #[cfg(windows)]
-        {
-            if self.shutdown.load(Ordering::Acquire) {
-                return Err(AudioOutputError::WorkerStopped);
-            }
-            if self.control_failed.load(Ordering::Acquire) {
-                return Err(AudioOutputError::Device(
-                    "audio backend control is in a failed state".to_owned(),
-                ));
-            }
-            self.suspended.store(false, Ordering::Release);
-            Ok(())
-        }
-        #[cfg(not(windows))]
-        {
-            Err(AudioOutputError::WorkerStopped)
-        }
-    }
-
     pub fn close(&mut self) {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
@@ -1009,6 +968,47 @@ impl NativeXAudio2Output {
 
     pub fn dropped_block_count(&self) -> u64 {
         self.dropped_blocks.load(Ordering::Relaxed)
+    }
+
+    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            self.suspended.store(true, Ordering::Release);
+            self.flush_acknowledged.store(false, Ordering::Release);
+            self.flush_requested.store(true, Ordering::Release);
+            wait_for_flush_acknowledgement(
+                &self.flush_acknowledged,
+                &self.control_failed,
+                &self.shutdown,
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            if self.control_failed.load(Ordering::Acquire) {
+                return Err(AudioOutputError::Device(
+                    "audio backend control is in a failed state".to_owned(),
+                ));
+            }
+            self.suspended.store(false, Ordering::Release);
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
     }
 
     pub fn close(&mut self) {
