@@ -15,9 +15,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
+#[cfg(any(windows, test))]
+use std::thread;
 #[cfg(windows)]
-use std::thread::{self, JoinHandle};
-#[cfg(windows)]
+use std::thread::JoinHandle;
+#[cfg(any(windows, test))]
 use std::time::Duration;
 
 #[cfg(any(windows, test))]
@@ -222,6 +224,77 @@ impl XAudio2CallbackSignals {
     }
 }
 
+#[cfg(windows)]
+struct BackendEpochControl {
+    suspended: AtomicBool,
+    flush_requested: AtomicBool,
+    flush_acknowledged: AtomicBool,
+    failed: AtomicBool,
+}
+
+#[cfg(windows)]
+impl BackendEpochControl {
+    fn new() -> Self {
+        Self {
+            suspended: AtomicBool::new(true),
+            flush_requested: AtomicBool::new(false),
+            flush_acknowledged: AtomicBool::new(true),
+            failed: AtomicBool::new(false),
+        }
+    }
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+struct BackendConfig {
+    sample_rate: u32,
+    buffer_size: u32,
+    queue_blocks: usize,
+}
+
+#[cfg(any(windows, test))]
+fn wait_for_flush_acknowledgement(
+    acknowledged: &AtomicBool,
+    failed: &AtomicBool,
+    shutdown: &AtomicBool,
+    timeout: Duration,
+) -> Result<(), AudioOutputError> {
+    let deadline = std::time::Instant::now() + timeout;
+    while !acknowledged.load(Ordering::Acquire) {
+        if failed.load(Ordering::Acquire) {
+            return Err(AudioOutputError::Device(
+                "audio backend worker failed during an epoch transition".to_owned(),
+            ));
+        }
+        if shutdown.load(Ordering::Acquire) {
+            return Err(AudioOutputError::WorkerStopped);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(AudioOutputError::Device(
+                "audio backend did not acknowledge the flush epoch within 5 seconds".to_owned(),
+            ));
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+    if failed.load(Ordering::Acquire) {
+        return Err(AudioOutputError::Device(
+            "audio backend failed while invalidating the previous epoch".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn xaudio2_flush_barrier_reached(
+    completed_before_flush: u64,
+    completed_now: u64,
+    pending_buffers: usize,
+    buffers_queued: u32,
+) -> bool {
+    completed_now.wrapping_sub(completed_before_flush) >= pending_buffers as u64
+        && buffers_queued == 0
+}
+
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
 pub struct NativeWasapiOutput {
     #[cfg(windows)]
@@ -235,6 +308,8 @@ pub struct NativeWasapiOutput {
     buffer_size: u32,
     #[cfg(windows)]
     balance: i8,
+    #[cfg(windows)]
+    control: Arc<BackendEpochControl>,
 }
 
 impl NativeWasapiOutput {
@@ -274,8 +349,10 @@ impl NativeWasapiOutput {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-wasapi-output".to_owned())
                 .spawn(move || {
@@ -284,8 +361,12 @@ impl NativeWasapiOutput {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
-                        sample_rate,
-                        buffer_size,
+                        worker_control,
+                        BackendConfig {
+                            sample_rate,
+                            buffer_size,
+                            queue_blocks,
+                        },
                     );
                 })
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
@@ -300,6 +381,7 @@ impl NativeWasapiOutput {
                     sample_rate,
                     buffer_size,
                     balance,
+                    control,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
@@ -336,7 +418,12 @@ impl NativeWasapiOutput {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire) {
+            if self.shutdown.load(Ordering::Acquire)
+                || self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| worker.is_finished())
+            {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -372,6 +459,50 @@ impl NativeWasapiOutput {
 
     pub fn dropped_block_count(&self) -> u64 {
         self.dropped_blocks.load(Ordering::Relaxed)
+    }
+
+    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            self.control.suspended.store(true, Ordering::Release);
+            self.control
+                .flush_acknowledged
+                .store(false, Ordering::Release);
+            self.control.flush_requested.store(true, Ordering::Release);
+            wait_for_flush_acknowledgement(
+                &self.control.flush_acknowledged,
+                &self.control.failed,
+                &self.shutdown,
+                Duration::from_secs(5),
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            if self.control.failed.load(Ordering::Acquire) {
+                return Err(AudioOutputError::Device(
+                    "audio backend control is in a failed state".to_owned(),
+                ));
+            }
+            self.control.suspended.store(false, Ordering::Release);
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
     }
 
     pub fn close(&mut self) {
@@ -424,9 +555,11 @@ fn run_wasapi_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
-    sample_rate: u32,
-    buffer_size: u32,
+    control: Arc<BackendEpochControl>,
+    config: BackendConfig,
 ) {
+    let sample_rate = config.sample_rate;
+    let buffer_size = config.buffer_size;
     if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
@@ -459,10 +592,6 @@ fn run_wasapi_worker(
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
 
-            // Prefer IAudioClient3 in shared/event-driven mode. Clamp the
-            // requested period to the endpoint range and align it to the
-            // fundamental period. Retain the previous Shared path when the
-            // interface or initialization is unavailable.
             let requested_frames = buffer_size.max(1);
             let selected_period = audio_client
                 .get_shared_mode_engine_period(&format)
@@ -533,6 +662,9 @@ fn run_wasapi_worker(
                 continue;
             }
         };
+        let prebuffer_frames = initial_buffer_frames
+            .min(consumer.metrics().capacity_frames)
+            .max(1);
         let mut scratch_frames = vec![[0_i16; 2]; initial_buffer_frames];
         let mut pending = VecDeque::<u8>::with_capacity(staging_bytes);
         pending.resize(staging_bytes, 0);
@@ -556,6 +688,7 @@ fn run_wasapi_worker(
             thread::sleep(Duration::from_millis(250));
             continue;
         }
+        let mut stream_started = true;
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
@@ -566,21 +699,102 @@ fn run_wasapi_worker(
             if shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if event.wait_for_event(1000).is_err() {
-                // A failed event wait usually means that the endpoint stopped.
-                break;
+
+            if control.flush_requested.swap(false, Ordering::AcqRel) {
+                let flush_result = (|| {
+                    if stream_started {
+                        audio_client
+                            .stop_stream()
+                            .map_err(|error| error.to_string())?;
+                        audio_client
+                            .reset_stream()
+                            .map_err(|error| error.to_string())?;
+                        stream_started = false;
+                    }
+                    consumer.discard_queued_frames();
+                    Ok::<(), String>(())
+                })();
+                if flush_result.is_err() {
+                    control.failed.store(true, Ordering::Release);
+                    disconnected = true;
+                }
+                control.flush_acknowledged.store(true, Ordering::Release);
+                if flush_result.is_err() {
+                    break;
+                }
+            }
+
+            if control.suspended.load(Ordering::Acquire) {
+                if stream_started {
+                    let stopped = audio_client
+                        .stop_stream()
+                        .and_then(|()| audio_client.reset_stream());
+                    if stopped.is_err() {
+                        control.failed.store(true, Ordering::Release);
+                        disconnected = true;
+                        break;
+                    }
+                    stream_started = false;
+                }
+                thread::sleep(Duration::from_millis(2));
+                continue;
+            }
+
+            if !stream_started {
+                if consumer.metrics().queued_frames < prebuffer_frames {
+                    thread::sleep(Duration::from_millis(2));
+                    continue;
+                }
+                let prebuffer = &mut scratch_frames[..prebuffer_frames];
+                let report = consumer.read_frames(prebuffer);
+                if report.silence_frames > 0 {
+                    underruns.fetch_add(1, Ordering::Relaxed);
+                }
+                pending.clear();
+                for [left, right] in prebuffer.iter() {
+                    pending.extend(left.to_le_bytes());
+                    pending.extend(right.to_le_bytes());
+                }
+                if pending.len() != prebuffer_frames.saturating_mul(block_align)
+                    || render_client
+                        .write_to_device_from_deque(prebuffer_frames, &mut pending, None)
+                        .is_err()
+                {
+                    disconnected = true;
+                    break;
+                }
+                pending.clear();
+                if audio_client.start_stream().is_err() {
+                    disconnected = true;
+                    break;
+                }
+                stream_started = true;
+                continue;
+            }
+
+            if event.wait_for_event(10).is_err() {
+                // The short timeout is intentional: it bounds control-command
+                // latency while retaining event-driven rendering. A failed
+                // endpoint is detected by the next client-space query.
+                if audio_client.get_available_space_in_frames().is_err() {
+                    disconnected = true;
+                    break;
+                }
+                continue;
             }
 
             let frames = match audio_client.get_available_space_in_frames() {
                 Ok(frames) => frames as usize,
-                Err(_) => break,
+                Err(_) => {
+                    disconnected = true;
+                    break;
+                }
             };
             if frames == 0 {
                 continue;
             }
             if frames > scratch_frames.len() {
-                // The endpoint reported a period larger than its initialized
-                // buffer; leave this stream and let the recovery path reopen it.
+                disconnected = true;
                 break;
             }
             let report = consumer.read_frames(&mut scratch_frames[..frames]);
@@ -593,13 +807,12 @@ fn run_wasapi_worker(
                 pending.extend(left.to_le_bytes());
                 pending.extend(right.to_le_bytes());
             }
-            if pending.len() != frames.saturating_mul(block_align) {
-                break;
-            }
-            if render_client
-                .write_to_device_from_deque(frames, &mut pending, None)
-                .is_err()
+            if pending.len() != frames.saturating_mul(block_align)
+                || render_client
+                    .write_to_device_from_deque(frames, &mut pending, None)
+                    .is_err()
             {
+                disconnected = true;
                 break;
             }
             if report.producer_closed {
@@ -608,11 +821,17 @@ fn run_wasapi_worker(
             }
         }
 
-        let _ = audio_client.stop_stream();
-        if shutdown.load(Ordering::Acquire) || disconnected {
+        if stream_started {
+            let _ = audio_client.stop_stream();
+        }
+        if shutdown.load(Ordering::Acquire)
+            || (disconnected && control.failed.load(Ordering::Acquire))
+        {
             break;
         }
-        thread::sleep(Duration::from_millis(250));
+        if disconnected {
+            thread::sleep(Duration::from_millis(250));
+        }
     }
 }
 
@@ -644,6 +863,8 @@ pub struct NativeXAudio2Output {
     buffer_size: u32,
     #[cfg(windows)]
     balance: i8,
+    #[cfg(windows)]
+    control: Arc<BackendEpochControl>,
 }
 
 impl NativeXAudio2Output {
@@ -683,8 +904,10 @@ impl NativeXAudio2Output {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-xaudio2-output".to_owned())
                 .spawn(move || {
@@ -693,9 +916,12 @@ impl NativeXAudio2Output {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
-                        sample_rate,
-                        buffer_size as usize,
-                        queue_blocks,
+                        worker_control,
+                        BackendConfig {
+                            sample_rate,
+                            buffer_size,
+                            queue_blocks,
+                        },
                     );
                 })
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
@@ -710,6 +936,7 @@ impl NativeXAudio2Output {
                     sample_rate,
                     buffer_size,
                     balance,
+                    control,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
@@ -784,6 +1011,50 @@ impl NativeXAudio2Output {
         self.dropped_blocks.load(Ordering::Relaxed)
     }
 
+    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            self.control.suspended.store(true, Ordering::Release);
+            self.control
+                .flush_acknowledged
+                .store(false, Ordering::Release);
+            self.control.flush_requested.store(true, Ordering::Release);
+            wait_for_flush_acknowledgement(
+                &self.control.flush_acknowledged,
+                &self.control.failed,
+                &self.shutdown,
+                Duration::from_secs(5),
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            if self.control.failed.load(Ordering::Acquire) {
+                return Err(AudioOutputError::Device(
+                    "audio backend control is in a failed state".to_owned(),
+                ));
+            }
+            self.control.suspended.store(false, Ordering::Release);
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
     pub fn close(&mut self) {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
@@ -829,10 +1100,12 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
-    sample_rate: u32,
-    frames_per_buffer: usize,
-    max_queued_buffers: usize,
+    control: Arc<BackendEpochControl>,
+    config: BackendConfig,
 ) {
+    let sample_rate = config.sample_rate;
+    let frames_per_buffer = config.buffer_size as usize;
+    let max_queued_buffers = config.queue_blocks;
     if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
@@ -916,14 +1189,6 @@ fn run_xaudio2_worker(
             }
             return Err(error.to_string());
         }
-        if let Err(error) = unsafe { source_voice.Start(0, 0) } {
-            unsafe {
-                source_voice.DestroyVoice();
-                mastering_voice.DestroyVoice();
-                engine.StopEngine();
-            }
-            return Err(error.to_string());
-        }
         Ok((engine, mastering_voice, source_voice))
     })();
 
@@ -938,9 +1203,84 @@ fn run_xaudio2_worker(
 
     let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
     let mut was_underrun = false;
+    let mut voice_started = false;
+    let mut voice_muted = false;
     loop {
-        if shutdown.load(Ordering::Acquire) || signals.voice_error.load(Ordering::Acquire) {
+        if shutdown.load(Ordering::Acquire) {
             break;
+        }
+        if signals.voice_error.load(Ordering::Acquire) {
+            control.failed.store(true, Ordering::Release);
+            break;
+        }
+
+        if control.flush_requested.swap(false, Ordering::AcqRel) {
+            let completed_before_flush = signals.completed_buffers.load(Ordering::Acquire);
+            submitted.reclaim_completed(completed_before_flush);
+            let pending_before_flush = submitted.submitted_len();
+            let flush_result = (|| {
+                if voice_started {
+                    // FlushSourceBuffers leaves the current buffer running.
+                    // Mute first, then let its OnBufferEnd arrive normally;
+                    // Stop would suppress voice callbacks and break the
+                    // callback-based staging lifetime barrier.
+                    unsafe { source_voice.SetVolume(0.0, 0) }.map_err(|error| error.to_string())?;
+                    voice_muted = true;
+                }
+                unsafe { source_voice.FlushSourceBuffers() }.map_err(|error| error.to_string())?;
+
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                loop {
+                    let completed = signals.completed_buffers.load(Ordering::Acquire);
+                    let mut state = XAUDIO2_VOICE_STATE::default();
+                    unsafe { source_voice.GetState(&mut state, 0) };
+                    if xaudio2_flush_barrier_reached(
+                        completed_before_flush,
+                        completed,
+                        pending_before_flush,
+                        state.BuffersQueued,
+                    ) {
+                        submitted.reclaim_completed(completed);
+                        break;
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        return Err("XAudio2 flush callback barrier timed out".to_owned());
+                    }
+                    thread::sleep(Duration::from_millis(1));
+                }
+                if submitted.submitted_len() != 0 {
+                    return Err(
+                        "XAudio2 flush left submitted staging buffers unreclaimed".to_owned()
+                    );
+                }
+                consumer.discard_queued_frames();
+                Ok::<(), String>(())
+            })();
+            if flush_result.is_err() {
+                control.failed.store(true, Ordering::Release);
+            }
+            control.flush_acknowledged.store(true, Ordering::Release);
+            if flush_result.is_err() {
+                break;
+            }
+        }
+
+        if control.suspended.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(2));
+            continue;
+        }
+
+        if (!voice_started || voice_muted) && consumer.metrics().queued_frames < frames_per_buffer {
+            thread::sleep(Duration::from_millis(2));
+            continue;
+        }
+
+        if voice_muted {
+            if unsafe { source_voice.SetVolume(1.0, 0) }.is_err() {
+                control.failed.store(true, Ordering::Release);
+                break;
+            }
+            voice_muted = false;
         }
 
         let completed = signals.completed_buffers.load(Ordering::Acquire);
@@ -965,11 +1305,19 @@ fn run_xaudio2_worker(
             submitted_new = true;
         }
 
+        if !voice_started && submitted_new {
+            if unsafe { source_voice.Start(0, 0) }.is_err() {
+                control.failed.store(true, Ordering::Release);
+                break;
+            }
+            voice_started = true;
+        }
+
         let mut current_state = XAUDIO2_VOICE_STATE::default();
         unsafe {
             source_voice.GetState(&mut current_state, 0);
         }
-        let is_underrun = current_state.BuffersQueued == 0 && !submitted_new;
+        let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
             underruns.fetch_add(1, Ordering::Relaxed);
         }
@@ -1000,6 +1348,14 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
         NativeWasapiOutput::write_pcm(self, pcm).map_err(|error| error.to_string())
     }
 
+    fn suspend_and_flush(&mut self) -> Result<(), String> {
+        NativeWasapiOutput::suspend_and_flush(self).map_err(|error| error.to_string())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        NativeWasapiOutput::resume(self).map_err(|error| error.to_string())
+    }
+
     fn metrics(&self) -> (u64, u64) {
         (self.underrun_count(), self.dropped_block_count())
     }
@@ -1028,6 +1384,14 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
         NativeXAudio2Output::write_pcm(self, pcm).map_err(|error| error.to_string())
     }
 
+    fn suspend_and_flush(&mut self) -> Result<(), String> {
+        NativeXAudio2Output::suspend_and_flush(self).map_err(|error| error.to_string())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        NativeXAudio2Output::resume(self).map_err(|error| error.to_string())
+    }
+
     fn metrics(&self) -> (u64, u64) {
         (self.underrun_count(), self.dropped_block_count())
     }
@@ -1054,6 +1418,48 @@ impl NativeXAudio2Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flush_acknowledgement_reports_failure_and_timeout() {
+        let shutdown = AtomicBool::new(false);
+        let failed = AtomicBool::new(false);
+        let acknowledged = AtomicBool::new(true);
+        assert!(
+            wait_for_flush_acknowledgement(
+                &acknowledged,
+                &failed,
+                &shutdown,
+                Duration::from_millis(1),
+            )
+            .is_ok()
+        );
+
+        failed.store(true, Ordering::Release);
+        assert!(
+            wait_for_flush_acknowledgement(
+                &acknowledged,
+                &failed,
+                &shutdown,
+                Duration::from_millis(1),
+            )
+            .is_err()
+        );
+
+        failed.store(false, Ordering::Release);
+        acknowledged.store(false, Ordering::Release);
+        assert!(
+            wait_for_flush_acknowledgement(&acknowledged, &failed, &shutdown, Duration::ZERO,)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn xaudio2_flush_barrier_uses_aggregate_callbacks_not_callback_order() {
+        assert!(xaudio2_flush_barrier_reached(10, 13, 3, 0));
+        assert!(!xaudio2_flush_barrier_reached(10, 12, 3, 0));
+        assert!(!xaudio2_flush_barrier_reached(10, 13, 3, 1));
+        assert!(xaudio2_flush_barrier_reached(u64::MAX - 1, 1, 3, 0));
+    }
 
     #[test]
     fn iaudio_client3_period_is_clamped_and_aligned_to_fundamental() {

@@ -11,6 +11,17 @@ pub trait PcmSink {
     /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
     fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
 
+    /// Invalidate queued and submitted host audio before acknowledging a
+    /// pause, stop, reset or content/ROM transition.
+    ///
+    /// The implementation must perform the operation on the backend-owning
+    /// thread and return only after old-epoch audio can no longer be emitted.
+    fn suspend_and_flush(&mut self) -> Result<(), String>;
+
+    /// Allow the backend to begin a new audio epoch. Device playback may wait
+    /// for its configured prebuffer threshold before starting.
+    fn resume(&mut self) -> Result<(), String>;
+
     /// Return (underruns, dropped blocks) observed by the sink.
     fn metrics(&self) -> (u64, u64);
 
@@ -25,6 +36,7 @@ pub struct NativeAudioSession<S: PcmSink> {
     resampler: PcmResampler,
     sink: S,
     closed: bool,
+    discarded_since_suspend: bool,
 }
 
 impl<S: PcmSink> NativeAudioSession<S> {
@@ -47,11 +59,31 @@ impl<S: PcmSink> NativeAudioSession<S> {
             resampler,
             sink,
             closed: false,
+            discarded_since_suspend: false,
         })
     }
 
     /// Mix, resample and enqueue one native hardware sample batch.
     pub fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
+        self.process_samples_with_policy(samples, true)
+    }
+
+    /// Advance the same mixer/resampler state without publishing PCM to the
+    /// physical endpoint. Used by deterministic debugger StepFrame execution.
+    pub fn process_samples_discarding_output(&mut self, samples: &[f64]) -> Result<(), String> {
+        if samples.is_empty() {
+            return Ok(());
+        }
+        self.process_samples_with_policy(samples, false)?;
+        self.discarded_since_suspend = true;
+        Ok(())
+    }
+
+    fn process_samples_with_policy(
+        &mut self,
+        samples: &[f64],
+        publish: bool,
+    ) -> Result<(), String> {
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
@@ -62,10 +94,44 @@ impl<S: PcmSink> NativeAudioSession<S> {
             .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
         let pcm = self.resampler.process(&self.mixed_samples);
-        if pcm.is_empty() {
-            return Ok(());
+        if publish && !pcm.is_empty() {
+            self.sink.write_pcm(pcm)?;
         }
-        self.sink.write_pcm(pcm)
+        Ok(())
+    }
+
+    /// Stop host presentation and wait for the backend to invalidate its
+    /// current queue epoch. DSP state is intentionally preserved for Pause.
+    pub fn suspend_and_flush(&mut self) -> Result<(), String> {
+        if self.closed {
+            return Err("native audio session is closed".to_owned());
+        }
+        self.sink.suspend_and_flush()
+    }
+
+    /// Start a fresh presentation epoch without resetting DSP history.
+    pub fn resume(&mut self) -> Result<(), String> {
+        if self.closed {
+            return Err("native audio session is closed".to_owned());
+        }
+        if self.discarded_since_suspend {
+            // Debugger-stepped samples advanced the emulated sound source but
+            // were intentionally not presented. Do not let their FIR history
+            // leak into the first audible block of the resumed epoch.
+            self.resampler.reset();
+            self.mixed_samples.clear();
+        }
+        self.sink.resume()?;
+        self.discarded_since_suspend = false;
+        Ok(())
+    }
+
+    /// Reset FIR/resampler history at a machine-content boundary such as
+    /// Reset or LoadRom. Pause/Resume must not call this method.
+    pub fn reset_dsp(&mut self) {
+        self.resampler.reset();
+        self.mixed_samples.clear();
+        self.discarded_since_suspend = false;
     }
 
     /// Update output volume without rebuilding the host stream.
@@ -85,9 +151,13 @@ impl<S: PcmSink> NativeAudioSession<S> {
         if self.closed {
             return;
         }
-        let tail = self.resampler.flush();
-        if !tail.is_empty() {
-            let _ = self.sink.write_pcm(tail);
+        if self.discarded_since_suspend {
+            self.resampler.reset();
+        } else {
+            let tail = self.resampler.flush();
+            if !tail.is_empty() {
+                let _ = self.sink.write_pcm(tail);
+            }
         }
         self.sink.close();
         self.closed = true;
@@ -110,6 +180,9 @@ mod tests {
         underruns: u64,
         dropped: u64,
         closed: bool,
+        flush_count: usize,
+        resume_count: usize,
+        suspended: bool,
     }
 
     impl PcmSink for RecordingSink {
@@ -118,6 +191,18 @@ mod tests {
                 return Err("sink is closed".to_owned());
             }
             self.blocks.push(pcm);
+            Ok(())
+        }
+
+        fn suspend_and_flush(&mut self) -> Result<(), String> {
+            self.flush_count += 1;
+            self.suspended = true;
+            Ok(())
+        }
+
+        fn resume(&mut self) -> Result<(), String> {
+            self.resume_count += 1;
+            self.suspended = false;
             Ok(())
         }
 
@@ -186,6 +271,59 @@ mod tests {
         let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
         assert_eq!(session.metrics(), (3, 2));
     }
+
+    #[test]
+    fn discarded_step_frame_does_not_publish_or_leak_fir_history_after_resume() {
+        let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.07).sin()).collect();
+        let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.07).sin()).collect();
+
+        let mut stepped = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        stepped.process_samples_discarding_output(&first).unwrap();
+        assert!(stepped.sink.blocks.is_empty());
+        stepped.resume().unwrap();
+        stepped.process_samples(&second).unwrap();
+
+        let mut reference = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        reference.process_samples(&second).unwrap();
+
+        assert_eq!(stepped.sink.blocks, reference.sink.blocks);
+    }
+
+    #[test]
+    fn pause_flush_resume_preserves_dsp_history_and_acknowledges_sink_controls() {
+        let mut session = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.05).sin()).collect();
+        let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.05).sin()).collect();
+        session.process_samples(&first).unwrap();
+        session.suspend_and_flush().unwrap();
+        assert!(session.sink.suspended);
+        session.resume().unwrap();
+        assert!(!session.sink.suspended);
+        session.process_samples(&second).unwrap();
+
+        let mut reference = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        reference.process_samples(&first).unwrap();
+        reference.process_samples(&second).unwrap();
+
+        assert_eq!(session.sink.flush_count, 1);
+        assert_eq!(session.sink.resume_count, 1);
+        assert_eq!(session.sink.blocks, reference.sink.blocks);
+    }
+
+    #[test]
+    fn reset_dsp_discards_filter_history_at_machine_content_boundary() {
+        let input: Vec<f64> = (0..160).map(|i| (i as f64 * 0.03).sin()).collect();
+        let mut session = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        session.process_samples(&input).unwrap();
+        session.reset_dsp();
+        session.process_samples(&input).unwrap();
+
+        let mut fresh = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        fresh.process_samples(&input).unwrap();
+
+        assert_eq!(session.sink.blocks[1], fresh.sink.blocks[0]);
+    }
+
     #[test]
     fn invalid_dsp_configuration_does_not_construct_the_host_sink() {
         let mut sink_created = false;

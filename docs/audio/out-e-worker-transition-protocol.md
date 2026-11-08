@@ -1,6 +1,6 @@
 # OUT-E — protocolo de transição de estado do áudio nativo
 
-**Status:** especificação/auditoria de arquitetura; nenhuma alteração executável nesta etapa.
+**Status:** implementação na PR #656 validada pelo CI #5719 no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351`; validação física em dispositivo Windows permanece NOT RUN.
 **Base:** `main` após OUT-B, merge commit `0a7a0579d01277fcccc21f6ad45190891604919d`.
 **Escopo:** integrar Pause/Stop/Reset/LoadRom/StepFrame com mute, flush, epoch e prebuffer sem alterar a linha temporal da máquina.
 
@@ -39,7 +39,7 @@ Esta auditoria é estática. Ela não demonstra o instante exato em que o endpoi
 1. A thread do worker SMS continua sendo o único produtor da FIFO; a thread backend continua sendo o único consumidor.
 2. Nenhum comando de Pause/Stop/Reset pode acessar diretamente o endpoint consumidor nem manipular o cursor interno da FIFO pelo lado produtor.
 3. Uma operação de flush é um comando coarse-grained enviado ao worker do backend, com confirmação síncrona de que a epoch anterior foi invalidada.
-4. O identificador de epoch é monotônico e não pode sofrer wrap silencioso; overflow deve ser erro explícito ou transição controlada.
+4. A fronteira entre epochs é estabelecida por uma barreira síncrona serializada no worker SMS: enquanto `suspend_and_flush` aguarda a confirmação, o único produtor não publica novos frames. Um contador numérico não é necessário neste modelo de produtor único e transições não reentrantes; se o controle se tornar assíncrono/multifonte, deverá ser introduzido um identificador monotônico com rejeição explícita de comandos obsoletos.
 5. O worker SMS não pode publicar novos frames entre emitir flush e receber a confirmação do backend.
 6. O backend deve descartar os frames ainda na FIFO e limpar o áudio já submetido ao endpoint segundo o contrato específico da API.
 7. Nenhuma API, lock, espera ou alocação nova pode ser introduzida no caminho de instruções ou no callback XAudio2.
@@ -60,10 +60,10 @@ Referências: [IAudioClient::Stop](https://learn.microsoft.com/en-us/windows/win
 ### XAudio2
 
 - O controle de voz ocorre exclusivamente na thread do worker XAudio2.
-- Para flush, impedir novas submissões, parar a source voice e limpar a fila.
+- Para flush, impedir novas submissões, aplicar `SetVolume(0)` e chamar `FlushSourceBuffers` sem Stop. O buffer atualmente em reprodução permanece ativo, mas fica silenciado até concluir e entregar `OnBufferEnd`; parar a voz suprimiria callbacks e impediria a barreira de lifetime.
 - `FlushSourceBuffers` pode gerar callbacks fora de ordem; não associar callbacks a reclaim FIFO individual após flush.
 - Buffers submetidos permanecem vivos até que cada `OnBufferEnd` esperado seja observado ou até `DestroyVoice`; callback e estado COM permanecem vivos durante a barreira.
-- Só após a barreira segura a voz pode ser reiniciada e aceitar dados da nova epoch.
+- A voz permanece iniciada e mutada após a barreira; depois do prebuffer, restaurar `SetVolume(1)` antes de submeter os frames da nova epoch. Na criação inicial, a voz só é iniciada após o primeiro prebuffer.
 - O estado de mute/volume precisa ser restaurado antes de iniciar o playback após o prebuffer.
 
 Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2sourcevoice-flushsourcebuffers), [OnBufferEnd](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2voicecallback-onbufferend), [windows 0.62.2 IXAudio2SourceVoice](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Media/Audio/XAudio2/struct.IXAudio2SourceVoice.html).
@@ -76,31 +76,52 @@ Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win
 - StepFrame mantém execução determinística do hardware e do DSP, mas o PCM produzido durante o passo é descartado antes do sink.
 - Testar Start inicial, Pause/Resume repetidos, Stop/Start, Reset durante pausa, troca de ROM e StepFrame repetido.
 
-## 6. Critérios de aceitação para implementação OUT-E
+## 6. Implementação atual — PR #656
 
-- [ ] `AudioSession`/ `PcmSink` possuem contrato explícito de enable/mute, flush/epoch e descarte de PCM.
-- [ ] Pause só confirma após backend silenciado e epoch anterior invalidada.
-- [ ] Stop não deixa PCM residual reproduzindo após confirmação.
-- [ ] Resume só libera áudio após prebuffer mínimo da epoch atual.
-- [ ] Reset/LoadRom não reproduzem frames da máquina anterior.
-- [ ] StepFrame avança estado DSP deterministicamente sem emitir som no endpoint.
-- [ ] WASAPI usa Stop → Reset → drain/rearm → prebuffer → Start, com chamadas na thread proprietária.
-- [ ] XAudio2 preserva staging até conclusão segura de todos os callbacks ou DestroyVoice; sem reclaim individual por callback fora de ordem.
-- [ ] Operações de controle são coarse-grained; nenhuma lógica entra na GUI além dos comandos já existentes.
-- [ ] Testes headless cobrem transições, epochs obsoletas, timeout/falha de flush, prebuffer, StepFrame e equivalência de execução contínua/em blocos.
-- [ ] CI Windows e Linux no HEAD exato; fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
+A implementação introduzida na PR #656 cobre os seguintes pontos:
+
+- `PcmSink` exige `suspend_and_flush` e `resume`; não há implementação padrão que retorne sucesso sem realizar controle.
+- `NativeAudioSession` expõe flush, resume e reset do estado FIR/resampler.
+- O worker SMS serializa Start/Pause/Stop/Reset/LoadRom/ConfigureAudio e aguarda a confirmação do backend antes de concluir as transições relevantes.
+- WASAPI executa Stop → Reset → descarte pelo consumidor. A espera do evento tem timeout de 10 ms para observar comandos de controle; o restart espera o prebuffer em frames, limitado à capacidade efetiva da FIFO.
+- XAudio2 executa Stop → FlushSourceBuffers e aguarda o número agregado de callbacks esperado e `BuffersQueued == 0`. Não libera staging individualmente por callback durante Flush.
+- A barreira de flush tem timeout de 5 s. Falha ou timeout é propagado como erro e não é convertido em sucesso.
+- StepFrame processa mixer/resampler, mas não envia PCM ao sink. A história FIR dos frames depurados é descartada antes do primeiro bloco audível após Resume.
+- Pause/Resume sem StepFrame preserva a história FIR; Reset/LoadRom a reinicializam.
+
+### Evidência automatizada adicionada
+
+- FIFO: descarte pelo consumidor e reutilização da fila com novos frames.
+- DSP: StepFrame sem publicação; ausência de vazamento de FIR após Resume; Pause/Resume preserva FIR; Reset reinicializa FIR.
+- Worker: StepFrame avança a máquina sem publicar PCM.
+- CI #5719 validou os hosts Windows e Linux no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351` (PASS).
+- Reprodução física, hotplug e escuta real permanecem OUT-G / NOT RUN.
+
+## 7. Critérios de aceitação para implementação OUT-E
+
+- [x] `AudioSession`/ `PcmSink` possuem contrato explícito de suspend/resume, flush e descarte de PCM.
+- [x] Pause só confirma após backend silenciado e epoch anterior invalidada.
+- [x] Stop não deixa PCM residual reproduzindo após confirmação.
+- [x] Resume só libera áudio após prebuffer mínimo da epoch atual.
+- [x] Reset/LoadRom não reproduzem frames da máquina anterior.
+- [x] StepFrame avança estado DSP deterministicamente sem emitir som no endpoint.
+- [x] WASAPI usa Stop → Reset → drain/rearm → prebuffer → Start, com chamadas na thread proprietária.
+- [x] XAudio2 preserva staging até conclusão segura de todos os callbacks ou DestroyVoice; sem reclaim individual por callback fora de ordem.
+- [x] Operações de controle são coarse-grained; nenhuma lógica entra na GUI além dos comandos já existentes.
+- [ ] Cobertura headless completa de transições concorrentes, timeout/falha de flush e equivalência contínua/em blocos (há testes direcionados iniciais, ainda não a suíte integral).
+- [x] CI #5719 no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351`: Windows/Linux áudio, fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
 - [ ] Validação física posterior classificada separadamente (OUT-G).
 
-## 7. Riscos e decisões ainda abertas
+## 8. Riscos e decisões ainda abertas
 
 1. O wrapper WASAPI atual aguarda eventos de áudio; quando o stream está parado, o protocolo de controle precisa de mecanismo independente de wake-up. Reduzir timeout por polling só pode ser adotado com justificativa e medição.
-2. XAudio2 deve usar uma barreira agregada de conclusão para a fila inteira após Flush; o contador normal de callbacks em ordem FIFO não é suficiente para reclaim incremental durante flush.
+2. XAudio2 deve silenciar a source voice antes do Flush e usar uma barreira agregada de conclusão para a fila inteira; não parar a voz, pois Stop suprime callbacks. O contador normal de callbacks em ordem FIFO não é suficiente para reclaim incremental durante flush.
 3. A semântica de Reset do resampler deve distinguir Pause (preservar estado DSP) de Reset/LoadRom (nova fronteira de conteúdo).
 4. A duração do prebuffer deve ser derivada de buffer/period do endpoint e testada contra latência/underruns, não escolhida por conveniência.
 5. Mute físico imediato e descarte de buffers são propriedades distintas; ambas precisam ser comprovadas.
 6. O protocolo deve evitar comandos concorrentes ou reentrantes e tratar timeout como falha explícita.
 
-## 8. Referências de versão
+## 9. Referências de versão
 
 - Manifesto atual: `wasapi = 0.26.0`; Docs.rs já lista 0.27.0 (2026-11-06). Não atualizar nesta especificação sem auditar changelog, MSRV e API usada.
 - Manifesto atual: `windows = 0.62.2`; APIs de XAudio2 consultadas na documentação correspondente.
