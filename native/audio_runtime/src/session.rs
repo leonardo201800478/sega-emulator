@@ -16,15 +16,11 @@ pub trait PcmSink {
     ///
     /// The implementation must perform the operation on the backend-owning
     /// thread and return only after old-epoch audio can no longer be emitted.
-    fn suspend_and_flush(&mut self) -> Result<(), String> {
-        Ok(())
-    }
+    fn suspend_and_flush(&mut self) -> Result<(), String>;
 
     /// Allow the backend to begin a new audio epoch. Device playback may wait
     /// for its configured prebuffer threshold before starting.
-    fn resume(&mut self) -> Result<(), String> {
-        Ok(())
-    }
+    fn resume(&mut self) -> Result<(), String>;
 
     /// Return (underruns, dropped blocks) observed by the sink.
     fn metrics(&self) -> (u64, u64);
