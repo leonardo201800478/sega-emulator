@@ -78,9 +78,9 @@ Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles n�
 ## 7. Validação da PR #654 — atualização pendente de CI final
 
 - CI Windows do HEAD anterior `c9c15432c981316d5fdd49c9d7f27ba194aac96a`: fmt PASS, Clippy PASS e 21 testes PASS.
-- Regressão global do workspace: NOT RUN no HEAD anterior (job SKIPPED pelo classificador de impacto).
+- Regressão global do workspace: NOT RUN no HEAD anterior (job SKIPPED pelo classificador de impacto). O workflow foi ajustado na branch para executar essa regressão também quando houver alterações classificadas como áudio.
 - Validação física em dispositivo Windows: NOT RUN.
-- A correção de conversão PCM em lotes fixos adiciona dois testes; os resultados do novo HEAD serão registrados após nova execução de CI.
+- A correção de conversão PCM em lotes fixos adiciona dois testes. A primeira execução após essa alteração encontrou dois avisos Clippy (função de referência sem uso em build normal e `chunks_exact` com tamanho constante); ambos foram corrigidos no HEAD subsequente. A validação do HEAD corrigido ainda aguarda nova execução.
 
 ## 8. Limites explícitos
 
