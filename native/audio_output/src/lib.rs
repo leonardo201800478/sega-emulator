@@ -243,7 +243,7 @@ fn wait_for_flush_acknowledgement(
         }
         if std::time::Instant::now() >= deadline {
             return Err(AudioOutputError::Device(
-                "audio backend did not acknowledge the flush epoch within 2 seconds".to_owned(),
+                "audio backend did not acknowledge the flush epoch within 5 seconds".to_owned(),
             ));
         }
         thread::sleep(Duration::from_millis(1));
