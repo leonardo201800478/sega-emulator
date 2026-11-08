@@ -623,16 +623,16 @@ impl D3d12Host {
     ) -> Result<Self> {
         let factory: IDXGIFactory2 =
             match unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default()) } {
-            Ok(factory) => factory,
-            Err(error) => {
-                sega_observability::tracing::error!(
-                    target: "sega::video::d3d12",
-                    error = %error,
-                    "DXGI factory creation failed"
-                );
-                return Err(error);
-            }
-        };
+                Ok(factory) => factory,
+                Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::video::d3d12",
+                        error = %error,
+                        "DXGI factory creation failed"
+                    );
+                    return Err(error);
+                }
+            };
 
         let mut device: Option<ID3D12Device> = None;
         if let Err(error) = unsafe { D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device) }
