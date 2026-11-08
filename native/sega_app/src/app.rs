@@ -1189,8 +1189,7 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.label("Áudio — high-water / backlog atual");
                 ui.label(format!(
                     "{} / {} frames",
-                    audio.queue_high_water_frames,
-                    audio.queue_queued_frames
+                    audio.queue_high_water_frames, audio.queue_queued_frames
                 ));
                 ui.end_row();
                 ui.label("Áudio — frames aceitos / consumidos");
@@ -1201,7 +1200,8 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.end_row();
                 ui.label("Áudio — backlog FIFO estimado");
                 ui.label(
-                    audio.queue_duration_micros()
+                    audio
+                        .queue_duration_micros()
                         .map(|micros| format!("{micros} µs"))
                         .unwrap_or_else(|| "indisponível".to_owned()),
                 );
