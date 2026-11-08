@@ -314,6 +314,13 @@ impl D3d12ChildWindow {
             }
         }
 
+        sega_observability::tracing::debug!(
+            target: "sega::video::d3d12",
+            parent_hwnd = parent_handle,
+            child_hwnd = hwnd.0 as usize,
+            added_parent_clip_children,
+            "D3D12 child presentation window created"
+        );
         Ok(Self {
             hwnd,
             parent_hwnd: parent,
@@ -336,7 +343,16 @@ impl D3d12ChildWindow {
             ));
         }
 
-        unsafe {
+        sega_observability::tracing::trace!(
+            target: "sega::video::d3d12",
+            child_hwnd = self.hwnd.0 as usize,
+            x,
+            y,
+            width,
+            height,
+            "D3D12 child viewport bounds updated"
+        );
+        if let Err(error) = unsafe {
             SetWindowPos(
                 self.hwnd,
                 None,
@@ -345,7 +361,19 @@ impl D3d12ChildWindow {
                 width,
                 height,
                 SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
-            )?;
+            )
+        } {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                child_hwnd = self.hwnd.0 as usize,
+                x,
+                y,
+                width,
+                height,
+                error = %error,
+                "D3D12 child viewport positioning failed"
+            );
+            return Err(error);
         }
         Ok(())
     }
@@ -597,10 +625,28 @@ impl D3d12Host {
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
         let mut device: Option<ID3D12Device> = None;
-        unsafe {
-            D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
+        if let Err(error) = unsafe {
+            D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)
+        } {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                feature_level = "11_0",
+                error = %error,
+                "D3D12 device creation failed"
+            );
+            return Err(error);
         }
         let device: ID3D12Device = device.ok_or_else(Error::from_thread)?;
+        let adapter_luid = unsafe { device.GetAdapterLuid() };
+        sega_observability::tracing::info!(
+            target: "sega::video::d3d12",
+            adapter_luid_low = adapter_luid.LowPart,
+            adapter_luid_high = adapter_luid.HighPart,
+            feature_level = "11_0",
+            render_width,
+            render_height,
+            "D3D12 device initialized on default adapter"
+        );
 
         let queue_desc = D3D12_COMMAND_QUEUE_DESC {
             Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -627,9 +673,32 @@ impl D3d12Host {
             ..Default::default()
         };
 
-        let swap_chain1 = unsafe {
-            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)?
+        let swap_chain1 = match unsafe {
+            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)
+        } {
+            Ok(swap_chain) => swap_chain,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    render_width,
+                    render_height,
+                    format = "R8G8B8A8_UNORM",
+                    buffer_count = SWAP_CHAIN_BUFFER_COUNT,
+                    error = %error,
+                    "D3D12 swap chain creation failed"
+                );
+                return Err(error);
+            }
         };
+        sega_observability::tracing::info!(
+            target: "sega::video::d3d12",
+            render_width,
+            render_height,
+            format = "R8G8B8A8_UNORM",
+            buffer_count = SWAP_CHAIN_BUFFER_COUNT,
+            maximum_frame_latency = 1,
+            "D3D12 swap chain created"
+        );
         unsafe {
             factory.MakeWindowAssociation(
                 window.hwnd(),
@@ -935,7 +1004,16 @@ impl D3d12Host {
             })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
-            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+            let present_result = self.swap_chain.Present(1, DXGI_PRESENT(0)).ok();
+            if let Err(error) = &present_result {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    error = %error,
+                    device_removed_reason = ?self.device_removed_reason().err(),
+                    "D3D12 Present failed"
+                );
+            }
+            present_result?;
         }
 
         Ok(())
@@ -1053,7 +1131,17 @@ impl D3d12Host {
             })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
-            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+            let present_result = self.swap_chain.Present(1, DXGI_PRESENT(0)).ok();
+            if let Err(error) = &present_result {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    frame_sequence = frame.sequence,
+                    error = %error,
+                    device_removed_reason = ?self.device_removed_reason().err(),
+                    "D3D12 mailbox frame presentation failed"
+                );
+            }
+            present_result?;
         }
 
         Ok(())
