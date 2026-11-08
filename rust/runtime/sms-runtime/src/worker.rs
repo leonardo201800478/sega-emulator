@@ -741,6 +741,8 @@ fn handle_command(
         }
         WorkerCommand::Reset(reply) => match build_sms_temporal_machine(rom.clone(), region) {
             Ok(reset_machine) => {
+                *running = false;
+                telemetry.running.store(false, Ordering::Release);
                 let result = audio_session.as_mut().map_or(Ok(()), |session| {
                     session.suspend_and_flush()?;
                     session.reset_dsp();
@@ -748,8 +750,6 @@ fn handle_command(
                 });
                 match result {
                     Ok(()) => {
-                        *running = false;
-                        telemetry.running.store(false, Ordering::Release);
                         *machine = reset_machine;
                         telemetry.reset_machine_counters();
                         let _ = reply.send(Ok(()));
@@ -767,6 +767,8 @@ fn handle_command(
         WorkerCommand::LoadRom(new_rom, reply) => {
             match build_sms_temporal_machine(new_rom.clone(), region) {
                 Ok(new_machine) => {
+                    *running = false;
+                    telemetry.running.store(false, Ordering::Release);
                     let result = audio_session.as_mut().map_or(Ok(()), |session| {
                         session.suspend_and_flush()?;
                         session.reset_dsp();
@@ -774,8 +776,6 @@ fn handle_command(
                     });
                     match result {
                         Ok(()) => {
-                            *running = false;
-                            telemetry.running.store(false, Ordering::Release);
                             *machine = new_machine;
                             *rom = new_rom;
                             telemetry.reset_machine_counters();
