@@ -590,8 +590,15 @@ fn run_wasapi_worker(
                 .map_err(|error| error.to_string())?;
             let initial_buffer_frames = audio_client
                 .get_buffer_size()
-                .map_err(|error| error.to_string())? as usize;
-            Ok((audio_client, event, render_client, block_align, initial_buffer_frames))
+                .map_err(|error| error.to_string())?
+                as usize;
+            Ok((
+                audio_client,
+                event,
+                render_client,
+                block_align,
+                initial_buffer_frames,
+            ))
         })();
 
         let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
@@ -658,8 +665,12 @@ fn run_wasapi_worker(
             if flush_requested.swap(false, Ordering::AcqRel) {
                 let flush_result = (|| {
                     if stream_started {
-                        audio_client.stop_stream().map_err(|error| error.to_string())?;
-                        audio_client.reset_stream().map_err(|error| error.to_string())?;
+                        audio_client
+                            .stop_stream()
+                            .map_err(|error| error.to_string())?;
+                        audio_client
+                            .reset_stream()
+                            .map_err(|error| error.to_string())?;
                         stream_started = false;
                     }
                     consumer.discard_queued_frames();
@@ -773,7 +784,9 @@ fn run_wasapi_worker(
         if stream_started {
             let _ = audio_client.stop_stream();
         }
-        if shutdown.load(Ordering::Acquire) || (disconnected && control_failed.load(Ordering::Acquire)) {
+        if shutdown.load(Ordering::Acquire)
+            || (disconnected && control_failed.load(Ordering::Acquire))
+        {
             break;
         }
         if disconnected {
@@ -1180,8 +1193,7 @@ fn run_xaudio2_worker(
                     unsafe { source_voice.Stop(0, 0) }.map_err(|error| error.to_string())?;
                     voice_started = false;
                 }
-                unsafe { source_voice.FlushSourceBuffers() }
-                    .map_err(|error| error.to_string())?;
+                unsafe { source_voice.FlushSourceBuffers() }.map_err(|error| error.to_string())?;
 
                 let deadline = std::time::Instant::now() + Duration::from_secs(2);
                 loop {
@@ -1199,7 +1211,9 @@ fn run_xaudio2_worker(
                     thread::sleep(Duration::from_millis(1));
                 }
                 if submitted.submitted_len() != 0 {
-                    return Err("XAudio2 flush left submitted staging buffers unreclaimed".to_owned());
+                    return Err(
+                        "XAudio2 flush left submitted staging buffers unreclaimed".to_owned()
+                    );
                 }
                 consumer.discard_queued_frames();
                 Ok::<(), String>(())
