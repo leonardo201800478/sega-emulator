@@ -7,6 +7,8 @@ fn audio_output_metrics_from_queue(
     sample_rate_hz: u32,
     queue: PcmFrameQueueMetrics,
     dropped_blocks: u64,
+    endpoint_starvation_events: u64,
+    submission_failed_frames: u64,
 ) -> sega_audio_runtime::AudioOutputMetrics {
     sega_audio_runtime::AudioOutputMetrics {
         sample_rate_hz,
@@ -19,6 +21,9 @@ fn audio_output_metrics_from_queue(
         underrun_frames: queue.underrun_frames,
         underrun_events: queue.underrun_events,
         dropped_blocks,
+        flushed_frames: queue.flushed_frames,
+        endpoint_starvation_events,
+        submission_failed_frames,
     }
 }
 
@@ -188,11 +193,14 @@ impl XAudio2SubmittedBuffers {
         Some((submitted.as_ptr().cast::<u8>(), audio_bytes))
     }
 
-    fn rollback_last_submission(&mut self) {
-        if let Some(mut staging) = self.submitted.pop_back() {
-            staging.clear();
-            self.available.push_back(staging);
-        }
+    fn rollback_last_submission(&mut self) -> usize {
+        let Some(mut staging) = self.submitted.pop_back() else {
+            return 0;
+        };
+        let lost_frames = staging.len();
+        staging.clear();
+        self.available.push_back(staging);
+        lost_frames
     }
 
     fn reclaim_completed(&mut self, completed_buffers: u64) -> usize {
@@ -368,9 +376,11 @@ impl NativeWasapiOutput {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let submission_failed_frames = Arc::new(AtomicU64::new(0));
             let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_submission_failed_frames = Arc::clone(&submission_failed_frames);
             let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-wasapi-output".to_owned())
@@ -380,6 +390,7 @@ impl NativeWasapiOutput {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_submission_failed_frames,
                         worker_control,
                         BackendConfig {
                             sample_rate,
@@ -397,6 +408,7 @@ impl NativeWasapiOutput {
                     shutdown,
                     underruns,
                     dropped_blocks,
+                    submission_failed_frames,
                     sample_rate,
                     buffer_size,
                     balance,
@@ -878,6 +890,7 @@ pub struct NativeXAudio2Output {
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
     dropped_blocks: Arc<AtomicU64>,
+    submission_failed_frames: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
     #[cfg(windows)]
@@ -992,7 +1005,10 @@ impl NativeXAudio2Output {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire) {
+            if self.shutdown.load(Ordering::Acquire)
+                || self.control.failed.load(Ordering::Acquire)
+                || self.worker.as_ref().map_or(true, |worker| worker.is_finished())
+            {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -1119,6 +1135,7 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    submission_failed_frames: Arc<AtomicU64>,
     control: Arc<BackendEpochControl>,
     config: BackendConfig,
 ) {
@@ -1228,7 +1245,9 @@ fn run_xaudio2_worker(
         if shutdown.load(Ordering::Acquire) {
             break;
         }
-        if signals.voice_error.load(Ordering::Acquire) {
+        if signals.voice_error.load(Ordering::Acquire)
+            || control.failed.load(Ordering::Acquire)
+        {
             control.failed.store(true, Ordering::Release);
             break;
         }
@@ -1318,7 +1337,9 @@ fn run_xaudio2_worker(
                 ..Default::default()
             };
             if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
-                submitted.rollback_last_submission();
+                let lost_frames = submitted.rollback_last_submission();
+                submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed);
+                control.failed.store(true, Ordering::Release);
                 break;
             }
             submitted_new = true;
@@ -1385,7 +1406,7 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
+        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count(), 0, 0)
     }
 
     fn close(&mut self) {
@@ -1430,7 +1451,13 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
+        audio_output_metrics_from_queue(
+            self.sample_rate,
+            queue,
+            self.dropped_block_count(),
+            self.underrun_count(),
+            self.submission_failed_frames.load(Ordering::Relaxed),
+        )
     }
 
     fn close(&mut self) {
@@ -1480,6 +1507,9 @@ mod tests {
         assert_eq!(metrics.underrun_frames, 32);
         assert_eq!(metrics.underrun_events, 4);
         assert_eq!(metrics.dropped_blocks, 3);
+        assert_eq!(metrics.flushed_frames, 5);
+        assert_eq!(metrics.endpoint_starvation_events, 0);
+        assert_eq!(metrics.submission_failed_frames, 0);
         assert_eq!(metrics.queue_duration_micros(), Some(10_000));
     }
 
