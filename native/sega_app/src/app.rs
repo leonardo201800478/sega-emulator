@@ -345,7 +345,7 @@ impl SegaApp {
                 egui::CentralPanel::default()
                     .frame(egui::Frame::popup(&menu_ui.style()))
                     .show(menu_ui, |menu_ui| {
-                        let scroll = egui::ScrollArea::vertical()
+                        let scroll = egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(menu_ui, |menu_ui| {
                                 let inner = menu_ui.vertical(|menu_ui| {
@@ -1174,6 +1174,7 @@ fn menu_popup_viewport_builder(
         .with_decorations(false)
         .with_resizable(false)
         .with_taskbar(false)
+        .with_transparent(false)
 }
 
 /// Render ROM loading/history and application lifecycle actions.
@@ -1260,7 +1261,7 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     }
 }
 
-/// Render less frequently used machine, input and diagnostics options.
+/// Render less frequently used machine and input options.
 fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     let mut show_status = state.footer_mode.is_visible();
     if ui
@@ -1644,7 +1645,7 @@ mod tests {
         assert_eq!(builder.decorations, Some(false));
         assert_eq!(builder.resizable, Some(false));
         assert_eq!(builder.taskbar, Some(false));
-        assert_ne!(builder.transparent, Some(true));
+        assert_eq!(builder.transparent, Some(false));
     }
 
     #[test]
