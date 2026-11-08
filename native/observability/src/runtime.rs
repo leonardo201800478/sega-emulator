@@ -363,7 +363,7 @@ fn install_panic_hook(crash_log: PathBuf) {
 
 #[cfg(test)]
 mod tests {
-    use super::{DIAGNOSTICS_ENABLED, LogConfig, SessionMetadata};
+    use super::{DIAGNOSTICS_ENABLED, LogConfig, Ordering, SessionMetadata};
 
     #[test]
     fn diagnostics_collection_starts_disabled() {
