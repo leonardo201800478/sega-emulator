@@ -115,7 +115,7 @@ A implementação introduzida na PR #656 cobre os seguintes pontos:
 ## 8. Riscos e decisões ainda abertas
 
 1. O wrapper WASAPI atual aguarda eventos de áudio; quando o stream está parado, o protocolo de controle precisa de mecanismo independente de wake-up. Reduzir timeout por polling só pode ser adotado com justificativa e medição.
-2. XAudio2 deve usar uma barreira agregada de conclusão para a fila inteira após Flush; o contador normal de callbacks em ordem FIFO não é suficiente para reclaim incremental durante flush.
+2. XAudio2 deve silenciar a source voice antes do Flush e usar uma barreira agregada de conclusão para a fila inteira; não parar a voz, pois Stop suprime callbacks. O contador normal de callbacks em ordem FIFO não é suficiente para reclaim incremental durante flush.
 3. A semântica de Reset do resampler deve distinguir Pause (preservar estado DSP) de Reset/LoadRom (nova fronteira de conteúdo).
 4. A duração do prebuffer deve ser derivada de buffer/period do endpoint e testada contra latência/underruns, não escolhida por conveniência.
 5. Mute físico imediato e descarte de buffers são propriedades distintas; ambas precisam ser comprovadas.
