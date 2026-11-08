@@ -113,11 +113,17 @@ impl LoggingHandle {
         } else {
             "off".to_owned()
         };
+        if !enabled {
+            // Disable the panic hook before changing the subscriber filter.
+            DIAGNOSTICS_ENABLED.store(false, Ordering::Release);
+        }
         let filter = EnvFilter::try_new(&directives).map_err(|error| error.to_string())?;
         self.filter
             .reload(filter)
             .map_err(|error| error.to_string())?;
-        DIAGNOSTICS_ENABLED.store(enabled, Ordering::Release);
+        if enabled {
+            DIAGNOSTICS_ENABLED.store(true, Ordering::Release);
+        }
         Ok(())
     }
 
@@ -357,7 +363,12 @@ fn install_panic_hook(crash_log: PathBuf) {
 
 #[cfg(test)]
 mod tests {
-    use super::{LogConfig, SessionMetadata};
+    use super::{DIAGNOSTICS_ENABLED, LogConfig, SessionMetadata};
+
+    #[test]
+    fn diagnostics_collection_starts_disabled() {
+        assert!(!DIAGNOSTICS_ENABLED.load(Ordering::Acquire));
+    }
 
     #[test]
     fn default_log_configuration_uses_bounded_async_queue_and_rotation() {
