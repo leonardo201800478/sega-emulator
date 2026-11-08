@@ -621,8 +621,19 @@ impl D3d12Host {
         render_height: u32,
         window: NativeVideoWindow,
     ) -> Result<Self> {
-        let factory: IDXGIFactory2 =
-            unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
+        let factory: IDXGIFactory2 = match unsafe {
+            CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())
+        } {
+            Ok(factory) => factory,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    error = %error,
+                    "DXGI factory creation failed"
+                );
+                return Err(error);
+            }
+        };
 
         let mut device: Option<ID3D12Device> = None;
         if let Err(error) = unsafe {
@@ -654,7 +665,17 @@ impl D3d12Host {
             Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
             NodeMask: 0,
         };
-        let queue: ID3D12CommandQueue = unsafe { device.CreateCommandQueue(&queue_desc)? };
+        let queue: ID3D12CommandQueue = match unsafe { device.CreateCommandQueue(&queue_desc) } {
+            Ok(queue) => queue,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    error = %error,
+                    "D3D12 command queue creation failed"
+                );
+                return Err(error);
+            }
+        };
 
         let swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
             Width: render_width,
@@ -1052,6 +1073,14 @@ impl D3d12Host {
     /// GPU-aligned.
     pub fn present_frame(&mut self, frame: &VideoFrame) -> Result<()> {
         if frame.width() != self.width || frame.height() != self.height {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                frame_width = frame.width(),
+                frame_height = frame.height(),
+                swap_chain_width = self.width,
+                swap_chain_height = self.height,
+                "video frame dimensions do not match D3D12 swap chain"
+            );
             return Err(Error::new(
                 windows::core::HRESULT(0x8007_0057_u32 as i32),
                 "VideoFrame dimensions must match the initialized DXGI swap chain",
