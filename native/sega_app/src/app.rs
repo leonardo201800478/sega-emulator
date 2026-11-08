@@ -897,8 +897,6 @@ impl eframe::App for SegaApp {
     }
 }
 
-}
-
 /// Read a raw SMS image or extract the single SMS image contained in a ZIP archive.
 fn read_rom_file(path: &Path) -> Result<Vec<u8>, String> {
     let extension = path
