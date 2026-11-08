@@ -336,8 +336,7 @@ impl SegaApp {
         let mut exit_requested = false;
         let mut measured_size = popup_size;
         let mut input_updated = false;
-        let root_fullscreen = context
-            .input(|input| input.viewport().fullscreen.unwrap_or(false));
+        let root_fullscreen = context.input(|input| input.viewport().fullscreen.unwrap_or(false));
 
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
@@ -359,38 +358,40 @@ impl SegaApp {
                                     menu_ui.separator();
 
                                     let mut header_state = HeaderState {
-                                browse_requested: &mut self.rom_dialog_requested,
-                                recent_roms: &self.recent_roms,
-                                recent_rom_requested: &mut self.recent_rom_requested,
-                                footer_mode: &mut self.footer_mode,
-                                region: &mut self.region,
-                                aspect_ratio: &mut self.aspect_ratio,
-                                audio_enabled: &mut self.audio_enabled,
-                                audio_backend: &mut self.audio_backend,
-                                audio_volume: &mut self.audio_volume,
-                                audio_command: &mut audio_command,
-                                viewport: &self.native_viewport,
-                                machine_command: &mut command,
-                                devices: &self.input_devices,
-                                selected_gamepad: &mut self.selected_gamepad,
-                                input_error: self
-                                    .input_backend
-                                    .as_ref()
-                                    .and_then(|state| state.as_ref().err())
-                                    .map(String::as_str),
-                                active_menu: &mut self.active_menu,
-                                menu_anchor: &mut self.menu_anchor,
-                                menu_popup_size: &mut self.menu_popup_size,
-                                root_fullscreen,
-                                fullscreen_requested: &mut fullscreen_requested,
-                                exit_requested: &mut exit_requested,
-                            };
+                                        browse_requested: &mut self.rom_dialog_requested,
+                                        recent_roms: &self.recent_roms,
+                                        recent_rom_requested: &mut self.recent_rom_requested,
+                                        footer_mode: &mut self.footer_mode,
+                                        region: &mut self.region,
+                                        aspect_ratio: &mut self.aspect_ratio,
+                                        audio_enabled: &mut self.audio_enabled,
+                                        audio_backend: &mut self.audio_backend,
+                                        audio_volume: &mut self.audio_volume,
+                                        audio_command: &mut audio_command,
+                                        viewport: &self.native_viewport,
+                                        machine_command: &mut command,
+                                        devices: &self.input_devices,
+                                        selected_gamepad: &mut self.selected_gamepad,
+                                        input_error: self
+                                            .input_backend
+                                            .as_ref()
+                                            .and_then(|state| state.as_ref().err())
+                                            .map(String::as_str),
+                                        active_menu: &mut self.active_menu,
+                                        menu_anchor: &mut self.menu_anchor,
+                                        menu_popup_size: &mut self.menu_popup_size,
+                                        root_fullscreen,
+                                        fullscreen_requested: &mut fullscreen_requested,
+                                        exit_requested: &mut exit_requested,
+                                    };
                                     render_menu_content(menu_ui, menu, &mut header_state);
 
-                                    if menu_ui.input(|input| {
+                                    let close_requested = menu_ui.input(|input| {
                                         input.key_pressed(egui::Key::Escape)
                                             || input.viewport().close_requested()
-                                    }) || command.is_some()
+                                    });
+                                    if close_requested
+                                        || command.is_some()
                                         || *header_state.browse_requested
                                         || header_state.recent_rom_requested.is_some()
                                         || exit_requested
@@ -398,14 +399,18 @@ impl SegaApp {
                                         *header_state.active_menu = None;
                                     }
                                     drop(header_state);
-                                    if menu_ui.input(|input| input.viewport().focused.unwrap_or(false)) {
+
+                                    if menu_ui.input(|input| {
+                                        input.viewport().focused.unwrap_or(false)
+                                    }) {
                                         self.update_keyboard_input(menu_ui.ctx());
                                         input_updated = true;
                                     }
                                 });
                                 inner
                             });
-                        measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
+                        measured_size =
+                            scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
                     });
             },
         );
