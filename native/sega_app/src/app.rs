@@ -389,75 +389,74 @@ impl SegaApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::popup(menu_ui.style()))
             .show(menu_ui, |menu_ui| {
-                let scroll =
-                    egui::ScrollArea::both()
-                        .max_width(menu.minimum_size().x)
-                        .auto_shrink([true, true])
-                        .show(menu_ui, |menu_ui| {
-                            menu_ui.vertical(|menu_ui| {
-                                menu_ui.horizontal(|menu_ui| {
-                                    menu_ui.strong(menu.title());
-                                    if menu_ui.small_button("×").clicked() {
-                                        self.active_menu = None;
-                                    }
-                                });
-                                menu_ui.separator();
-
-                                let (should_close, focused) = {
-                                    let mut header_state = HeaderState {
-                                        browse_requested: &mut self.rom_dialog_requested,
-                                        recent_roms: &self.recent_roms,
-                                        recent_rom_requested: &mut self.recent_rom_requested,
-                                        footer_mode: &mut self.footer_mode,
-                                        region: &mut self.region,
-                                        aspect_ratio: &mut self.aspect_ratio,
-                                        audio_enabled: &mut self.audio_enabled,
-                                        audio_backend: &mut self.audio_backend,
-                                        audio_volume: &mut self.audio_volume,
-                                        audio_command: &mut actions.audio_command,
-                                        viewport: &self.native_viewport,
-                                        machine_command: &mut actions.command,
-                                        devices: &self.input_devices,
-                                        selected_gamepad: &mut self.selected_gamepad,
-                                        input_error: self
-                                            .input_backend
-                                            .as_ref()
-                                            .and_then(|state| state.as_ref().err())
-                                            .map(String::as_str),
-                                        active_menu: &mut self.active_menu,
-                                        menu_anchor: &mut self.menu_anchor,
-                                        menu_popup_size: &mut self.menu_popup_size,
-                                        root_fullscreen: actions.root_fullscreen,
-                                        fullscreen_requested: &mut actions.fullscreen_requested,
-                                        exit_requested: &mut actions.exit_requested,
-                                    };
-                                    render_menu_content(menu_ui, menu, &mut header_state);
-
-                                    let close_requested = menu_ui.input(|input| {
-                                        input.key_pressed(egui::Key::Escape)
-                                            || input.viewport().close_requested()
-                                    });
-                                    let action_selected = header_state.machine_command.is_some()
-                                        || *header_state.browse_requested
-                                        || header_state.recent_rom_requested.is_some()
-                                        || *header_state.exit_requested;
-                                    (
-                                        close_requested || action_selected,
-                                        menu_ui.input(|input| {
-                                            input.viewport().focused.unwrap_or(false)
-                                        }),
-                                    )
-                                };
-
-                                if should_close {
+                let scroll = egui::ScrollArea::both()
+                    .max_width(menu.minimum_size().x)
+                    .auto_shrink([true, true])
+                    .show(menu_ui, |menu_ui| {
+                        menu_ui.vertical(|menu_ui| {
+                            menu_ui.horizontal(|menu_ui| {
+                                menu_ui.strong(menu.title());
+                                if menu_ui.small_button("×").clicked() {
                                     self.active_menu = None;
                                 }
-                                if focused {
-                                    self.update_keyboard_input(menu_ui.ctx(), root_context);
-                                    actions.input_updated = true;
-                                }
-                            })
-                        });
+                            });
+                            menu_ui.separator();
+
+                            let (should_close, focused) = {
+                                let mut header_state = HeaderState {
+                                    browse_requested: &mut self.rom_dialog_requested,
+                                    recent_roms: &self.recent_roms,
+                                    recent_rom_requested: &mut self.recent_rom_requested,
+                                    footer_mode: &mut self.footer_mode,
+                                    region: &mut self.region,
+                                    aspect_ratio: &mut self.aspect_ratio,
+                                    audio_enabled: &mut self.audio_enabled,
+                                    audio_backend: &mut self.audio_backend,
+                                    audio_volume: &mut self.audio_volume,
+                                    audio_command: &mut actions.audio_command,
+                                    viewport: &self.native_viewport,
+                                    machine_command: &mut actions.command,
+                                    devices: &self.input_devices,
+                                    selected_gamepad: &mut self.selected_gamepad,
+                                    input_error: self
+                                        .input_backend
+                                        .as_ref()
+                                        .and_then(|state| state.as_ref().err())
+                                        .map(String::as_str),
+                                    active_menu: &mut self.active_menu,
+                                    menu_anchor: &mut self.menu_anchor,
+                                    menu_popup_size: &mut self.menu_popup_size,
+                                    root_fullscreen: actions.root_fullscreen,
+                                    fullscreen_requested: &mut actions.fullscreen_requested,
+                                    exit_requested: &mut actions.exit_requested,
+                                };
+                                render_menu_content(menu_ui, menu, &mut header_state);
+
+                                let close_requested = menu_ui.input(|input| {
+                                    input.key_pressed(egui::Key::Escape)
+                                        || input.viewport().close_requested()
+                                });
+                                let action_selected = header_state.machine_command.is_some()
+                                    || *header_state.browse_requested
+                                    || header_state.recent_rom_requested.is_some()
+                                    || *header_state.exit_requested;
+                                (
+                                    close_requested || action_selected,
+                                    menu_ui.input(|input| {
+                                        input.viewport().focused.unwrap_or(false)
+                                    }),
+                                )
+                            };
+
+                            if should_close {
+                                self.active_menu = None;
+                            }
+                            if focused {
+                                self.update_keyboard_input(menu_ui.ctx(), root_context);
+                                actions.input_updated = true;
+                            }
+                        })
+                    });
                 measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
             });
         measured_size
