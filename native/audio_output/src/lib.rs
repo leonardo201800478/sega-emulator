@@ -93,6 +93,12 @@ fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
     frames
 }
 
+/// Return whether a backend producer may publish another PCM block.
+#[cfg(any(windows, test))]
+fn backend_accepts_pcm(shutdown: bool, failed: bool, worker_finished: bool) -> bool {
+    !shutdown && !failed && !worker_finished
+}
+
 /// Maximum number of PCM frames converted before publishing to the SPSC queue.
 /// This bounds temporary conversion storage independently of caller block size.
 #[cfg(any(windows, test))]
@@ -445,13 +451,11 @@ impl NativeWasapiOutput {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire)
-                || self.control.failed.load(Ordering::Acquire)
-                || self
-                    .worker
-                    .as_ref()
-                    .map_or(true, |worker| worker.is_finished())
-            {
+            if !backend_accepts_pcm(
+                self.shutdown.load(Ordering::Acquire),
+                self.control.failed.load(Ordering::Acquire),
+                self.worker.as_ref().map_or(true, |worker| worker.is_finished()),
+            ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -1006,10 +1010,11 @@ impl NativeXAudio2Output {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire)
-                || self.control.failed.load(Ordering::Acquire)
-                || self.worker.as_ref().map_or(true, |worker| worker.is_finished())
-            {
+            if !backend_accepts_pcm(
+                self.shutdown.load(Ordering::Acquire),
+                self.control.failed.load(Ordering::Acquire),
+                self.worker.as_ref().map_or(true, |worker| worker.is_finished()),
+            ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -1513,6 +1518,29 @@ mod tests {
         assert_eq!(metrics.endpoint_starvation_events, 7);
         assert_eq!(metrics.submission_failed_frames, 11);
         assert_eq!(metrics.queue_duration_micros(), Some(10_000));
+    }
+
+    #[test]
+    fn failed_or_stopped_backend_rejects_new_pcm_writes() {
+        assert!(backend_accepts_pcm(false, false, false));
+        assert!(!backend_accepts_pcm(true, false, false));
+        assert!(!backend_accepts_pcm(false, true, false));
+        assert!(!backend_accepts_pcm(false, false, true));
+        assert!(!backend_accepts_pcm(true, true, true));
+    }
+
+    #[test]
+    fn xaudio2_failed_submission_rollback_reports_lost_frame_count() {
+        let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
+        producer.push_frames(&[[1, 2], [3, 4], [5, 6]]).unwrap();
+        let mut staging = XAudio2SubmittedBuffers::new(1, 8);
+        assert!(staging.stage_next(&mut consumer, 8).is_some());
+        assert_eq!(staging.submitted_len(), 1);
+        assert_eq!(staging.rollback_last_submission(), 3);
+        assert_eq!(staging.submitted_len(), 0);
+        assert_eq!(staging.available_len(), 1);
+        assert_eq!(consumer.metrics().consumed_frames, 3);
+        assert_eq!(consumer.metrics().queued_frames, 0);
     }
 
     #[test]
