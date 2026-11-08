@@ -556,6 +556,10 @@ fn run_wasapi_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    suspended: Arc<AtomicBool>,
+    flush_requested: Arc<AtomicBool>,
+    flush_acknowledged: Arc<AtomicBool>,
+    control_failed: Arc<AtomicBool>,
     sample_rate: u32,
     buffer_size: u32,
 ) {
@@ -591,10 +595,6 @@ fn run_wasapi_worker(
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
 
-            // Prefer IAudioClient3 in shared/event-driven mode. Clamp the
-            // requested period to the endpoint range and align it to the
-            // fundamental period. Retain the previous Shared path when the
-            // interface or initialization is unavailable.
             let requested_frames = buffer_size.max(1);
             let selected_period = audio_client
                 .get_shared_mode_engine_period(&format)
@@ -631,15 +631,8 @@ fn run_wasapi_worker(
                 .map_err(|error| error.to_string())?;
             let initial_buffer_frames = audio_client
                 .get_buffer_size()
-                .map_err(|error| error.to_string())?
-                as usize;
-            Ok((
-                audio_client,
-                event,
-                render_client,
-                block_align,
-                initial_buffer_frames,
-            ))
+                .map_err(|error| error.to_string())? as usize;
+            Ok((audio_client, event, render_client, block_align, initial_buffer_frames))
         })();
 
         let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
@@ -688,6 +681,7 @@ fn run_wasapi_worker(
             thread::sleep(Duration::from_millis(250));
             continue;
         }
+        let mut stream_started = true;
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
@@ -698,21 +692,95 @@ fn run_wasapi_worker(
             if shutdown.load(Ordering::Acquire) {
                 break;
             }
-            if event.wait_for_event(1000).is_err() {
-                // A failed event wait usually means that the endpoint stopped.
-                break;
+
+            if flush_requested.swap(false, Ordering::AcqRel) {
+                let flush_result = (|| {
+                    if stream_started {
+                        audio_client.stop_stream().map_err(|error| error.to_string())?;
+                        audio_client.reset_stream().map_err(|error| error.to_string())?;
+                        stream_started = false;
+                    }
+                    consumer.discard_queued_frames();
+                    Ok::<(), String>(())
+                })();
+                if flush_result.is_err() {
+                    control_failed.store(true, Ordering::Release);
+                }
+                flush_acknowledged.store(true, Ordering::Release);
+                if flush_result.is_err() {
+                    break;
+                }
+            }
+
+            if suspended.load(Ordering::Acquire) {
+                if stream_started {
+                    let stopped = audio_client
+                        .stop_stream()
+                        .and_then(|()| audio_client.reset_stream());
+                    if stopped.is_err() {
+                        control_failed.store(true, Ordering::Release);
+                        break;
+                    }
+                    stream_started = false;
+                }
+                thread::sleep(Duration::from_millis(2));
+                continue;
+            }
+
+            if !stream_started {
+                if consumer.metrics().queued_frames < initial_buffer_frames {
+                    thread::sleep(Duration::from_millis(2));
+                    continue;
+                }
+                let report = consumer.read_frames(&mut scratch_frames);
+                if report.silence_frames > 0 {
+                    underruns.fetch_add(1, Ordering::Relaxed);
+                }
+                pending.clear();
+                for [left, right] in &scratch_frames {
+                    pending.extend(left.to_le_bytes());
+                    pending.extend(right.to_le_bytes());
+                }
+                if pending.len() != initial_buffer_frames.saturating_mul(block_align)
+                    || render_client
+                        .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
+                        .is_err()
+                {
+                    disconnected = true;
+                    break;
+                }
+                pending.clear();
+                if audio_client.start_stream().is_err() {
+                    disconnected = true;
+                    break;
+                }
+                stream_started = true;
+                continue;
+            }
+
+            if event.wait_for_event(10).is_err() {
+                // The short timeout is intentional: it bounds control-command
+                // latency while retaining event-driven rendering. A failed
+                // endpoint is detected by the next client-space query.
+                if audio_client.get_available_space_in_frames().is_err() {
+                    disconnected = true;
+                    break;
+                }
+                continue;
             }
 
             let frames = match audio_client.get_available_space_in_frames() {
                 Ok(frames) => frames as usize,
-                Err(_) => break,
+                Err(_) => {
+                    disconnected = true;
+                    break;
+                }
             };
             if frames == 0 {
                 continue;
             }
             if frames > scratch_frames.len() {
-                // The endpoint reported a period larger than its initialized
-                // buffer; leave this stream and let the recovery path reopen it.
+                disconnected = true;
                 break;
             }
             let report = consumer.read_frames(&mut scratch_frames[..frames]);
@@ -725,13 +793,12 @@ fn run_wasapi_worker(
                 pending.extend(left.to_le_bytes());
                 pending.extend(right.to_le_bytes());
             }
-            if pending.len() != frames.saturating_mul(block_align) {
-                break;
-            }
-            if render_client
-                .write_to_device_from_deque(frames, &mut pending, None)
-                .is_err()
+            if pending.len() != frames.saturating_mul(block_align)
+                || render_client
+                    .write_to_device_from_deque(frames, &mut pending, None)
+                    .is_err()
             {
+                disconnected = true;
                 break;
             }
             if report.producer_closed {
@@ -740,11 +807,15 @@ fn run_wasapi_worker(
             }
         }
 
-        let _ = audio_client.stop_stream();
-        if shutdown.load(Ordering::Acquire) || disconnected {
+        if stream_started {
+            let _ = audio_client.stop_stream();
+        }
+        if shutdown.load(Ordering::Acquire) || (disconnected && control_failed.load(Ordering::Acquire)) {
             break;
         }
-        thread::sleep(Duration::from_millis(250));
+        if disconnected {
+            thread::sleep(Duration::from_millis(250));
+        }
     }
 }
 
