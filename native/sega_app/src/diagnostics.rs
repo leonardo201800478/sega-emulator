@@ -61,7 +61,9 @@ impl DiagnosticsCapture {
             if let Ok(mut error) = self.writer_error.lock() { *error = None; }
             self.writer = Some(thread::Builder::new()
                 .name("sega-ui-diagnostics".to_owned())
-                .spawn(move || write_events(receiver, writer_path, writer_error))
+                .spawn(move || {
+                    write_events(&receiver, &writer_path, writer_error.as_ref())
+                })
                 .map_err(|error| format!("Não foi possível iniciar a thread de logs: {error}"))?);
             self.sender = Some(sender);
             self.file_path = Some(path);
@@ -124,7 +126,11 @@ fn now_millis() -> u128 {
         .map_or(0, |duration| duration.as_millis())
 }
 
-fn write_events(receiver: mpsc::Receiver<DiagnosticEvent>, path: PathBuf, writer_error: Arc<Mutex<Option<String>>>) {
+fn write_events(
+    receiver: &mpsc::Receiver<DiagnosticEvent>,
+    path: &std::path::Path,
+    writer_error: &Mutex<Option<String>>,
+) {
     let mut writer = match open_writer(&path) {
         Ok(writer) => writer,
         Err(error) => { set_writer_error(&writer_error, format!("Falha ao abrir arquivo de log: {error}")); return; }
