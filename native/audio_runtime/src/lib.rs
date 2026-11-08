@@ -139,15 +139,26 @@ impl PcmResampler {
         if input.is_empty() {
             return Vec::new();
         }
-        if self.rate == INPUT_RATE {
-            return self.encode(input.iter().copied());
-        }
 
-        self.buffer.extend_from_slice(input);
-        self.available += input.len();
-        self.real += input.len();
-        let output = self.emit(false);
-        self.discard_old();
+        let output = if self.rate == INPUT_RATE {
+            self.encode(input.iter().copied())
+        } else {
+            self.buffer.extend_from_slice(input);
+            self.available += input.len();
+            self.real += input.len();
+            let output = self.emit(false);
+            self.discard_old();
+            output
+        };
+        sega_observability::tracing::trace!(
+            target: "sega::audio::dsp",
+            input_samples = input.len(),
+            output_pcm_bytes = output.len(),
+            output_samples = output.len() / 2,
+            output_rate = self.rate,
+            buffered_samples = self.available.saturating_sub(self.start),
+            "PCM resampler processed sample batch"
+        );
         output
     }
 
@@ -160,6 +171,12 @@ impl PcmResampler {
         self.buffer.extend(std::iter::repeat_n(0.0, TAPS / 2 + 1));
         self.available += TAPS / 2 + 1;
         let output = self.emit(true);
+        sega_observability::tracing::trace!(
+            target: "sega::audio::dsp",
+            flushed_pcm_bytes = output.len(),
+            flushed_samples = output.len() / 2,
+            "PCM resampler flushed pending samples"
+        );
         self.reset();
         output
     }
