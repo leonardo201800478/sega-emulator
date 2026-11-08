@@ -241,6 +241,31 @@ mod tests {
     }
 
     #[test]
+    fn resampling_is_invariant_across_rates_and_input_chunk_sizes() {
+        let input: Vec<f64> = (0..4096)
+            .map(|index| 0.6 * (index as f64 * 0.017).sin())
+            .collect();
+
+        for rate in [22_050, 44_100, 48_000, 96_000] {
+            let mut whole = PcmResampler::new(rate, 100).unwrap();
+            let expected = [whole.process(&input), whole.flush()].concat();
+
+            for chunk_size in [1, 17, 113, 1024] {
+                let mut chunked = PcmResampler::new(rate, 100).unwrap();
+                let mut actual = Vec::new();
+                for block in input.chunks(chunk_size) {
+                    actual.extend(chunked.process(block));
+                }
+                actual.extend(chunked.flush());
+                assert_eq!(
+                    actual, expected,
+                    "PCM output changed with chunk size {chunk_size} at {rate} Hz"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn resampler_preserves_output_length_and_does_not_start_one_half_filter_early() {
         let input = vec![1.0; 2048];
 
