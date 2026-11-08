@@ -3,7 +3,7 @@
 mod pcm_fifo;
 
 pub use pcm_fifo::{
-    PcmFrameConsumer, PcmFrameProducer, PcmFrameQueue, PcmFrameQueueError,
+    pcm_frame_queue, PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError,
     PcmFrameQueueMetrics, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
 };
 
