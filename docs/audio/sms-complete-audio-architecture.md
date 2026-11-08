@@ -289,7 +289,11 @@ O acumulador de fase carrega a fração entre avanços; a duração acumulada a 
 
 ### 11.5 Comparação externa e limites
 
-A implementação de áudio do MAME descreve integração temporal das durações em que cada onda permanece em nível alto durante o período de saída, em vez de simplesmente selecionar o último tick. Isso é consistente com a necessidade de respeitar o instante de amostragem. Referência: [MAME SN76496](https://sources.debian.org/src/mame/0.289%2Bdfsg1-1/src/devices/sound/sn76496.cpp).
+O MAME configura a variante Sega PSG com divisor interno 8 e cria o stream em `clock()/2`. O loop de áudio emite esse stream de alta taxa e avança os contadores internos quando o divisor expira; portanto, o stream tem oito amostras por tick interno efetivo (`clock()/16`) antes da conversão para a taxa do host. Não é uma taxa física de saída do chip, mas uma estratégia de oversampling que evita selecionar diretamente um tick interno a cada amostra de 44,1 kHz. Referência: [MAME SN76496](https://sources.debian.org/src/mame/0.289%2Bdfsg1-1/src/devices/sound/sn76496.cpp), em especial `segapsg_device`, `device_start` e `sound_stream_update`.
+
+O rsemu adota outra estratégia: declara `SAMPLE_DIVISOR = 80`, amostrando a cada 80 clocks de entrada (cinco ticks internos de 16 clocks) e preservando a taxa regional como racional: NTSC 3.937.500/88 Hz (≈44.744,32 Hz) e PAL 709.379/16 Hz (≈44.336,19 Hz). Isso separa a taxa natural escolhida para a fonte da taxa de saída do host e evita quantização variável dos instantes da fonte. É uma decisão de implementação, não uma frequência física documentada do pino de áudio. Referência: [rsemu SMS audio source](https://docs.rs/rsemu/latest/src/rsemu/host/audio/sms.rs.html), especialmente `SAMPLE_DIVISOR`, `NTSC_SAMPLE_RATE` e `resolve_rate`.
+
+A solução atual da PR #661 mantém a taxa de host 44,1 kHz e interpola entre ticks internos. O caminho de rsemu é uma alternativa arquitetural futura que exigiria generalizar a taxa de entrada racional do `PcmResampler`; não é necessário para corrigir a falha demonstrada e não foi introduzido nesta PR.
 
 Outra implementação pública, rsemu, declara uma taxa de amostragem nativa racional derivada do clock do PSG dividido por 80 (44.744,32 Hz NTSC e 44.336,19 Hz PAL), separando a taxa da fonte da taxa do host. É uma decisão de arquitetura de emulador, não uma frequência de amostragem física documentada do pino do chip. Referência: [rsemu SMS audio source](https://docs.rs/rsemu/latest/src/rsemu/host/audio/sms.rs.html).
 
