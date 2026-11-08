@@ -99,16 +99,16 @@ A implementação introduzida na PR #656 cobre os seguintes pontos:
 
 ## 7. Critérios de aceitação para implementação OUT-E
 
-- [ ] `AudioSession`/ `PcmSink` possuem contrato explícito de enable/mute, flush/epoch e descarte de PCM.
-- [ ] Pause só confirma após backend silenciado e epoch anterior invalidada.
-- [ ] Stop não deixa PCM residual reproduzindo após confirmação.
-- [ ] Resume só libera áudio após prebuffer mínimo da epoch atual.
-- [ ] Reset/LoadRom não reproduzem frames da máquina anterior.
-- [ ] StepFrame avança estado DSP deterministicamente sem emitir som no endpoint.
-- [ ] WASAPI usa Stop → Reset → drain/rearm → prebuffer → Start, com chamadas na thread proprietária.
-- [ ] XAudio2 preserva staging até conclusão segura de todos os callbacks ou DestroyVoice; sem reclaim individual por callback fora de ordem.
-- [ ] Operações de controle são coarse-grained; nenhuma lógica entra na GUI além dos comandos já existentes.
-- [ ] Testes headless cobrem transições, epochs obsoletas, timeout/falha de flush, prebuffer, StepFrame e equivalência de execução contínua/em blocos.
+- [x] `AudioSession`/ `PcmSink` possuem contrato explícito de suspend/resume, flush e descarte de PCM.
+- [x] Pause só confirma após backend silenciado e epoch anterior invalidada.
+- [x] Stop não deixa PCM residual reproduzindo após confirmação.
+- [x] Resume só libera áudio após prebuffer mínimo da epoch atual.
+- [x] Reset/LoadRom não reproduzem frames da máquina anterior.
+- [x] StepFrame avança estado DSP deterministicamente sem emitir som no endpoint.
+- [x] WASAPI usa Stop → Reset → drain/rearm → prebuffer → Start, com chamadas na thread proprietária.
+- [x] XAudio2 preserva staging até conclusão segura de todos os callbacks ou DestroyVoice; sem reclaim individual por callback fora de ordem.
+- [x] Operações de controle são coarse-grained; nenhuma lógica entra na GUI além dos comandos já existentes.
+- [ ] Cobertura headless completa de transições concorrentes, timeout/falha de flush e equivalência contínua/em blocos (há testes direcionados iniciais, ainda não a suíte integral).
 - [ ] CI Windows e Linux no HEAD exato; fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
 - [ ] Validação física posterior classificada separadamente (OUT-G).
 
