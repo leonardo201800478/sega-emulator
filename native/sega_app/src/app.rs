@@ -1488,92 +1488,154 @@ fn render_input_controls(
     }
 }
 
-fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState, diagnostics: &mut super::diagnostics::DiagnosticsCapture) {
+fn render_runtime_status(
+    ui: &mut egui::Ui,
+    viewport: &NativeViewportState,
+    diagnostics: &mut super::diagnostics::DiagnosticsCapture,
+) {
     ui.separator();
-    let mut capture_enabled = diagnostics.is_enabled();
-    if ui.checkbox(&mut capture_enabled, "Capturar logs de diagnóstico").changed() {
-        if let Err(error) = diagnostics.set_enabled(capture_enabled) {
-            ui.colored_label(egui::Color32::RED, format!("Falha ao iniciar captura: {error}"));
-        } else {
-            diagnostics.record("diagnostics.capture.started", "capture enabled from Diagnostics menu");
-        }
-    }
-    if diagnostics.is_enabled() {
-        ui.small(format!("Arquivo: {}", diagnostics.file_path().map_or("indisponível".to_owned(), |path| path.display().to_string())));
-        ui.small(format!("Eventos descartados por fila cheia: {}", diagnostics.dropped_events()));
-        if let Some(error) = diagnostics.writer_error() {
-            ui.colored_label(egui::Color32::RED, format!("Erro na gravação de logs: {error}"));
-        }
-    }
+
+    render_diagnostics_capture(ui, diagnostics);
+
     ui.label(format!("Estado: {}", viewport.status()));
+
     if let Some(worker) = viewport.worker.as_ref() {
-        egui::Grid::new("sms_runtime_telemetry")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("Frame");
-                ui.label(worker.frame_number().to_string());
-                ui.end_row();
-                ui.label("Instruções Z80");
-                ui.label(worker.total_instructions().to_string());
-                ui.end_row();
-                ui.label("Frames publicados");
-                ui.label(worker.video_last_published_sequence().to_string());
-                ui.end_row();
-                ui.label("Frames substituídos na apresentação");
-                ui.label(worker.video_replaced_frames().to_string());
-                ui.end_row();
-                let audio = worker.audio_output_metrics();
-                ui.label("Áudio — taxa configurada");
-                ui.label(format!("{} Hz", audio.sample_rate_hz));
-                ui.end_row();
-                ui.label("Áudio — underrun FIFO (eventos / frames)");
-                ui.label(format!(
-                    "{} / {}",
-                    audio.underrun_events, audio.underrun_frames
-                ));
-                ui.end_row();
-                ui.label("Áudio — starvation endpoint XAudio2");
-                ui.label(audio.endpoint_starvation_events.to_string());
-                ui.end_row();
-                ui.label("Áudio — descartes (overflow / flush)");
-                ui.label(format!(
-                    "{} / {} frames",
-                    audio.dropped_frames, audio.flushed_frames
-                ));
-                ui.end_row();
-                ui.label("Áudio — perdas em SubmitSourceBuffer");
-                ui.label(format!("{} frames", audio.submission_failed_frames));
-                ui.end_row();
-                ui.label("Áudio — blocos com overflow");
-                ui.label(audio.dropped_blocks.to_string());
-                ui.end_row();
-                ui.label("Áudio — FIFO ocupação / capacidade");
-                ui.label(format!(
-                    "{} / {} frames",
-                    audio.queue_queued_frames, audio.queue_capacity_frames
-                ));
-                ui.end_row();
-                ui.label("Áudio — high-water / backlog atual");
-                ui.label(format!(
-                    "{} / {} frames",
-                    audio.queue_high_water_frames, audio.queue_queued_frames
-                ));
-                ui.end_row();
-                ui.label("Áudio — frames aceitos / consumidos");
-                ui.label(format!(
-                    "{} / {}",
-                    audio.accepted_frames, audio.consumed_frames
-                ));
-                ui.end_row();
-                ui.label("Áudio — backlog FIFO estimado");
-                ui.label(audio.queue_duration_micros().map_or_else(
-                    || "indisponível".to_owned(),
-                    |micros| format!("{micros} µs"),
-                ));
-                ui.end_row();
-            });
+        render_runtime_telemetry(ui, worker);
         render_output_errors(ui, worker);
     }
+}
+
+fn render_diagnostics_capture(
+    ui: &mut egui::Ui,
+    diagnostics: &mut super::diagnostics::DiagnosticsCapture,
+) {
+    let mut capture_enabled = diagnostics.is_enabled();
+
+    if ui
+        .checkbox(&mut capture_enabled, "Capturar logs de diagnóstico")
+        .changed()
+    {
+        if let Err(error) = diagnostics.set_enabled(capture_enabled) {
+            ui.colored_label(
+                egui::Color32::RED,
+                format!("Falha ao iniciar captura: {error}"),
+            );
+        } else if capture_enabled {
+            diagnostics.record(
+                "diagnostics.capture.started",
+                "capture enabled from Diagnostics menu",
+            );
+        }
+    }
+
+    if diagnostics.is_enabled() {
+        ui.small(format!(
+            "Arquivo: {}",
+            diagnostics
+                .file_path()
+                .map_or("indisponível".to_owned(), |path| path.display().to_string())
+        ));
+        ui.small(format!(
+            "Eventos descartados por fila cheia: {}",
+            diagnostics.dropped_events()
+        ));
+
+        if let Some(error) = diagnostics.writer_error() {
+            ui.colored_label(
+                egui::Color32::RED,
+                format!("Erro na gravação de logs: {error}"),
+            );
+        }
+    }
+}
+
+fn render_runtime_telemetry(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
+    egui::Grid::new("sms_runtime_telemetry")
+        .num_columns(2)
+        .show(ui, |ui| {
+            render_video_runtime_metrics(ui, worker);
+            render_audio_runtime_metrics(ui, worker);
+        });
+}
+
+fn render_video_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
+    ui.label("Frame");
+    ui.label(worker.frame_number().to_string());
+    ui.end_row();
+
+    ui.label("Instruções Z80");
+    ui.label(worker.total_instructions().to_string());
+    ui.end_row();
+
+    ui.label("Frames publicados");
+    ui.label(worker.video_last_published_sequence().to_string());
+    ui.end_row();
+
+    ui.label("Frames substituídos na apresentação");
+    ui.label(worker.video_replaced_frames().to_string());
+    ui.end_row();
+}
+
+fn render_audio_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
+    let audio = worker.audio_output_metrics();
+
+    ui.label("Áudio — taxa configurada");
+    ui.label(format!("{} Hz", audio.sample_rate_hz));
+    ui.end_row();
+
+    ui.label("Áudio — underrun FIFO (eventos / frames)");
+    ui.label(format!(
+        "{} / {}",
+        audio.underrun_events, audio.underrun_frames
+    ));
+    ui.end_row();
+
+    ui.label("Áudio — starvation endpoint XAudio2");
+    ui.label(audio.endpoint_starvation_events.to_string());
+    ui.end_row();
+
+    ui.label("Áudio — descartes (overflow / flush)");
+    ui.label(format!(
+        "{} / {} frames",
+        audio.dropped_frames, audio.flushed_frames
+    ));
+    ui.end_row();
+
+    ui.label("Áudio — perdas em SubmitSourceBuffer");
+    ui.label(format!("{} frames", audio.submission_failed_frames));
+    ui.end_row();
+
+    ui.label("Áudio — blocos com overflow");
+    ui.label(audio.dropped_blocks.to_string());
+    ui.end_row();
+
+    ui.label("Áudio — FIFO ocupação / capacidade");
+    ui.label(format!(
+        "{} / {} frames",
+        audio.queue_queued_frames, audio.queue_capacity_frames
+    ));
+    ui.end_row();
+
+    ui.label("Áudio — high-water / backlog atual");
+    ui.label(format!(
+        "{} / {} frames",
+        audio.queue_high_water_frames, audio.queue_queued_frames
+    ));
+    ui.end_row();
+
+    ui.label("Áudio — frames aceitos / consumidos");
+    ui.label(format!(
+        "{} / {}",
+        audio.accepted_frames, audio.consumed_frames
+    ));
+    ui.end_row();
+
+    ui.label("Áudio — backlog FIFO estimado");
+    ui.label(audio.queue_duration_micros().map_or_else(
+        || "indisponível".to_owned(),
+        |micros| format!("{micros} µs"),
+    ));
+    ui.end_row();
 }
 
 fn configure_audio_output(
