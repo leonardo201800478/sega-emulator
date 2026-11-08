@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+mod diagnostics;
+
 #[cfg(windows)]
 mod app;
 
