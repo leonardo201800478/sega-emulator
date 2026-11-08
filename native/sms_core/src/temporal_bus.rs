@@ -297,6 +297,13 @@ impl SmsTemporalBus {
             || self.pending_internal_cycle.is_some()
             || self.internal_completion.is_some()
         {
+            sega_observability::tracing::warn!(
+                target: "sega::bus",
+                request_id = request.id,
+                address = request.address,
+                operation = ?request.operation,
+                "SMS bus request rejected while another operation is pending"
+            );
             return Err(SmsTemporalBusError::Busy);
         }
         if !matches!(
@@ -308,6 +315,13 @@ impl SmsTemporalBus {
                 | Z80BusOperation::PortWrite { .. }
                 | Z80BusOperation::InterruptAcknowledge
         ) {
+            sega_observability::tracing::error!(
+                target: "sega::bus",
+                request_id = request.id,
+                address = request.address,
+                operation = ?request.operation,
+                "unsupported Z80 bus operation rejected by SMS temporal bus"
+            );
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
@@ -339,6 +353,12 @@ impl SmsTemporalBus {
             || self.completion.is_some()
             || self.pending_internal_cycle.is_some()
         {
+            sega_observability::tracing::warn!(
+                target: "sega::bus",
+                continuation_id,
+                tstates,
+                "SMS internal cycle rejected while bus is busy"
+            );
             return Err(SmsTemporalBusError::Busy);
         }
         let started_at = self.coordinator.now();
@@ -360,6 +380,11 @@ impl SmsTemporalBus {
             || self.pending_internal_cycle.is_some()
             || self.internal_completion.is_some()
         {
+            sega_observability::tracing::warn!(
+                target: "sega::bus",
+                continuation_id,
+                "SMS M1 T-state rejected while bus is busy"
+            );
             return Err(SmsTemporalBusError::Busy);
         }
         Ok(self.coordinator.schedule_m1_tstate(continuation_id)?)
@@ -400,6 +425,12 @@ impl SmsTemporalBus {
                     .pending_request
                     .ok_or(SmsTemporalBusError::NoPendingRequest)?;
                 if request.id != request_id {
+                    sega_observability::tracing::error!(
+                        target: "sega::bus",
+                        expected_request_id = request.id,
+                        received_request_id = request_id,
+                        "SMS bus completion request identity mismatch"
+                    );
                     return Err(SmsTemporalBusError::WrongRequestId {
                         expected: request.id,
                         received: request_id,
