@@ -302,11 +302,14 @@ impl SegaApp {
             self.apply_audio_command(audio_command);
         }
         if let Some(fullscreen) = fullscreen_requested {
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+            ui.ctx().send_viewport_cmd_to(
+                egui::ViewportId::ROOT,
+                egui::ViewportCommand::Fullscreen(fullscreen),
+            );
         }
         if exit_requested {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            ui.ctx()
+                .send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
     }
 
@@ -435,10 +438,13 @@ impl SegaApp {
             self.apply_audio_command(audio_command);
         }
         if let Some(fullscreen) = fullscreen_requested {
-            context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+            context.send_viewport_cmd_to(
+                egui::ViewportId::ROOT,
+                egui::ViewportCommand::Fullscreen(fullscreen),
+            );
         }
         if exit_requested {
-            context.send_viewport_cmd(egui::ViewportCommand::Close);
+            context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
             self.active_menu = None;
@@ -721,7 +727,10 @@ impl SegaApp {
         if toggle_fullscreen {
             let fullscreen =
                 root_context.input(|input| !input.viewport().fullscreen.unwrap_or(false));
-            root_context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+            root_context.send_viewport_cmd_to(
+                egui::ViewportId::ROOT,
+                egui::ViewportCommand::Fullscreen(fullscreen),
+            );
         }
     }
 
