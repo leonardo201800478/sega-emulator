@@ -1,11 +1,14 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
+mod pcm_convert;
 mod pcm_fifo;
 
 pub use pcm_fifo::{
     PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError, PcmFrameQueueMetrics,
     PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
 };
+
+use pcm_convert::mono_sample_to_stereo_frame;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -55,20 +58,9 @@ impl std::error::Error for AudioOutputError {}
 /// The emulated PSG remains mono; channel routing is handled only at the output boundary.
 fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
-    let left_gain = if balance > 0 {
-        100 - balance as i32
-    } else {
-        100
-    };
-    let right_gain = if balance < 0 {
-        100 + balance as i32
-    } else {
-        100
-    };
     for sample in pcm.as_chunks::<2>().0 {
-        let value = i16::from_le_bytes([sample[0], sample[1]]) as i32;
-        let left = ((value * left_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-        let right = ((value * right_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let value = i16::from_le_bytes([sample[0], sample[1]]);
+        let [left, right] = mono_sample_to_stereo_frame(value, balance);
         stereo.extend_from_slice(&left.to_le_bytes());
         stereo.extend_from_slice(&right.to_le_bytes());
     }
