@@ -54,6 +54,7 @@ impl std::fmt::Display for AudioOutputError {
 
 impl std::error::Error for AudioOutputError {}
 
+#[cfg(test)]
 /// Convert mono PCM16 bytes into a producer-side batch of stereo frames.
 /// The allocation is confined to the producer path, never the WASAPI consumer.
 fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
@@ -83,7 +84,7 @@ fn push_mono_pcm16_bounded(
 
     for batch in pcm.chunks(PCM_FRAME_BATCH_SIZE * 2) {
         let frame_count = batch.len() / 2;
-        for (index, sample) in batch.chunks_exact(2).enumerate() {
+        for (index, sample) in batch.as_chunks::<2>().0.iter().enumerate() {
             let mono = i16::from_le_bytes([sample[0], sample[1]]);
             frames[index] = mono_sample_to_stereo_frame(mono, balance);
         }
