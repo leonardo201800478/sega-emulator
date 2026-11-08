@@ -442,9 +442,8 @@ impl SegaApp {
                                     || *header_state.exit_requested;
                                 (
                                     close_requested || action_selected,
-                                    menu_ui.input(|input| {
-                                        input.viewport().focused.unwrap_or(false)
-                                    }),
+                                    menu_ui
+                                        .input(|input| input.viewport().focused.unwrap_or(false)),
                                 )
                             };
 
