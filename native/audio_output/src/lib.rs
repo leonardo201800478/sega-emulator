@@ -7,6 +7,8 @@ fn audio_output_metrics_from_queue(
     sample_rate_hz: u32,
     queue: PcmFrameQueueMetrics,
     dropped_blocks: u64,
+    endpoint_starvation_events: u64,
+    submission_failed_frames: u64,
 ) -> sega_audio_runtime::AudioOutputMetrics {
     sega_audio_runtime::AudioOutputMetrics {
         sample_rate_hz,
@@ -19,6 +21,9 @@ fn audio_output_metrics_from_queue(
         underrun_frames: queue.underrun_frames,
         underrun_events: queue.underrun_events,
         dropped_blocks,
+        flushed_frames: queue.flushed_frames,
+        endpoint_starvation_events,
+        submission_failed_frames,
     }
 }
 
@@ -86,6 +91,12 @@ fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
         frames.push(mono_sample_to_stereo_frame(value, balance));
     }
     frames
+}
+
+/// Return whether a backend producer may publish another PCM block.
+#[cfg(any(windows, test))]
+fn backend_accepts_pcm(shutdown: bool, failed: bool, worker_finished: bool) -> bool {
+    !shutdown && !failed && !worker_finished
 }
 
 /// Maximum number of PCM frames converted before publishing to the SPSC queue.
@@ -188,11 +199,14 @@ impl XAudio2SubmittedBuffers {
         Some((submitted.as_ptr().cast::<u8>(), audio_bytes))
     }
 
-    fn rollback_last_submission(&mut self) {
-        if let Some(mut staging) = self.submitted.pop_back() {
-            staging.clear();
-            self.available.push_back(staging);
-        }
+    fn rollback_last_submission(&mut self) -> usize {
+        let Some(mut staging) = self.submitted.pop_back() else {
+            return 0;
+        };
+        let lost_frames = staging.len();
+        staging.clear();
+        self.available.push_back(staging);
+        lost_frames
     }
 
     fn reclaim_completed(&mut self, completed_buffers: u64) -> usize {
@@ -437,12 +451,13 @@ impl NativeWasapiOutput {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire)
-                || self
-                    .worker
+            if !backend_accepts_pcm(
+                self.shutdown.load(Ordering::Acquire),
+                self.control.failed.load(Ordering::Acquire),
+                self.worker
                     .as_ref()
-                    .is_some_and(|worker| worker.is_finished())
-            {
+                    .is_none_or(|worker| worker.is_finished()),
+            ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -472,6 +487,7 @@ impl NativeWasapiOutput {
         self.buffer_size
     }
 
+    /// Number of consumer reads that inserted one or more silence frames.
     pub fn underrun_count(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
@@ -878,6 +894,7 @@ pub struct NativeXAudio2Output {
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
     dropped_blocks: Arc<AtomicU64>,
+    submission_failed_frames: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
     #[cfg(windows)]
@@ -923,9 +940,11 @@ impl NativeXAudio2Output {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let submission_failed_frames = Arc::new(AtomicU64::new(0));
             let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_submission_failed_frames = Arc::clone(&submission_failed_frames);
             let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-xaudio2-output".to_owned())
@@ -935,6 +954,7 @@ impl NativeXAudio2Output {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_submission_failed_frames,
                         worker_control,
                         BackendConfig {
                             sample_rate,
@@ -952,6 +972,7 @@ impl NativeXAudio2Output {
                     shutdown,
                     underruns,
                     dropped_blocks,
+                    submission_failed_frames,
                     sample_rate,
                     buffer_size,
                     balance,
@@ -992,7 +1013,13 @@ impl NativeXAudio2Output {
         }
         #[cfg(windows)]
         {
-            if self.shutdown.load(Ordering::Acquire) {
+            if !backend_accepts_pcm(
+                self.shutdown.load(Ordering::Acquire),
+                self.control.failed.load(Ordering::Acquire),
+                self.worker
+                    .as_ref()
+                    .is_none_or(|worker| worker.is_finished()),
+            ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let producer = self
@@ -1022,6 +1049,7 @@ impl NativeXAudio2Output {
         self.buffer_size
     }
 
+    /// Count transitions to XAudio2 source-voice starvation, not FIFO underflow.
     pub fn underrun_count(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
@@ -1119,6 +1147,7 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    submission_failed_frames: Arc<AtomicU64>,
     control: Arc<BackendEpochControl>,
     config: BackendConfig,
 ) {
@@ -1228,7 +1257,7 @@ fn run_xaudio2_worker(
         if shutdown.load(Ordering::Acquire) {
             break;
         }
-        if signals.voice_error.load(Ordering::Acquire) {
+        if signals.voice_error.load(Ordering::Acquire) || control.failed.load(Ordering::Acquire) {
             control.failed.store(true, Ordering::Release);
             break;
         }
@@ -1318,7 +1347,9 @@ fn run_xaudio2_worker(
                 ..Default::default()
             };
             if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
-                submitted.rollback_last_submission();
+                let lost_frames = submitted.rollback_last_submission();
+                submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed);
+                control.failed.store(true, Ordering::Release);
                 break;
             }
             submitted_new = true;
@@ -1385,7 +1416,7 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
+        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count(), 0, 0)
     }
 
     fn close(&mut self) {
@@ -1430,7 +1461,13 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
+        audio_output_metrics_from_queue(
+            self.sample_rate,
+            queue,
+            self.dropped_block_count(),
+            self.underrun_count(),
+            self.submission_failed_frames.load(Ordering::Relaxed),
+        )
     }
 
     fn close(&mut self) {
@@ -1467,8 +1504,9 @@ mod tests {
             consumed_frames: 11_513,
             underrun_frames: 32,
             underrun_events: 4,
+            flushed_frames: 5,
         };
-        let metrics = audio_output_metrics_from_queue(48_000, queue, 3);
+        let metrics = audio_output_metrics_from_queue(48_000, queue, 3, 7, 11);
 
         assert_eq!(metrics.sample_rate_hz, 48_000);
         assert_eq!(metrics.queue_capacity_frames, 2_048);
@@ -1480,7 +1518,33 @@ mod tests {
         assert_eq!(metrics.underrun_frames, 32);
         assert_eq!(metrics.underrun_events, 4);
         assert_eq!(metrics.dropped_blocks, 3);
+        assert_eq!(metrics.flushed_frames, 5);
+        assert_eq!(metrics.endpoint_starvation_events, 7);
+        assert_eq!(metrics.submission_failed_frames, 11);
         assert_eq!(metrics.queue_duration_micros(), Some(10_000));
+    }
+
+    #[test]
+    fn failed_or_stopped_backend_rejects_new_pcm_writes() {
+        assert!(backend_accepts_pcm(false, false, false));
+        assert!(!backend_accepts_pcm(true, false, false));
+        assert!(!backend_accepts_pcm(false, true, false));
+        assert!(!backend_accepts_pcm(false, false, true));
+        assert!(!backend_accepts_pcm(true, true, true));
+    }
+
+    #[test]
+    fn xaudio2_failed_submission_rollback_reports_lost_frame_count() {
+        let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
+        producer.push_frames(&[[1, 2], [3, 4], [5, 6]]).unwrap();
+        let mut staging = XAudio2SubmittedBuffers::new(1, 8);
+        assert!(staging.stage_next(&mut consumer, 8).is_some());
+        assert_eq!(staging.submitted_len(), 1);
+        assert_eq!(staging.rollback_last_submission(), 3);
+        assert_eq!(staging.submitted_len(), 0);
+        assert_eq!(staging.available_len(), 1);
+        assert_eq!(consumer.metrics().consumed_frames, 3);
+        assert_eq!(consumer.metrics().queued_frames, 0);
     }
 
     #[test]

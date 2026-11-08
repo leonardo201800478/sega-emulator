@@ -79,6 +79,9 @@ struct WorkerTelemetry {
     audio_consumed_frames: AtomicU64,
     audio_dropped_frames: AtomicU64,
     audio_underrun_frames: AtomicU64,
+    audio_flushed_frames: AtomicU64,
+    audio_endpoint_starvation_events: AtomicU64,
+    audio_submission_failed_frames: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
     video_last_published_sequence: AtomicU64,
@@ -135,6 +138,12 @@ impl WorkerTelemetry {
             .store(metrics.dropped_frames, Ordering::Release);
         self.audio_underrun_frames
             .store(metrics.underrun_frames, Ordering::Release);
+        self.audio_flushed_frames
+            .store(metrics.flushed_frames, Ordering::Release);
+        self.audio_endpoint_starvation_events
+            .store(metrics.endpoint_starvation_events, Ordering::Release);
+        self.audio_submission_failed_frames
+            .store(metrics.submission_failed_frames, Ordering::Release);
     }
 
     fn audio_output_metrics(&self) -> AudioOutputMetrics {
@@ -149,6 +158,11 @@ impl WorkerTelemetry {
             underrun_frames: self.audio_underrun_frames.load(Ordering::Acquire),
             underrun_events: self.audio_underruns.load(Ordering::Acquire),
             dropped_blocks: self.audio_dropped_blocks.load(Ordering::Acquire),
+            flushed_frames: self.audio_flushed_frames.load(Ordering::Acquire),
+            endpoint_starvation_events: self
+                .audio_endpoint_starvation_events
+                .load(Ordering::Acquire),
+            submission_failed_frames: self.audio_submission_failed_frames.load(Ordering::Acquire),
         }
     }
 
@@ -623,10 +637,12 @@ fn execute_frame(
         }
         Some(Err(error)) => {
             if let Some(mut failed_session) = audio_session.take() {
+                // Preserve the backend's terminal counters before close drops
+                // its producer endpoint and makes queue occupancy unavailable.
+                telemetry.set_audio_metrics(failed_session.metrics());
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
-            telemetry.set_audio_metrics(AudioOutputMetrics::default());
         }
         None => {}
     }
@@ -756,6 +772,9 @@ fn handle_command(
             let result = audio_session
                 .as_mut()
                 .map_or(Ok(()), |session| session.resume());
+            if let Some(session) = audio_session.as_ref() {
+                telemetry.set_audio_metrics(session.metrics());
+            }
             match result {
                 Ok(()) => {
                     *running = true;
@@ -774,6 +793,9 @@ fn handle_command(
             let result = audio_session
                 .as_mut()
                 .map_or(Ok(()), |session| session.suspend_and_flush());
+            if let Some(session) = audio_session.as_ref() {
+                telemetry.set_audio_metrics(session.metrics());
+            }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
             }
@@ -788,6 +810,9 @@ fn handle_command(
                     session.reset_dsp();
                     Ok(())
                 });
+                if let Some(session) = audio_session.as_ref() {
+                    telemetry.set_audio_metrics(session.metrics());
+                }
                 match result {
                     Ok(()) => {
                         *machine = reset_machine;
@@ -815,6 +840,9 @@ fn handle_command(
                             session.reset_dsp();
                             Ok(())
                         });
+                    if let Some(session) = audio_session.as_ref() {
+                        telemetry.set_audio_metrics(session.metrics());
+                    }
                     match result {
                         Ok(()) => {
                             *machine = new_machine;
@@ -891,9 +919,9 @@ fn handle_command(
                     };
                     match result {
                         Ok(()) => {
+                            telemetry.set_audio_metrics(session.metrics());
                             *audio_session = Some(session);
                             telemetry.set_audio_error(None);
-                            telemetry.set_audio_metrics(AudioOutputMetrics::default());
                             let _ = reply.send(Ok(()));
                         }
                         Err(error) => {
@@ -989,6 +1017,9 @@ mod tests {
             underrun_frames: 32,
             underrun_events: 4,
             dropped_blocks: 3,
+            flushed_frames: 9,
+            endpoint_starvation_events: 2,
+            submission_failed_frames: 7,
         };
 
         telemetry.set_audio_metrics(expected);

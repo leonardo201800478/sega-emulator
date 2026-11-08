@@ -593,6 +593,51 @@ mod tests {
     }
 
     #[test]
+    fn output_samples_are_invariant_to_scheduler_clock_chunking() {
+        let clock_hz = 3_579_545_u64;
+        let sample_rate = 44_100_u64;
+        let total_clocks = 1_000_000_u64;
+        let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+        let mut chunked =
+            Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+
+        for device in [&mut whole, &mut chunked] {
+            device.write_inner(0x85);
+            device.write_inner(0x12);
+            device.write_inner(0x90);
+            device.write_inner(0xE4);
+        }
+
+        whole.advance_clocks(total_clocks);
+        let chunk_sizes = [1_u64, 7, 15, 16, 17, 113, 257, 4_096];
+        let mut remaining = total_clocks;
+        let mut chunk_index = 0;
+        while remaining > 0 {
+            let clocks = chunk_sizes[chunk_index % chunk_sizes.len()].min(remaining);
+            chunked.advance_clocks(clocks);
+            remaining -= clocks;
+            chunk_index += 1;
+        }
+
+        let expected_internal_ticks = total_clocks / super::CLOCK_DIVIDER;
+        let expected_samples = (u128::from(expected_internal_ticks)
+            * u128::from(sample_rate)
+            * u128::from(super::CLOCK_DIVIDER)
+            / u128::from(clock_hz)) as usize;
+        let whole_samples = whole.drain_samples(None);
+        let chunked_samples = chunked.drain_samples(None);
+
+        assert_eq!(whole_samples.len(), expected_samples);
+        assert_eq!(chunked_samples, whole_samples);
+        assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
+        assert_eq!(chunked.output_phase, whole.output_phase);
+        assert_eq!(chunked.filter_history, whole.filter_history);
+        assert_eq!(chunked.filter_position, whole.filter_position);
+        assert_eq!(chunked.tone_counters, whole.tone_counters);
+        assert_eq!(chunked.lfsr, whole.lfsr);
+    }
+
+    #[test]
     fn fractional_output_sampling_reduces_clock_quantization_error() {
         let clock_hz = 3_579_545_u64;
         let sample_rate = 44_100_u64;
