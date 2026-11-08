@@ -233,6 +233,7 @@ pub struct NativeWasapiOutput {
     dropped_blocks: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
+    #[cfg(windows)]
     balance: i8,
 }
 
@@ -392,6 +393,7 @@ impl Drop for NativeWasapiOutput {
 }
 
 /// Select an IAudioClient3 period in frames, respecting endpoint limits and alignment.
+#[cfg(any(windows, test))]
 fn select_shared_period(requested: u32, min: u32, max: u32, fundamental: u32) -> Option<u32> {
     if fundamental == 0 || min == 0 || min > max {
         return None;
@@ -640,6 +642,7 @@ pub struct NativeXAudio2Output {
     dropped_blocks: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
+    #[cfg(windows)]
     balance: i8,
 }
 
