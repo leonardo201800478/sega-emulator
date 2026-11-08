@@ -450,10 +450,11 @@ impl NativeWasapiOutput {
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire)
+                || self.control.failed.load(Ordering::Acquire)
                 || self
                     .worker
                     .as_ref()
-                    .is_some_and(|worker| worker.is_finished())
+                    .map_or(true, |worker| worker.is_finished())
             {
                 return Err(AudioOutputError::WorkerStopped);
             }
@@ -936,9 +937,11 @@ impl NativeXAudio2Output {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let submission_failed_frames = Arc::new(AtomicU64::new(0));
             let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_submission_failed_frames = Arc::clone(&submission_failed_frames);
             let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-xaudio2-output".to_owned())
@@ -948,6 +951,7 @@ impl NativeXAudio2Output {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_submission_failed_frames,
                         worker_control,
                         BackendConfig {
                             sample_rate,
@@ -965,6 +969,7 @@ impl NativeXAudio2Output {
                     shutdown,
                     underruns,
                     dropped_blocks,
+                    submission_failed_frames,
                     sample_rate,
                     buffer_size,
                     balance,
@@ -1494,8 +1499,9 @@ mod tests {
             consumed_frames: 11_513,
             underrun_frames: 32,
             underrun_events: 4,
+            flushed_frames: 5,
         };
-        let metrics = audio_output_metrics_from_queue(48_000, queue, 3);
+        let metrics = audio_output_metrics_from_queue(48_000, queue, 3, 7, 11);
 
         assert_eq!(metrics.sample_rate_hz, 48_000);
         assert_eq!(metrics.queue_capacity_frames, 2_048);
@@ -1508,8 +1514,8 @@ mod tests {
         assert_eq!(metrics.underrun_events, 4);
         assert_eq!(metrics.dropped_blocks, 3);
         assert_eq!(metrics.flushed_frames, 5);
-        assert_eq!(metrics.endpoint_starvation_events, 0);
-        assert_eq!(metrics.submission_failed_frames, 0);
+        assert_eq!(metrics.endpoint_starvation_events, 7);
+        assert_eq!(metrics.submission_failed_frames, 11);
         assert_eq!(metrics.queue_duration_micros(), Some(10_000));
     }
 
