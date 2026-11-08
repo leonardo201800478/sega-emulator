@@ -11,6 +11,21 @@ pub trait PcmSink {
     /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
     fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
 
+    /// Invalidate queued and submitted host audio before acknowledging a
+    /// pause, stop, reset or content/ROM transition.
+    ///
+    /// The implementation must perform the operation on the backend-owning
+    /// thread and return only after old-epoch audio can no longer be emitted.
+    fn suspend_and_flush(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Allow the backend to begin a new audio epoch. Device playback may wait
+    /// for its configured prebuffer threshold before starting.
+    fn resume(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Return (underruns, dropped blocks) observed by the sink.
     fn metrics(&self) -> (u64, u64);
 
@@ -52,6 +67,23 @@ impl<S: PcmSink> NativeAudioSession<S> {
 
     /// Mix, resample and enqueue one native hardware sample batch.
     pub fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
+        self.process_samples_with_policy(samples, true)
+    }
+
+    /// Advance the same mixer/resampler state without publishing PCM to the
+    /// physical endpoint. Used by deterministic debugger StepFrame execution.
+    pub fn process_samples_discarding_output(
+        &mut self,
+        samples: &[f64],
+    ) -> Result<(), String> {
+        self.process_samples_with_policy(samples, false)
+    }
+
+    fn process_samples_with_policy(
+        &mut self,
+        samples: &[f64],
+        publish: bool,
+    ) -> Result<(), String> {
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
@@ -62,10 +94,34 @@ impl<S: PcmSink> NativeAudioSession<S> {
             .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
         let pcm = self.resampler.process(&self.mixed_samples);
-        if pcm.is_empty() {
-            return Ok(());
+        if publish && !pcm.is_empty() {
+            self.sink.write_pcm(pcm)?;
         }
-        self.sink.write_pcm(pcm)
+        Ok(())
+    }
+
+    /// Stop host presentation and wait for the backend to invalidate its
+    /// current queue epoch. DSP state is intentionally preserved for Pause.
+    pub fn suspend_and_flush(&mut self) -> Result<(), String> {
+        if self.closed {
+            return Err("native audio session is closed".to_owned());
+        }
+        self.sink.suspend_and_flush()
+    }
+
+    /// Start a fresh presentation epoch without resetting DSP history.
+    pub fn resume(&mut self) -> Result<(), String> {
+        if self.closed {
+            return Err("native audio session is closed".to_owned());
+        }
+        self.sink.resume()
+    }
+
+    /// Reset FIR/resampler history at a machine-content boundary such as
+    /// Reset or LoadRom. Pause/Resume must not call this method.
+    pub fn reset_dsp(&mut self) {
+        self.resampler.reset();
+        self.mixed_samples.clear();
     }
 
     /// Update output volume without rebuilding the host stream.
