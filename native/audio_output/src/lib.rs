@@ -467,12 +467,12 @@ impl NativeWasapiOutput {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            self.suspended.store(true, Ordering::Release);
-            self.flush_acknowledged.store(false, Ordering::Release);
-            self.flush_requested.store(true, Ordering::Release);
+            self.control.suspended.store(true, Ordering::Release);
+            self.control.flush_acknowledged.store(false, Ordering::Release);
+            self.control.flush_requested.store(true, Ordering::Release);
             wait_for_flush_acknowledgement(
-                &self.flush_acknowledged,
-                &self.control_failed,
+                &self.control.flush_acknowledged,
+                &self.control.failed,
                 &self.shutdown,
                 Duration::from_secs(5),
             )
@@ -489,12 +489,12 @@ impl NativeWasapiOutput {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            if self.control_failed.load(Ordering::Acquire) {
+            if self.control.failed.load(Ordering::Acquire) {
                 return Err(AudioOutputError::Device(
                     "audio backend control is in a failed state".to_owned(),
                 ));
             }
-            self.suspended.store(false, Ordering::Release);
+            self.control.suspended.store(false, Ordering::Release);
             Ok(())
         }
         #[cfg(not(windows))]
@@ -553,13 +553,11 @@ fn run_wasapi_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
-    suspended: Arc<AtomicBool>,
-    flush_requested: Arc<AtomicBool>,
-    flush_acknowledged: Arc<AtomicBool>,
-    control_failed: Arc<AtomicBool>,
-    sample_rate: u32,
-    buffer_size: u32,
+    control: Arc<BackendEpochControl>,
+    config: BackendConfig,
 ) {
+    let sample_rate = config.sample_rate;
+    let buffer_size = config.buffer_size;
     if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
@@ -700,7 +698,7 @@ fn run_wasapi_worker(
                 break;
             }
 
-            if flush_requested.swap(false, Ordering::AcqRel) {
+            if control.flush_requested.swap(false, Ordering::AcqRel) {
                 let flush_result = (|| {
                     if stream_started {
                         audio_client
@@ -715,22 +713,22 @@ fn run_wasapi_worker(
                     Ok::<(), String>(())
                 })();
                 if flush_result.is_err() {
-                    control_failed.store(true, Ordering::Release);
+                    control.failed.store(true, Ordering::Release);
                     disconnected = true;
                 }
-                flush_acknowledged.store(true, Ordering::Release);
+                control.flush_acknowledged.store(true, Ordering::Release);
                 if flush_result.is_err() {
                     break;
                 }
             }
 
-            if suspended.load(Ordering::Acquire) {
+            if control.suspended.load(Ordering::Acquire) {
                 if stream_started {
                     let stopped = audio_client
                         .stop_stream()
                         .and_then(|()| audio_client.reset_stream());
                     if stopped.is_err() {
-                        control_failed.store(true, Ordering::Release);
+                        control.failed.store(true, Ordering::Release);
                         disconnected = true;
                         break;
                     }
@@ -1020,12 +1018,12 @@ impl NativeXAudio2Output {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            self.suspended.store(true, Ordering::Release);
-            self.flush_acknowledged.store(false, Ordering::Release);
-            self.flush_requested.store(true, Ordering::Release);
+            self.control.suspended.store(true, Ordering::Release);
+            self.control.flush_acknowledged.store(false, Ordering::Release);
+            self.control.flush_requested.store(true, Ordering::Release);
             wait_for_flush_acknowledgement(
-                &self.flush_acknowledged,
-                &self.control_failed,
+                &self.control.flush_acknowledged,
+                &self.control.failed,
                 &self.shutdown,
                 Duration::from_secs(5),
             )
@@ -1042,12 +1040,12 @@ impl NativeXAudio2Output {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            if self.control_failed.load(Ordering::Acquire) {
+            if self.control.failed.load(Ordering::Acquire) {
                 return Err(AudioOutputError::Device(
                     "audio backend control is in a failed state".to_owned(),
                 ));
             }
-            self.suspended.store(false, Ordering::Release);
+            self.control.suspended.store(false, Ordering::Release);
             Ok(())
         }
         #[cfg(not(windows))]
@@ -1101,14 +1099,12 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
-    suspended: Arc<AtomicBool>,
-    flush_requested: Arc<AtomicBool>,
-    flush_acknowledged: Arc<AtomicBool>,
-    control_failed: Arc<AtomicBool>,
-    sample_rate: u32,
-    frames_per_buffer: usize,
-    max_queued_buffers: usize,
+    control: Arc<BackendEpochControl>,
+    config: BackendConfig,
 ) {
+    let sample_rate = config.sample_rate;
+    let frames_per_buffer = config.buffer_size as usize;
+    let max_queued_buffers = config.queue_blocks;
     if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
@@ -1213,11 +1209,11 @@ fn run_xaudio2_worker(
             break;
         }
         if signals.voice_error.load(Ordering::Acquire) {
-            control_failed.store(true, Ordering::Release);
+            control.failed.store(true, Ordering::Release);
             break;
         }
 
-        if flush_requested.swap(false, Ordering::AcqRel) {
+        if control.flush_requested.swap(false, Ordering::AcqRel) {
             let completed_before_flush = signals.completed_buffers.load(Ordering::Acquire);
             submitted.reclaim_completed(completed_before_flush);
             let pending_before_flush = submitted.submitted_len();
@@ -1260,15 +1256,15 @@ fn run_xaudio2_worker(
                 Ok::<(), String>(())
             })();
             if flush_result.is_err() {
-                control_failed.store(true, Ordering::Release);
+                control.failed.store(true, Ordering::Release);
             }
-            flush_acknowledged.store(true, Ordering::Release);
+            control.flush_acknowledged.store(true, Ordering::Release);
             if flush_result.is_err() {
                 break;
             }
         }
 
-        if suspended.load(Ordering::Acquire) {
+        if control.suspended.load(Ordering::Acquire) {
             thread::sleep(Duration::from_millis(2));
             continue;
         }
@@ -1280,7 +1276,7 @@ fn run_xaudio2_worker(
 
         if voice_muted {
             if unsafe { source_voice.SetVolume(1.0, 0) }.is_err() {
-                control_failed.store(true, Ordering::Release);
+                control.failed.store(true, Ordering::Release);
                 break;
             }
             voice_muted = false;
@@ -1310,7 +1306,7 @@ fn run_xaudio2_worker(
 
         if !voice_started && submitted_new {
             if unsafe { source_voice.Start(0, 0) }.is_err() {
-                control_failed.store(true, Ordering::Release);
+                control.failed.store(true, Ordering::Release);
                 break;
             }
             voice_started = true;
