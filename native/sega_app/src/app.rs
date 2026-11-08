@@ -1199,12 +1199,10 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ));
                 ui.end_row();
                 ui.label("Áudio — backlog FIFO estimado");
-                ui.label(
-                    audio.queue_duration_micros().map_or_else(
-                        || "indisponível".to_owned(),
-                        |micros| format!("{micros} µs"),
-                    ),
-                );
+                ui.label(audio.queue_duration_micros().map_or_else(
+                    || "indisponível".to_owned(),
+                    |micros| format!("{micros} µs"),
+                ));
                 ui.end_row();
             });
         render_output_errors(ui, worker);
