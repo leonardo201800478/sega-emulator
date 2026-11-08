@@ -18,7 +18,7 @@ O escopo de hardware compreende:
 5. transporte de áudio para o backend nativo WASAPI/XAudio2;
 6. serialização/restauração de estado determinístico dos dispositivos e dos acumuladores associados.
 
-Esta PR é de arquitetura/documentação. Não adiciona ainda o núcleo YM2413, não modifica o algoritmo SN76489 e não declara saída física de áudio validada.
+A proposta arquitetural original que introduziu este documento não adicionava o núcleo YM2413 nem modificava o algoritmo SN76489. A auditoria posterior da seção 11 registra uma correção independente de amostragem na PR #661; isso não conclui o YM2413 nem declara a saída física de áudio validada.
 
 ## 2. Auditoria da arquitetura existente
 
