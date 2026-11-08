@@ -52,6 +52,7 @@
 - [x] XAudio2 usa PcmFrameProducer/PcmFrameConsumer como transporte de entrada.
 - [x] Conversão mono PCM16 → StereoFrame ocorre em lotes fixos de 256 frames, sem vetor temporário proporcional ao tamanho do bloco recebido.
 - [x] WASAPI e XAudio2 contabilizam exatamente os frames descartados pela política drop-newest.
+- [x] O caminho host não-Windows do crate standalone é compilado/testado separadamente para proteger os stubs condicionais.
 - [x] XAudio2 prepara armazenamento estável e próprio antes de SubmitSourceBuffer.
 - [x] Callback não manipula buffers nem executa trabalho pesado.
 - [x] Falha de SubmitSourceBuffer remove o staging pendente sem aguardar callback.
@@ -80,7 +81,9 @@ Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles n�
 - CI Windows do HEAD anterior `c9c15432c981316d5fdd49c9d7f27ba194aac96a`: fmt PASS, Clippy PASS e 21 testes PASS.
 - Regressão global do workspace: NOT RUN no HEAD anterior (job SKIPPED pelo classificador de impacto). O workflow foi ajustado na branch para executar essa regressão também quando houver alterações classificadas como áudio.
 - Validação física em dispositivo Windows: NOT RUN.
-- A correção de conversão PCM em lotes fixos adiciona dois testes. A primeira execução após essa alteração encontrou dois avisos Clippy (função de referência sem uso em build normal e `chunks_exact` com tamanho constante); ambos foram corrigidos no HEAD subsequente. A validação do HEAD corrigido ainda aguarda nova execução.
+- A correção de conversão PCM em lotes fixos adiciona dois testes. A primeira execução encontrou dois avisos Clippy (função de referência sem uso em build normal e `chunks_exact` com tamanho constante); ambos foram corrigidos.
+- A auditoria estática subsequente encontrou uma referência residual a uma variável removida no stub não-Windows. Ela foi removida, e a função/constante de conversão limitada passaram a ser condicionadas a `windows` ou `test`.
+- O workflow foi ampliado para validar o crate standalone nos hosts Windows e Linux, além de executar a regressão do workspace principal em mudanças de áudio. O novo HEAD ainda aguarda execução completa.
 
 ## 8. Limites explícitos
 
