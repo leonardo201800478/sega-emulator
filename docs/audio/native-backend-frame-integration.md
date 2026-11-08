@@ -83,7 +83,7 @@ Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles n�
 - Validação física em dispositivo Windows: NOT RUN.
 - A correção de conversão PCM em lotes fixos adiciona dois testes. A primeira execução encontrou dois avisos Clippy (função de referência sem uso em build normal e `chunks_exact` com tamanho constante); ambos foram corrigidos.
 - A auditoria estática subsequente encontrou uma referência residual a uma variável removida no stub não-Windows. Ela foi removida.
-- A primeira execução Linux revelou que símbolos exclusivos do backend Windows (conversor, campos de balance e seletor de período) ainda eram compilados no host Linux e geravam warnings com `-D warnings`. Os imports, campos e funções foram condicionados a `windows` ou `test`.
+- A primeira execução Linux revelou que símbolos exclusivos do backend Windows (conversor, campos de balance e seletor de período) ainda eram compilados no host Linux e geravam warnings com `-D warnings`. Os imports, campos e funções foram condicionados a `windows` ou `test`. A segunda execução detectou ainda o import do tipo `StereoFrame` no módulo de conversão; ele também foi condicionado ao mesmo conjunto de cfg.
 - O workflow foi ampliado para validar o crate standalone nos hosts Windows e Linux, além de executar a regressão do workspace principal em mudanças de áudio. O HEAD após essas correções ainda aguarda execução completa.
 
 ## 8. Limites explícitos
