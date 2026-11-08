@@ -948,10 +948,31 @@ fn render_audio_controls(
     });
     ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
     if let Some(worker) = viewport.worker.as_ref() {
-        let (underruns, dropped) = worker.audio_output_metrics();
-        ui.small(format!(
-            "Áudio: {underruns} underruns · {dropped} blocos descartados"
-        ));
+        let metrics = worker.audio_output_metrics();
+        if let Some(backlog_micros) = metrics.queue_duration_micros() {
+            let backlog_ms = backlog_micros as f64 / 1_000.0;
+            ui.small(format!(
+                "FIFO de áudio: {} / {} frames · backlog estimado {:.2} ms · pico {} frames",
+                metrics.queue_queued_frames,
+                metrics.queue_capacity_frames,
+                backlog_ms,
+                metrics.queue_high_water_frames
+            ));
+            ui.small(format!(
+                "Underrun: {} eventos / {} frames de silêncio · overflow: {} frames em {} chamadas de escrita",
+                metrics.underrun_events,
+                metrics.underrun_frames,
+                metrics.dropped_frames,
+                metrics.dropped_blocks
+            ));
+            ui.small(format!(
+                "FIFO: {} frames publicados · {} retirados pelo consumidor",
+                metrics.accepted_frames,
+                metrics.consumed_frames
+            ));
+        } else {
+            ui.small("Áudio: sessão ainda não configurada ou telemetria indisponível");
+        }
     } else {
         ui.small("Áudio: aguardando ROM");
     }
