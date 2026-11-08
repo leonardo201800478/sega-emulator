@@ -715,7 +715,9 @@ fn handle_command(
 ) -> bool {
     match command {
         WorkerCommand::Start(reply) => {
-            let result = audio_session.as_mut().map_or(Ok(()), |session| session.resume());
+            let result = audio_session
+                .as_mut()
+                .map_or(Ok(()), |session| session.resume());
             match result {
                 Ok(()) => {
                     *running = true;
