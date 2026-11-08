@@ -169,6 +169,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
         run: cargo test --workspace --locked
+      - name: Clippy observability runtime feature
+        run: cargo clippy --manifest-path native/observability/Cargo.toml --features runtime --all-targets --locked -- -D warnings
+      - name: Test observability runtime feature
+        run: cargo test --manifest-path native/observability/Cargo.toml --features runtime --locked
 
   z80-focused:
     name: Z80 focused validation
