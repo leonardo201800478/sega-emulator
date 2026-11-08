@@ -745,7 +745,7 @@ fn handle_command(
             Ok(reset_machine) => {
                 *running = false;
                 telemetry.running.store(false, Ordering::Release);
-                let result = audio_session.as_mut().map_or(Ok(()), |session| {
+                let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
                     session.suspend_and_flush()?;
                     session.reset_dsp();
                     Ok(())
@@ -771,7 +771,7 @@ fn handle_command(
                 Ok(new_machine) => {
                     *running = false;
                     telemetry.running.store(false, Ordering::Release);
-                    let result = audio_session.as_mut().map_or(Ok(()), |session| {
+                    let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
                         session.suspend_and_flush()?;
                         session.reset_dsp();
                         Ok(())
