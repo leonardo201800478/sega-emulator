@@ -1039,6 +1039,15 @@ fn run_wasapi_worker(
                 disconnected = true;
                 break;
             }
+            sega_observability::tracing::trace!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                submitted_frames = frames,
+                consumed_frames = report.consumed_frames,
+                silence_frames = report.silence_frames,
+                queued_frames = consumer.metrics().queued_frames,
+                "WASAPI render buffer submitted"
+            );
             if report.producer_closed {
                 disconnected = true;
                 break;
@@ -1571,7 +1580,13 @@ fn run_xaudio2_worker(
                 consumer.discard_queued_frames();
                 Ok::<(), String>(())
             })();
-            if flush_result.is_err() {
+            if let Err(error) = &flush_result {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 flush barrier failed"
+                );
                 control.failed.store(true, Ordering::Release);
             }
             control.flush_acknowledged.store(true, Ordering::Release);
@@ -1591,7 +1606,13 @@ fn run_xaudio2_worker(
         }
 
         if voice_muted {
-            if unsafe { source_voice.SetVolume(1.0, 0) }.is_err() {
+            if let Err(error) = unsafe { source_voice.SetVolume(1.0, 0) } {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 source voice could not be unmuted"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
@@ -1630,6 +1651,14 @@ fn run_xaudio2_worker(
                 break;
             }
             submitted_new = true;
+            sega_observability::tracing::trace!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                submitted_frames = frames_per_buffer,
+                submitted_bytes = audio_bytes,
+                queued_buffers = submitted.submitted_len(),
+                "XAudio2 source buffer submitted"
+            );
         }
 
         if !voice_started && submitted_new {
