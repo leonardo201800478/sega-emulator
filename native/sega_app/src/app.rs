@@ -229,7 +229,8 @@ impl SegaApp {
                 machine_command: &mut command,
                 devices: &self.input_devices,
                 selected_gamepad: &mut self.selected_gamepad,
-                input_error: self.input_backend
+                input_error: self
+                    .input_backend
                     .as_ref()
                     .and_then(|state| state.as_ref().err())
                     .map(String::as_str),
@@ -991,7 +992,10 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 /// Render less frequently used machine, input and diagnostics options.
 fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     let mut show_status = state.footer_mode.is_visible();
-    if ui.checkbox(&mut show_status, "Exibir status no rodapé").changed() {
+    if ui
+        .checkbox(&mut show_status, "Exibir status no rodapé")
+        .changed()
+    {
         *state.footer_mode = if show_status {
             FooterMode::Visible
         } else {
@@ -1016,12 +1020,7 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         render_machine_controls(ui, state.viewport, state.machine_command);
     });
     ui.menu_button("Controles", |ui| {
-        render_input_controls(
-            ui,
-            state.devices,
-            state.selected_gamepad,
-            state.input_error,
-        );
+        render_input_controls(ui, state.devices, state.selected_gamepad, state.input_error);
         ui.separator();
         ui.small("Jogo: setas / Z / X · P solicita NMI");
         ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
