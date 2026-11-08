@@ -621,9 +621,8 @@ impl D3d12Host {
         render_height: u32,
         window: NativeVideoWindow,
     ) -> Result<Self> {
-        let factory: IDXGIFactory2 = match unsafe {
-            CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())
-        } {
+        let factory: IDXGIFactory2 =
+            match unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default()) } {
             Ok(factory) => factory,
             Err(error) => {
                 sega_observability::tracing::error!(
@@ -636,9 +635,8 @@ impl D3d12Host {
         };
 
         let mut device: Option<ID3D12Device> = None;
-        if let Err(error) = unsafe {
-            D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)
-        } {
+        if let Err(error) = unsafe { D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device) }
+        {
             sega_observability::tracing::error!(
                 target: "sega::video::d3d12",
                 feature_level = "11_0",
