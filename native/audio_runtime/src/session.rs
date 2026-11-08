@@ -285,8 +285,7 @@ mod tests {
     #[test]
     fn reset_dsp_discards_filter_history_at_machine_content_boundary() {
         let input: Vec<f64> = (0..160).map(|i| (i as f64 * 0.03).sin()).collect();
-        let mut session =
-            NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        let mut session = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
         session.process_samples(&input).unwrap();
         session.reset_dsp();
         session.process_samples(&input).unwrap();
