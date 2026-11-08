@@ -639,10 +639,12 @@ fn execute_frame(
         }
         Some(Err(error)) => {
             if let Some(mut failed_session) = audio_session.take() {
+                // Preserve the backend's terminal counters before close drops
+                // its producer endpoint and makes queue occupancy unavailable.
+                telemetry.set_audio_metrics(failed_session.metrics());
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
-            telemetry.set_audio_metrics(AudioOutputMetrics::default());
         }
         None => {}
     }
