@@ -1027,6 +1027,7 @@ impl NativeXAudio2Output {
                 &self.flush_acknowledged,
                 &self.control_failed,
                 &self.shutdown,
+                Duration::from_secs(5),
             )
         }
         #[cfg(not(windows))]
