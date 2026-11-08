@@ -9,3 +9,4 @@ name = "sega_video"
 path = "src/lib.rs"
 
 [dependencies]
+sega-observability.workspace = true
