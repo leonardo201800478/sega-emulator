@@ -222,6 +222,32 @@ impl XAudio2CallbackSignals {
     }
 }
 
+#[cfg(windows)]
+fn wait_for_flush_acknowledgement(
+    acknowledged: &AtomicBool,
+    failed: &AtomicBool,
+    shutdown: &AtomicBool,
+) -> Result<(), AudioOutputError> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while !acknowledged.load(Ordering::Acquire) {
+        if shutdown.load(Ordering::Acquire) {
+            return Err(AudioOutputError::WorkerStopped);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(AudioOutputError::Device(
+                "audio backend did not acknowledge the flush epoch within 2 seconds".to_owned(),
+            ));
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+    if failed.load(Ordering::Acquire) {
+        return Err(AudioOutputError::Device(
+            "audio backend failed while invalidating the previous epoch".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
 pub struct NativeWasapiOutput {
     #[cfg(windows)]
@@ -396,6 +422,88 @@ impl NativeWasapiOutput {
 
     pub fn dropped_block_count(&self) -> u64 {
         self.dropped_blocks.load(Ordering::Relaxed)
+    }
+
+    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            self.suspended.store(true, Ordering::Release);
+            self.flush_acknowledged.store(false, Ordering::Release);
+            self.flush_requested.store(true, Ordering::Release);
+            wait_for_flush_acknowledgement(
+                &self.flush_acknowledged,
+                &self.control_failed,
+                &self.shutdown,
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            if self.control_failed.load(Ordering::Acquire) {
+                return Err(AudioOutputError::Device(
+                    "audio backend control is in a failed state".to_owned(),
+                ));
+            }
+            self.suspended.store(false, Ordering::Release);
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn suspend_and_flush(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            self.suspended.store(true, Ordering::Release);
+            self.flush_acknowledged.store(false, Ordering::Release);
+            self.flush_requested.store(true, Ordering::Release);
+            wait_for_flush_acknowledgement(
+                &self.flush_acknowledged,
+                &self.control_failed,
+                &self.shutdown,
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
+    }
+
+    pub fn resume(&mut self) -> Result<(), AudioOutputError> {
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            if self.control_failed.load(Ordering::Acquire) {
+                return Err(AudioOutputError::Device(
+                    "audio backend control is in a failed state".to_owned(),
+                ));
+            }
+            self.suspended.store(false, Ordering::Release);
+            Ok(())
+        }
+        #[cfg(not(windows))]
+        {
+            Err(AudioOutputError::WorkerStopped)
+        }
     }
 
     pub fn close(&mut self) {
@@ -1048,6 +1156,14 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
         NativeWasapiOutput::write_pcm(self, pcm).map_err(|error| error.to_string())
     }
 
+    fn suspend_and_flush(&mut self) -> Result<(), String> {
+        NativeWasapiOutput::suspend_and_flush(self).map_err(|error| error.to_string())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        NativeWasapiOutput::resume(self).map_err(|error| error.to_string())
+    }
+
     fn metrics(&self) -> (u64, u64) {
         (self.underrun_count(), self.dropped_block_count())
     }
@@ -1074,6 +1190,14 @@ impl NativeWasapiOutput {
 impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
     fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
         NativeXAudio2Output::write_pcm(self, pcm).map_err(|error| error.to_string())
+    }
+
+    fn suspend_and_flush(&mut self) -> Result<(), String> {
+        NativeXAudio2Output::suspend_and_flush(self).map_err(|error| error.to_string())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        NativeXAudio2Output::resume(self).map_err(|error| error.to_string())
     }
 
     fn metrics(&self) -> (u64, u64) {
