@@ -78,28 +78,12 @@ impl AspectRatioMode {
         }
     }
 
-    const fn label(self) -> &'static str {
-        match self {
-            Self::OneToOne => "1:1",
-            Self::FourThree => "4:3",
-            Self::SixteenNine => "16:9",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AudioBackend {
     Wasapi,
     XAudio2,
-}
-
-impl AudioBackend {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Wasapi => "WASAPI Shared",
-            Self::XAudio2 => "XAudio2",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -221,7 +205,6 @@ impl SegaApp {
         let mut viewport_rect = egui::Rect::NOTHING;
         let mut command = None;
         let mut audio_command = None;
-        let mut load_requested = false;
 
         ui.vertical(|ui| {
             render_header(
@@ -246,9 +229,6 @@ impl SegaApp {
             render_footer(ui, &self.native_viewport, &self.rom_path);
         });
 
-        if load_requested {
-            self.load_rom_from_path();
-        }
         if let Some(command) = command {
             self.apply_command(command);
         }
