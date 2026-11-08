@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn preserves_frame_order_across_different_write_and_read_sizes() {
-        let (mut producer, mut consumer) = PcmFrameQueue::new(8).unwrap();
+        let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
         let input: [StereoFrame; 5] = [[1, -1], [2, -2], [3, -3], [4, -4], [5, -5]];
 
         assert_eq!(
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn overflow_drops_newest_frames_and_counts_exact_loss() {
-        let (mut producer, mut consumer) = PcmFrameQueue::new(3).unwrap();
+        let (mut producer, mut consumer) = pcm_frame_queue(3).unwrap();
         let input: [StereoFrame; 5] = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]];
 
         assert_eq!(
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn underflow_silences_only_missing_frames_and_counts_exact_loss() {
-        let (mut producer, mut consumer) = PcmFrameQueue::new(4).unwrap();
+        let (mut producer, mut consumer) = pcm_frame_queue(4).unwrap();
         let input: [StereoFrame; 2] = [[100, -100], [200, -200]];
         producer.push_frames(&input).unwrap();
 
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn empty_reads_count_silence_but_zero_length_reads_do_not() {
-        let (_producer, mut consumer) = PcmFrameQueue::new(2).unwrap();
+        let (_producer, mut consumer) = pcm_frame_queue(2).unwrap();
         let mut empty: [StereoFrame; 0] = [];
         assert_eq!(consumer.read_frames(&mut empty).silence_frames, 0);
         assert_eq!(consumer.metrics().underrun_events, 0);
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn reports_disconnected_producer_after_draining_queued_frames() {
-        let (mut producer, mut consumer) = PcmFrameQueue::new(2).unwrap();
+        let (mut producer, mut consumer) = pcm_frame_queue(2).unwrap();
         producer.push_frames(&[[7, -7]]).unwrap();
         drop(producer);
 
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn reports_consumer_disconnect_to_producer() {
-        let (mut producer, consumer) = PcmFrameQueue::new(2).unwrap();
+        let (mut producer, consumer) = pcm_frame_queue(2).unwrap();
         drop(consumer);
         assert_eq!(
             producer.push_frames(&[[1, 1]]),
