@@ -376,11 +376,9 @@ impl NativeWasapiOutput {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
-            let submission_failed_frames = Arc::new(AtomicU64::new(0));
             let control = Arc::new(BackendEpochControl::new());
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
-            let worker_submission_failed_frames = Arc::clone(&submission_failed_frames);
             let worker_control = Arc::clone(&control);
             let worker = thread::Builder::new()
                 .name("sega-wasapi-output".to_owned())
@@ -390,7 +388,6 @@ impl NativeWasapiOutput {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
-                        worker_submission_failed_frames,
                         worker_control,
                         BackendConfig {
                             sample_rate,
@@ -408,7 +405,6 @@ impl NativeWasapiOutput {
                     shutdown,
                     underruns,
                     dropped_blocks,
-                    submission_failed_frames,
                     sample_rate,
                     buffer_size,
                     balance,
