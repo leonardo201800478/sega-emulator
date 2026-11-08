@@ -1,8 +1,8 @@
 # Registro de processo — UI imersiva e telemetria PCM SMS
 
-**Data:** 2026-11-08  
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
-**PR de implementação:** [#662](https://github.com/leonardo201800478/sega-emulator/pull/662)  
+**Data:** 2026-11-08
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
+**PR de implementação:** [#662](https://github.com/leonardo201800478/sega-emulator/pull/662)
 **Escopo:** reorganização da interface nativa egui/eframe e integração de telemetria da saída PCM.
 
 > Este registro documenta decisões, mudanças e evidências da execução. Não declara validação física de áudio nem compatibilidade funcional de jogos além dos testes efetivamente executados.
