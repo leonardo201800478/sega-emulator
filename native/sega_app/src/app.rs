@@ -46,6 +46,7 @@ pub struct SegaApp {
     active_menu: Option<TopLevelMenu>,
     menu_anchor: egui::Pos2,
     menu_popup_size: egui::Vec2,
+    menu_last_focused: Option<bool>,
     native_viewport: NativeViewportState,
     diagnostics: super::diagnostics::DiagnosticsCapture,
 }
@@ -73,6 +74,7 @@ impl Default for SegaApp {
             active_menu: None,
             menu_anchor: egui::Pos2::ZERO,
             menu_popup_size: egui::vec2(360.0, 280.0),
+            menu_last_focused: None,
             native_viewport: NativeViewportState::default(),
             diagnostics: super::diagnostics::DiagnosticsCapture::default(),
         }
@@ -342,17 +344,23 @@ impl SegaApp {
             ..MenuPopupActions::default()
         };
         let mut measured_size = popup_size;
+        let mut popup_focused = false;
 
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
             |menu_ui, class| {
                 self.diagnostics.record("menu.viewport.render", format!("menu={menu:?} class={class:?}"));
+                popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
             },
         );
 
+        if self.menu_last_focused != Some(popup_focused) {
+            self.diagnostics.record("menu.viewport.focus_changed", format!("menu={menu:?} focused={popup_focused}"));
+            self.menu_last_focused = Some(popup_focused);
+        }
         self.diagnostics.record("menu.popup.measured", format!("menu={menu:?} measured={measured_size:?}"));
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
@@ -404,6 +412,7 @@ impl SegaApp {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
                                 if menu_ui.small_button("×").clicked() {
+                                    self.diagnostics.record("menu.popup.closed", format!("menu={menu:?} reason=close_button"));
                                     self.active_menu = None;
                                 }
                             });
@@ -936,6 +945,7 @@ impl eframe::App for SegaApp {
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
             self.diagnostics.record("menu.popup.closed", format!("menu={:?} reason=root_escape", self.active_menu));
             self.active_menu = None;
+            self.menu_last_focused = None;
         }
         let input_updated =
             if let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) {
@@ -1491,6 +1501,9 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState, diag
     if diagnostics.is_enabled() {
         ui.small(format!("Arquivo: {}", diagnostics.file_path().map_or("indisponível".to_owned(), |path| path.display().to_string())));
         ui.small(format!("Eventos descartados por fila cheia: {}", diagnostics.dropped_events()));
+        if let Some(error) = diagnostics.writer_error() {
+            ui.colored_label(egui::Color32::RED, format!("Erro na gravação de logs: {error}"));
+        }
     }
     ui.label(format!("Estado: {}", viewport.status()));
     if let Some(worker) = viewport.worker.as_ref() {
