@@ -1,6 +1,6 @@
 # OUT-B — integração dos backends nativos com PCM frame FIFO
 
-**Status:** Implementação XAudio2 em revisão; não declarar OUT-B concluída até CI Windows aprovado no HEAD final e regressão aplicável.
+**Status:** Migração WASAPI/XAudio2 implementada na branch da PR #654; aguardando CI no HEAD final, regressão global aplicável e validação física. OUT-B não é declarada concluída enquanto esses gates não forem encerrados.
 **Base:** `604346b9abd8d7b9505ced8ae9007927f9e32535`.
 **Escopo desta etapa:** completar a migração do transporte XAudio2 para a FIFO PCM estéreo compartilhada, sem alterar o runtime de áudio, DSP, Scheduler, PSG, VDP ou GUI.
 
@@ -50,6 +50,8 @@
 
 - [x] WASAPI usa a FIFO frame-based.
 - [x] XAudio2 usa PcmFrameProducer/PcmFrameConsumer como transporte de entrada.
+- [x] Conversão mono PCM16 → StereoFrame ocorre em lotes fixos de 256 frames, sem vetor temporário proporcional ao tamanho do bloco recebido.
+- [x] WASAPI e XAudio2 contabilizam exatamente os frames descartados pela política drop-newest.
 - [x] XAudio2 prepara armazenamento estável e próprio antes de SubmitSourceBuffer.
 - [x] Callback não manipula buffers nem executa trabalho pesado.
 - [x] Falha de SubmitSourceBuffer remove o staging pendente sem aguardar callback.
@@ -68,11 +70,19 @@
 - Rollback de staging após falha de submissão.
 - Wrap do contador u64.
 - Sinalização atômica concorrente entre callback e worker.
+- Conversão PCM em lotes limitados, incluindo fronteira entre lotes e blocos maiores que a capacidade da FIFO.
 - FIFO existente: overflow drop-newest, underflow, drenagem e desconexão do produtor.
 
 Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles não substituem a compilação/execução Windows real nem a validação física do dispositivo.
 
-## 7. Limites explícitos
+## 7. Validação da PR #654 — atualização pendente de CI final
+
+- CI Windows do HEAD anterior `c9c15432c981316d5fdd49c9d7f27ba194aac96a`: fmt PASS, Clippy PASS e 21 testes PASS.
+- Regressão global do workspace: NOT RUN no HEAD anterior (job SKIPPED pelo classificador de impacto).
+- Validação física em dispositivo Windows: NOT RUN.
+- A correção de conversão PCM em lotes fixos adiciona dois testes; os resultados do novo HEAD serão registrados após nova execução de CI.
+
+## 8. Limites explícitos
 
 - Não altera `PcmSink`, `NativeAudioSession`, DSP/resampler, Scheduler, PSG, VDP, controles de sessão ou GUI.
 - Não implementa OUT-E (mute/flush/epoch/prebuffer).
@@ -80,7 +90,7 @@ Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles n�
 - Não declara regressão global concluída sem execução dos jobs correspondentes.
 - Não altera versões de `windows = 0.62.2` ou `rtrb = 0.3`.
 
-## 8. Referências técnicas
+## 9. Referências técnicas
 
 - Microsoft, [XAUDIO2_BUFFER](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/ns-xaudio2-xaudio2_buffer).
 - Microsoft, [IXAudio2VoiceCallback::OnBufferEnd](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2voicecallback-onbufferend).
