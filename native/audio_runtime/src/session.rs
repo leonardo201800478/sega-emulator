@@ -69,7 +69,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Advance the same mixer/resampler state without publishing PCM to the
     /// physical endpoint. Used by deterministic debugger StepFrame execution.
     pub fn process_samples_discarding_output(&mut self, samples: &[f64]) -> Result<(), String> {
-        self.process_samples_with_policy(samples, false)
+        self.process_samples_with_policy(samples, false)?;
+        self.discarded_since_suspend = true;
+        Ok(())
     }
 
     fn process_samples_with_policy(
@@ -107,7 +109,16 @@ impl<S: PcmSink> NativeAudioSession<S> {
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
-        self.sink.resume()
+        if self.discarded_since_suspend {
+            // Debugger-stepped samples advanced the emulated sound source but
+            // were intentionally not presented. Do not let their FIR history
+            // leak into the first audible block of the resumed epoch.
+            self.resampler.reset();
+            self.mixed_samples.clear();
+        }
+        self.sink.resume()?;
+        self.discarded_since_suspend = false;
+        Ok(())
     }
 
     /// Reset FIR/resampler history at a machine-content boundary such as
@@ -115,6 +126,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
     pub fn reset_dsp(&mut self) {
         self.resampler.reset();
         self.mixed_samples.clear();
+        self.discarded_since_suspend = false;
     }
 
     /// Update output volume without rebuilding the host stream.
@@ -252,20 +264,20 @@ mod tests {
     }
 
     #[test]
-    fn discarded_step_frame_advances_fir_history_without_writing_to_sink() {
+    fn discarded_step_frame_does_not_publish_or_leak_fir_history_after_resume() {
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.07).sin()).collect();
         let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.07).sin()).collect();
 
         let mut stepped = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
         stepped.process_samples_discarding_output(&first).unwrap();
         assert!(stepped.sink.blocks.is_empty());
+        stepped.resume().unwrap();
         stepped.process_samples(&second).unwrap();
 
         let mut reference = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
-        reference.process_samples(&first).unwrap();
         reference.process_samples(&second).unwrap();
 
-        assert_eq!(stepped.sink.blocks, vec![reference.sink.blocks[1].clone()]);
+        assert_eq!(stepped.sink.blocks, reference.sink.blocks);
     }
 
     #[test]
