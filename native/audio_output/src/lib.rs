@@ -8,6 +8,7 @@ pub use pcm_fifo::{
     PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
 };
 
+#[cfg(any(windows, test))]
 use pcm_convert::mono_sample_to_stereo_frame;
 
 use std::sync::Arc;
