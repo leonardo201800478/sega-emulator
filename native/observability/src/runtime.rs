@@ -11,11 +11,11 @@ use std::sync::{Arc, Mutex, Once, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing_appender::non_blocking::{ErrorCounter, NonBlockingBuilder, WorkerGuard};
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Registry;
 use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::reload;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Registry;
 
 static LOGGING: OnceLock<LoggingHandle> = OnceLock::new();
 static PANIC_HOOK: Once = Once::new();
@@ -206,9 +206,7 @@ impl LoggingHandle {
         let recent_events = self
             .recent_events()
             .into_iter()
-            .map(|line| {
-                serde_json::from_str(&line).unwrap_or(serde_json::Value::String(line))
-            })
+            .map(|line| serde_json::from_str(&line).unwrap_or(serde_json::Value::String(line)))
             .collect();
         let snapshot = Snapshot {
             session: &self.session,
@@ -347,7 +345,10 @@ fn install_panic_hook(crash_log: PathBuf) {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |panic_info| {
             if DIAGNOSTICS_ENABLED.load(Ordering::Acquire)
-                && let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&crash_log)
+                && let Ok(mut file) = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&crash_log)
             {
                 let timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
