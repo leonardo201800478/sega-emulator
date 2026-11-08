@@ -474,8 +474,9 @@ fn run_wasapi_worker(
 
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
-    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER,
-    XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
+    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback,
+    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR,
+    XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
@@ -662,7 +663,6 @@ impl Drop for NativeXAudio2Output {
     }
 }
 
-#[cfg(windows)]
 #[cfg(windows)]
 #[implement(IXAudio2VoiceCallback)]
 struct XAudio2VoiceCallbackState {
