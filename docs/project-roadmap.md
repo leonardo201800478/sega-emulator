@@ -32,25 +32,40 @@ Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriore
 
 ## 3. Estado da prioridade imediata — P1 / SMS
 
-### 3.1 Integrado na main
+**Prioridade operacional atual: confiabilidade de áudio.** Antes de retomar expansão de plataforma ou tarefas não bloqueadoras do SMS, executar a trilha AUDIO-00 a AUDIO-10 do [scorecard de áudio](audio/audio-reliability-scorecard.md). O confronto das quatro auditorias independentes está em [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md).
+
+### 3.1 Estado integrado
 
 - Produto e shell nativos Rust/egui.
-- Worker/runtime SMS temporal em Rust.
+- Runtime SMS temporal, worker, viewport D3D12, áudio WASAPI/XAudio2 e controles teclado/SDL3 integrados pelas PRs #613 e #614.
 - Componentes compartilhados sem runtime atômico SMS como fallback.
-- CI Rust-first e contratos de validação.
-- Melhoria de fidelidade do SN76489 integrada pela PR #615.
-- Esclarecimento da arquitetura Rust-only integrado pela PR #617.
-- MachineScheduler com testes de determinismo, codec e restauração; campanha longa documentada em [evidência de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md).
+- Melhoria de fidelidade SN76489 integrada pela PR #615.
+- Correção de ciclo de saída/epoch do resampler integrada pela PR #658.
+- Amostragem SN76489 em posições fracionárias do clock de saída integrada pela PR #661.
+- MachineScheduler com testes de determinismo, codec e restauração; a campanha longa documentada em [evidência de 2026-11-07](evidence/scheduler-stress-long-2026-11-07.md) é evidência do Scheduler isolado, não de áudio físico ou TEMPORAL_PASS sistêmico.
 
-### 3.2 Em PRs abertas — não integradas
+### 3.2 Sprint transversal AUDIO — prioridade imediata
 
-- **PR #613:** integração do runtime SMS temporal, carregamento de ROM e viewport D3D12 no shell.
-- **PR #614:** integração de áudio WASAPI/XAudio2 e controles de teclado/SDL3; branch empilhada sobre #613.
-- **PR #616:** reconciliação documental da auditoria de boot/cartuchos.
+A issue #659 relata áudio distorcido, fora de ritmo e aparentemente lento em WASAPI e XAudio2, mesmo quando os underruns são raros ou não observados. Portanto, investigar primeiro a geração PCM compartilhada, não presumir que a FIFO ou um backend isolado seja a causa.
 
-Os estados de CI e validação física devem ser reconsultados no HEAD exato antes de qualquer merge.
+1. **AUDIO-00 — baseline e contrato:** fixar SHA, dispositivo, taxa, cenário, unidades, epochs e semântica dos contadores.
+2. **AUDIO-01 — geração e taxa efetiva:** rastrear PSG → conversão → resampler → blocos PCM; medir taxa, cadência, fase, amplitude e clipping.
+3. **AUDIO-02 — resampler/epoch:** provar continuidade de fase, equivalência por chunking e comportamento em flush/reset/load.
+4. **AUDIO-03 — transporte/backends:** corrigir underflow, starvation XAudio2, flush, falha terminal e submit; separar métricas por camada.
+5. **AUDIO-04 — lifecycle:** validar Pause/Resume/Stop/Reset/Load/Close/StepFrame e atualizar snapshots após transições confirmadas.
+6. **AUDIO-05 — validação física:** comparar WASAPI e XAudio2 no Windows com a mesma sequência PCM, captura de loopback e métricas sincronizadas.
 
-### 3.3 Gates de aceitação SMS
+**Gate de saída:** causa raiz demonstrada para #640/#659; ausência de perda/duplicação silenciosa; taxa/cadência coerentes; testes automatizados PASS; validação física dos dois backends PASS; regressão SG-1000 preservada. Até lá, áudio permanece BLOCKED para aceite de release e novas plataformas ficam congeladas. Não alterar clocks do PSG/MachineScheduler nem aumentar buffers por tentativa e erro.
+
+### 3.3 PRs e issues relevantes
+
+- **PRs #613 e #614:** MERGED; integram runtime/viewport e áudio/input. Merge não equivale a aceite físico.
+- **PR #657:** CLOSED / NOT MERGED; não atribuir a ela estado de integração.
+- **PRs #643, #644 e #645:** OPEN, base antiga e `mergeable=false`; não fazem parte da main e exigem reconciliação independente.
+- **Issues #640 e #659:** OPEN; underruns e qualidade sonora sem causa raiz confirmada.
+- **Issue #641:** OPEN; corrupção visual, trilha independente de áudio.
+
+### 3.4 Gates de aceitação SMS
 
 - ROM sintética/homebrew carregada sem depender de ROM comercial versionada.
 - Z80 compartilhado como única CPU.
@@ -64,8 +79,6 @@ Os estados de CI e validação física devem ser reconsultados no HEAD exato ant
 - Execução contínua versus em blocos com equivalência demonstrada.
 - Snapshot/restore determinístico dos estados que integram a máquina.
 - Regressões e gates Rust/Windows no mesmo SHA final.
-
-A campanha de stress do Scheduler é uma evidência de robustez do Scheduler isolado; não substitui os gates de integração acima.
 
 ## 4. Z80 — sequência obrigatória
 
