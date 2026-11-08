@@ -1057,12 +1057,24 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.label("Frames substituídos na apresentação");
                 ui.label(worker.video_replaced_frames().to_string());
                 ui.end_row();
-                let (underruns, dropped) = worker.audio_output_metrics();
-                ui.label("Áudio — underruns");
-                ui.label(underruns.to_string());
+                let audio = worker.audio_output_metrics();
+                ui.label("Áudio — underrun events / frames");
+                ui.label(format!(
+                    "{} / {}",
+                    audio.underrun_events, audio.underrun_frames
+                ));
                 ui.end_row();
-                ui.label("Áudio — blocos descartados");
-                ui.label(dropped.to_string());
+                ui.label("Áudio — frames descartados / blocos");
+                ui.label(format!(
+                    "{} / {}",
+                    audio.dropped_frames, audio.dropped_blocks
+                ));
+                ui.end_row();
+                ui.label("Áudio — FIFO ocupação / capacidade");
+                ui.label(format!(
+                    "{} / {} frames",
+                    audio.queue_queued_frames, audio.queue_capacity_frames
+                ));
                 ui.end_row();
             });
         render_output_errors(ui, worker);
