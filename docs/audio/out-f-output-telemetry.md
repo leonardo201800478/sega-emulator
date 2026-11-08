@@ -58,3 +58,14 @@ Essas métricas exigem instrumentação específica por backend e validação no
 - Testes unitários verificam conversão de unidades e mapeamento completo de PcmFrameQueueMetrics para AudioOutputMetrics.
 - CI deve compilar os dois backends e o frontend que consome o novo contrato.
 - Testes in-game físicos permanecem separados: executar o mesmo cenário com WASAPI e XAudio2, registrar as métricas e comparar os resultados sem modificar a configuração entre medições.
+
+## Reconciliação da base — 2026-11-08
+
+A PR foi retargeteada para a `main` após a integração da correção de amostragem fracionária do SN76489 (PR #661, merge SHA `af24e77018257b77293a28e2f8e1ac12d0804aa4`).
+
+A composição de merge gerada pelo GitHub inclui também a correção de ciclo de saída da PR #658. A inspeção do arquivo `native/audio_runtime/src/session.rs` na árvore de merge confirmou:
+- `suspended` é marcado somente após `suspend_and_flush()` bem-sucedido;
+- `resume()` limpa o estado após retomar o sink;
+- `close()` descarta a cauda FIR quando o epoch foi invalidado por suspensão/flush ou por amostras de debugger descartadas.
+
+Essa inspeção é uma verificação estrutural do merge, não substitui os testes executados sobre o merge resultante. O CI deve ser reexecutado após a atualização da base antes da integração.
