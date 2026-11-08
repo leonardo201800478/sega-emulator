@@ -1,6 +1,6 @@
 # OUT-D — ownership e conclusão de buffers XAudio2
 
-**Status:** contrato de lifetime aplicado; migração PCM FIFO implementada na branch da PR #654, aguardando CI final e revisão.
+**Status:** contrato de lifetime e migração PCM FIFO aplicados; CI #5676 PASS no HEAD `5fe508f9acba9dd5b2b7b58835d93bef7481743c`. Validação física em dispositivo Windows permanece NOT RUN.
 **Base do contrato:** PR #652, integrada na main.
 **Implementação de callback:** PR #653, integrada na main.
 **Migração PCM FIFO:** PR #654 sobre a main `604346b9abd8d7b9505ced8ae9007927f9e32535`.
