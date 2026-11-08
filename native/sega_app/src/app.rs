@@ -85,7 +85,6 @@ impl AspectRatioMode {
             Self::SixteenNine => 16.0 / 9.0,
         }
     }
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
