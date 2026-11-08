@@ -6,7 +6,7 @@ Esta pasta registra investigações delimitadas, com evidências, hipóteses, re
 
 - **Estado geral e integração:** `master-system-codebase-audit.md`, `project-state-2026-11-05.md`, `pr-integration-audit-2026-11-06.md`.
 - **Runtime SMS e hosts:** `sms-runtime-functional-baseline-2026-11-06.md`, auditorias D3D12, áudio/vídeo e mailbox.
-- **Áudio SMS:** [investigação de qualidade sonora, descompasso e distorção — 2026-11-08](sms-audio-quality-investigation-2026-11-08.md).
+- **Áudio SMS:** [auditoria consolidada das quatro análises independentes — 2026-11-08](audio-reliability-consolidated-2026-11-08.md); [investigação de qualidade sonora, descompasso e distorção — 2026-11-08](sms-audio-quality-investigation-2026-11-08.md).
 - **Integração UI/PCM:** [registro do processo de layout imersivo e telemetria PCM — 2026-11-08](sms-ui-pcm-telemetry-integration-2026-11-08.md).
 - **VDP e raster:** investigações de latches, H-counter, R0/R8, VBlank, raster e acesso à VRAM.
 - **Compatibilidade de cartuchos/boot:** auditorias de mapper, BIOS, região e investigações por jogo.
@@ -18,4 +18,4 @@ Esta pasta registra investigações delimitadas, com evidências, hipóteses, re
 - Uma PR aberta ou Draft não é integração.
 - Uma investigação de jogo não prova compatibilidade geral.
 - Resultados de CI só valem para o SHA exato e para os jobs efetivamente executados.
-- Documentos de arquitetura antiga (Qt/PySide6, Python/PyO3 ou workspaces anteriores) permanecem como histórico quando ajudam a explicar decisões e migrações. A arquitetura normativa atual está em [ADRs](../architecture/adr/README.md), [roadmap](../project-roadmap.md) e [status atual](../project-status-2026-11-07.md).
+- Documentos de arquitetura antiga (Qt/PySide6, Python/PyO3 ou workspaces anteriores) permanecem como histórico quando ajudam a explicar decisões e migrações. A arquitetura normativa atual está em [ADRs](../architecture/adr/README.md), [roadmap](../project-roadmap.md) e [status dos componentes](../component-status.md).
