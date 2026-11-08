@@ -7,6 +7,7 @@ use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
+use sega_observability::{current as current_logging, init as init_logging, LogConfig, SessionMetadata};
 use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
@@ -43,6 +44,8 @@ pub struct SegaApp {
     input_devices: Vec<DeviceDescriptor>,
     selected_gamepad: Option<DeviceId>,
     native_viewport: NativeViewportState,
+    diagnostics_enabled: bool,
+    diagnostics_error: Option<String>,
 }
 
 impl Default for SegaApp {
@@ -66,6 +69,8 @@ impl Default for SegaApp {
             input_devices: Vec::new(),
             selected_gamepad: None,
             native_viewport: NativeViewportState::default(),
+            diagnostics_enabled: false,
+            diagnostics_error: None,
         }
     }
 }
@@ -212,6 +217,7 @@ impl SegaApp {
         let mut viewport_rect = egui::Rect::NOTHING;
         let mut command = None;
         let mut audio_command = None;
+        let mut diagnostics_command = None;
 
         ui.vertical(|ui| {
             let mut header_state = HeaderState {
@@ -229,6 +235,9 @@ impl SegaApp {
                 machine_command: &mut command,
                 devices: &self.input_devices,
                 selected_gamepad: &mut self.selected_gamepad,
+                diagnostics_enabled: self.diagnostics_enabled,
+                diagnostics_command: &mut diagnostics_command,
+                diagnostics_error: self.diagnostics_error.as_deref(),
                 input_error: self
                     .input_backend
                     .as_ref()
@@ -253,6 +262,9 @@ impl SegaApp {
         }
         if let Some(audio_command) = audio_command {
             self.apply_audio_command(audio_command);
+        }
+        if let Some(enabled) = diagnostics_command {
+            self.set_diagnostics_enabled(enabled);
         }
 
         viewport_rect
@@ -325,6 +337,56 @@ impl SegaApp {
             Err(error) => {
                 self.native_viewport.error = Some(format!("Falha ao criar runtime SMS: {error}"));
             }
+        }
+    }
+
+    /// Enable or disable diagnostic collection from the GUI.
+    ///
+    /// Logging infrastructure is initialized lazily on the first opt-in.
+    /// Turning collection off reloads the global filter to "off"; no new
+    /// diagnostic events or panic records are written while it remains off.
+    fn set_diagnostics_enabled(&mut self, enabled: bool) {
+        if enabled {
+            let logging = if let Some(logging) = current_logging() {
+                Ok(logging)
+            } else {
+                let mut config = LogConfig::default();
+                if std::env::var_os("SEGA_LOG_FILTER").is_none() {
+                    config.filter = "info,sega::audio::pacing=trace".to_owned();
+                }
+                let session = SessionMetadata::current(
+                    env!("CARGO_PKG_VERSION"),
+                    option_env!("SEGA_GIT_SHA").unwrap_or("unknown"),
+                    option_env!("SEGA_BUILD_PROFILE").unwrap_or("unknown"),
+                );
+                init_logging(config, session).map_err(|error| error.to_string())
+            };
+            match logging.and_then(|logging| {
+                logging.set_enabled(true)?;
+                Ok(logging)
+            }) {
+                Ok(logging) => {
+                    sega_observability::tracing::info!(
+                        target: "sega::app",
+                        event = "diagnostics_enabled",
+                        session_id = %logging.session().session_id,
+                    );
+                    self.diagnostics_enabled = true;
+                    self.diagnostics_error = None;
+                }
+                Err(error) => {
+                    self.diagnostics_enabled = false;
+                    self.diagnostics_error = Some(format!(
+                        "Não foi possível ativar a coleta de diagnóstico: {error}"
+                    ));
+                }
+            }
+        } else {
+            if let Some(logging) = current_logging() {
+                let _ = logging.set_enabled(false);
+            }
+            self.diagnostics_enabled = false;
+            self.diagnostics_error = None;
         }
     }
 
@@ -688,6 +750,24 @@ impl SegaApp {
     }
 }
 
+impl Drop for SegaApp {
+    fn drop(&mut self) {
+        if let Some(logging) = current_logging() {
+            if logging.is_enabled() {
+                sega_observability::tracing::info!(
+                    target: "sega::app",
+                    event = "application_shutdown",
+                    session_id = %logging.session().session_id,
+                );
+                if let Err(error) = logging.write_diagnostics_json() {
+                    eprintln!("Unable to write diagnostics snapshot: {error}");
+                }
+            }
+            logging.shutdown();
+        }
+    }
+}
+
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let viewport_rect = self.render(ui);
@@ -893,6 +973,9 @@ struct HeaderState<'a> {
     devices: &'a [DeviceDescriptor],
     selected_gamepad: &'a mut Option<DeviceId>,
     input_error: Option<&'a str>,
+    diagnostics_enabled: bool,
+    diagnostics_command: &'a mut Option<bool>,
+    diagnostics_error: Option<&'a str>,
 }
 
 /// Render the minimal immersive menu bar; configuration stays outside the game viewport.
@@ -1028,6 +1111,24 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         ui.small("Gamepad: direcional / analógico · A / B · Start");
     });
     ui.menu_button("Diagnóstico", |ui| {
+        let mut enabled = state.diagnostics_enabled;
+        if ui
+            .checkbox(&mut enabled, "Ativar coleta de diagnóstico")
+            .on_hover_text("Desligado por padrão. Quando desligado, nenhum log, snapshot ou registro de panic é coletado.")
+            .changed()
+        {
+            *state.diagnostics_command = Some(enabled);
+            ui.close();
+        }
+        ui.label(if state.diagnostics_enabled {
+            "Coleta ativa — gravação assíncrona"
+        } else {
+            "Coleta desativada — nenhum diagnóstico gravado"
+        });
+        if let Some(error) = state.diagnostics_error {
+            ui.colored_label(egui::Color32::RED, error);
+        }
+        ui.separator();
         render_runtime_status(ui, state.viewport);
     });
 }
