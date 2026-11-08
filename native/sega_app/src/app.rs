@@ -47,6 +47,7 @@ pub struct SegaApp {
     menu_anchor: egui::Pos2,
     menu_popup_size: egui::Vec2,
     native_viewport: NativeViewportState,
+    diagnostics: super::diagnostics::DiagnosticsCapture,
 }
 
 impl Default for SegaApp {
@@ -73,6 +74,7 @@ impl Default for SegaApp {
             menu_anchor: egui::Pos2::ZERO,
             menu_popup_size: egui::vec2(360.0, 280.0),
             native_viewport: NativeViewportState::default(),
+            diagnostics: super::diagnostics::DiagnosticsCapture::default(),
         }
     }
 }
@@ -298,6 +300,7 @@ impl SegaApp {
                 root_fullscreen,
                 fullscreen_requested: &mut fullscreen_requested,
                 exit_requested: &mut exit_requested,
+                diagnostics: &mut self.diagnostics,
             };
             render_header(ui, &mut header_state);
         }
@@ -333,6 +336,7 @@ impl SegaApp {
         let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
+        self.diagnostics.record("menu.popup.requested", format!("menu={menu:?} position={position:?} size={popup_size:?}"));
         let mut actions = MenuPopupActions {
             root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
             ..MenuPopupActions::default()
@@ -342,12 +346,14 @@ impl SegaApp {
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
-            |menu_ui, _class| {
+            |menu_ui, class| {
+                self.diagnostics.record("menu.viewport.render", format!("menu={menu:?} class={class:?}"));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
             },
         );
 
+        self.diagnostics.record("menu.popup.measured", format!("menu={menu:?} measured={measured_size:?}"));
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -372,6 +378,7 @@ impl SegaApp {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
+            self.diagnostics.record("menu.popup.closed", format!("menu={menu:?} reason=rom_dialog"));
             self.active_menu = None;
         }
         actions.input_updated
@@ -429,6 +436,7 @@ impl SegaApp {
                                     root_fullscreen: actions.root_fullscreen,
                                     fullscreen_requested: &mut actions.fullscreen_requested,
                                     exit_requested: &mut actions.exit_requested,
+                                    diagnostics: &mut self.diagnostics,
                                 };
                                 render_menu_content(menu_ui, menu, &mut header_state);
 
@@ -440,6 +448,9 @@ impl SegaApp {
                                     || *header_state.browse_requested
                                     || header_state.recent_rom_requested.is_some()
                                     || *header_state.exit_requested;
+                                if close_requested || action_selected {
+                                    self.diagnostics.record("menu.popup.close_requested", format!("menu={menu:?} escape_or_viewport_close={close_requested} action_selected={action_selected}"));
+                                }
                                 (
                                     close_requested || action_selected,
                                     menu_ui
@@ -759,6 +770,7 @@ impl SegaApp {
             return;
         }
 
+        self.diagnostics.record("native.root.hwnd", format!("hwnd=0x{parent_hwnd:X}"));
         self.update_child_bounds(context, viewport_rect);
         self.poll_native_startup(context);
         self.connect_worker_video(context);
@@ -774,7 +786,10 @@ impl SegaApp {
         self.native_viewport.error = None;
 
         let child = match D3d12ChildWindow::create(parent_hwnd) {
-            Ok(child) => child,
+            Ok(child) => {
+                self.diagnostics.record("native.d3d12_child.created", format!("parent_hwnd=0x{parent_hwnd:X} child_hwnd=0x{:X}", child.handle()));
+                child
+            },
             Err(error) => {
                 self.native_viewport.error =
                     Some(format!("Falha ao criar HWND filho D3D12: {error}"));
@@ -814,8 +829,12 @@ impl SegaApp {
             && let Some(child) = self.native_viewport.child.as_ref()
         {
             match child.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
-                Ok(()) => self.native_viewport.last_bounds = Some(bounds),
+                Ok(()) => {
+                    self.native_viewport.last_bounds = Some(bounds);
+                    self.diagnostics.record("native.d3d12_child.bounds", format!("x={} y={} width={} height={}", bounds.0, bounds.1, bounds.2, bounds.3));
+                },
                 Err(error) => {
+                    self.diagnostics.record("native.d3d12_child.bounds_error", error.to_string());
                     self.native_viewport.error =
                         Some(format!("Falha ao redimensionar viewport D3D12: {error}"));
                     context.request_repaint();
@@ -915,6 +934,7 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+            self.diagnostics.record("menu.popup.closed", format!("menu={:?} reason=root_escape", self.active_menu));
             self.active_menu = None;
         }
         let input_updated =
@@ -1135,6 +1155,7 @@ struct HeaderState<'a> {
     root_fullscreen: bool,
     fullscreen_requested: &'a mut Option<bool>,
     exit_requested: &'a mut bool,
+    diagnostics: &'a mut super::diagnostics::DiagnosticsCapture,
 }
 
 /// Render the menu bar. Dropdown content is hosted by a native child viewport.
@@ -1161,10 +1182,13 @@ fn top_level_menu_button(
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
     if response.clicked() {
+        state.diagnostics.record("menu.button.clicked", format!("label={label} menu={menu:?} active_before={:?}", *state.active_menu));
         if *state.active_menu == Some(menu) {
             *state.active_menu = None;
+            state.diagnostics.record("menu.state.changed", format!("active=None toggled={menu:?}"));
         } else {
             *state.active_menu = Some(menu);
+            state.diagnostics.record("menu.state.changed", format!("active=Some({menu:?})"));
             *state.menu_anchor = response.rect.left_bottom();
             *state.menu_popup_size = menu.minimum_size();
         }
@@ -1177,7 +1201,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
         TopLevelMenu::Options => render_options_menu(ui, state),
-        TopLevelMenu::Diagnostics => render_runtime_status(ui, state.viewport),
+        TopLevelMenu::Diagnostics => render_runtime_status(ui, state.viewport, state.diagnostics),
     }
 }
 
@@ -1454,8 +1478,20 @@ fn render_input_controls(
     }
 }
 
-fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
+fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState, diagnostics: &mut super::diagnostics::DiagnosticsCapture) {
     ui.separator();
+    let mut capture_enabled = diagnostics.is_enabled();
+    if ui.checkbox(&mut capture_enabled, "Capturar logs de diagnóstico").changed() {
+        if let Err(error) = diagnostics.set_enabled(capture_enabled) {
+            ui.colored_label(egui::Color32::RED, format!("Falha ao iniciar captura: {error}"));
+        } else {
+            diagnostics.record("diagnostics.capture.started", "capture enabled from Diagnostics menu");
+        }
+    }
+    if diagnostics.is_enabled() {
+        ui.small(format!("Arquivo: {}", diagnostics.file_path().map_or("indisponível".to_owned(), |path| path.display().to_string())));
+        ui.small(format!("Eventos descartados por fila cheia: {}", diagnostics.dropped_events()));
+    }
     ui.label(format!("Estado: {}", viewport.status()));
     if let Some(worker) = viewport.worker.as_ref() {
         egui::Grid::new("sms_runtime_telemetry")
