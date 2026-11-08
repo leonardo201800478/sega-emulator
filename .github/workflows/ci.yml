@@ -247,6 +247,9 @@ jobs:
       - name: Clippy native egui application and Windows dependencies
         if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
         run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test native egui application
+        if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
+        run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Clippy native D3D12 and DXGI runtime
         if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
         run: cargo clippy --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
