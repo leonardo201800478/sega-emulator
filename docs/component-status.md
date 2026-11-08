@@ -12,7 +12,7 @@
 | SMS core temporal | Base temporal Rust integrada | Precisão VDP ainda parcial; WAIT por fixture; Save States persistentes completos pendentes |
 | SMS runtime worker | Worker Rust puro integrado | Lifecycle e áudio físico precisam de validação no mesmo SHA |
 | Vídeo / D3D12 | Runtime/viewport integrados | Validação física GPU e regressões visuais permanecem pendentes; issue #641 aberta |
-| Áudio / PSG | SN76489 e pipeline de áudio Rust integrados; melhorias #615/#661 e lifecycle de epoch #658 integradas | **BLOCKED para aceite:** issues #640/#659 abertas; telemetria/semântica e falhas XAudio2 pendentes; validação física dos dois backends NOT RUN nesta baseline |
+| Áudio / PSG | SN76489 e pipeline de áudio Rust integrados; melhorias #615/#661 e lifecycle de epoch #658 integradas | **BLOCKED para release físico:** #640/#659 abertas. PR #666 corrige falha terminal XAudio2, submit loss, starvation e snapshot flush; CI PASS, ainda não integrada. Validação física WASAPI/XAudio2 NOT RUN |
 | Input | Teclado e SDL3 integrados ao shell | Foco/consumo de teclado requer teste Windows; gamepad físico/hotplug NOT RUN |
 | SG-1000 | Implementação preservada fora da trilha de expansão SMS atual | Regressão obrigatória em cada alteração compartilhada; não criar fallback duplicado |
 | ZEXDOC / ZEXALL | NOT RUN | E8 bloqueada até fechamento E7 e harness Rust completo |
@@ -37,6 +37,7 @@ Consultar [scorecard de confiabilidade de áudio](audio/audio-reliability-scorec
 | [PR #657](https://github.com/leonardo201800478/sega-emulator/pull/657) | CLOSED / NOT MERGED | Não atribuir a esta PR a integração do código atual |
 | [PR #658](https://github.com/leonardo201800478/sega-emulator/pull/658) | MERGED | Descarte da cauda do resampler após invalidação de epoch |
 | [PR #661](https://github.com/leonardo201800478/sega-emulator/pull/661) | MERGED | Amostragem SN76489 em posições fracionárias do clock de saída |
+| [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666) | OPEN / CI SUCCESS | Correções de falha/telemetria; validação física pendente |
 | [PR #643](https://github.com/leonardo201800478/sega-emulator/pull/643) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #644](https://github.com/leonardo201800478/sega-emulator/pull/644) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #645](https://github.com/leonardo201800478/sega-emulator/pull/645) | OPEN / mergeable=false | Base antiga; não integrada |
@@ -52,6 +53,10 @@ Workflow [42484594809](https://github.com/leonardo201800478/sega-emulator/action
 - **SKIPPED / NOT RUN:** Rust workspace regression; Linux audio-output host validation; Windows WASAPI/XAudio2 validation; Windows x64 D3D12 compile; Windows SDL3 input; Scheduler deterministic stress; Z80 focused validation; PowerShell tooling; refresh manual de lockfiles.
 
 Não interpretar o sucesso geral como validação das suítes ignoradas.
+
+## CI da correção de áudio — PR #666
+
+Workflow [42489225235](https://github.com/leonardo201800478/sega-emulator/actions/runs/42489225235), HEAD `29916f7ddb27a069b385a57e53d04760de5e01ed`, conclusão SUCCESS. PASS: workspace fmt/Clippy/testes; Linux audio-output; Windows WASAPI/XAudio2 fmt/Clippy/testes; formatação e Clippy da aplicação Windows; documentação e classificação de impacto. SKIPPED: Scheduler stress, Z80 focused, SDL3, PowerShell e refresh manual de lockfiles. A CI não executa áudio em endpoint físico nem loopback.
 
 ## Evidência do Scheduler
 
