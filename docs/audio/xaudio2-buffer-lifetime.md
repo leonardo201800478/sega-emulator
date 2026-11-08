@@ -65,4 +65,3 @@ A contagem simples de conclusões é válida apenas no playback FIFO normal. O w
 - CI não comprova saída audível em hardware físico.
 - Flush/epoch/mute/prebuffer continuam fora do escopo (OUT-E).
 - Não alterar Scheduler, PSG, DSP, VDP, runtime ou GUI nesta etapa.
-
