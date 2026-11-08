@@ -22,6 +22,7 @@ const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 const RECENT_ROM_LIST_FILE: &str = "recent_roms.txt";
 const MAX_RECENT_ROMS: usize = 10;
+const UI_HEADER_HEIGHT: f32 = 30.0;
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
@@ -204,44 +205,45 @@ impl Drop for NativeViewportState {
 }
 
 impl SegaApp {
-    /// Render the shell and collect coarse-grained user commands.
+    /// Render the shell for headless tests and embedded viewport fallbacks.
     ///
-    /// This method remains headless-testable; native HWND/D3D12 work is handled
-    /// by the eframe callback after layout has produced the viewport rectangle.
+    /// The native Windows application places the header in a separate egui
+    /// viewport so its popups are composed above the D3D12 child HWND.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
+        ui.vertical(|ui| {
+            self.render_header_controls(ui);
+            viewport_rect = self.render_game_area(ui);
+        });
+        viewport_rect
+    }
+
+    /// Render menus and apply only coarse-grained UI commands.
+    fn render_header_controls(&mut self, ui: &mut egui::Ui) {
         let mut command = None;
         let mut audio_command = None;
-
-        ui.vertical(|ui| {
-            let mut header_state = HeaderState {
-                browse_requested: &mut self.rom_dialog_requested,
-                recent_roms: &self.recent_roms,
-                recent_rom_requested: &mut self.recent_rom_requested,
-                footer_mode: &mut self.footer_mode,
-                region: &mut self.region,
-                aspect_ratio: &mut self.aspect_ratio,
-                audio_enabled: &mut self.audio_enabled,
-                audio_backend: &mut self.audio_backend,
-                audio_volume: &mut self.audio_volume,
-                audio_command: &mut audio_command,
-                viewport: &self.native_viewport,
-                machine_command: &mut command,
-                devices: &self.input_devices,
-                selected_gamepad: &mut self.selected_gamepad,
-                input_error: self
-                    .input_backend
-                    .as_ref()
-                    .and_then(|state| state.as_ref().err())
-                    .map(String::as_str),
-            };
-            render_header(ui, &mut header_state);
-            let show_status = self.footer_mode.is_visible();
-            viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
-            if show_status {
-                render_footer(ui, &self.native_viewport, &self.rom_path);
-            }
-        });
+        let mut header_state = HeaderState {
+            browse_requested: &mut self.rom_dialog_requested,
+            recent_roms: &self.recent_roms,
+            recent_rom_requested: &mut self.recent_rom_requested,
+            footer_mode: &mut self.footer_mode,
+            region: &mut self.region,
+            aspect_ratio: &mut self.aspect_ratio,
+            audio_enabled: &mut self.audio_enabled,
+            audio_backend: &mut self.audio_backend,
+            audio_volume: &mut self.audio_volume,
+            audio_command: &mut audio_command,
+            viewport: &self.native_viewport,
+            machine_command: &mut command,
+            devices: &self.input_devices,
+            selected_gamepad: &mut self.selected_gamepad,
+            input_error: self
+                .input_backend
+                .as_ref()
+                .and_then(|state| state.as_ref().err())
+                .map(String::as_str),
+        };
+        render_header(ui, &mut header_state);
 
         if let Some(path) = self.recent_rom_requested.take() {
             self.rom_path = path.to_string_lossy().into_owned();
@@ -254,7 +256,20 @@ impl SegaApp {
         if let Some(audio_command) = audio_command {
             self.apply_audio_command(audio_command);
         }
+    }
 
+    /// Render the game viewport and optional status footer in the root window.
+    fn render_game_area(&mut self, ui: &mut egui::Ui) -> egui::Rect {
+        // The root surface is opaque; the separate egui overlay viewport uses
+        // a transparent clear color and is composed above the D3D12 child HWND.
+        ui.painter()
+            .rect_filled(ui.max_rect(), 0.0, egui::Color32::BLACK);
+
+        let show_status = self.footer_mode.is_visible();
+        let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
+        if show_status {
+            render_footer(ui, &self.native_viewport, &self.rom_path);
+        }
         viewport_rect
     }
 
@@ -690,13 +705,59 @@ impl SegaApp {
 
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        let viewport_rect = self.render(ui);
-        self.update_keyboard_input(ui.ctx());
+        let context = ui.ctx().clone();
+        let overlay_bounds = context.input(|input| input.viewport().inner_rect);
+        let overlay_is_native = if let Some(bounds) = overlay_bounds {
+            let builder = overlay_viewport_builder(bounds);
+            let viewport_class = context.show_viewport_immediate(
+                egui::ViewportId::from_hash_of("sega-ui-overlay"),
+                builder,
+                |overlay_ui, class| {
+                    if class != egui::ViewportClass::EmbeddedWindow {
+                        egui::CentralPanel::default()
+                            .frame(egui::Frame::NONE)
+                            .show(overlay_ui, |overlay_ui| {
+                                overlay_ui.vertical(|overlay_ui| {
+                                    self.render_header_controls(overlay_ui);
+                                    self.update_keyboard_input(overlay_ui.ctx());
+                                });
+                            });
+                    }
+                    class
+                },
+            );
+            viewport_class != egui::ViewportClass::EmbeddedWindow
+        } else {
+            context.request_repaint_after(Duration::from_millis(16));
+            false
+        };
+
+        let viewport_rect = if overlay_is_native {
+            let mut viewport_rect = egui::Rect::NOTHING;
+            ui.vertical(|ui| {
+                // Reserve the same header band occupied by the transparent
+                // overlay window; the D3D12 child never covers the menu bar.
+                ui.add_space(UI_HEADER_HEIGHT);
+                viewport_rect = self.render_game_area(ui);
+            });
+            viewport_rect
+        } else {
+            let viewport_rect = self.render(ui);
+            self.update_keyboard_input(ui.ctx());
+            viewport_rect
+        };
+
         if self.rom_dialog_requested {
             self.rom_dialog_requested = false;
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // Required for the transparent native overlay viewport. The root
+        // window paints its own opaque black background in render_game_area.
+        [0.0, 0.0, 0.0, 0.0]
     }
 }
 
@@ -1249,6 +1310,16 @@ fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     if let Some(error) = worker.runtime_error() {
         ui.colored_label(egui::Color32::RED, format!("Runtime: {error}"));
     }
+}
+
+fn overlay_viewport_builder(bounds: egui::Rect) -> egui::ViewportBuilder {
+    egui::ViewportBuilder::default()
+        .with_title("Sega Emulator UI Overlay")
+        .with_position(bounds.min)
+        .with_inner_size(bounds.size())
+        .with_decorations(false)
+        .with_resizable(false)
+        .with_transparent(true)
 }
 
 fn render_video_viewport(
