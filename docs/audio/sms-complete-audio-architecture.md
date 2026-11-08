@@ -3,7 +3,7 @@
 **Status:** proposta arquitetural inicial; não representa implementação concluída nem certificação de fidelidade.
 **Plataforma-alvo:** Sega Master System / Mark III, com reutilização dos componentes compartilhados também pelo SG-1000 e, quando aplicável, Game Gear.
 **Crates atuais auditados:** `native/sn76489`, `native/audio_runtime`, `native/audio_output`, `native/machine_scheduler`, `native/temporal_core` e `native/sms_core`.
-**Baseline:** `main` em `f47f71830344b85f72329376505d400bfbfaae69` (2026-11-07).
+**Baseline auditada:** `main` em `ece2d634851313d9066e5d87d4b3235a9b8fcd9b` (2026-11-08).
 
 ## 1. Objetivo e limites desta proposta
 
@@ -243,3 +243,66 @@ Antes de cada implementação de hardware, os links/documentos específicos, rev
 - Manter saída física, DSP e GUI fora dos núcleos de síntese.
 - Não incluir ROMs, BIOS ou dumps protegidos.
 - Não realizar merge automaticamente; integração depende de revisão e CI verde no HEAD final.
+
+
+## 11. Auditoria da amostragem PCM do SN76489 — 2026-11-08
+
+### 11.1 Evidência do defeito
+
+A auditoria do caminho SMS identificou que `Sn76489Core::advance_clocks_inner` preservava a contagem média de amostras com acumulador inteiro, mas emitia o valor FIR do tick interno atual no primeiro tick que ultrapassava a fronteira temporal da próxima amostra.
+
+Para o perfil NTSC de 3.579.545 Hz, o divisor interno de 16 resulta em aproximadamente 223.721,56 ticks FIR por segundo. Com saída configurada em 44.100 Hz, o instante ideal de cada amostra normalmente cai entre dois ticks internos; a distância entre saídas varia entre cinco e seis ticks. O algoritmo anterior arredondava cada instante para o tick seguinte, sem interpolação fracionária. Os backends reproduziam então esses valores como se tivessem sido amostrados em instantes uniformes.
+
+A taxa média não era o problema: a fase inteira preservava a contagem. O defeito estava na posição temporal dos valores PCM.
+
+### 11.2 Experimento diferencial
+
+O teste `fractional_output_sampling_reduces_clock_quantization_error` reproduz o filtro Kaiser NTSC/44,1 kHz atual (321 taps), aplica um tom sintético de 10 kHz e compara:
+
+1. valor do FIR no tick interno mais próximo (algoritmo anterior);
+2. interpolação entre as saídas FIR dos ticks adjacentes no instante fracionário calculado pelo acumulador;
+3. referência do mesmo FIR avaliado no instante ideal.
+
+Com origem temporal alinhada ao primeiro tick interno, a simulação numérica de referência obteve erro RMS normalizado aproximado de 16,2% no método anterior e 0,72% com interpolação linear. O teste automatizado exige erro superior a 5% no método antigo e inferior a 1% no interpolado, além de conferir a contagem exata de amostras.
+
+Esses valores são erro em relação à referência temporal do filtro, não THD medido em loopback físico. Não devem ser interpretados como certificação acústica.
+
+### 11.3 Correção no core
+
+A PR #661 captura o valor FIR anterior antes de avançar o PSG, calcula o valor FIR após o tick atual e interpola usando a fração do cruzamento do acumulador:
+
+`fraction = (clock_hz - previous_phase + sample_index * clock_hz) / (sample_rate * 16)`
+
+A fase e a contagem permanecem inteiras; somente a avaliação do valor filtrado usa interpolação em ponto flutuante. Não são alterados o clock do chip, o divisor interno, o Scheduler, o ritmo de execução da máquina, a taxa PCM configurada ou o contrato do backend.
+
+A alteração não introduz estado adicional e, portanto, não exige mudança de versão do snapshot do PSG.
+
+### 11.4 Taxa média e percepção de lentidão
+
+Para o perfil NTSC modelado:
+
+- 262 linhas × 228 T-states = 59.736 T-states por frame;
+- 3.579.545 T-states/s ÷ 59.736 ≈ 59,922743 frames/s;
+- 44.100 ÷ 59,922743 ≈ 735,9476 amostras por frame.
+
+O acumulador de fase carrega a fração entre avanços; a duração acumulada a partir das amostras acompanha o tempo lógico dentro de menos de uma amostra. A fórmula média não demonstra deriva sistemática de pitch. A percepção de lentidão ainda precisa ser separada de timbre/artefatos de fase e medida por loopback com timestamps e frequência efetiva de consumo.
+
+### 11.5 Comparação externa e limites
+
+A implementação de áudio do MAME descreve integração temporal das durações em que cada onda permanece em nível alto durante o período de saída, em vez de simplesmente selecionar o último tick. Isso é consistente com a necessidade de respeitar o instante de amostragem. Referência: [MAME SN76496](https://sources.debian.org/src/mame/0.289%2Bdfsg1-1/src/devices/sound/sn76496.cpp).
+
+Outra implementação pública, rsemu, declara uma taxa de amostragem nativa racional derivada do clock do PSG dividido por 80 (44.744,32 Hz NTSC e 44.336,19 Hz PAL), separando a taxa da fonte da taxa do host. É uma decisão de arquitetura de emulador, não uma frequência de amostragem física documentada do pino do chip. Referência: [rsemu SMS audio source](https://docs.rs/rsemu/latest/src/rsemu/host/audio/sms.rs.html).
+
+A interpolação fracionária corrige a quantização de instante identificada; não modela o filtro analógico do console, não certifica variantes de placa e não substitui captura física. Underruns WASAPI permanecem uma questão independente de transporte e cadência de consumo.
+
+### 11.6 Validação registrada na PR #661
+
+No HEAD `58fbddcc9ca52d5ecda46ec6743235f8144782a8`:
+
+- `cargo fmt --all -- --check`: PASS;
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS;
+- `cargo test --workspace --locked`: PASS; o teste diferencial foi executado e passou;
+- validação standalone Linux de áudio: PASS;
+- validação Windows WASAPI/XAudio2 (formatação, Clippy e 26 testes): PASS.
+
+As validações de host são headless/automatizadas. Não houve captura de loopback físico nem teste auditivo pós-correção. A PR permanece sujeita a revisão e não foi integrada à main.
