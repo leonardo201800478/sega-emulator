@@ -9,6 +9,7 @@ name = "sega_z80_cpu"
 path = "src/lib.rs"
 
 [dependencies]
+sega-observability.workspace = true
 sega-z80-alu = { path = "../z80_alu" }
 sega-z80-bus = { path = "../z80_bus" }
 serde = { version = "=1.0.229", features = ["derive"] }
