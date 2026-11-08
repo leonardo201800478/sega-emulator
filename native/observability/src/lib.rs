@@ -6,6 +6,9 @@
 pub use tracing;
 
 #[cfg(feature = "runtime")]
+mod writer;
+
+#[cfg(feature = "runtime")]
 mod runtime;
 
 #[cfg(feature = "runtime")]
