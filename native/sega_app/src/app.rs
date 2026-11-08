@@ -837,11 +837,16 @@ fn save_recent_roms(recent_roms: &[PathBuf]) -> std::io::Result<()> {
 }
 
 /// Move a successfully loaded ROM to the front of the bounded recent-file list.
-fn remember_recent_rom(recent_roms: &mut Vec<PathBuf>, path: &Path) {
+fn update_recent_rom_list(recent_roms: &mut Vec<PathBuf>, path: &Path) {
     let normalized = path.to_string_lossy();
     recent_roms.retain(|recent| !recent.to_string_lossy().eq_ignore_ascii_case(&normalized));
     recent_roms.insert(0, path.to_path_buf());
     recent_roms.truncate(MAX_RECENT_ROMS);
+}
+
+/// Persist a successfully loaded ROM in the bounded recent-file list.
+fn remember_recent_rom(recent_roms: &mut Vec<PathBuf>, path: &Path) {
+    update_recent_rom_list(recent_roms, path);
     if let Err(error) = save_recent_roms(recent_roms) {
         eprintln!("Não foi possível salvar a lista de ROMs recentes: {error}");
     }
@@ -1272,6 +1277,22 @@ mod tests {
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn recent_rom_list_moves_duplicate_to_front_and_caps_entries() {
+        let mut recent = (0..super::MAX_RECENT_ROMS)
+            .map(|index| PathBuf::from(format!("game-{index}.sms")))
+            .collect::<Vec<_>>();
+        super::update_recent_rom_list(&mut recent, Path::new("game-5.sms"));
+        assert_eq!(recent[0], PathBuf::from("game-5.sms"));
+        assert_eq!(recent.len(), super::MAX_RECENT_ROMS);
+
+        super::update_recent_rom_list(&mut recent, Path::new("new-game.sms"));
+        assert_eq!(recent[0], PathBuf::from("new-game.sms"));
+        assert_eq!(recent.len(), super::MAX_RECENT_ROMS);
+        assert!(!recent.contains(&PathBuf::from("game-9.sms")));
+    }
 
     #[test]
     fn aspect_ratio_modes_preserve_requested_geometry() {
