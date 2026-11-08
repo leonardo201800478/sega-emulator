@@ -1143,6 +1143,7 @@ mod tests {
         let (instructions, _) = execute_frame(
             &mut machine,
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            true,
             &mut audio_session,
             &mut video_mailbox,
             &mut video_sequence,
