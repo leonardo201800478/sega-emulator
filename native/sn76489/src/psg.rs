@@ -923,7 +923,7 @@ mod tests {
 
     #[test]
     fn rendered_tone_frequency_matches_clock_and_divider() {
-        for period in [127_u16, 254, 511] {
+        for period in [11_u16, 12, 127, 254, 511] {
             let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
             device.write_inner(0x90);
             device.write_inner(0x80 | (period as u8 & 0x0F));
