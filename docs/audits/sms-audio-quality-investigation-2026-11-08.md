@@ -1,10 +1,10 @@
 # Auditoria e registro de investigação — qualidade sonora SMS
 
-**Data do registro:** 2026-11-08  
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
-**Branch-base auditada:** `main`  
-**SHA da main usado como base documental:** `ece2d634851313d9066e5d87d4b3235a9b8fcd9b`  
-**PR de observabilidade relacionada:** [#657](https://github.com/leonardo201800478/sega-emulator/pull/657)  
+**Data do registro:** 2026-11-08
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
+**Branch-base auditada:** `main`
+**SHA da main usado como base documental:** `ece2d634851313d9066e5d87d4b3235a9b8fcd9b`
+**PR de observabilidade relacionada:** [#657](https://github.com/leonardo201800478/sega-emulator/pull/657)
 **Issues relacionadas:** [#640](https://github.com/leonardo201800478/sega-emulator/issues/640), [#659](https://github.com/leonardo201800478/sega-emulator/issues/659)
 
 > Este documento registra fatos observados, ações realizadas e hipóteses de investigação. Não representa correção do áudio nem comprovação da causa raiz.
