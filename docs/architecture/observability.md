@@ -4,7 +4,11 @@
 
 O logging é transversal aos crates compartilhados e não participa do controle temporal da máquina. CPU, VDP, PSG, Scheduler, barramentos e hosts publicam eventos estruturados; a aplicação nativa instala o subscriber e mantém o ciclo de vida do escritor.
 
-O caminho de hardware não executa operações de disco. Eventos são enviados a uma fila limitada e processados por uma thread de escrita independente.
+**Coleta desativada por padrão (opt-in).** A aplicação não inicializa o subscriber, não cria o diretório de logs, não instala o panic hook e não grava snapshots enquanto o usuário não ativar explicitamente `Opções > Diagnóstico > Ativar coleta de diagnóstico`. A opção não é persistida: cada inicialização começa desligada.
+
+Ao desativar a coleta durante a execução, o filtro global é recarregado para `off` e o panic hook deixa de gravar. O worker de escrita permanece ocioso para permitir reativação sem reiniciar. Eventos já enfileirados antes da desativação ainda podem terminar de ser gravados; nenhum evento novo é aceito pelo filtro desligado.
+
+O caminho de hardware não executa operações de disco. Quando ativada, a coleta usa uma fila limitada e uma thread de escrita independente. Quando desativada, não há coleta de eventos de diagnóstico.
 
 ## Bibliotecas e versões
 
@@ -56,13 +60,13 @@ Arquivos:
 
 `SEGA_LOG_DIR` permite substituir o diretório e `SEGA_LOG_FILTER` define o filtro inicial. O filtro pode ser recarregado em runtime por `LoggingHandle::set_filter`.
 
-O `WorkerGuard` permanece vivo durante a execução. No encerramento normal, a aplicação registra o evento final, descarta o guard para aguardar o worker e então grava o snapshot JSON.
+O `WorkerGuard` só é criado após o opt-in e permanece vivo durante a execução. No encerramento normal, a aplicação só registra o evento final e grava o snapshot JSON se a coleta ainda estiver ativa; depois descarta o guard. Se a coleta estiver desativada, nenhum snapshot de encerramento é produzido.
 
 ## Níveis e filtros
 
 Níveis suportados: ERROR, WARN, INFO, DEBUG e TRACE.
 
-O padrão é `info`. Eventos de alta frequência, como despacho individual do Scheduler, escrita de registradores PSG, submissão de buffers e consumo de amostras, usam TRACE e não são emitidos no perfil normal.
+Com a coleta ativada e sem `SEGA_LOG_FILTER` definido, o filtro inicial é `info,sega::audio::pacing=trace`. Enquanto desativada, o filtro é `off`. Eventos de alta frequência, como despacho individual do Scheduler, escrita de registradores PSG, submissão de buffers e consumo de amostras, usam TRACE.
 
 Exemplos de filtros:
 
@@ -112,13 +116,12 @@ Além dos testes, a aplicação deve ser validada em Windows para confirmar os c
 
 ## Entregas seguintes da sprint
 
-Esta fundação disponibiliza inicialização, persistência, rotação, filtro recarregável, ring buffer, contador de descarte e snapshot JSON. As próximas entregas devem concluir:
+Esta fundação disponibiliza inicialização sob demanda, opt-in pela GUI, persistência, rotação, filtro recarregável, ring buffer, contador de descarte e snapshot JSON. As próximas entregas devem concluir:
 
-1. Instrumentação de GUI e alterações de configuração.
-2. Painel Diagnostics com filtros por target, níveis, eventos recentes e contadores.
-3. Exportação de pacote ZIP contendo logs, snapshot e configuração sanitizada.
-4. Métricas de áudio/vídeo/Scheduler com distinção entre valores instantâneos, acumulados e estimados.
-5. Benchmarks reproduzíveis de Debug, Debug otimizado e Release.
+1. Painel Diagnostics com filtros por target, níveis, eventos recentes e contadores.
+2. Exportação de pacote ZIP contendo logs, snapshot e configuração sanitizada.
+3. Métricas de áudio/vídeo/Scheduler com distinção entre valores instantâneos, acumulados e estimados.
+4. Benchmarks reproduzíveis de Debug, Debug otimizado e Release.
 
 ## Referências oficiais
 
