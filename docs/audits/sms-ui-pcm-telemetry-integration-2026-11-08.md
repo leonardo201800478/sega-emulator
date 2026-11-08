@@ -143,18 +143,47 @@ Permanecem fora do que foi comprovado por esta execução:
 
 A telemetria permite coletar evidências sobre a FIFO, mas não identifica sozinha a causa de distorção, descompasso ou pitch percebido. A investigação de qualidade sonora permanece separada e não deve ser considerada encerrada por esta integração.
 
-## 7. Estado de integração e próximos passos
+## 7. Resultado final da integração — PR #662
 
-Na preparação deste registro, a PR #662 estava aberta e a branch já havia sido reconciliada com a base `main`. A tentativa inicial de merge foi bloqueada por status checks esperados; por isso, o merge final depende de uma nova execução de CI no HEAD atualizado.
+A PR #662 foi integrada com sucesso à `main`.
 
-Sequência obrigatória:
+| Referência | SHA / resultado |
+|---|---|
+| Base `main` antes da reconciliação | `d6d14cbcc78dd5d3b39cabfe7d03a857c59034ed` |
+| HEAD final validado da PR | `3a7169dd504d7f2e8705efeb1f724e3aad207862` |
+| Workflow final | #5764 — run ID `42484250031` |
+| Resultado do workflow final | SUCCESS |
+| Commit de merge da PR #662 | `950df944adc2a5fcc6fa297a48dc72d97e861e70` |
+| SHA confirmado da `main` após merge | `950df944adc2a5fcc6fa297a48dc72d97e861e70` |
+| Estado remoto da PR #662 | CLOSED / MERGED |
 
-1. confirmar o HEAD da branch e a base atual da `main`;
-2. aguardar a CI do HEAD final;
-3. confirmar PASS nos gates aplicáveis e classificar os demais como NOT RUN;
-4. confirmar que a PR está mergeável e que os checks exigidos pela proteção da branch estão presentes;
-5. realizar o merge usando o SHA exato validado;
-6. verificar o SHA remoto da `main` após o merge;
-7. registrar o SHA de integração e o resultado final neste documento, sem converter validações pendentes em PASS.
+A primeira tentativa de merge foi recusada por falta de dois status checks esperados. A branch foi reconciliada com a base atual sem force-push. Após a inclusão deste registro e a correção de trailing whitespace apontada pelo job de higiene documental, o workflow #5764 foi executado no HEAD final da PR e terminou SUCCESS. O merge foi então realizado com proteção de SHA esperado.
 
-Este registro descreve o processo e os resultados comprovados até a sua atualização. O estado remoto do GitHub permanece a fonte de verdade para o resultado final do merge.
+### Classificação dos checks do workflow final
+
+| Job | Classificação |
+|---|---|
+| Change impact classification | PASS |
+| Documentation patch hygiene | PASS |
+| Rust workspace regression | PASS |
+| Rust quality and unit regression | PASS |
+| Linux audio-output host validation | PASS |
+| Windows WASAPI and XAudio2 validation | PASS |
+| Windows x64 D3D12 compile | PASS |
+| Windows SDL3 input validation | NOT RUN (SKIPPED) |
+| Windows PowerShell tooling syntax | NOT RUN (SKIPPED) |
+| Scheduler deterministic stress | NOT RUN (SKIPPED) |
+| Z80 focused validation | NOT RUN (SKIPPED) |
+| Refresh Cargo lockfiles (manual artifact) | NOT RUN (SKIPPED) |
+
+No job Windows D3D12, a formatação nativa e o Clippy da aplicação egui/dependências Windows passaram. As etapas específicas de Clippy e testes do runtime D3D12/DXGI foram SKIPPED; portanto, não são declaradas como executadas.
+
+### Estado final e pendências separadas
+
+- A reorganização da interface, a telemetria PCM e este registro de processo estão integrados à `main`.
+- Os testes automatizados classificados como PASS acima correspondem ao HEAD final da PR antes do merge.
+- Os jobs NOT RUN permanecem pendentes e não foram convertidos em PASS.
+- A validação física de áudio (loopback, medição de taxa efetiva, latência ponta a ponta e confirmação auditiva) continua pendente.
+- A causa raiz de eventuais problemas de qualidade sonora não foi declarada resolvida por esta integração.
+
+**Conclusão:** integração de código e documentação concluída. A validação física e os jobs especializados classificados como NOT RUN permanecem fora do escopo comprovado desta entrega.
