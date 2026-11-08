@@ -1,93 +1,69 @@
-# OUT-D — contrato de ownership e conclusão de buffers XAudio2
+# OUT-D — ownership e conclusão de buffers XAudio2
 
-**Status:** especificação técnica; nenhuma alteração executável nesta etapa.
-**Base auditada:** `d8e1b657354be1096973c321ee6c44cb3b40dc29`.
-**Backend:** `native/audio_output/src/lib.rs`, `NativeXAudio2Output` e `run_xaudio2_worker`.
-**Objetivo:** tornar explícita a prova de lifetime de `XAUDIO2_BUFFER::pAudioData` antes da migração do transporte XAudio2 para a FIFO frame-based.
+**Status:** contrato de lifetime e migração PCM FIFO aplicados; CI #5676 PASS no HEAD `5fe508f9acba9dd5b2b7b58835d93bef7481743c`. Validação física em dispositivo Windows permanece NOT RUN.
+**Base do contrato:** PR #652, integrada na main.
+**Implementação de callback:** PR #653, integrada na main.
+**Migração PCM FIFO:** PR #654 sobre a main `604346b9abd8d7b9505ced8ae9007927f9e32535`.
 
-## 1. Estado atual observado
-
-- O produtor publica blocos `Vec<u8>` em uma FIFO `rtrb`.
-- O worker retira blocos e os mantém em `VecDeque<Vec<u8>>`.
-- O endereço de `Vec<u8>` é passado como `pAudioData` em `SubmitSourceBuffer`.
-- A estrutura `XAUDIO2_BUFFER` local é descartada após a chamada, o que é permitido pela API.
-- O código atualmente remove buffers do `VecDeque` comparando seu comprimento com `XAUDIO2_VOICE_STATE::BuffersQueued`, consultado por polling de `GetState`.
-- A criação da source voice passa `None::<&IXAudio2VoiceCallback>`; portanto, não há callback `OnBufferEnd` implementado.
-
-## 2. Evidência documental primária
+## 1. Contrato Microsoft
 
 A Microsoft especifica que:
+
 1. A memória da estrutura `XAUDIO2_BUFFER` pode ser liberada quando `SubmitSourceBuffer` retorna.
-2. A memória apontada por `pAudioData` não pode ser liberada até o callback `IXAudio2VoiceCallback::OnBufferEnd` ou até a voz ser parada/destruída.
+2. A memória apontada por `pAudioData` não pode ser liberada até `IXAudio2VoiceCallback::OnBufferEnd` ou até a voz ser parada/destruída.
 3. `OnBufferEnd` ocorre depois que o último byte do buffer foi consumido e antes do primeiro byte do buffer seguinte ser consumido.
 4. Callbacks XAudio2 executam na thread de processamento de áudio e precisam retornar rapidamente. Não devem fazer I/O, chamadas caras/bloqueantes, sincronização com outras threads ou trabalho significativo.
-5. `FlushSourceBuffers` gera `OnBufferEnd` para buffers removidos, mas esses callbacks não são necessariamente entregues na ordem em que os buffers foram submetidos. O buffer atualmente em reprodução pode continuar até terminar.
+5. `FlushSourceBuffers` gera callbacks para buffers removidos, mas esses callbacks podem ocorrer fora da ordem de submissão.
+6. `DestroyVoice` aguarda a thread de processamento ficar ociosa. Depois do retorno, a voz não executará mais callbacks nem lerá dados de áudio.
 
 Fontes:
 - Microsoft, [XAUDIO2_BUFFER](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/ns-xaudio2-xaudio2_buffer).
 - Microsoft, [IXAudio2VoiceCallback::OnBufferEnd](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2voicecallback-onbufferend).
 - Microsoft, [XAudio2 Callbacks](https://learn.microsoft.com/en-us/windows/desktop/xaudio2/xaudio2-callbacks).
-- Microsoft, [IXAudio2SourceVoice::GetState](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2sourcevoice-getstate).
-- Microsoft, [IXAudio2SourceVoice::FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/desktop/api/xaudio2/nf-xaudio2-ixaudio2sourcevoice-flushsourcebuffers).
-- Windows crate 0.62.2, [IXAudio2VoiceCallback_Impl](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Media/Audio/XAudio2/trait.IXAudio2VoiceCallback_Impl.html).
+- Microsoft, [IXAudio2SourceVoice::FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2sourcevoice-flushsourcebuffers).
+- Microsoft, [IXAudio2Voice::DestroyVoice](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2voice-destroyvoice).
 
-## 3. Conclusão da auditoria do mecanismo atual
+## 2. Implementação integrada na main
 
-**Não aceitar `BuffersQueued` isoladamente como prova de que a memória do buffer pode ser liberada.**
+A PR #653 substituiu o polling de `BuffersQueued` como prova de lifetime por confirmação explícita `OnBufferEnd`:
 
-A documentação define o contador como o número de buffers atualmente enfileirados, incluindo o que está em processamento. Ela não documenta que a observação de uma redução do contador pelo worker estabelece a sincronização necessária com o callback de conclusão nem que a memória já pode ser liberada naquele instante. O contrato de lifetime nomeia explicitamente `OnBufferEnd` ou parada/destruição da voz.
+- O callback incrementa um contador atômico.
+- `OnVoiceError` sinaliza erro atomicamente.
+- O worker é o único proprietário da coleção de buffers submetidos.
+- O callback e os buffers permanecem vivos até `DestroyVoice`.
+- O caminho de shutdown não tenta reclaim individual com base na ordem dos callbacks de Flush.
 
-Assim, embora o `VecDeque` mantenha os dados enquanto o contador parece indicar buffers pendentes, o polling não é uma prova documental suficiente para liberar o bloco. A migração não deve perpetuar essa suposição.
+A implementação de callback foi construída com a API `IXAudio2VoiceCallback::new` do crate `windows 0.62.2`. O adaptador COM empresta o estado do callback; ambos permanecem vivos até a destruição da voz.
 
-## 4. Estratégia proposta para reprodução normal (sem flush)
+## 3. Modelo de staging após a migração PCM FIFO
 
-A primeira implementação deve usar o callback como autoridade de conclusão e manter toda a gestão de memória no worker:
+A migração OUT-B mantém o contrato de lifetime e altera apenas a origem dos dados:
 
-1. Cada bloco de áudio é colocado em armazenamento próprio e estável no `VecDeque` **antes** de chamar `SubmitSourceBuffer`. O ponteiro submetido aponta para o heap do bloco, não para memória da FIFO ou scratch reutilizável.
-2. A source voice recebe uma implementação de `IXAudio2VoiceCallback` cuja referência permanece viva até depois de `DestroyVoice`.
-3. `OnBufferEnd` executa somente uma operação atômica bounded (incrementar contador monotônico de conclusões). Não libera `Vec`, não remove elementos de coleção, não aloca, não bloqueia e não chama APIs XAudio2.
-4. O worker compara o contador de conclusões com o número de conclusões já reaproveitadas e remove do início do `VecDeque` exatamente essa quantidade de buffers concluídos.
-5. Esta estratégia pressupõe reprodução FIFO sequencial, sem `FlushSourceBuffers` durante o funcionamento normal. O contrato de `OnBufferEnd` garante a notificação do buffer antes do consumo do próximo; o worker libera os buffers em ordem de submissão.
-6. Se `SubmitSourceBuffer` falhar, o worker desfaz a inserção correspondente, sem esperar callback para buffer que não foi aceito.
-7. `OnVoiceError` apenas sinaliza erro atômico para o worker. A política de recuperação/destruição é executada fora da thread de áudio.
+1. O worker consome frames de `PcmFrameConsumer`.
+2. Cada lote é copiado para uma alocação própria de `Vec<StereoFrame>` preparada em um pool de staging do worker.
+3. O ponteiro de `pAudioData` aponta para a alocação estável do staging; nunca aponta para a FIFO ou scratch reutilizável.
+4. A coleção de buffers submetidos mantém os `Vec<StereoFrame>` vivos até o worker observar as conclusões.
+5. O callback somente incrementa o contador; o worker remove buffers concluídos e os devolve ao pool.
+6. Se `SubmitSourceBuffer` falhar, o worker remove o staging recém-inserido. A submissão rejeitada não é aguardada como se houvesse callback pendente.
+7. O pool tem capacidade fixa; as coleções `VecDeque` são reservadas antes do loop. Nenhuma alocação é feita no callback.
+8. O produtor converte PCM16 mono em lotes de até 256 frames usando buffer temporário de tamanho fixo. A memória temporária não cresce com o tamanho do bloco recebido, tanto em WASAPI quanto em XAudio2. A FIFO recebe cada lote e mantém a política drop-newest com contagem exata dos frames descartados.
 
-O callback não pode manter ponteiro para `Vec` nem executar destruição do armazenamento. A coleção continua pertencendo exclusivamente ao worker.
+A contagem simples de conclusões é válida apenas no playback FIFO normal. O worker não faz Flush durante reprodução normal.
 
-## 5. Encerramento
+## 4. Shutdown e falhas de inicialização
 
-- O worker interrompe submissões novas.
-- Para a voz e executa o protocolo de encerramento definido pela API.
-- Pode liberar todos os blocos ainda mantidos somente depois que a voz tiver sido destruída com sucesso (ou outra condição de parada documentada que prove que ela não acessará mais os dados).
-- O objeto de callback deve permanecer vivo até que a voz tenha sido destruída; somente então pode ser descartado.
-- Erros no caminho de shutdown não podem levar a liberar buffers enquanto a voz ainda puder referenciá-los. A implementação deve tratar o resultado das operações de parada/destruição explicitamente, sem ignorar erros que invalidem a prova de lifetime.
+- O worker interrompe novas submissões.
+- Executa `Stop` e `FlushSourceBuffers` conforme o caminho de shutdown existente.
+- Não tenta liberar buffers individualmente com callbacks de Flush, cuja ordem não é garantida.
+- Chama `DestroyVoice` antes de liberar buffers ou callback.
+- Depois do retorno de `DestroyVoice`, libera a coleção de staging e o adaptador COM.
+- Se a criação da source voice tiver sucesso, mas `StartEngine` ou `Start` falhar, o caminho de erro destrói a source voice antes de deixar o callback sair de escopo.
 
-## 6. Limite importante: Flush
+## 5. Limites e validação
 
-A contagem atômica simples depende da ordem FIFO dos callbacks. A Microsoft documenta que callbacks provocados por `FlushSourceBuffers` podem ocorrer fora da ordem de submissão. Portanto:
-
-- não introduzir flush no caminho normal desta primeira migração;
-- se flush se tornar necessário, trocar a contagem sequencial por identificação individual via `XAUDIO2_BUFFER::pContext` e um canal de conclusão bounded/realtime-safe, ou adotar outro mecanismo que trate conclusões fora de ordem;
-- não liberar armazenamento a partir de suposições sobre ordem de callback durante flush;
-- políticas de flush/epoch permanecem OUT-E e não pertencem à primeira migração XAudio2.
-
-## 7. Critérios de aceitação da futura implementação
-
-- [ ] Source voice recebe callback válido e callback vive até depois da destruição da voz.
-- [ ] O armazenamento de cada `pAudioData` permanece estável e pertencente ao worker até `OnBufferEnd` ou destruição da voz.
-- [ ] Callback executa somente operações atômicas bounded; sem lock, alocação, log, I/O ou chamada XAudio2.
-- [ ] Worker é o único proprietário que remove/libera buffers da coleção.
-- [ ] Testes unitários do tracker cobrem zero, uma e várias conclusões, bem como wrap/overflow conforme o tipo escolhido.
-- [ ] Falha de `SubmitSourceBuffer` não deixa buffer fantasma nem aguarda callback inexistente.
-- [ ] Shutdown não libera buffers antes da destruição confirmada da voz.
-- [ ] Nenhum flush é introduzido nesta etapa; caso necessário, a estratégia de conclusão é reavaliada.
-- [ ] XAudio2 migra para a mesma FIFO `StereoFrame` sem usar ponteiro para memória reutilizável da FIFO.
-- [ ] Windows x64 CI executa fmt, Clippy com `-D warnings` e testes no HEAD exato.
-- [ ] Validação física em Windows é registrada separadamente; CI não é evidência de reprodução audível.
-
-## 8. Escopo excluído
-
-- Não altera WASAPI, `PcmSink`, `NativeAudioSession`, DSP/resampler, Scheduler, worker SMS, Pause/Stop/Resume/StepFrame ou GUI.
-- Não implementa OUT-E (mute/flush/epoch/prebuffer) nem declara OUT-B concluída.
-- Não altera versão de `windows` (0.62.2) ou `rtrb` (0.3.6).
-
-Este documento é o gate de projeto para a implementação XAudio2. A estratégia deve ser demonstrada por código e testes Windows antes de migrar o transporte.
+- OUT-B só será concluída após CI Windows aprovado no HEAD final e regressão aplicável.
+- A CI anterior ao incremento de conversão limitada validou 21 testes; os dois testes novos ainda aguardam execução no HEAD atualizado.
+- Testes unitários do bookkeeping não substituem compilação Windows real.
+- CI não comprova saída audível em hardware físico.
+- Flush/epoch/mute/prebuffer continuam fora do escopo (OUT-E).
+- Não alterar Scheduler, PSG, DSP, VDP, runtime ou GUI nesta etapa.
