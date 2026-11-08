@@ -1130,6 +1130,36 @@ mod tests {
     }
 
     #[test]
+    fn debugger_step_frame_advances_machine_without_publishing_pcm() {
+        let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
+        let sink = RecordingSink::default();
+        let captured_blocks = Arc::clone(&sink.0);
+        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
+        let telemetry = WorkerTelemetry::default();
+        let mut video_mailbox = None;
+        let mut video_sequence = 0;
+
+        let (instructions, _) = execute_frame(
+            &mut machine,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert!(instructions > 0);
+        assert_eq!(machine.frame_number(), 1);
+        assert!(
+            captured_blocks.lock().unwrap().is_empty(),
+            "debugger StepFrame must advance DSP but never submit PCM to the physical sink"
+        );
+    }
+
+    #[test]
     fn worker_frame_submits_non_silent_pcm_to_native_audio_session_sink() {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
