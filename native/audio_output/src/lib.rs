@@ -3,8 +3,8 @@
 mod pcm_fifo;
 
 pub use pcm_fifo::{
-    pcm_frame_queue, PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError,
-    PcmFrameQueueMetrics, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
+    PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError, PcmFrameQueueMetrics,
+    PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
 };
 
 use std::sync::Arc;
