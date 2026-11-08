@@ -22,7 +22,6 @@ const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 const RECENT_ROM_LIST_FILE: &str = "recent_roms.txt";
 const MAX_RECENT_ROMS: usize = 10;
-const UI_HEADER_HEIGHT: f32 = 30.0;
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
 pub struct SegaApp {
@@ -43,6 +42,9 @@ pub struct SegaApp {
     input_buffers: InputBuffers,
     input_devices: Vec<DeviceDescriptor>,
     selected_gamepad: Option<DeviceId>,
+    active_menu: Option<TopLevelMenu>,
+    menu_anchor: egui::Pos2,
+    menu_popup_size: egui::Vec2,
     native_viewport: NativeViewportState,
 }
 
@@ -66,6 +68,9 @@ impl Default for SegaApp {
             input_buffers: InputBuffers::default(),
             input_devices: Vec::new(),
             selected_gamepad: None,
+            active_menu: None,
+            menu_anchor: egui::Pos2::ZERO,
+            menu_popup_size: egui::vec2(360.0, 280.0),
             native_viewport: NativeViewportState::default(),
         }
     }
@@ -84,6 +89,34 @@ impl AspectRatioMode {
             Self::OneToOne => 1.0,
             Self::FourThree => 4.0 / 3.0,
             Self::SixteenNine => 16.0 / 9.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TopLevelMenu {
+    File,
+    Video,
+    Audio,
+    Options,
+}
+
+impl TopLevelMenu {
+    const fn title(self) -> &'static str {
+        match self {
+            Self::File => "Arquivo",
+            Self::Video => "Vídeo",
+            Self::Audio => "Som",
+            Self::Options => "Opções",
+        }
+    }
+
+    const fn minimum_size(self) -> egui::Vec2 {
+        match self {
+            Self::File => egui::vec2(360.0, 220.0),
+            Self::Video => egui::vec2(240.0, 150.0),
+            Self::Audio => egui::vec2(300.0, 240.0),
+            Self::Options => egui::vec2(480.0, 460.0),
         }
     }
 }
@@ -205,10 +238,7 @@ impl Drop for NativeViewportState {
 }
 
 impl SegaApp {
-    /// Render the shell for headless tests and embedded viewport fallbacks.
-    ///
-    /// The native Windows application places the header in a separate egui
-    /// viewport so its popups are composed above the D3D12 child HWND.
+    /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
         ui.vertical(|ui| {
@@ -218,10 +248,15 @@ impl SegaApp {
         viewport_rect
     }
 
-    /// Render menus and apply only coarse-grained UI commands.
+    /// Render top-level menu buttons and apply coarse-grained UI commands.
     fn render_header_controls(&mut self, ui: &mut egui::Ui) {
         let mut command = None;
         let mut audio_command = None;
+        let mut fullscreen_requested = None;
+        let mut exit_requested = false;
+        let root_fullscreen = ui
+            .ctx()
+            .input(|input| input.viewport().fullscreen.unwrap_or(false));
         let mut header_state = HeaderState {
             browse_requested: &mut self.rom_dialog_requested,
             recent_roms: &self.recent_roms,
@@ -242,26 +277,148 @@ impl SegaApp {
                 .as_ref()
                 .and_then(|state| state.as_ref().err())
                 .map(String::as_str),
+            active_menu: &mut self.active_menu,
+            menu_anchor: &mut self.menu_anchor,
+            menu_popup_size: &mut self.menu_popup_size,
+            root_fullscreen,
+            fullscreen_requested: &mut fullscreen_requested,
+            exit_requested: &mut exit_requested,
         };
         render_header(ui, &mut header_state);
+        drop(header_state);
 
         if let Some(path) = self.recent_rom_requested.take() {
             self.rom_path = path.to_string_lossy().into_owned();
             self.load_rom_from_path();
         }
-
         if let Some(command) = command {
             self.apply_command(command);
         }
         if let Some(audio_command) = audio_command {
             self.apply_audio_command(audio_command);
         }
+        if let Some(fullscreen) = fullscreen_requested {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+        }
+        if exit_requested {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    /// Render the selected menu in an opaque native child viewport above D3D12.
+    fn render_menu_popup(&mut self, context: &egui::Context, root_bounds: egui::Rect) {
+        let Some(menu) = self.active_menu else {
+            return;
+        };
+
+        let minimum_size = menu.minimum_size();
+        let popup_size = egui::vec2(
+            self.menu_popup_size.x.max(minimum_size.x),
+            self.menu_popup_size.y.max(minimum_size.y),
+        );
+        let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
+        let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
+
+        let mut command = None;
+        let mut audio_command = None;
+        let mut fullscreen_requested = None;
+        let mut exit_requested = false;
+        let mut measured_size = popup_size;
+        let root_fullscreen = context
+            .input(|input| input.viewport().fullscreen.unwrap_or(false));
+
+        context.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("sega-menu-popup"),
+            builder,
+            |menu_ui, _class| {
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::popup(&menu_ui.style()))
+                    .show(menu_ui, |menu_ui| {
+                        let inner = menu_ui.vertical(|menu_ui| {
+                            menu_ui.horizontal(|menu_ui| {
+                                menu_ui.strong(menu.title());
+                                if menu_ui.small_button("×").clicked() {
+                                    *self.active_menu = None;
+                                }
+                            });
+                            menu_ui.separator();
+
+                            let mut header_state = HeaderState {
+                                browse_requested: &mut self.rom_dialog_requested,
+                                recent_roms: &self.recent_roms,
+                                recent_rom_requested: &mut self.recent_rom_requested,
+                                footer_mode: &mut self.footer_mode,
+                                region: &mut self.region,
+                                aspect_ratio: &mut self.aspect_ratio,
+                                audio_enabled: &mut self.audio_enabled,
+                                audio_backend: &mut self.audio_backend,
+                                audio_volume: &mut self.audio_volume,
+                                audio_command: &mut audio_command,
+                                viewport: &self.native_viewport,
+                                machine_command: &mut command,
+                                devices: &self.input_devices,
+                                selected_gamepad: &mut self.selected_gamepad,
+                                input_error: self
+                                    .input_backend
+                                    .as_ref()
+                                    .and_then(|state| state.as_ref().err())
+                                    .map(String::as_str),
+                                active_menu: &mut self.active_menu,
+                                menu_anchor: &mut self.menu_anchor,
+                                menu_popup_size: &mut self.menu_popup_size,
+                                root_fullscreen,
+                                fullscreen_requested: &mut fullscreen_requested,
+                                exit_requested: &mut exit_requested,
+                            };
+                            render_menu_content(menu_ui, menu, &mut header_state);
+
+                            if menu_ui.input(|input| input.key_pressed(egui::Key::Escape))
+                                || command.is_some()
+                                || *header_state.browse_requested
+                                || header_state.recent_rom_requested.is_some()
+                                || exit_requested
+                            {
+                                *header_state.active_menu = None;
+                            }
+                            drop(header_state);
+                            self.update_keyboard_input(menu_ui.ctx());
+                        });
+                        measured_size = inner.response.rect.size() + egui::vec2(24.0, 24.0);
+                    });
+            },
+        );
+
+        self.menu_popup_size = egui::vec2(
+            measured_size.x.max(minimum_size.x),
+            measured_size.y.max(minimum_size.y),
+        );
+
+        if let Some(path) = self.recent_rom_requested.take() {
+            self.rom_path = path.to_string_lossy().into_owned();
+            self.load_rom_from_path();
+            self.active_menu = None;
+        }
+        if let Some(command) = command {
+            self.apply_command(command);
+            self.active_menu = None;
+        }
+        if let Some(audio_command) = audio_command {
+            self.apply_audio_command(audio_command);
+        }
+        if let Some(fullscreen) = fullscreen_requested {
+            context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+        }
+        if exit_requested {
+            context.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        if self.rom_dialog_requested {
+            self.active_menu = None;
+        }
     }
 
     /// Render the game viewport and optional status footer in the root window.
     fn render_game_area(&mut self, ui: &mut egui::Ui) -> egui::Rect {
-        // The root surface is opaque; the separate egui overlay viewport uses
-        // a transparent clear color and is composed above the D3D12 child HWND.
         ui.painter()
             .rect_filled(ui.max_rect(), 0.0, egui::Color32::BLACK);
 
@@ -706,60 +863,25 @@ impl SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
-        let overlay_bounds = context.input(|input| input.viewport().inner_rect);
-        let overlay_is_native = if let Some(bounds) = overlay_bounds {
-            let builder = overlay_viewport_builder(bounds);
-            let viewport_class = context.show_viewport_immediate(
-                egui::ViewportId::from_hash_of("sega-ui-overlay"),
-                builder,
-                |overlay_ui, class| {
-                    if class != egui::ViewportClass::EmbeddedWindow {
-                        egui::CentralPanel::default().frame(egui::Frame::NONE).show(
-                            overlay_ui,
-                            |overlay_ui| {
-                                overlay_ui.vertical(|overlay_ui| {
-                                    self.render_header_controls(overlay_ui);
-                                    self.update_keyboard_input(overlay_ui.ctx());
-                                });
-                            },
-                        );
-                    }
-                    class
-                },
-            );
-            viewport_class != egui::ViewportClass::EmbeddedWindow
+        let viewport_rect = self.render(ui);
+
+        if let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) {
+            self.render_menu_popup(&context, root_bounds);
         } else {
             context.request_repaint_after(Duration::from_millis(16));
-            false
-        };
+        }
 
-        let viewport_rect = if overlay_is_native {
-            let mut viewport_rect = egui::Rect::NOTHING;
-            ui.vertical(|ui| {
-                // Reserve the same header band occupied by the transparent
-                // overlay window; the D3D12 child never covers the menu bar.
-                ui.add_space(UI_HEADER_HEIGHT);
-                viewport_rect = self.render_game_area(ui);
-            });
-            viewport_rect
-        } else {
-            let viewport_rect = self.render(ui);
+        if self.active_menu.is_none() {
             self.update_keyboard_input(ui.ctx());
-            viewport_rect
-        };
-
+        }
         if self.rom_dialog_requested {
             self.rom_dialog_requested = false;
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
     }
+}
 
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // Required for the transparent native overlay viewport. The root
-        // window paints its own opaque black background in render_game_area.
-        [0.0, 0.0, 0.0, 0.0]
-    }
 }
 
 /// Read a raw SMS image or extract the single SMS image contained in a ZIP archive.
@@ -955,25 +1077,88 @@ struct HeaderState<'a> {
     devices: &'a [DeviceDescriptor],
     selected_gamepad: &'a mut Option<DeviceId>,
     input_error: Option<&'a str>,
+    active_menu: &'a mut Option<TopLevelMenu>,
+    menu_anchor: &'a mut egui::Pos2,
+    menu_popup_size: &'a mut egui::Vec2,
+    root_fullscreen: bool,
+    fullscreen_requested: &'a mut Option<bool>,
+    exit_requested: &'a mut bool,
 }
 
-/// Render the minimal immersive menu bar; configuration stays outside the game viewport.
+/// Render the menu bar. Dropdown content is hosted by a native child viewport.
 fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         ui.small("SEGA · SMS");
-        ui.menu_button("Arquivo", |ui| render_file_menu(ui, state));
-        ui.menu_button("Vídeo", |ui| render_video_menu(ui, state));
-        ui.menu_button("Som", |ui| render_audio_menu(ui, state));
-        ui.menu_button("Opções", |ui| render_options_menu(ui, state));
+        top_level_menu_button(ui, "Arquivo", TopLevelMenu::File, state);
+        top_level_menu_button(ui, "Vídeo", TopLevelMenu::Video, state);
+        top_level_menu_button(ui, "Som", TopLevelMenu::Audio, state);
+        top_level_menu_button(ui, "Opções", TopLevelMenu::Options, state);
     });
     ui.separator();
+}
+
+fn top_level_menu_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    menu: TopLevelMenu,
+    state: &mut HeaderState<'_>,
+) {
+    let response = ui.button(label);
+    if response.clicked() {
+        if *state.active_menu == Some(menu) {
+            *state.active_menu = None;
+        } else {
+            *state.active_menu = Some(menu);
+            *state.menu_anchor = response.rect.left_bottom();
+            *state.menu_popup_size = menu.minimum_size();
+        }
+    }
+}
+
+fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut HeaderState<'_>) {
+    match menu {
+        TopLevelMenu::File => render_file_menu(ui, state),
+        TopLevelMenu::Video => render_video_menu(ui, state),
+        TopLevelMenu::Audio => render_audio_menu(ui, state),
+        TopLevelMenu::Options => render_options_menu(ui, state),
+    }
+}
+
+fn menu_popup_position(
+    root_bounds: egui::Rect,
+    anchor: egui::Pos2,
+    size: egui::Vec2,
+) -> egui::Pos2 {
+    let mut position = root_bounds.min + anchor.to_vec2();
+    position.x = position
+        .x
+        .min((root_bounds.right() - size.x).max(root_bounds.left()));
+    position.y = position
+        .y
+        .min((root_bounds.bottom() - size.y).max(root_bounds.top()));
+    position
+}
+
+fn menu_popup_viewport_builder(
+    title: &str,
+    position: egui::Pos2,
+    size: egui::Vec2,
+) -> egui::ViewportBuilder {
+    egui::ViewportBuilder::default()
+        .with_title(title)
+        .with_position(position)
+        .with_inner_size(size)
+        .with_decorations(false)
+        .with_resizable(false)
+        .with_taskbar(false)
 }
 
 /// Render ROM loading/history and application lifecycle actions.
 fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     if ui.button("Abrir ROM…").clicked() {
         *state.browse_requested = true;
+        *state.active_menu = None;
         ui.close();
     }
     ui.menu_button("Recentes", |ui| {
@@ -991,6 +1176,7 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
                     .clicked()
                 {
                     *state.recent_rom_requested = Some(path.clone());
+                    *state.active_menu = None;
                     ui.close();
                 }
             }
@@ -1006,7 +1192,8 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     );
     ui.separator();
     if ui.button("Sair").clicked() {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        *state.exit_requested = true;
+        *state.active_menu = None;
     }
 }
 
@@ -1064,12 +1251,9 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
             FooterMode::Hidden
         };
     }
-    let mut fullscreen = ui
-        .ctx()
-        .input(|input| input.viewport().fullscreen.unwrap_or(false));
+    let mut fullscreen = state.root_fullscreen;
     if ui.checkbox(&mut fullscreen, "Tela cheia (F11)").changed() {
-        ui.ctx()
-            .send_viewport_cmd(egui::ViewportCommand::Fullscreen(fullscreen));
+        *state.fullscreen_requested = Some(fullscreen);
     }
     ui.separator();
     ui.menu_button("Região / padrão de vídeo", |ui| {
@@ -1313,16 +1497,6 @@ fn render_output_errors(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     }
 }
 
-fn overlay_viewport_builder(bounds: egui::Rect) -> egui::ViewportBuilder {
-    egui::ViewportBuilder::default()
-        .with_title("Sega Emulator UI Overlay")
-        .with_position(bounds.min)
-        .with_inner_size(bounds.size())
-        .with_decorations(false)
-        .with_resizable(false)
-        .with_transparent(true)
-}
-
 fn render_video_viewport(
     ui: &mut egui::Ui,
     aspect_ratio: AspectRatioMode,
@@ -1427,15 +1601,31 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     #[test]
-    fn overlay_viewport_matches_root_client_geometry_and_is_transparent() {
-        let bounds = egui::Rect::from_min_size(egui::pos2(120.0, 80.0), egui::vec2(1280.0, 720.0));
-        let builder = super::overlay_viewport_builder(bounds);
+    fn menu_popup_is_clamped_to_root_client_bounds() {
+        let root = egui::Rect::from_min_size(egui::pos2(100.0, 60.0), egui::vec2(800.0, 600.0));
+        let anchor = egui::pos2(650.0, 540.0);
+        let size = egui::vec2(400.0, 300.0);
 
-        assert_eq!(builder.position, Some(bounds.min));
-        assert_eq!(builder.inner_size, Some(bounds.size()));
+        let position = super::menu_popup_position(root, anchor, size);
+
+        assert!(position.x >= root.left());
+        assert!(position.y >= root.top());
+        assert!(position.x + size.x <= root.right());
+        assert!(position.y + size.y <= root.bottom());
+    }
+
+    #[test]
+    fn menu_popup_viewport_is_opaque_undecorated_and_non_resizable() {
+        let position = egui::pos2(120.0, 80.0);
+        let size = egui::vec2(360.0, 280.0);
+        let builder = super::menu_popup_viewport_builder("Arquivo", position, size);
+
+        assert_eq!(builder.position, Some(position));
+        assert_eq!(builder.inner_size, Some(size));
         assert_eq!(builder.decorations, Some(false));
         assert_eq!(builder.resizable, Some(false));
-        assert_eq!(builder.transparent, Some(true));
+        assert_eq!(builder.taskbar, Some(false));
+        assert_ne!(builder.transparent, Some(true));
     }
 
     #[test]
