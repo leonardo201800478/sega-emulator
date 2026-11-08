@@ -1203,6 +1203,7 @@ fn run_xaudio2_worker(
     let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
     let mut was_underrun = false;
     let mut voice_started = false;
+    let mut voice_muted = false;
     loop {
         if shutdown.load(Ordering::Acquire) {
             break;
@@ -1218,8 +1219,13 @@ fn run_xaudio2_worker(
             let pending_before_flush = submitted.submitted_len();
             let flush_result = (|| {
                 if voice_started {
-                    unsafe { source_voice.Stop(0, 0) }.map_err(|error| error.to_string())?;
-                    voice_started = false;
+                    // FlushSourceBuffers leaves the current buffer running.
+                    // Mute first, then let its OnBufferEnd arrive normally;
+                    // Stop would suppress voice callbacks and break the
+                    // callback-based staging lifetime barrier.
+                    unsafe { source_voice.SetVolume(0.0, 0) }
+                        .map_err(|error| error.to_string())?;
+                    voice_muted = true;
                 }
                 unsafe { source_voice.FlushSourceBuffers() }.map_err(|error| error.to_string())?;
 
@@ -1264,9 +1270,19 @@ fn run_xaudio2_worker(
             continue;
         }
 
-        if !voice_started && consumer.metrics().queued_frames < frames_per_buffer {
+        if (!voice_started || voice_muted)
+            && consumer.metrics().queued_frames < frames_per_buffer
+        {
             thread::sleep(Duration::from_millis(2));
             continue;
+        }
+
+        if voice_muted {
+            if unsafe { source_voice.SetVolume(1.0, 0) }.is_err() {
+                control_failed.store(true, Ordering::Release);
+                break;
+            }
+            voice_muted = false;
         }
 
         let completed = signals.completed_buffers.load(Ordering::Acquire);
