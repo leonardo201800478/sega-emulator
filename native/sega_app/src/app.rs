@@ -440,9 +440,6 @@ impl SegaApp {
 
     /// Render the game viewport and optional status footer in the root window.
     fn render_game_area(&mut self, ui: &mut egui::Ui) -> egui::Rect {
-        ui.painter()
-            .rect_filled(ui.max_rect(), 0.0, egui::Color32::BLACK);
-
         let show_status = self.footer_mode.is_visible();
         let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
         if show_status {
