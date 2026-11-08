@@ -1114,7 +1114,9 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         let mut enabled = state.diagnostics_enabled;
         if ui
             .checkbox(&mut enabled, "Ativar coleta de diagnóstico")
-            .on_hover_text("Desligado por padrão. Quando desligado, nenhum log, snapshot ou registro de panic é coletado.")
+            .on_hover_text(
+                "Desligado por padrão. Quando desligado, nenhum log, snapshot ou registro de panic é coletado.",
+            )
             .changed()
         {
             *state.diagnostics_command = Some(enabled);
@@ -1454,6 +1456,13 @@ mod tests {
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn diagnostics_collection_is_opt_in_by_default() {
+        let app = SegaApp::default();
+        assert!(!app.diagnostics_enabled);
+        assert!(app.diagnostics_error.is_none());
+    }
 
     #[test]
     fn recent_rom_list_moves_duplicate_to_front_and_caps_entries() {
