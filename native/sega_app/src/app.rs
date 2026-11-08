@@ -967,8 +967,7 @@ fn render_audio_controls(
             ));
             ui.small(format!(
                 "FIFO: {} frames publicados · {} retirados pelo consumidor",
-                metrics.accepted_frames,
-                metrics.consumed_frames
+                metrics.accepted_frames, metrics.consumed_frames
             ));
         } else {
             ui.small("Áudio: sessão ainda não configurada ou telemetria indisponível");
