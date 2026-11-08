@@ -40,3 +40,6 @@ Essas operações exigem um protocolo de controle/epoch para que limpar áudio p
 ## Validação pendente
 
 Os testes foram adicionados ao código, mas ainda dependem da execução do CI no commit desta branch. Não declarar PASS até o workflow concluir.
+## API pública
+
+A construção é feita por `pcm_frame_queue(capacity_frames)`, que retorna os endpoints exclusivos `PcmFrameProducer` e `PcmFrameConsumer`. A capacidade zero retorna `PcmFrameQueueError::ZeroCapacity`; após a construção, o produtor publica com `push_frames` e o consumidor preenche buffers com `read_frames`.
