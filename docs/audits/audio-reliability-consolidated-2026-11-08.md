@@ -197,3 +197,13 @@ A trilha de áudio só deixa de bloquear a evolução do SMS quando:
 - Issue #659 — qualidade sonora em ambos os backends.
 - Issue #641 — corrupção visual, acompanhada separadamente.
 - Auditorias independentes Claude, Gemini, DeepSeek e Manus recebidas em 2026-11-08.
+
+## 11. Acompanhamento após a auditoria — PR #666
+
+A primeira rodada de correções está na [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666), branch `fix/audio-host-failure-telemetry-20261108`, HEAD `29916f7ddb27a069b385a57e53d04760de5e01ed`. A PR permanece aberta e não integrada na main.
+
+Correções implementadas: rejeição de novas escritas após estado terminal do backend; falha de `SubmitSourceBuffer` terminal e com contagem de frames perdidos; starvation XAudio2 separado do underrun FIFO; frames descartados em flush contabilizados; snapshots atualizados após lifecycle; telemetria terminal preservada antes do fechamento da sessão; GUI e contratos OUT-F atualizados.
+
+Validação CI do HEAD: workflow `42489225235` SUCCESS. PASS: Rust workspace regression (fmt/Clippy/testes), Linux audio-output, Windows WASAPI/XAudio2 (fmt/Clippy/testes), formatação/Clippy da aplicação Windows, documentação e classificação de impacto. SKIPPED: Scheduler stress, Z80 focused, SDL3, PowerShell e refresh manual de lockfiles.
+
+**Limitação essencial:** nenhuma validação física, captura loopback ou comparação acústica foi realizada. A causa raiz da issue #659 (distorção/ritmo lento nos dois backends) e da #640 (underruns WASAPI) continua UNKNOWN. As correções de telemetria/falha não equivalem à correção da qualidade sonora. O próximo passo obrigatório é a comparação física controlada WASAPI Shared versus XAudio2.
