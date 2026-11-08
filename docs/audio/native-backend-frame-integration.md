@@ -1,6 +1,6 @@
 # OUT-B — integração dos backends nativos com PCM frame FIFO
 
-**Status:** Migração WASAPI/XAudio2 implementada na branch da PR #654; aguardando CI no HEAD final, regressão global aplicável e validação física. OUT-B não é declarada concluída enquanto esses gates não forem encerrados.
+**Status:** Migração WASAPI/XAudio2 implementada e validada por CI #5676 no HEAD `5fe508f9acba9dd5b2b7b58835d93bef7481743c`; validação física de reprodução em dispositivo Windows permanece pendente.
 **Base:** `604346b9abd8d7b9505ced8ae9007927f9e32535`.
 **Escopo desta etapa:** completar a migração do transporte XAudio2 para a FIFO PCM estéreo compartilhada, sem alterar o runtime de áudio, DSP, Scheduler, PSG, VDP ou GUI.
 
@@ -59,9 +59,9 @@
 - [x] Reclaim de playback normal ocorre apenas após OnBufferEnd.
 - [x] Flush não faz reclaim individual; buffers são retidos até DestroyVoice.
 - [x] Estado de callback permanece vivo durante a vida da source voice.
-- [ ] CI Windows no HEAD final: fmt, Clippy -D warnings e testes focados PASS.
-- [ ] Regressão global do workspace: executar conforme filtros de impacto; registrar explicitamente PASS/FAIL/BLOCKED/NOT RUN.
-- [ ] Validação física de áudio em dispositivo Windows real.
+- [x] CI Windows no HEAD validado: fmt, Clippy -D warnings e testes focados PASS.
+- [x] Regressão global do workspace: cargo fmt, Clippy e cargo test PASS.
+- [ ] Validação física de áudio em dispositivo Windows real (NOT RUN).
 
 ## 6. Testes adicionados nesta implementação
 
@@ -76,15 +76,21 @@
 
 Os testes unitários modelam o bookkeeping e as invariantes de memória. Eles não substituem a compilação/execução Windows real nem a validação física do dispositivo.
 
-## 7. Validação da PR #654 — atualização pendente de CI final
+## 7. Validação da PR #654 — CI #5676
 
-- CI Windows do HEAD anterior `c9c15432c981316d5fdd49c9d7f27ba194aac96a`: fmt PASS, Clippy PASS e 21 testes PASS.
-- Regressão global do workspace: NOT RUN no HEAD anterior (job SKIPPED pelo classificador de impacto). O workflow foi ajustado na branch para executar essa regressão também quando houver alterações classificadas como áudio.
-- Validação física em dispositivo Windows: NOT RUN.
-- A correção de conversão PCM em lotes fixos adiciona dois testes. A primeira execução encontrou dois avisos Clippy (função de referência sem uso em build normal e `chunks_exact` com tamanho constante); ambos foram corrigidos.
-- A auditoria estática subsequente encontrou uma referência residual a uma variável removida no stub não-Windows. Ela foi removida.
-- A primeira execução Linux revelou que símbolos exclusivos do backend Windows (conversor, campos de balance e seletor de período) ainda eram compilados no host Linux e geravam warnings com `-D warnings`. Os imports, campos e funções foram condicionados a `windows` ou `test`. A segunda execução detectou ainda o import do tipo `StereoFrame` no módulo de conversão; ele também foi condicionado ao mesmo conjunto de cfg.
-- O workflow foi ampliado para validar o crate standalone nos hosts Windows e Linux, além de executar a regressão do workspace principal em mudanças de áudio. O HEAD após essas correções ainda aguarda execução completa.
+HEAD validado: `5fe508f9acba9dd5b2b7b58835d93bef7481743c`.
+
+- Windows audio-output: fmt PASS; Clippy `-D warnings` PASS; testes PASS.
+- Linux audio-output: fmt PASS; Clippy `-D warnings` PASS; testes PASS.
+- Workspace root: `cargo fmt --all -- --check` PASS.
+- Workspace root: `cargo clippy --workspace --all-targets --locked -- -D warnings` PASS.
+- Workspace root: `cargo test --workspace --locked` PASS.
+- Documentação `git diff --check`: PASS.
+- Windows SDL3, D3D12 e PowerShell: PASS.
+- Quality gate do workflow: PASS.
+- Validação física de áudio em dispositivo Windows real: NOT RUN.
+
+CI #5676 terminou com conclusão `success` para o HEAD acima. A execução comprova compilação e testes nos hosts Windows e Linux; não comprova reprodução audível em hardware físico.
 
 ## 8. Limites explícitos
 
