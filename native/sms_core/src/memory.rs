@@ -123,6 +123,13 @@ impl SmsMemory {
             MapperKind::Sega | MapperKind::Codemasters => MAX_ROM_SIZE,
         };
         if rom.len() > max_rom_size {
+            sega_observability::tracing::error!(
+                target: "sega::mapper",
+                mapper = ?mapper,
+                rom_bytes = rom.len(),
+                maximum_rom_bytes = max_rom_size,
+                "cartridge image exceeds mapper address capacity"
+            );
             return Err(SmsCoreError::RomTooLargeForSegaMapper {
                 size: rom.len(),
                 max_size: max_rom_size,
@@ -130,6 +137,12 @@ impl SmsMemory {
         }
 
         if bios.as_ref().is_some_and(|image| image.len() != 0x2000) {
+            sega_observability::tracing::error!(
+                target: "sega::mapper",
+                bios_bytes = bios.as_ref().map_or(0, Vec::len),
+                expected_bios_bytes = 0x2000,
+                "invalid SMS BIOS image size"
+            );
             return Err(SmsCoreError::InvalidBiosSize {
                 size: bios.as_ref().map_or(0, Vec::len),
                 expected: 0x2000,
@@ -149,6 +162,18 @@ impl SmsMemory {
         } else {
             CARTRIDGE_BOOT_CONTROL
         };
+        sega_observability::tracing::info!(
+            target: "sega::mapper",
+            mapper = ?mapper,
+            rom_bytes = rom.len(),
+            rom_banks = rom.len() / BANK_SIZE,
+            maximum_rom_bytes = max_rom_size,
+            bios_present = bios.is_some(),
+            bios_bytes = bios.as_ref().map_or(0, Vec::len),
+            selected_banks = ?bank_registers,
+            memory_control = control_port,
+            "SMS cartridge mapper selected"
+        );
         Ok(Self {
             rom,
             mapper,
@@ -204,6 +229,8 @@ impl SmsMemory {
 
     #[inline]
     pub fn write(&mut self, address: u16, value: u8) {
+        let previous_mapper_control = self.mapper_control;
+        let previous_banks = self.bank_registers;
         // Work RAM is mirrored through FFFF. Mapper writes update both the
         // mapper register and the RAM mirror at the same logical address.
         if address >= RAM_START && self.control_port & 0x10 == 0 {
@@ -234,6 +261,20 @@ impl SmsMemory {
             {
                 self.mapper_register_write_count += 1;
             }
+        }
+
+        if previous_mapper_control != self.mapper_control || previous_banks != self.bank_registers {
+            sega_observability::tracing::trace!(
+                target: "sega::mapper",
+                mapper = ?self.mapper,
+                address,
+                value,
+                previous_control = previous_mapper_control,
+                control = self.mapper_control,
+                previous_banks = ?previous_banks,
+                selected_banks = ?self.bank_registers,
+                "cartridge mapper register changed"
+            );
         }
     }
 
