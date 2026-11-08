@@ -1,6 +1,6 @@
 # Status dos componentes — 2026-11-08
 
-**Baseline:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c`.  
+**Baseline:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c`.
 **Regra:** descreve somente código integrado na main; PRs abertas, evidência manual e validação física são classificadas separadamente.
 
 | Componente | Estado integrado na main | Pendências / evidência |
