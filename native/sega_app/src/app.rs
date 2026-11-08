@@ -897,11 +897,11 @@ impl eframe::App for SegaApp {
         }
         let input_updated =
             if let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) {
-            self.render_menu_popup(&context, root_bounds)
-        } else {
-            context.request_repaint_after(Duration::from_millis(16));
-            false
-        };
+                self.render_menu_popup(&context, root_bounds)
+            } else {
+                context.request_repaint_after(Duration::from_millis(16));
+                false
+            };
 
         if !input_updated {
             self.update_keyboard_input(ui.ctx());
