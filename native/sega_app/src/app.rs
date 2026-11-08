@@ -7,7 +7,9 @@ use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
-use sega_observability::{current as current_logging, init as init_logging, LogConfig, SessionMetadata};
+use sega_observability::{
+    LogConfig, SessionMetadata, current as current_logging, init as init_logging,
+};
 use sega_input_runtime::{
     DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
     sdl3_backend::Sdl3Backend,
