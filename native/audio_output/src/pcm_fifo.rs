@@ -6,7 +6,7 @@
 //! and accounted as underrun frames. This module does not own a device clock.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering, fence};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -80,7 +80,7 @@ pub struct PcmFrameReadReport {
     pub queued_frames: usize,
     /// Frames replaced with digital silence.
     pub silence_frames: usize,
-    /// True when the producer endpoint has been dropped.
+    /// True when the producer was dropped and the queue ran empty during this read.
     pub producer_closed: bool,
 }
 
@@ -101,6 +101,7 @@ impl PcmFrameProducer {
         frames: &[StereoFrame],
     ) -> Result<PcmFrameWriteReport, PcmFrameQueueError> {
         if self.producer.is_abandoned() {
+            fence(Ordering::Acquire);
             return Err(PcmFrameQueueError::ConsumerDisconnected);
         }
 
@@ -178,6 +179,9 @@ impl PcmFrameConsumer {
                 .underrun_events
                 .fetch_add(1, Ordering::Relaxed);
             report.producer_closed = self.consumer.is_abandoned();
+            if report.producer_closed {
+                fence(Ordering::Acquire);
+            }
         }
 
         report
@@ -222,7 +226,7 @@ impl PcmFrameQueue {
             return Err(PcmFrameQueueError::ZeroCapacity);
         }
 
-        let (producer, consumer) = RingBuffer::new(capacity_frames);
+        let (producer, consumer) = RingBuffer::<StereoFrame>::new(capacity_frames);
         let metrics = Arc::new(SharedMetrics::default());
         Ok((
             PcmFrameProducer {
@@ -282,7 +286,7 @@ mod tests {
                 producer_closed: false,
             }
         );
-        assert_eq!(first, input[..3]);
+        assert_eq!(&first[..], &input[..3]);
 
         let mut second = [[0, 0]; 2];
         assert_eq!(
@@ -293,7 +297,7 @@ mod tests {
                 producer_closed: false,
             }
         );
-        assert_eq!(second, input[3..]);
+        assert_eq!(&second[..], &input[3..]);
     }
 
     #[test]
