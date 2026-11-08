@@ -1,5 +1,6 @@
 //! Pure PCM16 mono sample conversion at the native output boundary.
 
+#[cfg(any(windows, test))]
 use crate::StereoFrame;
 
 /// Convert one signed mono PCM16 sample into an interleaved stereo frame.
