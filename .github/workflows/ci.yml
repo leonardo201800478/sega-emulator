@@ -277,6 +277,28 @@ jobs:
       - name: Test WASAPI and XAudio2 output
         run: cargo test --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
+  linux-audio:
+    name: Linux audio-output host validation
+    needs: [changes]
+    if: |
+      github.event_name != 'workflow_dispatch' &&
+      (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format standalone audio-output workspace
+        run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
+      - name: Clippy non-Windows audio-output host
+        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml -- -D warnings
+      - name: Test non-Windows audio-output host
+        run: cargo test --locked --all-targets --manifest-path native/audio_output/Cargo.toml
+
   windows-input:
     name: Windows SDL3 input validation
     needs: [changes]
@@ -425,6 +447,7 @@ jobs:
       - docs-format
       - windows-d3d12
       - windows-audio
+      - linux-audio
       - windows-input
       - windows-tooling
       - scheduler-stress
@@ -436,7 +459,7 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' && needs.changes.outputs.full != 'true' }}
           Z80: ${{ needs.z80-focused.result }}
@@ -446,6 +469,8 @@ jobs:
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
           EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
+          EXPECT_LINUX_AUDIO: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true') }}
+          LINUX_AUDIO: ${{ needs.linux-audio.result }}
           EXPECT_WINDOWS_INPUT: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_INPUT: ${{ needs.windows-input.result }}
           EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true')) }}
@@ -481,6 +506,7 @@ jobs:
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
           check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
+          check_job "Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
           check_job "Windows input" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
