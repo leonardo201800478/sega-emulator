@@ -36,6 +36,7 @@ pub struct NativeAudioSession<S: PcmSink> {
     resampler: PcmResampler,
     sink: S,
     closed: bool,
+    suspended: bool,
     discarded_since_suspend: bool,
 }
 
@@ -59,6 +60,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
             resampler,
             sink,
             closed: false,
+            suspended: false,
             discarded_since_suspend: false,
         })
     }
@@ -106,7 +108,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
-        self.sink.suspend_and_flush()
+        self.sink.suspend_and_flush()?;
+        self.suspended = true;
+        Ok(())
     }
 
     /// Start a fresh presentation epoch without resetting DSP history.
@@ -122,6 +126,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
             self.mixed_samples.clear();
         }
         self.sink.resume()?;
+        self.suspended = false;
         self.discarded_since_suspend = false;
         Ok(())
     }
@@ -151,7 +156,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
         if self.closed {
             return;
         }
-        if self.discarded_since_suspend {
+        if self.suspended || self.discarded_since_suspend {
+            // A successful suspend/flush invalidates the previous output epoch.
+            // Closing must not publish a resampler tail into that invalidated epoch.
             self.resampler.reset();
         } else {
             let tail = self.resampler.flush();
@@ -222,6 +229,19 @@ mod tests {
         session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
         session.close();
         assert_eq!(session.sink.blocks, vec![vec![0, 0, 0, 64, 0, 192]]);
+        assert!(session.sink.closed);
+    }
+
+    #[test]
+    fn close_after_suspend_does_not_publish_resampler_tail() {
+        let mut session = NativeAudioSession::new(44_100, 100, RecordingSink::default()).unwrap();
+        session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
+        session.suspend_and_flush().unwrap();
+        let blocks_at_flush = session.sink.blocks.clone();
+
+        session.close();
+
+        assert_eq!(session.sink.blocks, blocks_at_flush);
         assert!(session.sink.closed);
     }
 
