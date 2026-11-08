@@ -383,6 +383,23 @@ mod tests {
     }
 
     #[test]
+    fn consumer_can_discard_old_epoch_and_read_new_frames_in_order() {
+        let (mut producer, mut consumer) = pcm_frame_queue(4).unwrap();
+        producer.push_frames(&[[1, 1], [2, 2], [3, 3]]).unwrap();
+
+        assert_eq!(consumer.discard_queued_frames(), 3);
+        assert_eq!(consumer.metrics().queued_frames, 0);
+        assert_eq!(consumer.metrics().consumed_frames, 0);
+
+        producer.push_frames(&[[9, -9]]).unwrap();
+        let mut output = [[0, 0]; 1];
+        let report = consumer.read_frames(&mut output);
+        assert_eq!(report.queued_frames, 1);
+        assert_eq!(report.silence_frames, 0);
+        assert_eq!(output, [[9, -9]]);
+    }
+
+    #[test]
     fn reports_consumer_disconnect_to_producer() {
         let (mut producer, consumer) = pcm_frame_queue(2).unwrap();
         drop(consumer);
