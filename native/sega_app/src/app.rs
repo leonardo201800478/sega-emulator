@@ -311,9 +311,9 @@ impl SegaApp {
     }
 
     /// Render the selected menu in an opaque native child viewport above D3D12.
-    fn render_menu_popup(&mut self, context: &egui::Context, root_bounds: egui::Rect) {
+    fn render_menu_popup(&mut self, context: &egui::Context, root_bounds: egui::Rect) -> bool {
         let Some(menu) = self.active_menu else {
-            return;
+            return false;
         };
 
         let minimum_size = menu.minimum_size();
@@ -335,6 +335,7 @@ impl SegaApp {
         let mut fullscreen_requested = None;
         let mut exit_requested = false;
         let mut measured_size = popup_size;
+        let mut input_updated = false;
         let root_fullscreen = context
             .input(|input| input.viewport().fullscreen.unwrap_or(false));
 
@@ -386,8 +387,10 @@ impl SegaApp {
                             };
                                     render_menu_content(menu_ui, menu, &mut header_state);
 
-                                    if menu_ui.input(|input| input.key_pressed(egui::Key::Escape))
-                                        || command.is_some()
+                                    if menu_ui.input(|input| {
+                                        input.key_pressed(egui::Key::Escape)
+                                            || input.viewport().close_requested()
+                                    }) || command.is_some()
                                         || *header_state.browse_requested
                                         || header_state.recent_rom_requested.is_some()
                                         || exit_requested
@@ -395,7 +398,10 @@ impl SegaApp {
                                         *header_state.active_menu = None;
                                     }
                                     drop(header_state);
-                                    self.update_keyboard_input(menu_ui.ctx());
+                                    if menu_ui.input(|input| input.viewport().focused.unwrap_or(false)) {
+                                        self.update_keyboard_input(menu_ui.ctx());
+                                        input_updated = true;
+                                    }
                                 });
                                 inner
                             });
@@ -436,6 +442,7 @@ impl SegaApp {
         if self.rom_dialog_requested {
             self.active_menu = None;
         }
+        input_updated
     }
 
     /// Render the game viewport and optional status footer in the root window.
@@ -883,13 +890,19 @@ impl eframe::App for SegaApp {
         let context = ui.ctx().clone();
         let viewport_rect = self.render(ui);
 
-        if let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) {
-            self.render_menu_popup(&context, root_bounds);
+        if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+            self.active_menu = None;
+        }
+        let input_updated = if let Some(root_bounds) =
+            context.input(|input| input.viewport().inner_rect)
+        {
+            self.render_menu_popup(&context, root_bounds)
         } else {
             context.request_repaint_after(Duration::from_millis(16));
-        }
+            false
+        };
 
-        if self.active_menu.is_none() {
+        if !input_updated {
             self.update_keyboard_input(ui.ctx());
         }
         if self.rom_dialog_requested {
