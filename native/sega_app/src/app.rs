@@ -345,9 +345,9 @@ impl SegaApp {
                 egui::CentralPanel::default()
                     .frame(egui::Frame::popup(&menu_ui.style()))
                     .show(menu_ui, |menu_ui| {
-                        let scroll = egui::ScrollArea::both()
-                            .auto_shrink([false, false])
-                            .show(menu_ui, |menu_ui| {
+                        let scroll = egui::ScrollArea::both().auto_shrink([false, false]).show(
+                            menu_ui,
+                            |menu_ui| {
                                 let inner = menu_ui.vertical(|menu_ui| {
                                     menu_ui.horizontal(|menu_ui| {
                                         menu_ui.strong(menu.title());
@@ -400,26 +400,23 @@ impl SegaApp {
                                     }
                                     drop(header_state);
 
-                                    if menu_ui.input(|input| {
-                                        input.viewport().focused.unwrap_or(false)
-                                    }) {
+                                    if menu_ui
+                                        .input(|input| input.viewport().focused.unwrap_or(false))
+                                    {
                                         self.update_keyboard_input(menu_ui.ctx());
                                         input_updated = true;
                                     }
                                 });
                                 inner
-                            });
-                        measured_size =
-                            scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
+                            },
+                        );
+                        measured_size = scroll.inner.response.rect.size() + egui::vec2(24.0, 24.0);
                     });
             },
         );
 
         self.menu_popup_size = egui::vec2(
-            measured_size
-                .x
-                .max(minimum_size.x)
-                .min(root_bounds.width()),
+            measured_size.x.max(minimum_size.x).min(root_bounds.width()),
             measured_size
                 .y
                 .max(minimum_size.y)
