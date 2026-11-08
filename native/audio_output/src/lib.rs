@@ -454,7 +454,7 @@ impl NativeWasapiOutput {
             if !backend_accepts_pcm(
                 self.shutdown.load(Ordering::Acquire),
                 self.control.failed.load(Ordering::Acquire),
-                self.worker.as_ref().map_or(true, |worker| worker.is_finished()),
+                self.worker.as_ref().is_none_or(|worker| worker.is_finished()),
             ) {
                 return Err(AudioOutputError::WorkerStopped);
             }
@@ -485,7 +485,7 @@ impl NativeWasapiOutput {
         self.buffer_size
     }
 
-    /// Count transitions to XAudio2 source-voice starvation, not FIFO underflow.
+    /// Number of consumer reads that inserted one or more silence frames.
     pub fn underrun_count(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
@@ -1045,6 +1045,7 @@ impl NativeXAudio2Output {
         self.buffer_size
     }
 
+    /// Count transitions to XAudio2 source-voice starvation, not FIFO underflow.
     pub fn underrun_count(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
