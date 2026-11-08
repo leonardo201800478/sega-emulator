@@ -175,9 +175,7 @@ impl PcmFrameConsumer {
             self.metrics
                 .underrun_frames
                 .fetch_add(report.silence_frames as u64, Ordering::Relaxed);
-            self.metrics
-                .underrun_events
-                .fetch_add(1, Ordering::Relaxed);
+            self.metrics.underrun_events.fetch_add(1, Ordering::Relaxed);
             report.producer_closed = self.consumer.is_abandoned();
             if report.producer_closed {
                 fence(Ordering::Acquire);
@@ -189,11 +187,7 @@ impl PcmFrameConsumer {
 
     /// Return a snapshot, including occupancy observed from the consumer side.
     pub fn metrics(&self) -> PcmFrameQueueMetrics {
-        metrics_snapshot(
-            self.capacity_frames,
-            self.consumer.slots(),
-            &self.metrics,
-        )
+        metrics_snapshot(self.capacity_frames, self.consumer.slots(), &self.metrics)
     }
 }
 
@@ -241,7 +235,7 @@ pub fn pcm_frame_queue(
 #[cfg(test)]
 mod tests {
     use super::{
-        pcm_frame_queue, PcmFrameQueueError, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
+        PcmFrameQueueError, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
     };
 
     #[test]
