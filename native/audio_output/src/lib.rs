@@ -658,6 +658,12 @@ fn run_wasapi_worker(
     let sample_rate = config.sample_rate;
     let buffer_size = config.buffer_size;
     if let Err(error) = initialize_mta().ok() {
+        sega_observability::tracing::error!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            error = %error,
+            "WASAPI COM apartment initialization failed"
+        );
         let _ = ready.send(Err(error.to_string()));
         return;
     }
@@ -740,9 +746,21 @@ fn run_wasapi_worker(
             Ok(state) => state,
             Err(message) => {
                 if first_start {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %message,
+                        "default render endpoint initialization failed"
+                    );
                     let _ = ready.send(Err(message));
                     return;
                 }
+                sega_observability::tracing::warn!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    error = %message,
+                    "render endpoint reconnect attempt failed"
+                );
                 thread::sleep(Duration::from_millis(250));
                 continue;
             }
@@ -762,13 +780,31 @@ fn run_wasapi_worker(
         let prebuffer_frames = initial_buffer_frames
             .min(consumer.metrics().capacity_frames)
             .max(1);
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            endpoint = "default render",
+            sample_rate,
+            channels = 2,
+            bits_per_sample = 16,
+            block_align,
+            initial_buffer_frames,
+            prebuffer_frames,
+            "WASAPI PCM16 stereo format negotiated"
+        );
         let mut scratch_frames = vec![[0_i16; 2]; initial_buffer_frames];
         let mut pending = VecDeque::<u8>::with_capacity(staging_bytes);
         pending.resize(staging_bytes, 0);
-        if render_client
-            .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
-            .is_err()
+        if let Err(error) =
+            render_client.write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
         {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                error = %error,
+                frames = initial_buffer_frames,
+                "failed to prime the WASAPI render buffer"
+            );
             if first_start {
                 let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
                 return;
@@ -778,6 +814,12 @@ fn run_wasapi_worker(
         }
         pending.clear();
         if let Err(error) = audio_client.start_stream() {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                error = %error,
+                "WASAPI render stream failed to start"
+            );
             if first_start {
                 let _ = ready.send(Err(error.to_string()));
                 return;
@@ -789,6 +831,14 @@ fn run_wasapi_worker(
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
+        } else {
+            sega_observability::tracing::info!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                sample_rate,
+                buffer_size,
+                "WASAPI render endpoint reconnected"
+            );
         }
 
         let mut disconnected = false;
@@ -811,7 +861,13 @@ fn run_wasapi_worker(
                     consumer.discard_queued_frames();
                     Ok::<(), String>(())
                 })();
-                if flush_result.is_err() {
+                if let Err(error) = &flush_result {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI suspend/flush operation failed"
+                    );
                     control.failed.store(true, Ordering::Release);
                     disconnected = true;
                 }
@@ -826,7 +882,13 @@ fn run_wasapi_worker(
                     let stopped = audio_client
                         .stop_stream()
                         .and_then(|()| audio_client.reset_stream());
-                    if stopped.is_err() {
+                    if let Err(error) = stopped {
+                        sega_observability::tracing::error!(
+                            target: "sega::audio::backend",
+                            backend = "WASAPI",
+                            error = %error,
+                            "WASAPI stream failed to stop/reset during suspend"
+                        );
                         control.failed.store(true, Ordering::Release);
                         disconnected = true;
                         break;
@@ -856,16 +918,38 @@ fn run_wasapi_worker(
                     pending.extend(left.to_le_bytes());
                     pending.extend(right.to_le_bytes());
                 }
-                if pending.len() != prebuffer_frames.saturating_mul(block_align)
-                    || render_client
-                        .write_to_device_from_deque(prebuffer_frames, &mut pending, None)
-                        .is_err()
+                if pending.len() != prebuffer_frames.saturating_mul(block_align) {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        pending_bytes = pending.len(),
+                        expected_bytes = prebuffer_frames.saturating_mul(block_align),
+                        "WASAPI prebuffer byte count invariant violated"
+                    );
+                    disconnected = true;
+                    break;
+                }
+                if let Err(error) =
+                    render_client.write_to_device_from_deque(prebuffer_frames, &mut pending, None)
                 {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        frames = prebuffer_frames,
+                        "WASAPI prebuffer submission failed"
+                    );
                     disconnected = true;
                     break;
                 }
                 pending.clear();
-                if audio_client.start_stream().is_err() {
+                if let Err(error) = audio_client.start_stream() {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI render stream failed to restart"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -877,7 +961,13 @@ fn run_wasapi_worker(
                 // The short timeout is intentional: it bounds control-command
                 // latency while retaining event-driven rendering. A failed
                 // endpoint is detected by the next client-space query.
-                if audio_client.get_available_space_in_frames().is_err() {
+                if let Err(error) = audio_client.get_available_space_in_frames() {
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI endpoint stopped responding after event timeout"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -886,7 +976,13 @@ fn run_wasapi_worker(
 
             let frames = match audio_client.get_available_space_in_frames() {
                 Ok(frames) => frames as usize,
-                Err(_) => {
+                Err(error) => {
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI available-buffer query failed; endpoint will be reopened"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -895,6 +991,13 @@ fn run_wasapi_worker(
                 continue;
             }
             if frames > scratch_frames.len() {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    available_frames = frames,
+                    scratch_capacity = scratch_frames.len(),
+                    "WASAPI endpoint reported more frames than the staging buffer can hold"
+                );
                 disconnected = true;
                 break;
             }
@@ -912,11 +1015,27 @@ fn run_wasapi_worker(
                 pending.extend(left.to_le_bytes());
                 pending.extend(right.to_le_bytes());
             }
-            if pending.len() != frames.saturating_mul(block_align)
-                || render_client
-                    .write_to_device_from_deque(frames, &mut pending, None)
-                    .is_err()
+            if pending.len() != frames.saturating_mul(block_align) {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    pending_bytes = pending.len(),
+                    expected_bytes = frames.saturating_mul(block_align),
+                    "WASAPI render buffer byte count invariant violated"
+                );
+                disconnected = true;
+                break;
+            }
+            if let Err(error) =
+                render_client.write_to_device_from_deque(frames, &mut pending, None)
             {
+                sega_observability::tracing::warn!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    error = %error,
+                    frames,
+                    "WASAPI render buffer submission failed; endpoint will be reopened"
+                );
                 disconnected = true;
                 break;
             }
@@ -935,6 +1054,11 @@ fn run_wasapi_worker(
             break;
         }
         if disconnected {
+            sega_observability::tracing::warn!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                "WASAPI endpoint disconnected; retrying default render device"
+            );
             thread::sleep(Duration::from_millis(250));
         }
     }
