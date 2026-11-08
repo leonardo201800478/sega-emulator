@@ -895,9 +895,8 @@ impl eframe::App for SegaApp {
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
             self.active_menu = None;
         }
-        let input_updated = if let Some(root_bounds) =
-            context.input(|input| input.viewport().inner_rect)
-        {
+        let input_updated =
+            if let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) {
             self.render_menu_popup(&context, root_bounds)
         } else {
             context.request_repaint_after(Duration::from_millis(16));
