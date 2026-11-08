@@ -32,7 +32,7 @@ A chamada não oculta, pausa ou recria o jogo. Ela altera somente a ordem Z e os
 
 A posição do popup é calculada a partir do retângulo da janela raiz e do retângulo do botão que abriu o menu. O resultado é limitado ao client rect e preserva a faixa superior da barra de menus.
 
-O tamanho do popup é limitado à área disponível. O conteúdo usa rolagem horizontal e vertical para que a redução da janela não torne controles inacessíveis.
+A largura do popup permanece limitada à largura preferencial de cada menu, sem herdar a largura total da janela raiz a partir da medição do conteúdo. A área de rolagem usa auto-shrink nos dois eixos e largura máxima igual à largura do menu; assim, conteúdo pequeno não preenche o espaço vazio, enquanto conteúdo maior continua acessível por rolagem horizontal e vertical. A altura do popup é limitada à área disponível.
 
 O retângulo do viewport D3D12 continua sendo calculado pela GUI e aplicado ao HWND filho. Em redimensionamento, maximização e tela cheia, a posição do popup é recalculada e o HWND D3D12 continua sendo reposicionado ao fim da ordem Z.
 
