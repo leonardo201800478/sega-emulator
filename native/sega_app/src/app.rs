@@ -107,6 +107,16 @@ enum TopLevelMenu {
     Diagnostics,
 }
 
+fn close_menu_if_current(
+    active_menu: &mut Option<TopLevelMenu>,
+    rendered_menu: TopLevelMenu,
+    should_close: bool,
+) {
+    if should_close && *active_menu == Some(rendered_menu) {
+        *active_menu = None;
+    }
+}
+
 impl TopLevelMenu {
     const fn title(self) -> &'static str {
         match self {
@@ -488,9 +498,7 @@ impl SegaApp {
                                 )
                             };
 
-                            if should_close && self.active_menu == Some(menu) {
-                                self.active_menu = None;
-                            }
+                            close_menu_if_current(&mut self.active_menu, menu, should_close);
                             if focused {
                                 self.update_keyboard_input(menu_ui.ctx(), root_context);
                                 actions.input_updated = true;
@@ -1838,29 +1846,42 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     #[test]
-    fn closing_stale_popup_does_not_clear_newly_selected_menu() {
-        let rendered_menu = super::TopLevelMenu::File;
+    fn stale_popup_close_does_not_clear_newly_selected_menu() {
         let mut active_menu = Some(super::TopLevelMenu::Video);
-        let should_close = true;
 
-        if should_close && active_menu == Some(rendered_menu) {
-            active_menu = None;
-        }
+        super::close_menu_if_current(
+            &mut active_menu,
+            super::TopLevelMenu::File,
+            true,
+        );
 
         assert_eq!(active_menu, Some(super::TopLevelMenu::Video));
     }
 
     #[test]
-    fn closing_current_popup_clears_active_menu() {
-        let rendered_menu = super::TopLevelMenu::Audio;
+    fn current_popup_close_clears_active_menu() {
         let mut active_menu = Some(super::TopLevelMenu::Audio);
-        let should_close = true;
 
-        if should_close && active_menu == Some(rendered_menu) {
-            active_menu = None;
-        }
+        super::close_menu_if_current(
+            &mut active_menu,
+            super::TopLevelMenu::Audio,
+            true,
+        );
 
         assert_eq!(active_menu, None);
+    }
+
+    #[test]
+    fn popup_remains_open_when_no_close_was_requested() {
+        let mut active_menu = Some(super::TopLevelMenu::Options);
+
+        super::close_menu_if_current(
+            &mut active_menu,
+            super::TopLevelMenu::Options,
+            false,
+        );
+
+        assert_eq!(active_menu, Some(super::TopLevelMenu::Options));
     }
 
     #[test]
