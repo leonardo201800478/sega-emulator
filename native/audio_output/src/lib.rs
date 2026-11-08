@@ -458,7 +458,7 @@ impl NativeWasapiOutput {
                 &self.flush_acknowledged,
                 &self.control_failed,
                 &self.shutdown,
-                Duration::from_secs(2),
+                Duration::from_secs(5),
             )
         }
         #[cfg(not(windows))]
@@ -1229,7 +1229,7 @@ fn run_xaudio2_worker(
                 }
                 unsafe { source_voice.FlushSourceBuffers() }.map_err(|error| error.to_string())?;
 
-                let deadline = std::time::Instant::now() + Duration::from_secs(2);
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
                 loop {
                     let completed = signals.completed_buffers.load(Ordering::Acquire);
                     let mut state = XAUDIO2_VOICE_STATE::default();
