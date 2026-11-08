@@ -149,8 +149,9 @@ impl XAudio2SubmittedBuffers {
                 self.available.push_back(staging);
             }
         }
-        self.reclaimed_completions =
-            self.reclaimed_completions.wrapping_add(reclaim_count as u64);
+        self.reclaimed_completions = self
+            .reclaimed_completions
+            .wrapping_add(reclaim_count as u64);
         reclaim_count
     }
 
@@ -1217,9 +1218,6 @@ mod tests {
             bytes.extend_from_slice(&left.to_le_bytes());
             bytes.extend_from_slice(&right.to_le_bytes());
         }
-        assert_eq!(
-            bytes,
-            [0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80]
-        );
+        assert_eq!(bytes, [0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80]);
     }
 }
