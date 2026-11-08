@@ -111,7 +111,7 @@ impl TopLevelMenu {
         }
     }
 
-    const fn minimum_size(self) -> egui::Vec2 {
+    fn minimum_size(self) -> egui::Vec2 {
         match self {
             Self::File => egui::vec2(360.0, 220.0),
             Self::Video => egui::vec2(240.0, 150.0),
@@ -314,8 +314,14 @@ impl SegaApp {
 
         let minimum_size = menu.minimum_size();
         let popup_size = egui::vec2(
-            self.menu_popup_size.x.max(minimum_size.x),
-            self.menu_popup_size.y.max(minimum_size.y),
+            self.menu_popup_size
+                .x
+                .max(minimum_size.x)
+                .min(root_bounds.width()),
+            self.menu_popup_size
+                .y
+                .max(minimum_size.y)
+                .min(root_bounds.height()),
         );
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
@@ -339,7 +345,7 @@ impl SegaApp {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
                                 if menu_ui.small_button("×").clicked() {
-                                    *self.active_menu = None;
+                                    self.active_menu = None;
                                 }
                             });
                             menu_ui.separator();
@@ -390,8 +396,14 @@ impl SegaApp {
         );
 
         self.menu_popup_size = egui::vec2(
-            measured_size.x.max(minimum_size.x),
-            measured_size.y.max(minimum_size.y),
+            measured_size
+                .x
+                .max(minimum_size.x)
+                .min(root_bounds.width()),
+            measured_size
+                .y
+                .max(minimum_size.y)
+                .min(root_bounds.height()),
         );
 
         if let Some(path) = self.recent_rom_requested.take() {
