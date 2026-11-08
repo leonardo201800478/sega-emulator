@@ -392,6 +392,15 @@ impl Z80 {
         } else {
             self.capture_opcode_trace = false;
         }
+        if let Err(error) = &result {
+            sega_observability::tracing::error!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                error = %error,
+                "Z80 instruction execution failed"
+            );
+        }
         result
     }
 
