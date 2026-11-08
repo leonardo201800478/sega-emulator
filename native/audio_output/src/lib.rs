@@ -1,7 +1,7 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
-mod pcm_fifo;
 mod pcm_convert;
+mod pcm_fifo;
 
 pub use pcm_fifo::{
     PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError, PcmFrameQueueMetrics,
