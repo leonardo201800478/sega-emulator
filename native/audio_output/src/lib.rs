@@ -1364,10 +1364,26 @@ fn run_xaudio2_worker(
     let (engine, mastering_voice, source_voice) = match setup {
         Ok(state) => state,
         Err(message) => {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                error = %message,
+                "XAudio2 device and voice setup failed"
+            );
             let _ = ready.send(Err(message));
             return;
         }
     };
+    sega_observability::tracing::info!(
+        target: "sega::audio::backend",
+        backend = "XAudio2",
+        sample_rate,
+        channels = 2,
+        bits_per_sample = 16,
+        frames_per_buffer,
+        max_queued_buffers,
+        "XAudio2 PCM16 stereo format negotiated"
+    );
     let _ = ready.send(Ok(()));
 
     let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
@@ -1473,7 +1489,7 @@ fn run_xaudio2_worker(
                 pAudioData: audio_data,
                 ..Default::default()
             };
-            if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
+            if let Err(error) = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) } {
                 let lost_frames = submitted.rollback_last_submission();
                 let total_failed_frames =
                     submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed)
@@ -1483,7 +1499,7 @@ fn run_xaudio2_worker(
                     backend = "XAudio2",
                     lost_frames,
                     total_failed_frames,
-                    error = %unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.unwrap_err(),
+                    error = %error,
                     "XAudio2 buffer submission failed"
                 );
                 control.failed.store(true, Ordering::Release);
