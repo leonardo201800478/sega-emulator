@@ -830,24 +830,37 @@ fn handle_command(
         WorkerCommand::RequestNmi => machine.request_nmi(),
         WorkerCommand::ConfigureAudio(factory, reply) => match factory() {
             Ok(mut session) => {
-                let result = if *running {
-                    session.resume()
-                } else {
-                    session.suspend_and_flush()
-                };
-                match result {
-                    Ok(()) => {
-                        if let Some(mut previous) = audio_session.replace(session) {
-                            previous.close();
-                        }
-                        telemetry.set_audio_error(None);
-                        telemetry.set_audio_metrics((0, 0));
-                        let _ = reply.send(Ok(()));
+                let previous_result = audio_session
+                    .as_mut()
+                    .map_or(Ok(()), |previous| previous.suspend_and_flush());
+                if let Err(error) = previous_result {
+                    if let Some(mut previous) = audio_session.take() {
+                        previous.close();
                     }
-                    Err(error) => {
-                        session.close();
-                        telemetry.set_audio_error(Some(error.clone()));
-                        let _ = reply.send(Err(error));
+                    session.close();
+                    telemetry.set_audio_error(Some(error.clone()));
+                    let _ = reply.send(Err(error));
+                } else {
+                    if let Some(mut previous) = audio_session.take() {
+                        previous.close();
+                    }
+                    let result = if *running {
+                        session.resume()
+                    } else {
+                        session.suspend_and_flush()
+                    };
+                    match result {
+                        Ok(()) => {
+                            *audio_session = Some(session);
+                            telemetry.set_audio_error(None);
+                            telemetry.set_audio_metrics((0, 0));
+                            let _ = reply.send(Ok(()));
+                        }
+                        Err(error) => {
+                            session.close();
+                            telemetry.set_audio_error(Some(error.clone()));
+                            let _ = reply.send(Err(error));
+                        }
                     }
                 }
             }
