@@ -1,6 +1,6 @@
 # OUT-E — protocolo de transição de estado do áudio nativo
 
-**Status:** especificação/auditoria de arquitetura; nenhuma alteração executável nesta etapa.
+**Status:** implementação inicial em revisão na PR #656; validação CI do HEAD final pendente.
 **Base:** `main` após OUT-B, merge commit `0a7a0579d01277fcccc21f6ad45190891604919d`.
 **Escopo:** integrar Pause/Stop/Reset/LoadRom/StepFrame com mute, flush, epoch e prebuffer sem alterar a linha temporal da máquina.
 
@@ -76,7 +76,28 @@ Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win
 - StepFrame mantém execução determinística do hardware e do DSP, mas o PCM produzido durante o passo é descartado antes do sink.
 - Testar Start inicial, Pause/Resume repetidos, Stop/Start, Reset durante pausa, troca de ROM e StepFrame repetido.
 
-## 6. Critérios de aceitação para implementação OUT-E
+## 6. Implementação atual — PR #656
+
+A implementação introduzida na PR #656 cobre os seguintes pontos:
+
+- `PcmSink` exige `suspend_and_flush` e `resume`; não há implementação padrão que retorne sucesso sem realizar controle.
+- `NativeAudioSession` expõe flush, resume e reset do estado FIR/resampler.
+- O worker SMS serializa Start/Pause/Stop/Reset/LoadRom/ConfigureAudio e aguarda a confirmação do backend antes de concluir as transições relevantes.
+- WASAPI executa Stop → Reset → descarte pelo consumidor. A espera do evento tem timeout de 10 ms para observar comandos de controle; o restart espera o prebuffer em frames, limitado à capacidade efetiva da FIFO.
+- XAudio2 executa Stop → FlushSourceBuffers e aguarda o número agregado de callbacks esperado e `BuffersQueued == 0`. Não libera staging individualmente por callback durante Flush.
+- A barreira de flush tem timeout de 2 s. Falha ou timeout é propagado como erro e não é convertido em sucesso.
+- StepFrame processa mixer/resampler, mas não envia PCM ao sink. A história FIR dos frames depurados é descartada antes do primeiro bloco audível após Resume.
+- Pause/Resume sem StepFrame preserva a história FIR; Reset/LoadRom a reinicializam.
+
+### Evidência automatizada adicionada
+
+- FIFO: descarte pelo consumidor e reutilização da fila com novos frames.
+- DSP: StepFrame sem publicação; ausência de vazamento de FIR após Resume; Pause/Resume preserva FIR; Reset reinicializa FIR.
+- Worker: StepFrame avança a máquina sem publicar PCM.
+- CI Windows e Linux precisa passar no mesmo HEAD da PR #656 antes de marcar a etapa como validada.
+- Reprodução física, hotplug e escuta real permanecem OUT-G / NOT RUN.
+
+## 7. Critérios de aceitação para implementação OUT-E
 
 - [ ] `AudioSession`/ `PcmSink` possuem contrato explícito de enable/mute, flush/epoch e descarte de PCM.
 - [ ] Pause só confirma após backend silenciado e epoch anterior invalidada.
@@ -91,7 +112,7 @@ Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win
 - [ ] CI Windows e Linux no HEAD exato; fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
 - [ ] Validação física posterior classificada separadamente (OUT-G).
 
-## 7. Riscos e decisões ainda abertas
+## 8. Riscos e decisões ainda abertas
 
 1. O wrapper WASAPI atual aguarda eventos de áudio; quando o stream está parado, o protocolo de controle precisa de mecanismo independente de wake-up. Reduzir timeout por polling só pode ser adotado com justificativa e medição.
 2. XAudio2 deve usar uma barreira agregada de conclusão para a fila inteira após Flush; o contador normal de callbacks em ordem FIFO não é suficiente para reclaim incremental durante flush.
@@ -100,7 +121,7 @@ Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win
 5. Mute físico imediato e descarte de buffers são propriedades distintas; ambas precisam ser comprovadas.
 6. O protocolo deve evitar comandos concorrentes ou reentrantes e tratar timeout como falha explícita.
 
-## 8. Referências de versão
+## 9. Referências de versão
 
 - Manifesto atual: `wasapi = 0.26.0`; Docs.rs já lista 0.27.0 (2026-11-06). Não atualizar nesta especificação sem auditar changelog, MSRV e API usada.
 - Manifesto atual: `windows = 0.62.2`; APIs de XAudio2 consultadas na documentação correspondente.
