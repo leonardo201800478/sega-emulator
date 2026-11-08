@@ -451,7 +451,7 @@ impl NativeWasapiOutput {
                         buffer_size,
                         balance,
                         control,
-                })
+                    })
                 }
                 Ok(Err(message)) => {
                     sega_observability::tracing::error!(
@@ -1190,7 +1190,7 @@ impl NativeXAudio2Output {
                         buffer_size,
                         balance,
                         control,
-                })
+                    })
                 }
                 Ok(Err(message)) => {
                     sega_observability::tracing::error!(
