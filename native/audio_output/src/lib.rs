@@ -758,7 +758,7 @@ fn run_xaudio2_worker(
                     &format,
                     0,
                     2.0,
-                    Some(&callback),
+                    Some(&*callback),
                     None,
                     None,
                 )
