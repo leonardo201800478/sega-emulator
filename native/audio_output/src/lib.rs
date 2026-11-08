@@ -68,10 +68,12 @@ fn mono_pcm16_to_stereo_frames(pcm: &[u8], balance: i8) -> Vec<StereoFrame> {
 
 /// Maximum number of PCM frames converted before publishing to the SPSC queue.
 /// This bounds temporary conversion storage independently of caller block size.
+#[cfg(any(windows, test))]
 const PCM_FRAME_BATCH_SIZE: usize = 256;
 
 /// Convert and publish mono PCM16 in fixed-size batches without allocating.
 /// Returns the exact number of frames rejected by the queue's drop-newest policy.
+#[cfg(any(windows, test))]
 fn push_mono_pcm16_bounded(
     producer: &mut PcmFrameProducer,
     pcm: &[u8],
@@ -756,7 +758,6 @@ impl NativeXAudio2Output {
         }
         #[cfg(not(windows))]
         {
-            let _ = frames;
             Err(AudioOutputError::Device(
                 "native XAudio2 output is available only on Windows".to_owned(),
             ))
