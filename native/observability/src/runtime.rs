@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Once, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing_appender::non_blocking::{ErrorCounter, NonBlockingBuilder, WorkerGuard};
@@ -265,7 +265,11 @@ pub fn init(
         config: Mutex::new(config),
         session,
     };
-    let _ = LOGGING.set(logging);
+    if LOGGING.set(logging).is_err() {
+        return Ok(LOGGING
+            .get()
+            .expect("concurrent logging initialization already installed a handle"));
+    }
 
     Ok(LOGGING.get().expect("logging handle was initialized"))
 }
