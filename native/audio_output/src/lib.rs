@@ -15,9 +15,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
+#[cfg(any(windows, test))]
+use std::thread;
 #[cfg(windows)]
-use std::thread::{self, JoinHandle};
-#[cfg(windows)]
+use std::thread::JoinHandle;
+#[cfg(any(windows, test))]
 use std::time::Duration;
 
 #[cfg(any(windows, test))]
