@@ -3,6 +3,25 @@
 mod pcm_convert;
 mod pcm_fifo;
 
+fn audio_output_metrics_from_queue(
+    sample_rate_hz: u32,
+    queue: PcmFrameQueueMetrics,
+    dropped_blocks: u64,
+) -> sega_audio_runtime::AudioOutputMetrics {
+    sega_audio_runtime::AudioOutputMetrics {
+        sample_rate_hz,
+        queue_capacity_frames: queue.capacity_frames as u64,
+        queue_queued_frames: queue.queued_frames as u64,
+        queue_high_water_frames: queue.high_water_frames as u64,
+        accepted_frames: queue.accepted_frames,
+        consumed_frames: queue.consumed_frames,
+        dropped_frames: queue.dropped_frames,
+        underrun_frames: queue.underrun_frames,
+        underrun_events: queue.underrun_events,
+        dropped_blocks,
+    }
+}
+
 pub use pcm_fifo::{
     PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError, PcmFrameQueueMetrics,
     PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
@@ -1366,18 +1385,7 @@ impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        sega_audio_runtime::AudioOutputMetrics {
-            sample_rate_hz: self.sample_rate,
-            queue_capacity_frames: queue.capacity_frames as u64,
-            queue_queued_frames: queue.queued_frames as u64,
-            queue_high_water_frames: queue.high_water_frames as u64,
-            accepted_frames: queue.accepted_frames,
-            consumed_frames: queue.consumed_frames,
-            dropped_frames: queue.dropped_frames,
-            underrun_frames: queue.underrun_frames,
-            underrun_events: queue.underrun_events,
-            dropped_blocks: self.dropped_block_count(),
-        }
+        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
     }
 
     fn close(&mut self) {
@@ -1422,18 +1430,7 @@ impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
         #[cfg(not(windows))]
         let queue = PcmFrameQueueMetrics::default();
 
-        sega_audio_runtime::AudioOutputMetrics {
-            sample_rate_hz: self.sample_rate,
-            queue_capacity_frames: queue.capacity_frames as u64,
-            queue_queued_frames: queue.queued_frames as u64,
-            queue_high_water_frames: queue.high_water_frames as u64,
-            accepted_frames: queue.accepted_frames,
-            consumed_frames: queue.consumed_frames,
-            dropped_frames: queue.dropped_frames,
-            underrun_frames: queue.underrun_frames,
-            underrun_events: queue.underrun_events,
-            dropped_blocks: self.dropped_block_count(),
-        }
+        audio_output_metrics_from_queue(self.sample_rate, queue, self.dropped_block_count())
     }
 
     fn close(&mut self) {
@@ -1460,18 +1457,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn both_native_sinks_expose_the_structured_pcm_metrics_contract() {
-        let wasapi = NativeWasapiOutput::new(48_000, 512, 4).unwrap();
-        let wasapi_metrics =
-            <NativeWasapiOutput as sega_audio_runtime::PcmSink>::metrics(&wasapi);
-        assert_eq!(wasapi_metrics.sample_rate_hz, 48_000);
-        assert_eq!(wasapi_metrics.queue_capacity_frames, 0);
+    fn queue_metrics_are_mapped_without_changing_frame_units() {
+        let queue = PcmFrameQueueMetrics {
+            capacity_frames: 2_048,
+            queued_frames: 480,
+            high_water_frames: 960,
+            accepted_frames: 12_000,
+            dropped_frames: 7,
+            consumed_frames: 11_513,
+            underrun_frames: 32,
+            underrun_events: 4,
+        };
+        let metrics = audio_output_metrics_from_queue(48_000, queue, 3);
 
-        let xaudio2 = NativeXAudio2Output::new(48_000, 512, 4).unwrap();
-        let xaudio2_metrics =
-            <NativeXAudio2Output as sega_audio_runtime::PcmSink>::metrics(&xaudio2);
-        assert_eq!(xaudio2_metrics.sample_rate_hz, 48_000);
-        assert_eq!(xaudio2_metrics.queue_capacity_frames, 0);
+        assert_eq!(metrics.sample_rate_hz, 48_000);
+        assert_eq!(metrics.queue_capacity_frames, 2_048);
+        assert_eq!(metrics.queue_queued_frames, 480);
+        assert_eq!(metrics.queue_high_water_frames, 960);
+        assert_eq!(metrics.accepted_frames, 12_000);
+        assert_eq!(metrics.consumed_frames, 11_513);
+        assert_eq!(metrics.dropped_frames, 7);
+        assert_eq!(metrics.underrun_frames, 32);
+        assert_eq!(metrics.underrun_events, 4);
+        assert_eq!(metrics.dropped_blocks, 3);
+        assert_eq!(metrics.queue_duration_micros(), Some(10_000));
     }
 
     #[test]
