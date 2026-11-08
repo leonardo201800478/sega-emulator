@@ -81,6 +81,14 @@ impl PcmResampler {
             coefficients.push(weights);
         }
 
+        sega_observability::tracing::info!(
+            target: "sega::audio::dsp",
+            input_rate = INPUT_RATE,
+            output_rate = rate,
+            volume,
+            filter_taps = coefficients.len(),
+            "PCM resampler initialized"
+        );
         Ok(Self {
             rate,
             step: INPUT_RATE as f64 / rate as f64,
