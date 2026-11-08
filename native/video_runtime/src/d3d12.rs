@@ -337,9 +337,9 @@ impl D3d12ChildWindow {
         }
 
         unsafe {
-            // The egui overlay is a sibling child HWND of the same eframe
+            // The egui menu viewport is a sibling child HWND of the same eframe
             // parent. Keep the D3D12 surface at the bottom of the sibling
-            // z-order so transparent egui menus and panels remain visible.
+            // z-order so opaque native menus and panels stay above it.
             SetWindowPos(
                 self.hwnd,
                 Some(HWND_BOTTOM),
