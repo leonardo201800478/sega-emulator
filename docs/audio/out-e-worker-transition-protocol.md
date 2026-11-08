@@ -1,6 +1,6 @@
 # OUT-E — protocolo de transição de estado do áudio nativo
 
-**Status:** implementação inicial em revisão na PR #656; validação CI do HEAD final pendente.
+**Status:** implementação na PR #656 validada pelo CI #5719 no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351`; validação física em dispositivo Windows permanece NOT RUN.
 **Base:** `main` após OUT-B, merge commit `0a7a0579d01277fcccc21f6ad45190891604919d`.
 **Escopo:** integrar Pause/Stop/Reset/LoadRom/StepFrame com mute, flush, epoch e prebuffer sem alterar a linha temporal da máquina.
 
@@ -94,7 +94,7 @@ A implementação introduzida na PR #656 cobre os seguintes pontos:
 - FIFO: descarte pelo consumidor e reutilização da fila com novos frames.
 - DSP: StepFrame sem publicação; ausência de vazamento de FIR após Resume; Pause/Resume preserva FIR; Reset reinicializa FIR.
 - Worker: StepFrame avança a máquina sem publicar PCM.
-- CI Windows e Linux precisa passar no mesmo HEAD da PR #656 antes de marcar a etapa como validada.
+- CI #5719 validou os hosts Windows e Linux no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351` (PASS).
 - Reprodução física, hotplug e escuta real permanecem OUT-G / NOT RUN.
 
 ## 7. Critérios de aceitação para implementação OUT-E
@@ -109,7 +109,7 @@ A implementação introduzida na PR #656 cobre os seguintes pontos:
 - [x] XAudio2 preserva staging até conclusão segura de todos os callbacks ou DestroyVoice; sem reclaim individual por callback fora de ordem.
 - [x] Operações de controle são coarse-grained; nenhuma lógica entra na GUI além dos comandos já existentes.
 - [ ] Cobertura headless completa de transições concorrentes, timeout/falha de flush e equivalência contínua/em blocos (há testes direcionados iniciais, ainda não a suíte integral).
-- [ ] CI Windows e Linux no HEAD exato; fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
+- [x] CI #5719 no HEAD `610480450aa7b7687556b87f2bed5ace6de4e351`: Windows/Linux áudio, fmt, Clippy `-D warnings`, testes standalone e workspace raiz PASS.
 - [ ] Validação física posterior classificada separadamente (OUT-G).
 
 ## 8. Riscos e decisões ainda abertas
