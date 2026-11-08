@@ -390,12 +390,11 @@ impl SegaApp {
                                         input.key_pressed(egui::Key::Escape)
                                             || input.viewport().close_requested()
                                     });
-                                    if close_requested
-                                        || command.is_some()
+                                    let action_selected = header_state.machine_command.is_some()
                                         || *header_state.browse_requested
                                         || header_state.recent_rom_requested.is_some()
-                                        || exit_requested
-                                    {
+                                        || *header_state.exit_requested;
+                                    if close_requested || action_selected {
                                         *header_state.active_menu = None;
                                     }
                                     drop(header_state);
