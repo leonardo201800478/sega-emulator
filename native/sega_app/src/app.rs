@@ -1158,12 +1158,12 @@ fn top_level_menu_button(
     state: &mut HeaderState<'_>,
 ) {
     let response = ui.button(label);
-    // Activate on the press edge as well as the completed click. This avoids
-    // losing a menu activation when Windows changes viewport focus between
-    // the mouse-down and mouse-up events.
+    // Toggle only on the press edge. A completed egui click may arrive on
+    // the following frame; handling both events would immediately close the
+    // popup that was opened on mouse-down.
     let pressed_on_button = response.is_pointer_button_down_on()
         && ui.input(|input| input.pointer.primary_pressed());
-    if response.clicked() || pressed_on_button {
+    if pressed_on_button {
         if *state.active_menu == Some(menu) {
             *state.active_menu = None;
         } else {
