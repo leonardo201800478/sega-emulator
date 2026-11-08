@@ -617,6 +617,9 @@ fn run_wasapi_worker(
                 continue;
             }
         };
+        let prebuffer_frames = initial_buffer_frames
+            .min(consumer.metrics().capacity_frames)
+            .max(1);
         let mut scratch_frames = vec![[0_i16; 2]; initial_buffer_frames];
         let mut pending = VecDeque::<u8>::with_capacity(staging_bytes);
         pending.resize(staging_bytes, 0);
@@ -687,22 +690,23 @@ fn run_wasapi_worker(
             }
 
             if !stream_started {
-                if consumer.metrics().queued_frames < initial_buffer_frames {
+                if consumer.metrics().queued_frames < prebuffer_frames {
                     thread::sleep(Duration::from_millis(2));
                     continue;
                 }
-                let report = consumer.read_frames(&mut scratch_frames);
+                let prebuffer = &mut scratch_frames[..prebuffer_frames];
+                let report = consumer.read_frames(prebuffer);
                 if report.silence_frames > 0 {
                     underruns.fetch_add(1, Ordering::Relaxed);
                 }
                 pending.clear();
-                for [left, right] in &scratch_frames {
+                for [left, right] in prebuffer.iter() {
                     pending.extend(left.to_le_bytes());
                     pending.extend(right.to_le_bytes());
                 }
-                if pending.len() != initial_buffer_frames.saturating_mul(block_align)
+                if pending.len() != prebuffer_frames.saturating_mul(block_align)
                     || render_client
-                        .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
+                        .write_to_device_from_deque(prebuffer_frames, &mut pending, None)
                         .is_err()
                 {
                     disconnected = true;
