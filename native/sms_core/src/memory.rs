@@ -331,15 +331,33 @@ impl SmsMemory {
     /// Apply the SMS memory-control latch written through I/O port $3E.
     #[inline]
     pub fn write_control_port(&mut self, value: u8) {
+        let previous = self.control_port;
         self.control_port = value;
+        if previous != value {
+            sega_observability::tracing::debug!(
+                target: "sega::mapper",
+                previous,
+                value,
+                bios_enabled = self.bios_enabled(),
+                "SMS memory-control latch changed"
+            );
+        }
     }
 
     pub fn reset_control_port(&mut self) {
+        let previous = self.control_port;
         self.control_port = if self.bios.is_some() {
             BIOS_POWER_ON_CONTROL
         } else {
             CARTRIDGE_BOOT_CONTROL
         };
+        sega_observability::tracing::debug!(
+            target: "sega::mapper",
+            previous,
+            value = self.control_port,
+            bios_enabled = self.bios_enabled(),
+            "SMS memory-control latch reset"
+        );
     }
 
     pub fn control_port(&self) -> u8 {
