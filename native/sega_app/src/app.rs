@@ -350,7 +350,16 @@ impl SegaApp {
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
             |menu_ui, class| {
-                self.diagnostics.record("menu.viewport.render", format!("menu={menu:?} class={class:?}"));
+                let class_name = match class {
+                    egui::ViewportClass::Root => "root",
+                    egui::ViewportClass::Deferred => "deferred",
+                    egui::ViewportClass::Immediate => "immediate",
+                    egui::ViewportClass::EmbeddedWindow => "embedded_window",
+                };
+                self.diagnostics.record(
+                    "menu.viewport.render",
+                    format!("menu={menu:?} class={class_name}"),
+                );
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
