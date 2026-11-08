@@ -330,17 +330,7 @@ impl SegaApp {
             return false;
         };
 
-        let minimum_size = menu.minimum_size();
-        let popup_size = egui::vec2(
-            self.menu_popup_size
-                .x
-                .max(minimum_size.x)
-                .min(root_bounds.width()),
-            self.menu_popup_size
-                .y
-                .max(minimum_size.y)
-                .min((root_bounds.height() - MENU_BAR_HEIGHT).max(1.0)),
-        );
+        let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
         let mut actions = MenuPopupActions {
@@ -358,13 +348,7 @@ impl SegaApp {
             },
         );
 
-        self.menu_popup_size = egui::vec2(
-            measured_size.x.max(minimum_size.x).min(root_bounds.width()),
-            measured_size
-                .y
-                .max(minimum_size.y)
-                .min((root_bounds.height() - MENU_BAR_HEIGHT).max(1.0)),
-        );
+        self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
             self.rom_path = path.to_string_lossy().into_owned();
@@ -407,7 +391,8 @@ impl SegaApp {
             .show(menu_ui, |menu_ui| {
                 let scroll =
                     egui::ScrollArea::both()
-                        .auto_shrink([false, false])
+                        .max_width(menu.minimum_size().x)
+                        .auto_shrink([true, true])
                         .show(menu_ui, |menu_ui| {
                             menu_ui.vertical(|menu_ui| {
                                 menu_ui.horizontal(|menu_ui| {
@@ -1196,6 +1181,23 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
     }
 }
 
+fn menu_popup_size(
+    menu: TopLevelMenu,
+    measured_size: egui::Vec2,
+    root_bounds: egui::Rect,
+) -> egui::Vec2 {
+    let preferred_size = menu.minimum_size();
+    let maximum_height = (root_bounds.height() - MENU_BAR_HEIGHT).max(1.0);
+
+    // Keep width tied to the menu's preferred size. The ScrollArea response can
+    // otherwise report the full available width when auto_shrink is disabled,
+    // feeding the root viewport width back into the next popup window size.
+    egui::vec2(
+        preferred_size.x.min(root_bounds.width()).max(1.0),
+        measured_size.y.max(preferred_size.y).min(maximum_height),
+    )
+}
+
 fn menu_popup_position(
     root_bounds: egui::Rect,
     anchor: egui::Pos2,
@@ -1669,6 +1671,18 @@ mod tests {
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn menu_popup_width_stays_bounded_by_preferred_menu_width() {
+        let root = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1680.0, 900.0));
+        let measured = egui::vec2(1680.0, 245.0);
+
+        let size = super::menu_popup_size(super::TopLevelMenu::File, measured, root);
+
+        assert_eq!(size.x, super::TopLevelMenu::File.minimum_size().x);
+        assert!(size.x < root.width());
+        assert!(size.y >= super::TopLevelMenu::File.minimum_size().y);
+    }
 
     #[test]
     fn menu_popup_is_clamped_to_root_client_bounds() {
