@@ -1,7 +1,7 @@
 # OUT-B — contrato de integração dos backends nativos com PCM frame FIFO
 
-**Status:** especificação de implementação; nenhum backend foi migrado nesta etapa.  
-**Base auditada:** `531764ee836b8c412b550685d923a912961d7015`.  
+**Status:** especificação de implementação; nenhum backend foi migrado nesta etapa.
+**Base auditada:** `531764ee836b8c412b550685d923a912961d7015`.
 **Escopo:** definir o limite de transporte entre `sega-audio-runtime`, a FIFO PCM estéreo e os consumidores WASAPI/XAudio2.
 
 ## 1. Estado observado na base
