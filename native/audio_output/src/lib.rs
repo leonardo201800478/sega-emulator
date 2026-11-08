@@ -1056,6 +1056,10 @@ fn run_xaudio2_worker(
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
+    suspended: Arc<AtomicBool>,
+    flush_requested: Arc<AtomicBool>,
+    flush_acknowledged: Arc<AtomicBool>,
+    control_failed: Arc<AtomicBool>,
     sample_rate: u32,
     frames_per_buffer: usize,
     max_queued_buffers: usize,
@@ -1143,14 +1147,6 @@ fn run_xaudio2_worker(
             }
             return Err(error.to_string());
         }
-        if let Err(error) = unsafe { source_voice.Start(0, 0) } {
-            unsafe {
-                source_voice.DestroyVoice();
-                mastering_voice.DestroyVoice();
-                engine.StopEngine();
-            }
-            return Err(error.to_string());
-        }
         Ok((engine, mastering_voice, source_voice))
     })();
 
@@ -1165,9 +1161,62 @@ fn run_xaudio2_worker(
 
     let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
     let mut was_underrun = false;
+    let mut voice_started = false;
     loop {
         if shutdown.load(Ordering::Acquire) || signals.voice_error.load(Ordering::Acquire) {
             break;
+        }
+
+        if flush_requested.swap(false, Ordering::AcqRel) {
+            let completed_before_flush = signals.completed_buffers.load(Ordering::Acquire);
+            submitted.reclaim_completed(completed_before_flush);
+            let pending_before_flush = submitted.submitted_len();
+            let flush_result = (|| {
+                if voice_started {
+                    unsafe { source_voice.Stop(0, 0) }.map_err(|error| error.to_string())?;
+                    voice_started = false;
+                }
+                unsafe { source_voice.FlushSourceBuffers() }
+                    .map_err(|error| error.to_string())?;
+
+                let deadline = std::time::Instant::now() + Duration::from_secs(2);
+                loop {
+                    let completed = signals.completed_buffers.load(Ordering::Acquire);
+                    let callbacks_seen = completed.wrapping_sub(completed_before_flush);
+                    let mut state = XAUDIO2_VOICE_STATE::default();
+                    unsafe { source_voice.GetState(&mut state, 0) };
+                    if callbacks_seen >= pending_before_flush as u64 && state.BuffersQueued == 0 {
+                        submitted.reclaim_completed(completed);
+                        break;
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        return Err("XAudio2 flush callback barrier timed out".to_owned());
+                    }
+                    thread::sleep(Duration::from_millis(1));
+                }
+                if submitted.submitted_len() != 0 {
+                    return Err("XAudio2 flush left submitted staging buffers unreclaimed".to_owned());
+                }
+                consumer.discard_queued_frames();
+                Ok::<(), String>(())
+            })();
+            if flush_result.is_err() {
+                control_failed.store(true, Ordering::Release);
+            }
+            flush_acknowledged.store(true, Ordering::Release);
+            if flush_result.is_err() {
+                break;
+            }
+        }
+
+        if suspended.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(2));
+            continue;
+        }
+
+        if !voice_started && consumer.metrics().queued_frames < frames_per_buffer {
+            thread::sleep(Duration::from_millis(2));
+            continue;
         }
 
         let completed = signals.completed_buffers.load(Ordering::Acquire);
@@ -1192,11 +1241,19 @@ fn run_xaudio2_worker(
             submitted_new = true;
         }
 
+        if !voice_started && submitted_new {
+            if unsafe { source_voice.Start(0, 0) }.is_err() {
+                control_failed.store(true, Ordering::Release);
+                break;
+            }
+            voice_started = true;
+        }
+
         let mut current_state = XAUDIO2_VOICE_STATE::default();
         unsafe {
             source_voice.GetState(&mut current_state, 0);
         }
-        let is_underrun = current_state.BuffersQueued == 0 && !submitted_new;
+        let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
             underruns.fetch_add(1, Ordering::Relaxed);
         }
