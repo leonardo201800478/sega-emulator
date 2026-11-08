@@ -6,6 +6,7 @@ use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing_appender::non_blocking::{ErrorCounter, NonBlockingBuilder, WorkerGuard};
@@ -18,6 +19,7 @@ use tracing_subscriber::Registry;
 
 static LOGGING: OnceLock<LoggingHandle> = OnceLock::new();
 static PANIC_HOOK: Once = Once::new();
+static DIAGNOSTICS_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub type InitError = Box<dyn Error + Send + Sync>;
 
@@ -96,6 +98,34 @@ pub struct LoggingHandle {
 }
 
 impl LoggingHandle {
+    /// Enable or disable diagnostic collection without restarting the application.
+    ///
+    /// Disabling reloads the subscriber filter to off and suppresses the
+    /// diagnostic panic hook. The writer remains idle so collection can be
+    /// re-enabled during the same application session.
+    pub fn set_enabled(&self, enabled: bool) -> Result<(), String> {
+        let directives = if enabled {
+            self.config
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .filter
+                .clone()
+        } else {
+            "off".to_owned()
+        };
+        let filter = EnvFilter::try_new(&directives).map_err(|error| error.to_string())?;
+        self.filter
+            .reload(filter)
+            .map_err(|error| error.to_string())?;
+        DIAGNOSTICS_ENABLED.store(enabled, Ordering::Release);
+        Ok(())
+    }
+
+    /// Return whether diagnostic collection is currently enabled.
+    pub fn is_enabled(&self) -> bool {
+        DIAGNOSTICS_ENABLED.load(Ordering::Acquire)
+    }
+
     pub fn set_filter(&self, directives: &str) -> Result<(), String> {
         let filter = EnvFilter::try_new(directives).map_err(|error| error.to_string())?;
         self.filter
@@ -308,7 +338,9 @@ fn install_panic_hook(crash_log: PathBuf) {
     PANIC_HOOK.call_once(move || {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |panic_info| {
-            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&crash_log) {
+            if DIAGNOSTICS_ENABLED.load(Ordering::Acquire)
+                && let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&crash_log)
+            {
                 let timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
