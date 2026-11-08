@@ -99,7 +99,14 @@ impl PcmResampler {
         if volume > 100 {
             return Err(AudioError::InvalidVolume);
         }
+        let previous = self.volume;
         self.volume = volume;
+        sega_observability::tracing::debug!(
+            target: "sega::audio::dsp",
+            previous,
+            volume,
+            "PCM output volume changed"
+        );
         Ok(())
     }
 
