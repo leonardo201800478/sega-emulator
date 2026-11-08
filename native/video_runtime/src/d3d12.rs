@@ -1319,7 +1319,7 @@ mod tests {
         let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
         child.set_bounds(0, 0, 320, 240).unwrap();
 
-        assert_eq!(unsafe { GetTopWindow(Some(parent_hwnd)) }, Some(overlay));
+        assert_eq!(unsafe { GetTopWindow(Some(parent_hwnd)) }.unwrap(), overlay);
     }
 
     #[test]
