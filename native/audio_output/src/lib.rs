@@ -406,7 +406,10 @@ impl NativeWasapiOutput {
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire)
-                || self.worker.as_ref().is_some_and(|worker| worker.is_finished())
+                || self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| worker.is_finished())
             {
                 return Err(AudioOutputError::WorkerStopped);
             }
@@ -1223,8 +1226,7 @@ fn run_xaudio2_worker(
                     // Mute first, then let its OnBufferEnd arrive normally;
                     // Stop would suppress voice callbacks and break the
                     // callback-based staging lifetime barrier.
-                    unsafe { source_voice.SetVolume(0.0, 0) }
-                        .map_err(|error| error.to_string())?;
+                    unsafe { source_voice.SetVolume(0.0, 0) }.map_err(|error| error.to_string())?;
                     voice_muted = true;
                 }
                 unsafe { source_voice.FlushSourceBuffers() }.map_err(|error| error.to_string())?;
@@ -1270,9 +1272,7 @@ fn run_xaudio2_worker(
             continue;
         }
 
-        if (!voice_started || voice_muted)
-            && consumer.metrics().queued_frames < frames_per_buffer
-        {
+        if (!voice_started || voice_muted) && consumer.metrics().queued_frames < frames_per_buffer {
             thread::sleep(Duration::from_millis(2));
             continue;
         }
@@ -1426,32 +1426,33 @@ mod tests {
         let shutdown = AtomicBool::new(false);
         let failed = AtomicBool::new(false);
         let acknowledged = AtomicBool::new(true);
-        assert!(wait_for_flush_acknowledgement(
-            &acknowledged,
-            &failed,
-            &shutdown,
-            Duration::from_millis(1),
-        )
-        .is_ok());
+        assert!(
+            wait_for_flush_acknowledgement(
+                &acknowledged,
+                &failed,
+                &shutdown,
+                Duration::from_millis(1),
+            )
+            .is_ok()
+        );
 
         failed.store(true, Ordering::Release);
-        assert!(wait_for_flush_acknowledgement(
-            &acknowledged,
-            &failed,
-            &shutdown,
-            Duration::from_millis(1),
-        )
-        .is_err());
+        assert!(
+            wait_for_flush_acknowledgement(
+                &acknowledged,
+                &failed,
+                &shutdown,
+                Duration::from_millis(1),
+            )
+            .is_err()
+        );
 
         failed.store(false, Ordering::Release);
         acknowledged.store(false, Ordering::Release);
-        assert!(wait_for_flush_acknowledgement(
-            &acknowledged,
-            &failed,
-            &shutdown,
-            Duration::ZERO,
-        )
-        .is_err());
+        assert!(
+            wait_for_flush_acknowledgement(&acknowledged, &failed, &shutdown, Duration::ZERO,)
+                .is_err()
+        );
     }
 
     #[test]
