@@ -900,7 +900,11 @@ fn render_header(
                             .file_name()
                             .and_then(|name| name.to_str())
                             .unwrap_or("ROM sem nome");
-                        if ui.button(name).on_hover_text(path.display().to_string()).clicked() {
+                        if ui
+                            .button(name)
+                            .on_hover_text(path.display().to_string())
+                            .clicked()
+                        {
                             *recent_rom_requested = Some(path.clone());
                             ui.close();
                         }
@@ -937,8 +941,12 @@ fn render_header(
             }
             ui.separator();
             ui.label("Saída");
-            if ui.radio_value(audio_backend, AudioBackend::Wasapi, "WASAPI Shared").changed()
-                || ui.radio_value(audio_backend, AudioBackend::XAudio2, "XAudio2").changed()
+            if ui
+                .radio_value(audio_backend, AudioBackend::Wasapi, "WASAPI Shared")
+                .changed()
+                || ui
+                    .radio_value(audio_backend, AudioBackend::XAudio2, "XAudio2")
+                    .changed()
             {
                 *audio_enabled = true;
                 *audio_command = Some(AudioCommand::Configure);
