@@ -1156,23 +1156,55 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.label(worker.video_replaced_frames().to_string());
                 ui.end_row();
                 let audio = worker.audio_output_metrics();
-                ui.label("Áudio — underrun events / frames");
+                ui.label("Áudio — taxa configurada");
+                ui.label(format!("{} Hz", audio.sample_rate_hz));
+                ui.end_row();
+                ui.label("Áudio — underrun FIFO (eventos / frames)");
                 ui.label(format!(
                     "{} / {}",
                     audio.underrun_events, audio.underrun_frames
                 ));
                 ui.end_row();
-                ui.label("Áudio — frames descartados / blocos");
+                ui.label("Áudio — starvation endpoint XAudio2");
+                ui.label(audio.endpoint_starvation_events.to_string());
+                ui.end_row();
+                ui.label("Áudio — descartes (overflow / flush)");
                 ui.label(format!(
-                    "{} / {}",
-                    audio.dropped_frames, audio.dropped_blocks
+                    "{} / {} frames",
+                    audio.dropped_frames, audio.flushed_frames
                 ));
+                ui.end_row();
+                ui.label("Áudio — perdas em SubmitSourceBuffer");
+                ui.label(format!("{} frames", audio.submission_failed_frames));
+                ui.end_row();
+                ui.label("Áudio — blocos com overflow");
+                ui.label(audio.dropped_blocks.to_string());
                 ui.end_row();
                 ui.label("Áudio — FIFO ocupação / capacidade");
                 ui.label(format!(
                     "{} / {} frames",
                     audio.queue_queued_frames, audio.queue_capacity_frames
                 ));
+                ui.end_row();
+                ui.label("Áudio — high-water / backlog atual");
+                ui.label(format!(
+                    "{} / {} frames",
+                    audio.queue_high_water_frames,
+                    audio.queue_queued_frames
+                ));
+                ui.end_row();
+                ui.label("Áudio — frames aceitos / consumidos");
+                ui.label(format!(
+                    "{} / {}",
+                    audio.accepted_frames, audio.consumed_frames
+                ));
+                ui.end_row();
+                ui.label("Áudio — backlog FIFO estimado");
+                ui.label(
+                    audio.queue_duration_micros()
+                        .map(|micros| format!("{micros} µs"))
+                        .unwrap_or_else(|| "indisponível".to_owned()),
+                );
                 ui.end_row();
             });
         render_output_errors(ui, worker);
