@@ -417,7 +417,7 @@ impl SegaApp {
                                     }
                                 });
                                 menu_ui.separator();
-    
+
                                 let (should_close, focused) = {
                                     let mut header_state = HeaderState {
                                         browse_requested: &mut self.rom_dialog_requested,
@@ -447,7 +447,7 @@ impl SegaApp {
                                         exit_requested: &mut actions.exit_requested,
                                     };
                                     render_menu_content(menu_ui, menu, &mut header_state);
-    
+
                                     let close_requested = menu_ui.input(|input| {
                                         input.key_pressed(egui::Key::Escape)
                                             || input.viewport().close_requested()
@@ -463,7 +463,7 @@ impl SegaApp {
                                         }),
                                     )
                                 };
-    
+
                                 if should_close {
                                     self.active_menu = None;
                                 }
