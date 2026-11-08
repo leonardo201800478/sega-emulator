@@ -1281,7 +1281,7 @@ mod tests {
         D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, GetTopWindow, GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE,
+        CreateWindowExW, GWL_STYLE, GetTopWindow, GetWindowLongPtrW, IsWindow, SW_MINIMIZE,
         ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_VISIBLE,
     };
 
