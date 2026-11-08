@@ -771,11 +771,12 @@ fn handle_command(
                 Ok(new_machine) => {
                     *running = false;
                     telemetry.running.store(false, Ordering::Release);
-                    let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
-                        session.suspend_and_flush()?;
-                        session.reset_dsp();
-                        Ok(())
-                    });
+                    let result: Result<(), String> =
+                        audio_session.as_mut().map_or(Ok(()), |session| {
+                            session.suspend_and_flush()?;
+                            session.reset_dsp();
+                            Ok(())
+                        });
                     match result {
                         Ok(()) => {
                             *machine = new_machine;
