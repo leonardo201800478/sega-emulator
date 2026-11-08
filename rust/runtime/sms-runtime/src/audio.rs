@@ -3,7 +3,7 @@
 //! The runtime owns when samples are mixed and submitted. The application
 //! supplies a concrete session backed by its selected native audio host.
 
-use sega_audio_runtime::{NativeAudioSession, PcmSink};
+use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
 /// Audio session accepted by the SMS runtime worker.
 pub trait AudioSession {
@@ -25,8 +25,8 @@ pub trait AudioSession {
     /// Update output volume without replacing the native host session.
     fn set_volume(&mut self, volume: u8) -> Result<(), String>;
 
-    /// Return host underrun and dropped-block counters.
-    fn metrics(&self) -> (u64, u64);
+    /// Return a nonblocking snapshot of the host PCM output path.
+    fn metrics(&self) -> AudioOutputMetrics;
 
     /// Close the host session and release its resources.
     fn close(&mut self);
@@ -57,7 +57,7 @@ impl<S: PcmSink> AudioSession for NativeAudioSession<S> {
         NativeAudioSession::set_volume(self, volume)
     }
 
-    fn metrics(&self) -> (u64, u64) {
+    fn metrics(&self) -> AudioOutputMetrics {
         NativeAudioSession::metrics(self)
     }
 

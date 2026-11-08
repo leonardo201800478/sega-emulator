@@ -948,10 +948,32 @@ fn render_audio_controls(
     });
     ui.small("Teclado: setas/Z/X/P · Gamepad SDL3: D-pad/stick esquerdo, A/B ou equivalentes, Start = Pause/NMI");
     if let Some(worker) = viewport.worker.as_ref() {
-        let (underruns, dropped) = worker.audio_output_metrics();
-        ui.small(format!(
-            "Áudio: {underruns} underruns · {dropped} blocos descartados"
-        ));
+        let metrics = worker.audio_output_metrics();
+        if let Some(backlog_micros) = metrics.queue_duration_micros() {
+            let backlog_ms = backlog_micros / 1_000;
+            let backlog_fraction = (backlog_micros % 1_000) / 10;
+            ui.small(format!(
+                "FIFO de áudio: {} / {} frames · backlog estimado {}.{:02} ms · pico {} frames",
+                metrics.queue_queued_frames,
+                metrics.queue_capacity_frames,
+                backlog_ms,
+                backlog_fraction,
+                metrics.queue_high_water_frames
+            ));
+            ui.small(format!(
+                "Underrun: {} eventos / {} frames de silêncio · overflow: {} frames em {} chamadas de escrita",
+                metrics.underrun_events,
+                metrics.underrun_frames,
+                metrics.dropped_frames,
+                metrics.dropped_blocks
+            ));
+            ui.small(format!(
+                "FIFO: {} frames publicados · {} retirados pelo consumidor",
+                metrics.accepted_frames, metrics.consumed_frames
+            ));
+        } else {
+            ui.small("Áudio: sessão ainda não configurada ou telemetria indisponível");
+        }
     } else {
         ui.small("Áudio: aguardando ROM");
     }
@@ -1036,12 +1058,24 @@ fn render_runtime_status(ui: &mut egui::Ui, viewport: &NativeViewportState) {
                 ui.label("Frames substituídos na apresentação");
                 ui.label(worker.video_replaced_frames().to_string());
                 ui.end_row();
-                let (underruns, dropped) = worker.audio_output_metrics();
-                ui.label("Áudio — underruns");
-                ui.label(underruns.to_string());
+                let audio = worker.audio_output_metrics();
+                ui.label("Áudio — underrun events / frames");
+                ui.label(format!(
+                    "{} / {}",
+                    audio.underrun_events, audio.underrun_frames
+                ));
                 ui.end_row();
-                ui.label("Áudio — blocos descartados");
-                ui.label(dropped.to_string());
+                ui.label("Áudio — frames descartados / blocos");
+                ui.label(format!(
+                    "{} / {}",
+                    audio.dropped_frames, audio.dropped_blocks
+                ));
+                ui.end_row();
+                ui.label("Áudio — FIFO ocupação / capacidade");
+                ui.label(format!(
+                    "{} / {} frames",
+                    audio.queue_queued_frames, audio.queue_capacity_frames
+                ));
                 ui.end_row();
             });
         render_output_errors(ui, worker);

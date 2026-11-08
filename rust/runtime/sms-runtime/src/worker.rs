@@ -11,6 +11,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
+use sega_audio_runtime::AudioOutputMetrics;
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
@@ -70,6 +71,14 @@ struct WorkerTelemetry {
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
+    audio_sample_rate_hz: AtomicU64,
+    audio_queue_capacity_frames: AtomicU64,
+    audio_queue_queued_frames: AtomicU64,
+    audio_queue_high_water_frames: AtomicU64,
+    audio_accepted_frames: AtomicU64,
+    audio_consumed_frames: AtomicU64,
+    audio_dropped_frames: AtomicU64,
+    audio_underrun_frames: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
     video_last_published_sequence: AtomicU64,
@@ -105,10 +114,42 @@ impl WorkerTelemetry {
         }
     }
 
-    fn set_audio_metrics(&self, metrics: (u64, u64)) {
-        self.audio_underruns.store(metrics.0, Ordering::Release);
+    fn set_audio_metrics(&self, metrics: AudioOutputMetrics) {
+        self.audio_underruns
+            .store(metrics.underrun_events, Ordering::Release);
         self.audio_dropped_blocks
-            .store(metrics.1, Ordering::Release);
+            .store(metrics.dropped_blocks, Ordering::Release);
+        self.audio_sample_rate_hz
+            .store(u64::from(metrics.sample_rate_hz), Ordering::Release);
+        self.audio_queue_capacity_frames
+            .store(metrics.queue_capacity_frames, Ordering::Release);
+        self.audio_queue_queued_frames
+            .store(metrics.queue_queued_frames, Ordering::Release);
+        self.audio_queue_high_water_frames
+            .store(metrics.queue_high_water_frames, Ordering::Release);
+        self.audio_accepted_frames
+            .store(metrics.accepted_frames, Ordering::Release);
+        self.audio_consumed_frames
+            .store(metrics.consumed_frames, Ordering::Release);
+        self.audio_dropped_frames
+            .store(metrics.dropped_frames, Ordering::Release);
+        self.audio_underrun_frames
+            .store(metrics.underrun_frames, Ordering::Release);
+    }
+
+    fn audio_output_metrics(&self) -> AudioOutputMetrics {
+        AudioOutputMetrics {
+            sample_rate_hz: self.audio_sample_rate_hz.load(Ordering::Acquire) as u32,
+            queue_capacity_frames: self.audio_queue_capacity_frames.load(Ordering::Acquire),
+            queue_queued_frames: self.audio_queue_queued_frames.load(Ordering::Acquire),
+            queue_high_water_frames: self.audio_queue_high_water_frames.load(Ordering::Acquire),
+            accepted_frames: self.audio_accepted_frames.load(Ordering::Acquire),
+            consumed_frames: self.audio_consumed_frames.load(Ordering::Acquire),
+            dropped_frames: self.audio_dropped_frames.load(Ordering::Acquire),
+            underrun_frames: self.audio_underrun_frames.load(Ordering::Acquire),
+            underrun_events: self.audio_underruns.load(Ordering::Acquire),
+            dropped_blocks: self.audio_dropped_blocks.load(Ordering::Acquire),
+        }
     }
 
     fn reset_machine_counters(&self) {
@@ -482,13 +523,9 @@ impl SmsTemporalWorker {
             .and_then(|error| error.clone())
     }
 
-    pub fn audio_output_metrics(&self) -> (u64, u64) {
-        (
-            self.telemetry.audio_underruns.load(Ordering::Acquire),
-            self.telemetry.audio_dropped_blocks.load(Ordering::Acquire),
-        )
+    pub fn audio_output_metrics(&self) -> AudioOutputMetrics {
+        self.telemetry.audio_output_metrics()
     }
-
     #[cfg(test)]
     fn wait_for_frame_after(&self, frame_number: u64, timeout: Duration) -> bool {
         let Ok(observed) = self.telemetry.frame_signal.0.lock() else {
@@ -589,7 +626,7 @@ fn execute_frame(
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
-            telemetry.set_audio_metrics((0, 0));
+            telemetry.set_audio_metrics(AudioOutputMetrics::default());
         }
         None => {}
     }
@@ -684,6 +721,7 @@ fn worker_loop(
                 if let Some(mut session) = audio_session.take() {
                     session.close();
                 }
+                telemetry.set_audio_metrics(AudioOutputMetrics::default());
             }
         }
     }
@@ -839,6 +877,7 @@ fn handle_command(
                         previous.close();
                     }
                     session.close();
+                    telemetry.set_audio_metrics(AudioOutputMetrics::default());
                     telemetry.set_audio_error(Some(error.clone()));
                     let _ = reply.send(Err(error));
                 } else {
@@ -854,11 +893,12 @@ fn handle_command(
                         Ok(()) => {
                             *audio_session = Some(session);
                             telemetry.set_audio_error(None);
-                            telemetry.set_audio_metrics((0, 0));
+                            telemetry.set_audio_metrics(AudioOutputMetrics::default());
                             let _ = reply.send(Ok(()));
                         }
                         Err(error) => {
                             session.close();
+                            telemetry.set_audio_metrics(AudioOutputMetrics::default());
                             telemetry.set_audio_error(Some(error.clone()));
                             let _ = reply.send(Err(error));
                         }
@@ -884,7 +924,7 @@ fn handle_command(
                 error
             });
             telemetry.set_audio_error(close_error);
-            telemetry.set_audio_metrics((0, 0));
+            telemetry.set_audio_metrics(AudioOutputMetrics::default());
             let _ = reply.send(());
         }
         #[cfg(any(windows, test))]
@@ -929,11 +969,31 @@ mod tests {
         DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
         WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
-    use sega_audio_runtime::{NativeAudioSession, PcmSink};
+    use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[test]
+    fn worker_telemetry_round_trips_all_audio_output_metrics() {
+        let telemetry = WorkerTelemetry::default();
+        let expected = AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            queue_capacity_frames: 2_048,
+            queue_queued_frames: 480,
+            queue_high_water_frames: 960,
+            accepted_frames: 12_000,
+            consumed_frames: 11_513,
+            dropped_frames: 7,
+            underrun_frames: 32,
+            underrun_events: 4,
+            dropped_blocks: 3,
+        };
+
+        telemetry.set_audio_metrics(expected);
+        assert_eq!(telemetry.audio_output_metrics(), expected);
+    }
 
     #[derive(Clone, Default)]
     struct RecordingSink(Arc<Mutex<Vec<Vec<u8>>>>);
@@ -955,8 +1015,8 @@ mod tests {
             Ok(())
         }
 
-        fn metrics(&self) -> (u64, u64) {
-            (0, 0)
+        fn metrics(&self) -> AudioOutputMetrics {
+            AudioOutputMetrics::default()
         }
 
         fn close(&mut self) {}
@@ -980,8 +1040,8 @@ mod tests {
             Ok(())
         }
 
-        fn metrics(&self) -> (u64, u64) {
-            (0, 0)
+        fn metrics(&self) -> AudioOutputMetrics {
+            AudioOutputMetrics::default()
         }
 
         fn close(&mut self) {}
