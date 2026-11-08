@@ -299,8 +299,7 @@ mod tests {
         assert!(!session.sink.suspended);
         session.process_samples(&second).unwrap();
 
-        let mut reference =
-            NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
+        let mut reference = NativeAudioSession::new(48_000, 100, RecordingSink::default()).unwrap();
         reference.process_samples(&first).unwrap();
         reference.process_samples(&second).unwrap();
 
