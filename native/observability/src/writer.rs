@@ -119,36 +119,43 @@ impl SizeRotatingWriter {
     }
 
     fn rotate(&mut self) -> io::Result<()> {
-        if let Some(mut file) = self.file.take() {
-            file.flush()?;
+        let flush_result = if let Some(mut file) = self.file.take() {
+            let result = file.flush();
             drop(file);
-        }
-
-        if self.retained_files == 0 {
-            if self.path.exists() {
-                fs::remove_file(&self.path)?;
-            }
+            result
         } else {
-            for index in (1..=self.retained_files).rev() {
-                let source = if index == 1 {
-                    self.path.clone()
-                } else {
-                    self.backup_path(index - 1)
-                };
-                let destination = self.backup_path(index);
+            Ok(())
+        };
 
-                if source.exists() {
-                    if destination.exists() {
-                        fs::remove_file(&destination)?;
+        let rotation_result = (|| {
+            if self.retained_files == 0 {
+                if self.path.exists() {
+                    fs::remove_file(&self.path)?;
+                }
+            } else {
+                for index in (1..=self.retained_files).rev() {
+                    let source = if index == 1 {
+                        self.path.clone()
+                    } else {
+                        self.backup_path(index - 1)
+                    };
+                    let destination = self.backup_path(index);
+
+                    if source.exists() {
+                        if destination.exists() {
+                            fs::remove_file(&destination)?;
+                        }
+                        fs::rename(source, destination)?;
                     }
-                    fs::rename(source, destination)?;
                 }
             }
-        }
+            Ok::<(), io::Error>(())
+        })();
 
-        self.file = Some(OpenOptions::new().create(true).append(true).open(&self.path)?);
-        self.current_size = 0;
-        Ok(())
+        let reopened = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        self.current_size = reopened.metadata()?.len();
+        self.file = Some(reopened);
+        flush_result.and(rotation_result)
     }
 }
 
