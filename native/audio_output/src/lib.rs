@@ -1460,6 +1460,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn both_native_sinks_expose_the_structured_pcm_metrics_contract() {
+        let wasapi = NativeWasapiOutput::new(48_000, 512, 4).unwrap();
+        let wasapi_metrics =
+            <NativeWasapiOutput as sega_audio_runtime::PcmSink>::metrics(&wasapi);
+        assert_eq!(wasapi_metrics.sample_rate_hz, 48_000);
+        assert_eq!(wasapi_metrics.queue_capacity_frames, 0);
+
+        let xaudio2 = NativeXAudio2Output::new(48_000, 512, 4).unwrap();
+        let xaudio2_metrics =
+            <NativeXAudio2Output as sega_audio_runtime::PcmSink>::metrics(&xaudio2);
+        assert_eq!(xaudio2_metrics.sample_rate_hz, 48_000);
+        assert_eq!(xaudio2_metrics.queue_capacity_frames, 0);
+    }
+
+    #[test]
     fn flush_acknowledgement_reports_failure_and_timeout() {
         let shutdown = AtomicBool::new(false);
         let failed = AtomicBool::new(false);
