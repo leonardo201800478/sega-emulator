@@ -1,0 +1,60 @@
+# OUT-F — telemetria da saída PCM (primeiro incremento)
+
+## Objetivo
+
+Expor ao runtime e à interface diagnósticos não bloqueantes do transporte PCM estéreo por frames, sem alterar o relógio da máquina, o MachineScheduler, o PSG, o VDP ou o DSP determinístico.
+
+## Métricas expostas
+
+A estrutura AudioOutputMetrics representa um snapshot:
+
+| Campo | Unidade | Semântica |
+|---|---:|---|
+| sample_rate_hz | frames/s | Taxa configurada na saída host |
+| queue_capacity_frames | frames estéreo | Capacidade fixa da FIFO |
+| queue_queued_frames | frames estéreo | Ocupação observada no instante da leitura |
+| queue_high_water_frames | frames estéreo | Maior ocupação observada após publicação |
+| accepted_frames | frames estéreo | Frames publicados com sucesso |
+| consumed_frames | frames estéreo | Frames retirados pelo consumidor |
+| dropped_frames | frames estéreo | Frames mais novos rejeitados por FIFO cheia |
+| underrun_frames | frames estéreo | Frames de silêncio inseridos por falta de dados |
+| underrun_events | eventos | Leituras que precisaram inserir ao menos um frame de silêncio |
+| dropped_blocks | chamadas | Escritas PCM que rejeitaram ao menos um frame |
+
+Os contadores da FIFO são compartilhados entre produtor e consumidor por atomics. A ocupação é uma observação instantânea e pode mudar imediatamente após a leitura. Os campos independentes não formam uma transação atômica; o snapshot é diagnóstico, não um ponto de sincronização.
+
+## Estimativa de backlog
+
+queue_duration_micros() calcula:
+
+queued_frames × 1.000.000 / sample_rate_hz
+
+A estimativa representa somente o tempo equivalente aos frames atualmente enfileirados na FIFO SPSC. Não inclui buffers do endpoint, driver, mixer do sistema operacional, DAC ou dispositivo físico. Portanto, não deve ser apresentada como latência ponta a ponta.
+
+A estimativa de high-water aplica a mesma conversão ao maior backlog observado.
+
+## Integração
+
+- WASAPI e XAudio2 expõem o mesmo contrato PcmSink::metrics() -> AudioOutputMetrics.
+- O runtime SMS copia o snapshot para atomics de telemetria; a GUI apenas lê esses valores.
+- A thread/callback de áudio não passa a executar lógica de interface, logging, alocação ou controle do Scheduler.
+- A GUI mostra ocupação/capacidade, backlog estimado, high-water, underrun em eventos/frames, overflow em frames/chamadas e frames aceitos/consumidos.
+
+## Limites desta entrega
+
+Este incremento fecha a exposição das métricas já existentes da FIFO e sua visualização. Ele **não** implementa ainda:
+
+- latência medida do endpoint/driver;
+- duração e distribuição temporal dos episódios de underrun;
+- low-water mark;
+- métricas de período/padding específicas de WASAPI;
+- buffers em voo, amostras tocadas e callbacks específicos de XAudio2;
+- tuning automático ou alteração dinâmica da capacidade/prebuffer.
+
+Essas métricas exigem instrumentação específica por backend e validação no mesmo dispositivo/cenário. Não se deve ajustar buffer, prebuffer, número de blocos ou taxa de resampling antes de coletar uma linha de base comparável. O tuning futuro deverá ser determinístico, limitado por capacidades reportadas pelo endpoint e sem alterar clocks da máquina.
+
+## Validação esperada
+
+- Testes unitários verificam conversão de unidades e mapeamento completo de PcmFrameQueueMetrics para AudioOutputMetrics.
+- CI deve compilar os dois backends e o frontend que consome o novo contrato.
+- Testes in-game físicos permanecem separados: executar o mesmo cenário com WASAPI e XAudio2, registrar as métricas e comparar os resultados sem modificar a configuração entre medições.
