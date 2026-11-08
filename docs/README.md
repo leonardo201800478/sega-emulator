@@ -18,7 +18,7 @@ Uma PR aberta, Draft, branch local, teste em branch ou documentação proposta n
 
 | Documento | Finalidade |
 |---|---|
-| [Status atual do projeto](project-status-2026-11-07.md) | Fotografia de estado em 2026-11-07, PRs, validações e bloqueios |
+| [Status atual do projeto](project-status-2026-11-07.md) | Fotografia histórica de estado em 2026-11-07 |\n| [Status dos componentes](component-status.md) | Estado reconciliado da main em 2026-11-08 |\n| [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md) | Prioridades, métricas, gates e aceite de áudio SMS |\n| [Auditoria consolidada de áudio](audits/audio-reliability-consolidated-2026-11-08.md) | Confronto das quatro auditorias e evidências
 | [Roadmap mestre](project-roadmap.md) | Sequência normativa das fases e critérios de avanço |
 | [Escopo do produto](project-scope.md) | O que pertence ao produto ativo e o que está fora da fase atual |
 | [Política de desenvolvimento e validação](development-and-validation-policy.md) | Método de engenharia, fidelidade e gates |
