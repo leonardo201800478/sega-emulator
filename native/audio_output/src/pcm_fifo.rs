@@ -185,6 +185,19 @@ impl PcmFrameConsumer {
         report
     }
 
+    /// Discard all currently queued frames from the consumer side.
+    ///
+    /// This is reserved for an acknowledged host-output epoch transition. It
+    /// preserves SPSC ownership: only the consumer endpoint advances its read
+    /// cursor. Discarded frames are not reported as audible consumption.
+    pub fn discard_queued_frames(&mut self) -> usize {
+        let mut discarded = 0;
+        while self.consumer.pop().is_ok() {
+            discarded += 1;
+        }
+        discarded
+    }
+
     /// Return a snapshot, including occupancy observed from the consumer side.
     pub fn metrics(&self) -> PcmFrameQueueMetrics {
         metrics_snapshot(self.capacity_frames, self.consumer.slots(), &self.metrics)
