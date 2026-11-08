@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(windows)]
 mod diagnostics;
 
 #[cfg(windows)]
