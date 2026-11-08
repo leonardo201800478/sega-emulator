@@ -961,6 +961,31 @@ mod tests {
         fn close(&mut self) {}
     }
 
+    #[derive(Clone, Default)]
+    struct ControlSink(Arc<Mutex<Vec<&'static str>>>);
+
+    impl PcmSink for ControlSink {
+        fn write_pcm(&mut self, _pcm: Vec<u8>) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn suspend_and_flush(&mut self) -> Result<(), String> {
+            self.0.lock().unwrap().push("flush");
+            Ok(())
+        }
+
+        fn resume(&mut self) -> Result<(), String> {
+            self.0.lock().unwrap().push("resume");
+            Ok(())
+        }
+
+        fn metrics(&self) -> (u64, u64) {
+            (0, 0)
+        }
+
+        fn close(&mut self) {}
+    }
+
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
 
     fn av_test_rom() -> Vec<u8> {
@@ -1066,6 +1091,42 @@ mod tests {
         assert_eq!(
             worker.audio_output_error().as_deref(),
             Some("audio host unavailable")
+        );
+        assert!(!worker.is_running());
+    }
+
+    #[test]
+    fn worker_serializes_audio_flush_resume_and_step_frame_boundaries() {
+        let worker = SmsTemporalWorker::new(av_test_rom(), "usa").unwrap();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let factory_events = Arc::clone(&events);
+
+        worker
+            .configure_audio_output(move || {
+                let sink = ControlSink(Arc::clone(&factory_events));
+                let session =
+                    NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink)?;
+                Ok(Box::new(session))
+            })
+            .unwrap();
+        worker.start().unwrap();
+        worker.pause().unwrap();
+
+        let before_step = events.lock().unwrap().clone();
+        worker.step_frame(100_000).unwrap();
+        assert_eq!(
+            *events.lock().unwrap(),
+            before_step,
+            "StepFrame must not resume or flush the host endpoint"
+        );
+
+        worker.start().unwrap();
+        worker.reset().unwrap();
+        worker.load_rom(av_test_rom()).unwrap();
+
+        assert_eq!(
+            *events.lock().unwrap(),
+            ["flush", "resume", "flush", "resume", "flush", "flush"]
         );
         assert!(!worker.is_running());
     }
