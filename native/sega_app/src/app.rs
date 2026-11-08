@@ -1426,6 +1426,21 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     #[test]
+    fn overlay_viewport_matches_root_client_geometry_and_is_transparent() {
+        let bounds = egui::Rect::from_min_size(
+            egui::pos2(120.0, 80.0),
+            egui::vec2(1280.0, 720.0),
+        );
+        let builder = super::overlay_viewport_builder(bounds);
+
+        assert_eq!(builder.position, Some(bounds.min));
+        assert_eq!(builder.inner_size, Some(bounds.size()));
+        assert_eq!(builder.decorations, Some(false));
+        assert_eq!(builder.resizable, Some(false));
+        assert_eq!(builder.transparent, Some(true));
+    }
+
+    #[test]
     fn recent_rom_list_moves_duplicate_to_front_and_caps_entries() {
         let mut recent = (0..super::MAX_RECENT_ROMS)
             .map(|index| PathBuf::from(format!("game-{index}.sms")))
