@@ -36,6 +36,7 @@ pub struct NativeAudioSession<S: PcmSink> {
     resampler: PcmResampler,
     sink: S,
     closed: bool,
+    discarded_since_suspend: bool,
 }
 
 impl<S: PcmSink> NativeAudioSession<S> {
@@ -58,6 +59,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
             resampler,
             sink,
             closed: false,
+            discarded_since_suspend: false,
         })
     }
 
