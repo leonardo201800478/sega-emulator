@@ -477,7 +477,7 @@ use std::ffi::c_void;
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback,
-    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR,
+    IXAudio2VoiceCallback_Impl, XAUDIO2_BUFFER, XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE,
     XAudio2CreateWithVersionInfo,
 };
 #[cfg(windows)]
