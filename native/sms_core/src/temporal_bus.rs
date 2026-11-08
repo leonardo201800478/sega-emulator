@@ -248,6 +248,15 @@ impl SmsTemporalBus {
         vdp_profile: SmsVdpProfile,
         territory: Territory,
     ) -> Result<Self, SmsTemporalBusError> {
+        sega_observability::tracing::info!(
+            target: "sega::machine",
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            vdp_profile = ?vdp_profile,
+            territory = ?territory,
+            "SMS temporal bus configuration selected"
+        );
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
