@@ -1,9 +1,9 @@
 # Auditoria A1 — fechamento do PSG SN76489 (SMS)
 
-**Status:** auditoria estática inicial; não certifica fidelidade física.  
-**PR de arquitetura:** #646 — `docs/sms-complete-audio-architecture-20261107`  
-**Baseline auditada:** `main` — `f47f71830344b85f72329376505d400bfbfaae69` (2026-11-07)  
-**Fonte principal de código:** `native/sn76489/src/psg.rs`, blob `b0eaec6b1917001be729f5524115c1b3e43b19aa`.  
+**Status:** auditoria estática inicial; não certifica fidelidade física.
+**PR de arquitetura:** #646 — `docs/sms-complete-audio-architecture-20261107`
+**Baseline auditada:** `main` — `f47f71830344b85f72329376505d400bfbfaae69` (2026-11-07)
+**Fonte principal de código:** `native/sn76489/src/psg.rs`, blob `b0eaec6b1917001be729f5524115c1b3e43b19aa`.
 **Integração:** `native/audio_runtime/src/psg.rs`, blob `9b8f71846f84195068d3753875ab43851369e89d`.
 
 ## 1. Resultado executivo
