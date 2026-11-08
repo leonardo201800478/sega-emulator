@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
+use egui::containers::menu::{MenuButton, MenuConfig};
+use egui::PopupCloseBehavior;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
@@ -819,7 +821,9 @@ fn render_header(
             ui.radio_value(aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
         });
 
-        ui.menu_button("Som", |ui| {
+        MenuButton::new("Som")
+            .config(MenuConfig::new().close_behavior(PopupCloseBehavior::CloseOnClickOutside))
+            .ui(ui, |ui| {
             if ui.checkbox(audio_enabled, "Áudio ativo").changed() {
                 *audio_command = Some(if *audio_enabled {
                     AudioCommand::Configure
@@ -843,7 +847,9 @@ fn render_header(
             }
         });
 
-        ui.menu_button("Opções", |ui| {
+        MenuButton::new("Opções")
+            .config(MenuConfig::new().close_behavior(PopupCloseBehavior::CloseOnClickOutside))
+            .ui(ui, |ui| {
             ui.menu_button("Região / padrão de vídeo", |ui| {
                 ui.radio_value(region, "usa".to_owned(), "USA / NTSC");
                 ui.radio_value(region, "brazil".to_owned(), "Brasil / PAL-M");
@@ -908,6 +914,7 @@ fn add_machine_button(
 ) {
     if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
         *command = Some(value);
+        ui.close();
     }
 }
 
