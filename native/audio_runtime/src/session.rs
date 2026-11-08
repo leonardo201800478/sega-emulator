@@ -106,6 +106,12 @@ impl<S: PcmSink> NativeAudioSession<S> {
     where
         F: FnOnce() -> Result<S, String>,
     {
+        sega_observability::tracing::info!(
+            target: "sega::audio::session",
+            sample_rate,
+            volume,
+            "native audio session initialization requested"
+        );
         let resampler =
             PcmResampler::new(sample_rate, volume).map_err(|error| error.to_string())?;
         let sink = make_sink()?;
@@ -160,6 +166,12 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Stop host presentation and wait for the backend to invalidate its
     /// current queue epoch. DSP state is intentionally preserved for Pause.
     pub fn suspend_and_flush(&mut self) -> Result<(), String> {
+        sega_observability::tracing::debug!(
+            target: "sega::audio::session",
+            already_suspended = self.suspended,
+            closed = self.closed,
+            "audio session suspend requested"
+        );
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
@@ -170,6 +182,13 @@ impl<S: PcmSink> NativeAudioSession<S> {
 
     /// Start a fresh presentation epoch without resetting DSP history.
     pub fn resume(&mut self) -> Result<(), String> {
+        sega_observability::tracing::debug!(
+            target: "sega::audio::session",
+            suspended = self.suspended,
+            closed = self.closed,
+            discarded_since_suspend = self.discarded_since_suspend,
+            "audio session resume requested"
+        );
         if self.closed {
             return Err("native audio session is closed".to_owned());
         }
@@ -189,6 +208,10 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Reset FIR/resampler history at a machine-content boundary such as
     /// Reset or LoadRom. Pause/Resume must not call this method.
     pub fn reset_dsp(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::audio::session",
+            "audio DSP history reset"
+        );
         self.resampler.reset();
         self.mixed_samples.clear();
         self.discarded_since_suspend = false;
@@ -209,6 +232,10 @@ impl<S: PcmSink> NativeAudioSession<S> {
     /// Flush the resampler tail and close the selected native output once.
     pub fn close(&mut self) {
         if self.closed {
+            sega_observability::tracing::trace!(
+                target: "sega::audio::session",
+                "duplicate audio session close ignored"
+            );
             return;
         }
         if self.suspended || self.discarded_since_suspend {
