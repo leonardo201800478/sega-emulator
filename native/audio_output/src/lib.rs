@@ -485,6 +485,7 @@ impl NativeWasapiOutput {
         self.buffer_size
     }
 
+    /// Count transitions to XAudio2 source-voice starvation, not FIFO underflow.
     pub fn underrun_count(&self) -> u64 {
         self.underruns.load(Ordering::Relaxed)
     }
