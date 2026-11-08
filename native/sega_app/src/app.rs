@@ -488,7 +488,7 @@ impl SegaApp {
                                 )
                             };
 
-                            if should_close {
+                            if should_close && self.active_menu == Some(menu) {
                                 self.active_menu = None;
                             }
                             if focused {
@@ -1229,15 +1229,18 @@ fn top_level_menu_button(
     let response = ui.button(label);
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
-    if response.clicked() {
+    let switch_by_hover = state.active_menu.is_some()
+        && *state.active_menu != Some(menu)
+        && response.hovered();
+    if response.clicked() || switch_by_hover {
+        let previous = *state.active_menu;
         state.diagnostics.record(
-            "menu.button.clicked",
+            "menu.button.activated",
             format!(
-                "label={label} menu={menu:?} active_before={:?}",
-                *state.active_menu
+                "label={label} menu={menu:?} previous={previous:?} by_hover={switch_by_hover}"
             ),
         );
-        if *state.active_menu == Some(menu) {
+        if response.clicked() && previous == Some(menu) {
             *state.active_menu = None;
             state.diagnostics.record(
                 "menu.state.changed",
@@ -1833,6 +1836,32 @@ mod tests {
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn closing_stale_popup_does_not_clear_newly_selected_menu() {
+        let rendered_menu = super::TopLevelMenu::File;
+        let mut active_menu = Some(super::TopLevelMenu::Video);
+        let should_close = true;
+
+        if should_close && active_menu == Some(rendered_menu) {
+            active_menu = None;
+        }
+
+        assert_eq!(active_menu, Some(super::TopLevelMenu::Video));
+    }
+
+    #[test]
+    fn closing_current_popup_clears_active_menu() {
+        let rendered_menu = super::TopLevelMenu::Audio;
+        let mut active_menu = Some(super::TopLevelMenu::Audio);
+        let should_close = true;
+
+        if should_close && active_menu == Some(rendered_menu) {
+            active_menu = None;
+        }
+
+        assert_eq!(active_menu, None);
+    }
 
     #[test]
     fn menu_popup_width_stays_bounded_by_preferred_menu_width() {
