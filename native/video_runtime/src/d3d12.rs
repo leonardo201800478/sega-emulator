@@ -1135,7 +1135,7 @@ impl D3d12Host {
             if let Err(error) = &present_result {
                 sega_observability::tracing::error!(
                     target: "sega::video::d3d12",
-                    frame_sequence = frame.sequence,
+                    frame_sequence = frame.sequence(),
                     error = %error,
                     device_removed_reason = ?self.device_removed_reason().err(),
                     "D3D12 mailbox frame presentation failed"
