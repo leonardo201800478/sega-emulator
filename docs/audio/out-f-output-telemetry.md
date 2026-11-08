@@ -69,3 +69,5 @@ A composição de merge gerada pelo GitHub inclui também a correção de ciclo 
 - `close()` descarta a cauda FIR quando o epoch foi invalidado por suspensão/flush ou por amostras de debugger descartadas.
 
 Essa inspeção é uma verificação estrutural do merge, não substitui os testes executados sobre o merge resultante. O CI deve ser reexecutado após a atualização da base antes da integração.
+
+A documentação geral da investigação foi integrada à `main` pela PR #663, merge SHA `d6d14cbcc78dd5d3b39cabfe7d03a857c59034ed`. A validação de higiene documental dessa integração passou no workflow #42481945972.
