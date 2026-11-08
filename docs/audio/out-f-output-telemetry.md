@@ -20,8 +20,11 @@ A estrutura AudioOutputMetrics representa um snapshot:
 | underrun_frames | frames estéreo | Frames de silêncio inseridos por falta de dados |
 | underrun_events | eventos | Leituras que precisaram inserir ao menos um frame de silêncio |
 | dropped_blocks | chamadas | Escritas PCM que rejeitaram ao menos um frame |
+| flushed_frames | frames estéreo | Frames descartados da FIFO pelo consumidor ao invalidar uma epoch |
+| endpoint_starvation_events | eventos | Transições para source voice sem buffers enfileirados no XAudio2; zero no WASAPI |
+| submission_failed_frames | frames estéreo | Frames retirados da FIFO e contabilizados como perdidos quando SubmitSourceBuffer falha no XAudio2 |
 
-Os contadores da FIFO são compartilhados entre produtor e consumidor por atomics. A ocupação é uma observação instantânea e pode mudar imediatamente após a leitura. Os campos independentes não formam uma transação atômica; o snapshot é diagnóstico, não um ponto de sincronização.
+Os contadores da FIFO são compartilhados entre produtor e consumidor por atomics. `flushed_frames` é distinto de overflow e consumo audível. `endpoint_starvation_events` não deve ser somado a `underrun_events`: são eventos de camadas e semânticas diferentes. `submission_failed_frames` representa PCM retirado da FIFO mas não aceito pela source voice. A ocupação é uma observação instantânea e pode mudar imediatamente após a leitura. Os campos independentes não formam uma transação atômica; o snapshot é diagnóstico, não um ponto de sincronização.
 
 ## Estimativa de backlog
 
@@ -38,7 +41,14 @@ A estimativa de high-water aplica a mesma conversão ao maior backlog observado.
 - WASAPI e XAudio2 expõem o mesmo contrato PcmSink::metrics() -> AudioOutputMetrics.
 - O runtime SMS copia o snapshot para atomics de telemetria; a GUI apenas lê esses valores.
 - A thread/callback de áudio não passa a executar lógica de interface, logging, alocação ou controle do Scheduler.
-- A GUI mostra ocupação/capacidade, backlog estimado, high-water, underrun em eventos/frames, overflow em frames/chamadas e frames aceitos/consumidos.
+- A GUI mostra taxa configurada, ocupação/capacidade, backlog estimado, high-water, FIFO underrun em eventos/frames, starvation XAudio2, overflow, flush, perdas em SubmitSourceBuffer e frames aceitos/consumidos.
+
+## Incremento de confiabilidade — 2026-11-08
+
+- O consumidor registra `flushed_frames` ao descartar a fila durante uma transição de epoch; o snapshot é atualizado no worker após Start/Pause/Stop/Reset/Load ROM.
+- XAudio2 propaga o contador de starvation da source voice separadamente dos underruns da FIFO.
+- Falha em `SubmitSourceBuffer` marca o backend como terminal, contabiliza os frames retirados da FIFO e faz novas chamadas `write_pcm` retornarem erro em vez de continuar aceitando PCM sem consumidor ativo.
+- A telemetria terminal é capturada antes do fechamento da sessão para não apagar o diagnóstico.
 
 ## Limites desta entrega
 
