@@ -467,7 +467,7 @@ impl SegaApp {
                                 self.active_menu = None;
                             }
                             if focused {
-                                self.update_keyboard_input(menu_ui, root_context);
+                                self.update_keyboard_input(menu_ui.ctx(), root_context);
                                 actions.input_updated = true;
                             }
                         });
