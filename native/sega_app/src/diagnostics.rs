@@ -131,9 +131,9 @@ fn write_events(
     path: &std::path::Path,
     writer_error: &Mutex<Option<String>>,
 ) {
-    let mut writer = match open_writer(&path) {
+    let mut writer = match open_writer(path) {
         Ok(writer) => writer,
-        Err(error) => { set_writer_error(&writer_error, format!("Falha ao abrir arquivo de log: {error}")); return; }
+        Err(error) => { set_writer_error(writer_error, format!("Falha ao abrir arquivo de log: {error}")); return; }
     };
     let mut bytes_written = writer.get_ref().metadata().map_or(0, |metadata| metadata.len());
 
@@ -148,24 +148,24 @@ fn write_events(
         );
         let line_bytes = u64::try_from(line.len()).unwrap_or(u64::MAX);
         if bytes_written.saturating_add(line_bytes) > MAX_FILE_BYTES {
-            if let Err(error) = writer.flush().and_then(|()| rotate_files(&path)) {
-                set_writer_error(&writer_error, format!("Falha ao girar arquivo de log: {error}"));
+            if let Err(error) = writer.flush().and_then(|()| rotate_files(path)) {
+                set_writer_error(writer_error, format!("Falha ao girar arquivo de log: {error}"));
                 return;
             }
-            writer = match open_writer(&path) {
+            writer = match open_writer(path) {
                 Ok(writer) => writer,
-                Err(error) => { set_writer_error(&writer_error, format!("Falha ao reabrir arquivo de log: {error}")); return; }
+                Err(error) => { set_writer_error(writer_error, format!("Falha ao reabrir arquivo de log: {error}")); return; }
             };
             bytes_written = 0;
         }
         if let Err(error) = writer.write_all(line.as_bytes()) {
-            set_writer_error(&writer_error, format!("Falha ao gravar evento de log: {error}"));
+            set_writer_error(writer_error, format!("Falha ao gravar evento de log: {error}"));
             return;
         }
         bytes_written = bytes_written.saturating_add(line_bytes);
     }
     if let Err(error) = writer.flush() {
-        set_writer_error(&writer_error, format!("Falha ao finalizar arquivo de log: {error}"));
+        set_writer_error(writer_error, format!("Falha ao finalizar arquivo de log: {error}"));
     }
 }
 
