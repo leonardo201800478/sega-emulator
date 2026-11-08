@@ -825,7 +825,7 @@ fn run_wasapi_worker(
             let _ = audio_client.stop_stream();
         }
         if shutdown.load(Ordering::Acquire)
-            || (disconnected && control_failed.load(Ordering::Acquire))
+            || (disconnected && control.failed.load(Ordering::Acquire))
         {
             break;
         }
@@ -936,10 +936,7 @@ impl NativeXAudio2Output {
                     sample_rate,
                     buffer_size,
                     balance,
-                    suspended,
-                    flush_requested,
-                    flush_acknowledged,
-                    control_failed,
+                    control,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
