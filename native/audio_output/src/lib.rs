@@ -235,6 +235,14 @@ pub struct NativeWasapiOutput {
     buffer_size: u32,
     #[cfg(windows)]
     balance: i8,
+    #[cfg(windows)]
+    suspended: Arc<AtomicBool>,
+    #[cfg(windows)]
+    flush_requested: Arc<AtomicBool>,
+    #[cfg(windows)]
+    flush_acknowledged: Arc<AtomicBool>,
+    #[cfg(windows)]
+    control_failed: Arc<AtomicBool>,
 }
 
 impl NativeWasapiOutput {
@@ -274,8 +282,16 @@ impl NativeWasapiOutput {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let suspended = Arc::new(AtomicBool::new(true));
+            let flush_requested = Arc::new(AtomicBool::new(false));
+            let flush_acknowledged = Arc::new(AtomicBool::new(true));
+            let control_failed = Arc::new(AtomicBool::new(false));
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_suspended = Arc::clone(&suspended);
+            let worker_flush_requested = Arc::clone(&flush_requested);
+            let worker_flush_acknowledged = Arc::clone(&flush_acknowledged);
+            let worker_control_failed = Arc::clone(&control_failed);
             let worker = thread::Builder::new()
                 .name("sega-wasapi-output".to_owned())
                 .spawn(move || {
@@ -284,6 +300,10 @@ impl NativeWasapiOutput {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_suspended,
+                        worker_flush_requested,
+                        worker_flush_acknowledged,
+                        worker_control_failed,
                         sample_rate,
                         buffer_size,
                     );
@@ -300,6 +320,10 @@ impl NativeWasapiOutput {
                     sample_rate,
                     buffer_size,
                     balance,
+                    suspended,
+                    flush_requested,
+                    flush_acknowledged,
+                    control_failed,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
@@ -644,6 +668,14 @@ pub struct NativeXAudio2Output {
     buffer_size: u32,
     #[cfg(windows)]
     balance: i8,
+    #[cfg(windows)]
+    suspended: Arc<AtomicBool>,
+    #[cfg(windows)]
+    flush_requested: Arc<AtomicBool>,
+    #[cfg(windows)]
+    flush_acknowledged: Arc<AtomicBool>,
+    #[cfg(windows)]
+    control_failed: Arc<AtomicBool>,
 }
 
 impl NativeXAudio2Output {
@@ -683,8 +715,16 @@ impl NativeXAudio2Output {
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
             let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let suspended = Arc::new(AtomicBool::new(true));
+            let flush_requested = Arc::new(AtomicBool::new(false));
+            let flush_acknowledged = Arc::new(AtomicBool::new(true));
+            let control_failed = Arc::new(AtomicBool::new(false));
             let worker_shutdown = Arc::clone(&shutdown);
             let worker_underruns = Arc::clone(&underruns);
+            let worker_suspended = Arc::clone(&suspended);
+            let worker_flush_requested = Arc::clone(&flush_requested);
+            let worker_flush_acknowledged = Arc::clone(&flush_acknowledged);
+            let worker_control_failed = Arc::clone(&control_failed);
             let worker = thread::Builder::new()
                 .name("sega-xaudio2-output".to_owned())
                 .spawn(move || {
@@ -693,6 +733,10 @@ impl NativeXAudio2Output {
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
+                        worker_suspended,
+                        worker_flush_requested,
+                        worker_flush_acknowledged,
+                        worker_control_failed,
                         sample_rate,
                         buffer_size as usize,
                         queue_blocks,
@@ -710,6 +754,10 @@ impl NativeXAudio2Output {
                     sample_rate,
                     buffer_size,
                     balance,
+                    suspended,
+                    flush_requested,
+                    flush_acknowledged,
+                    control_failed,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
