@@ -60,10 +60,10 @@ Referências: [IAudioClient::Stop](https://learn.microsoft.com/en-us/windows/win
 ### XAudio2
 
 - O controle de voz ocorre exclusivamente na thread do worker XAudio2.
-- Para flush, impedir novas submissões, parar a source voice e limpar a fila.
+- Para flush, impedir novas submissões, aplicar `SetVolume(0)` e chamar `FlushSourceBuffers` sem Stop. O buffer atualmente em reprodução permanece ativo, mas fica silenciado até concluir e entregar `OnBufferEnd`; parar a voz suprimiria callbacks e impediria a barreira de lifetime.
 - `FlushSourceBuffers` pode gerar callbacks fora de ordem; não associar callbacks a reclaim FIFO individual após flush.
 - Buffers submetidos permanecem vivos até que cada `OnBufferEnd` esperado seja observado ou até `DestroyVoice`; callback e estado COM permanecem vivos durante a barreira.
-- Só após a barreira segura a voz pode ser reiniciada e aceitar dados da nova epoch.
+- A voz permanece iniciada e mutada após a barreira; depois do prebuffer, restaurar `SetVolume(1)` antes de submeter os frames da nova epoch. Na criação inicial, a voz só é iniciada após o primeiro prebuffer.
 - O estado de mute/volume precisa ser restaurado antes de iniciar o playback após o prebuffer.
 
 Referências: [FlushSourceBuffers](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2sourcevoice-flushsourcebuffers), [OnBufferEnd](https://learn.microsoft.com/en-us/windows/win32/api/xaudio2/nf-xaudio2-ixaudio2voicecallback-onbufferend), [windows 0.62.2 IXAudio2SourceVoice](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Media/Audio/XAudio2/struct.IXAudio2SourceVoice.html).
