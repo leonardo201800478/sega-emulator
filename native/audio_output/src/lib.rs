@@ -1,5 +1,12 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
+mod pcm_fifo;
+
+pub use pcm_fifo::{
+    PcmFrameConsumer, PcmFrameProducer, PcmFrameQueueError, PcmFrameQueueMetrics,
+    PcmFrameReadReport, PcmFrameWriteReport, StereoFrame, pcm_frame_queue,
+};
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
