@@ -222,9 +222,12 @@ impl Sn76489Core {
         if sample_rate == 0 {
             return Err(PsgError::ZeroSampleRate);
         }
-        sample_rate
+        let output_clock_numerator = sample_rate
             .checked_mul(CLOCK_DIVIDER)
             .ok_or(PsgError::SampleRateTooLarge)?;
+        if output_clock_numerator > clock_hz {
+            return Err(PsgError::SampleRateTooLarge);
+        }
         let capacity = sample_rate
             .checked_mul(SAMPLE_BUFFER_SECONDS)
             .ok_or(PsgError::SampleRateTooLarge)?;
@@ -1006,6 +1009,15 @@ mod tests {
         let (samples, phase) = super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
         assert_eq!(samples, 1);
         assert_eq!(phase, u64::MAX - 16);
+    }
+
+    #[test]
+    fn constructor_rejects_output_rate_above_internal_psg_rate() {
+        assert!(Sn76489::new(1_600, 100).is_ok());
+        assert_eq!(
+            Sn76489::new(1_600, 101).unwrap_err(),
+            super::PsgError::SampleRateTooLarge
+        );
     }
 
     #[test]
