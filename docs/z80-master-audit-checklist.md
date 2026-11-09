@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota após PR #687:** `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09). PR #687 atualizou scorecard, matriz e checklist após o fechamento de F-037; nenhuma alteração de runtime.
+**Baseline remota após PR #692:** `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09). PR #692 integrou o harness externo SingleStepTests para 32.000 vetores F-037; o histórico anterior permanece preservado.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -103,16 +103,16 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #680 integrou INC/DEC e LD imediato; PR #684 fechou F-036 LD r,r' register-only; PR #686 fechou F-037 ALU. F-028 continua AUDIT_PARTIAL até a auditoria residual de prefixos, exceções, estados e timing. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | F-037: 32.000 vetores externos PASS. A divergência Q/previous-Q em DD/FD antes de SCF/CCF foi reproduzida: PR #695, run #42624833386, DD 37 0001 esperado F=65 e obtido F=45. O teste falhou antes de alcançar FD 3F. PR de correção Q/previous-Q contém correção em validação; preservar E4A/E4B e exceções 66/6E/74/75. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
 | F-032 | Prefixos DD/FD ignorados antes de BASE/CB/ED | AUDIT_PARTIAL | Verificar não refetch, sem substituição indevida e custo prefixado. |
-| F-033 | Encodings ED reservados e fallback ED-NOP | GAP_CONFIRMED | Auditoria estática reporta 78 bytes explícitos e 178 em fallback. Confirmar cada byte contra perfil e referência; não presumir que smoke test prova semântica. |
-| F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | NOT_AUDITED | Classificar explicitamente documentado, alias, não documentado, ignorado ou reservado. |
+| F-033 | Encodings ED reservados e fallback ED-NOP | GAP_CONFIRMED | O executor atômico reconhece 78 codificações e aplica fallback 8T às outras 178; testes atuais dos 178 são do caminho atômico. No microsequenciador, execute_ed_register_control termina em UnsupportedOpcode para os mesmos bytes. Falta reproduzir no caminho retomável e fechar o fallback NMOS sem ampliar suporte a clones. Matriz completa em docs/z80-ed-opcode-matrix.md. |
+| F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | AUDIT_PARTIAL | Primeira classificação ED identifica aliases NEG, RETN/RETI e IM, ED70 indefinido e ED71 não documentado; falta matriz completa de todos os prefixos, distinção RETI/RETN observável e resolução de variantes. Não inventar semântica nem ampliar hardware. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
 | F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`. CI #42614755935 PASS no HEAD exato `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`: Z80 focused, docs hygiene e agregador PASS; D3D12/áudio/SDL3/workspace SKIPPED. 48 combinações, oracle de registradores, comparação atômica, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. As exceções 66/6E/74/75 permanecem no caminho E4A. |
-| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | CLOSED | PR #686 integrada em `e7e37290e1baa9119326e9e7213f77cadcc37f5e`; HEAD `a0937e8fa1bb4547d1ee53a9e3431392a2fa443a`, CI #42619522899 PASS. 10.816 casos diferenciais, vetores fixos independentes para flags/X/Y/CP, carry-in, Q/previous-Q, WAIT nos dois M1, snapshot/restore e prefixos repetidos. Nenhum ciclo interno artificial; fonte código 6 preservada no caminho E4B. Corpus externo SingleStepTests ainda não foi integrado à suíte.
+| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | CLOSED | PR #686 merge SHA e testes internos preservados. Validação externa adicional: PR #692, HEAD `1606556814a8746a445d3ad32fc948ab97f0fde5`, CI #42622828177 PASS; 32 fixtures SingleStepTests × 1.000 = 32.000/32.000 no microsequenciador retomável. Merge SHA/main `1304bc0438e3ea333719d0ba3a495e2db9089da3`. Corpus Ares-derived; não é prova de silício. |
 
 ## 4. Checklist de estado arquitetural e flags
 
@@ -123,7 +123,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | S-003 | SP/PC/I/R | AUDIT_PARTIAL | Wrap, refresh e efeitos de fetch/interrupt. |
 | S-004 | IFF1/IFF2, IM e EI delay | AUDIT_PARTIAL | Transições, snapshot e interrupções nas fronteiras. |
 | S-005 | WZ/MEMPTR | AUDIT_PARTIAL | Tabela por família com vetores independentes. |
-| S-006 | Q/previous-Q | AUDIT_PARTIAL | Regras por instrução que altera/não altera flags. |
+| S-006 | Q/previous-Q | AUDIT_PARTIAL | Divergência DD/FD→SCF/CCF reproduzida em DD 37 0001 (esperado F=65, obtido F=45; run #42624833386). FD 3F está incluído, mas não foi alcançado pelo fail-fast. Correção nos dois executores e snapshot/restore em PR de correção Q/previous-Q, CI pendente. |
 | S-007 | S/Z/H/PV/N/C | AUDIT_PARTIAL | Fórmulas e fronteiras por família. |
 | S-008 | X/Y e flags não documentadas | AUDIT_PARTIAL | Proveniência NMOS/CMOS e vetores discriminantes. |
 | S-009 | Preservação de flags | NOT_AUDITED | Verificar instruções que preservam total ou parcialmente F. |
@@ -319,3 +319,13 @@ A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
 - Scorecard e matriz DD/FD tinham cabeçalhos com baselines antigas apesar de conterem os fechamentos #684/#686 em seções posteriores.
 - Esta PR atualiza os cabeçalhos para a baseline corrente, mantendo as baselines anteriores como histórico e sem alegar reexecução de testes antigos.
 - Estado semântico: F-036 CLOSED; F-037 CLOSED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## Atualização de evidências — PR #692 (2026-11-09)
+
+- Baseline main: `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
+- F-037: 32.000 vetores SingleStepTests PASS no HEAD `1606556814a8746a445d3ad32fc948ab97f0fde5`, run `4262282817`.
+- F-028: nova hipótese de divergência Q/previous-Q documentada; sem correção implementada antes de reproduzir.
+- F-033: divergência de cobertura entre executor atômico e microsequenciador identificada; teste retomável pendente.
+- F-034: classificação inicial ED iniciada; inventário global permanece parcial.
+- E7 permanece IN_PROGRESS. E8/ZEXDOC/ZEXALL permanece BLOCKED.

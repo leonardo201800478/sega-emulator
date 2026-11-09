@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09; PRs #686 e #687 integradas). A PR #687 atualizou o ledger após o fechamento F-037; esta baseline não reexecuta as suítes antigas.
+**Baseline documental atual:** `main` = `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada). A PR #692 acrescentou validação externa de 32.000 vetores DD/FD ALU; a evidência está registrada na seção 22.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -262,3 +262,32 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - Run intermediário #42615731297 FAIL em rustfmt foi corrigido antes do HEAD final.
 - F-036 CLOSED; F-037 CLOSED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 - Pendência de evidência: integrar vetores externos (SingleStepTests Z80, variante NMOS e licença MIT) à suíte diferencial, sem tratar o executor atômico como oracle independente.
+
+
+## 22. Validação externa SingleStepTests F-037 — 2026-11-09
+
+**Main após integração:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`
+**PR:** #692 — merge squash
+**HEAD da PR validado:** `1606556814a8746a445d3ad32fc948ab97f0fde5`
+**CI:** run `4262282817` — PASS nos checks aplicáveis
+**Upstream:** SingleStepTests/z80, revisão `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
+
+- 32 fixtures: DD/FD × 16 segundos bytes.
+- 1.000 vetores por fixture; **32.000/32.000 PASS**, sem amostragem.
+- Executados no microsequenciador retomável em `native/z80_cpu/tests/singlestep_indexed_alu.rs`.
+- Comparados registradores principais/alternativos, F, Q/P, PC, R, WZ, IFF, IM, EI, IX/IY e RAM.
+- Duas requisições lógicas OpcodeFetch e 8 T-states agregados conferidos.
+- Os traces de barramento não foram tratados como equivalência elétrica de pinos.
+
+**Limite de proveniência:** o README upstream informa que os vetores foram traduzidos do núcleo Z80 do Ares e corrigidos. O corpus é externo ao repositório, mas não é independente do Ares nem constitui prova direta de silício.
+
+**Estado após integração:** F-036 CLOSED; F-037 CLOSED com validação externa complementar; F-028 AUDIT_PARTIAL; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+## 23. F-028 — reprodução da divergência Q/previous-Q — 2026-11-09
+
+- Reprodução: PR #695, workflow run #42624833386.
+- Fixture DD 37 0001: esperado F=0x65; obtido F=0x45. **FAIL reproduzido** no microsequenciador retomável.
+- A execução interrompeu no primeiro mismatch; FD 3F está presente no corpus, mas não foi alcançado.
+- O problema decorre da preservação de q_previous através de DD/FD antes de SCF/CCF no perfil Zilog NMOS.
+- PR de correção Q/previous-Q limpa q_previous nos caminhos atômico e retomável, atualiza o teste interno e valida snapshot/restore após o prefixo. CI ainda pendente nesta baseline documental.
+- F-028 permanece AUDIT_PARTIAL até CI PASS e auditoria das demais exceções/variantes. E7 IN_PROGRESS; E8 BLOCKED.

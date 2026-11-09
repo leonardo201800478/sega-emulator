@@ -1,7 +1,7 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
-**Status:** PR #691; validação externa pendente no HEAD desta branch.
-**Sega Emulator baseline:** `95dacafb083847991b7fbc59bcfa099e8f297685`.
+**Status:** integrada pela PR #692; validação externa PASS.
+**Sega Emulator main após merge:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
 **Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).
 **Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).
 **Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.
@@ -77,3 +77,24 @@ Os valores abaixo são os Git blob SHA-1 retornados pela API de conteúdo do Git
 - A comparação dos traces é deliberadamente limitada às duas operações lógicas M1 e ao total de 8 T-states; sinais elétricos e amostras de pinos não são declarados equivalentes.
 - Esta suíte cobre inicialmente as 32.000 combinações fornecidas para F-037. Prefixos repetidos/alternados, SCF/CCF, exceções de H/L e as demais famílias serão tratados em matrizes e incrementos separados.
 - O resultado desta PR só poderá ser marcado PASS depois do CI no HEAD exato.
+
+
+## Resultado de integração
+
+- PR #692: MERGED.
+- HEAD validado: `1606556814a8746a445d3ad32fc948ab97f0fde5`.
+- Workflow run: `4262282817` — checks aplicáveis PASS.
+- Merge SHA: `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
+- Teste: `all_32000_dd_fd_indexed_half_register_alu_vectors_match_resumable_z80` — **32.000/32.000 PASS**.
+- A suíte não compara traces elétricos de pinos e não é prova direta de hardware.
+
+## Extensão F-028 — DD/FD SCF/CCF e Q/previous-Q
+
+Fixtures adicionais no mesmo commit upstream:
+
+| Fixture | Blob SHA-1 | Vetores |
+|---|---|---:|
+| DD 37 (SCF) | `c68369350b5a47ebb481d35a7b9e4dd86e292716` | 1.000 |
+| FD 3F (CCF) | `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345` | 1.000 |
+
+A execução de reprodução na PR #695, run #42624833386, falhou no primeiro vetor DD 37: F esperado 0x65, obtido 0x45. O teste foi fail-fast e não alcançou FD 3F. A PR de correção Q/previous-Q adiciona a correção nos dois executores e a validação de snapshot/restore; resultado CI ainda pendente.

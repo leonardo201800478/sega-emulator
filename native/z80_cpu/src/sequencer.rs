@@ -3239,6 +3239,12 @@ impl Z80MicroSequencer {
         let previous_prefix = self.opcode;
         let index_opcode_class = match self.prefix_state.transition(opcode) {
             Z80PrefixTransition::Continue(next_state) => {
+                // A DD/FD prefix is the previous non-flag-modifying instruction
+                // for Zilog NMOS SCF/CCF X/Y flag behavior. Repeated prefixes
+                // keep this latch cleared across resumable boundaries.
+                if matches!(next_state, Z80PrefixState::Index(_)) {
+                    self.q_previous = 0;
+                }
                 self.prefix_state = next_state;
                 self.opcode = Some(opcode);
                 let next_mcycle_index = self

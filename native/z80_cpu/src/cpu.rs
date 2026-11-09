@@ -892,6 +892,9 @@ impl Z80 {
     /// affect an instruction are ignored while retaining their extra M1 cost.
     fn execute_indexed<B: CpuBus>(&mut self, bus: &mut B, prefix: u8) -> Result<u32, CpuError> {
         let mut active_prefix = prefix;
+        // On Zilog NMOS, DD/FD is the previous non-flag-modifying instruction
+        // for SCF/CCF's undocumented X/Y flag calculation.
+        self.q_previous = 0;
         let mut opcode = self.fetch_opcode(bus);
         let mut extra_prefix_cycles = 0_u32;
         while opcode == 0xDD || opcode == 0xFD {
