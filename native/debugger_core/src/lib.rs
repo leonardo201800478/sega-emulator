@@ -279,9 +279,15 @@ impl<T: DebugTarget> DebugSession<T> {
             let address = event
                 .address
                 .map_or_else(|| "----".to_owned(), |v| format!("{v:04X}"));
-            let data = event
-                .data
-                .map_or_else(|| "--".to_owned(), |v| format!("{v:02X}"));
+            let cartridge_access = event.operation == "OpcodeFetch"
+                || event.address.is_some_and(|address| address < 0xC000);
+            let data = if cartridge_access {
+                "--".to_owned()
+            } else {
+                event
+                    .data
+                    .map_or_else(|| "--".to_owned(), |v| format!("{v:02X}"))
+            };
             let _ = writeln!(
                 output,
                 "{} {} {} {} wait={} {}",
@@ -331,7 +337,7 @@ mod tests {
                 timestamp_ticks: u128::from(self.pc),
                 operation: "READ".to_owned(),
                 address: Some(self.pc),
-                data: Some(0),
+                data: Some(0xA5),
                 wait_tstates: Some(0),
                 detail: String::new(),
             });
@@ -374,6 +380,28 @@ mod tests {
         assert_eq!(session.trace().len(), 2);
         assert_eq!(session.trace().front().unwrap().timestamp_ticks, 3);
         assert_eq!(session.trace().back().unwrap().timestamp_ticks, 4);
+    }
+
+    #[test]
+    fn diagnostic_report_redacts_cartridge_bytes_and_preserves_ram_diagnostics() {
+        let target = FakeTarget {
+            pc: 0x1233,
+            trace: Vec::new(),
+        };
+        let mut session = DebugSession::new(target, 8);
+        session.step_instruction().unwrap();
+        let report = session.diagnostic_report();
+        assert!(report.contains("READ 1234 --"));
+        assert!(!report.contains("1234 A5"));
+
+        let target = FakeTarget {
+            pc: 0xC000,
+            trace: Vec::new(),
+        };
+        let mut session = DebugSession::new(target, 8);
+        session.step_instruction().unwrap();
+        let report = session.diagnostic_report();
+        assert!(report.contains("READ C001 A5"));
     }
 
     #[test]
