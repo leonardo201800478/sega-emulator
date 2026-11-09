@@ -1,7 +1,9 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -28,7 +30,9 @@ const MAX_RECENT_ROMS: usize = 10;
 const MENU_BAR_HEIGHT: f32 = 32.0;
 
 fn record_ui_diagnostic(event: &'static str, details: impl std::fmt::Display) {
-    sega_observability::tracing::debug!(target: "sega::ui::menu", event, details = %details);
+    if current_logging().is_some_and(|logging| logging.is_enabled()) {
+        sega_observability::tracing::debug!(target: "sega::ui::menu", event, details = %details);
+    }
 }
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
@@ -57,6 +61,10 @@ pub struct SegaApp {
     native_viewport: NativeViewportState,
     diagnostics_enabled: bool,
     diagnostics_error: Option<String>,
+    fps_overlay_enabled: bool,
+    fps_counter: FpsCounter,
+    fps_shared_value: Arc<AtomicU32>,
+    theme_initialized: bool,
 }
 
 impl Default for SegaApp {
@@ -86,6 +94,10 @@ impl Default for SegaApp {
             native_viewport: NativeViewportState::default(),
             diagnostics_enabled: false,
             diagnostics_error: None,
+            fps_overlay_enabled: true,
+            fps_counter: FpsCounter::default(),
+            fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+            theme_initialized: false,
         }
     }
 }
@@ -109,11 +121,13 @@ impl AspectRatioMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TopLevelMenu {
+    System,
     File,
     Video,
     Audio,
+    Controls,
     Options,
-    Diagnostics,
+    Debug,
 }
 
 fn close_menu_if_current(
@@ -129,22 +143,66 @@ fn close_menu_if_current(
 impl TopLevelMenu {
     const fn title(self) -> &'static str {
         match self {
+            Self::System => "Sistema",
             Self::File => "Arquivo",
             Self::Video => "Vídeo",
-            Self::Audio => "Som",
+            Self::Audio => "Áudio",
+            Self::Controls => "Controles",
             Self::Options => "Opções",
-            Self::Diagnostics => "Diagnostics",
+            Self::Debug => "DEBUG",
         }
     }
 
     fn minimum_size(self) -> egui::Vec2 {
         match self {
+            Self::System => egui::vec2(300.0, 260.0),
             Self::File => egui::vec2(420.0, 280.0),
-            Self::Video => egui::vec2(240.0, 150.0),
-            Self::Audio => egui::vec2(300.0, 240.0),
-            Self::Options => egui::vec2(520.0, 480.0),
-            Self::Diagnostics => egui::vec2(640.0, 540.0),
+            Self::Video => egui::vec2(320.0, 220.0),
+            Self::Audio => egui::vec2(340.0, 280.0),
+            Self::Controls => egui::vec2(460.0, 420.0),
+            Self::Options => egui::vec2(440.0, 420.0),
+            Self::Debug => egui::vec2(640.0, 540.0),
         }
+    }
+}
+
+const FPS_SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
+
+#[derive(Debug)]
+struct FpsCounter {
+    last_sequence: u64,
+    last_sample: Instant,
+    fps: f32,
+}
+
+impl Default for FpsCounter {
+    fn default() -> Self {
+        Self {
+            last_sequence: 0,
+            last_sample: Instant::now(),
+            fps: 0.0,
+        }
+    }
+}
+
+impl FpsCounter {
+    fn reset(&mut self, sequence: u64, now: Instant) {
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        self.fps = 0.0;
+    }
+
+    fn update(&mut self, sequence: u64, now: Instant) -> bool {
+        let elapsed = now.saturating_duration_since(self.last_sample);
+        if elapsed < FPS_SAMPLE_INTERVAL {
+            return false;
+        }
+        let frames = u32::try_from(sequence.saturating_sub(self.last_sequence))
+            .unwrap_or(u32::MAX);
+        self.fps = f32::from(frames) / elapsed.as_secs_f32();
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        true
     }
 }
 
@@ -291,10 +349,16 @@ impl SegaApp {
     /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
-        ui.vertical(|ui| {
-            self.render_header_controls(ui);
-            viewport_rect = self.render_game_area(ui);
-        });
+        egui::Frame::new()
+            .fill(egui::Color32::from_rgb(17, 21, 29))
+            .inner_margin(12.0)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                ui.vertical(|ui| {
+                    self.render_header_controls(ui);
+                    viewport_rect = self.render_game_area(ui);
+                });
+            });
         viewport_rect
     }
 
@@ -338,6 +402,7 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
+                fps_overlay_enabled: &mut self.fps_overlay_enabled,
             };
             render_header(ui, &mut header_state);
         }
@@ -495,6 +560,7 @@ impl SegaApp {
                                     diagnostics_enabled: self.diagnostics_enabled,
                                     diagnostics_command: &mut actions.diagnostics_command,
                                     diagnostics_error: self.diagnostics_error.as_deref(),
+                                    fps_overlay_enabled: &mut self.fps_overlay_enabled,
                                 };
                                 render_menu_content(menu_ui, menu, &mut header_state);
 
@@ -598,6 +664,13 @@ impl SegaApp {
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                if self.diagnostics_enabled
+                    && let Some(worker) = self.native_viewport.worker.as_ref()
+                {
+                    worker.set_diagnostics_enabled(true);
+                }
+                self.fps_counter.reset(0, Instant::now());
+                self.fps_shared_value.store(0.0_f32.to_bits(), Ordering::Relaxed);
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
@@ -637,6 +710,9 @@ impl SegaApp {
                         event = "diagnostics_enabled",
                         session_id = %logging.session().session_id,
                     );
+                    if let Some(worker) = self.native_viewport.worker.as_ref() {
+                        worker.set_diagnostics_enabled(true);
+                    }
                     self.diagnostics_enabled = true;
                     self.diagnostics_error = None;
                 }
@@ -650,6 +726,9 @@ impl SegaApp {
         } else {
             if let Some(logging) = current_logging() {
                 let _ = logging.set_enabled(false);
+            }
+            if let Some(worker) = self.native_viewport.worker.as_ref() {
+                worker.set_diagnostics_enabled(false);
             }
             self.diagnostics_enabled = false;
             self.diagnostics_error = None;
@@ -856,6 +935,72 @@ impl SegaApp {
                 egui::ViewportCommand::Fullscreen(fullscreen),
             );
         }
+    }
+
+    fn render_fps_overlay(&mut self, context: &egui::Context, viewport_rect: egui::Rect) {
+        if !self.fps_overlay_enabled || !self.native_viewport.video_attached {
+            return;
+        }
+
+        let now = Instant::now();
+        if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL {
+            let presented_sequence = self
+                .native_viewport
+                .worker
+                .as_ref()
+                .map_or(0, SmsTemporalWorker::video_last_presented_sequence);
+            if self.fps_counter.update(presented_sequence, now) {
+                self.fps_shared_value.store(
+                    self.fps_counter.fps.to_bits(),
+                    Ordering::Relaxed,
+                );
+            }
+        }
+
+        let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) else {
+            return;
+        };
+        let overlay_size = egui::vec2(104.0, 30.0);
+        let position = root_bounds.min
+            + viewport_rect.right_bottom().to_vec2()
+            - overlay_size
+            - egui::vec2(12.0, 12.0);
+        let fps_value = Arc::clone(&self.fps_shared_value);
+        let builder = egui::ViewportBuilder::default()
+            .with_title("Sega Emulator FPS")
+            .with_position(position)
+            .with_inner_size(overlay_size)
+            .with_min_inner_size(overlay_size)
+            .with_max_inner_size(overlay_size)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_taskbar(false)
+            .with_active(false)
+            .with_transparent(true)
+            .with_mouse_passthrough(true)
+            .with_has_shadow(false);
+
+        context.show_viewport_deferred(
+            egui::ViewportId::from_hash_of("sega-fps-overlay"),
+            builder,
+            move |overlay_ui, _class| {
+                egui::Frame::NONE.show(overlay_ui, |overlay_ui| {
+                    overlay_ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |overlay_ui| {
+                            let fps = f32::from_bits(fps_value.load(Ordering::Relaxed));
+                            overlay_ui.label(
+                                egui::RichText::new(format!("{fps:.0} FPS"))
+                                    .color(egui::Color32::from_rgb(170, 255, 170))
+                                    .strong()
+                                    .size(18.0),
+                            );
+                        },
+                    );
+                });
+                overlay_ui.ctx().request_repaint_after(Duration::from_millis(250));
+            },
+        );
     }
 
     fn update_native_viewport(
@@ -1072,6 +1217,13 @@ impl Drop for SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
+        if !self.theme_initialized {
+            let mut visuals = egui::Visuals::dark();
+            visuals.panel_fill = egui::Color32::from_rgb(17, 21, 29);
+            visuals.window_fill = egui::Color32::from_rgb(25, 30, 40);
+            context.set_visuals(visuals);
+            self.theme_initialized = true;
+        }
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
@@ -1095,6 +1247,11 @@ impl eframe::App for SegaApp {
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+        self.render_fps_overlay(&context, viewport_rect);
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
     }
 }
 
@@ -1300,18 +1457,21 @@ struct HeaderState<'a> {
     diagnostics_enabled: bool,
     diagnostics_command: &'a mut Option<bool>,
     diagnostics_error: Option<&'a str>,
+    fps_overlay_enabled: &'a mut bool,
 }
 
 /// Render the menu bar. Dropdown content is hosted by a native child viewport.
 fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        ui.small("SEGA · SMS");
+        ui.strong("SEGA EMULATOR");
+        top_level_menu_button(ui, "Sistema", TopLevelMenu::System, state);
         top_level_menu_button(ui, "Arquivo", TopLevelMenu::File, state);
         top_level_menu_button(ui, "Vídeo", TopLevelMenu::Video, state);
-        top_level_menu_button(ui, "Som", TopLevelMenu::Audio, state);
+        top_level_menu_button(ui, "Áudio", TopLevelMenu::Audio, state);
+        top_level_menu_button(ui, "Controles", TopLevelMenu::Controls, state);
         top_level_menu_button(ui, "Opções", TopLevelMenu::Options, state);
-        top_level_menu_button(ui, "Diagnostics", TopLevelMenu::Diagnostics, state);
+        top_level_menu_button(ui, "DEBUG", TopLevelMenu::Debug, state);
     });
     ui.separator();
 }
@@ -1322,7 +1482,13 @@ fn top_level_menu_button(
     menu: TopLevelMenu,
     state: &mut HeaderState<'_>,
 ) {
-    let response = ui.button(label);
+    let active = *state.active_menu == Some(menu);
+    let fill = if active {
+        egui::Color32::from_rgb(47, 61, 82)
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let response = ui.add(egui::Button::new(label).fill(fill));
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
     let switch_by_hover =
@@ -1344,11 +1510,18 @@ fn top_level_menu_button(
 
 fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut HeaderState<'_>) {
     match menu {
+        TopLevelMenu::System => render_system_menu(ui),
         TopLevelMenu::File => render_file_menu(ui, state),
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
+        TopLevelMenu::Controls => render_controls_menu(
+            ui,
+            state.devices,
+            state.selected_gamepad,
+            state.input_error,
+        ),
         TopLevelMenu::Options => render_options_menu(ui, state),
-        TopLevelMenu::Diagnostics => render_runtime_status(
+        TopLevelMenu::Debug => render_runtime_status(
             ui,
             state.viewport,
             state.diagnostics_enabled,
@@ -1450,7 +1623,21 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 }
 
 /// Render display aspect-ratio selection.
+fn render_system_menu(ui: &mut egui::Ui) {
+    ui.label("Sistema ativo");
+    ui.add_enabled(false, egui::Button::new("Sega Master System  ·  ativo"));
+    ui.separator();
+    ui.label("Outros sistemas");
+    for system in ["SG-1000", "Game Gear", "Mega Drive / Genesis", "Sega CD", "32X"] {
+        ui.add_enabled(
+            false,
+            egui::Button::new(format!("{system}  ·  não integrado nesta interface")),
+        );
+    }
+}
+
 fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.label("Proporção da imagem");
     ui.radio_value(
         state.aspect_ratio,
         AspectRatioMode::FourThree,
@@ -1458,6 +1645,42 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     );
     ui.radio_value(state.aspect_ratio, AspectRatioMode::OneToOne, "1:1");
     ui.radio_value(state.aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
+    ui.separator();
+    ui.checkbox(state.fps_overlay_enabled, "Exibir FPS no canto da tela");
+    ui.small("Contagem baseada nos frames apresentados pelo D3D12.");
+}
+
+fn render_controls_menu(
+    ui: &mut egui::Ui,
+    devices: &[DeviceDescriptor],
+    selected: &mut Option<DeviceId>,
+    error: Option<&str>,
+) {
+    ui.heading("Dispositivo de entrada");
+    render_input_controls(ui, devices, selected, error);
+    ui.separator();
+    ui.heading("Teclado");
+    egui::Grid::new("sms_keyboard_bindings")
+        .num_columns(2)
+        .show(ui, |ui| {
+            for (action, key) in [
+                ("Direcional", "Setas"),
+                ("Botão 1", "Z"),
+                ("Botão 2", "X"),
+                ("Solicitar NMI", "P"),
+                ("Iniciar", "F5"),
+                ("Pausar", "F6"),
+                ("Parar", "F7"),
+                ("Reset", "F8"),
+                ("Avançar um quadro", "F9"),
+                ("Tela cheia", "F11"),
+            ] {
+                ui.label(action);
+                ui.monospace(key);
+                ui.end_row();
+            }
+        });
+    ui.small("O remapeamento de teclas ainda não está implementado.");
 }
 
 /// Render audio output configuration without consuming permanent viewport space.
@@ -1514,22 +1737,19 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         *state.fullscreen_requested = Some(fullscreen);
     }
     ui.separator();
-    ui.menu_button("Região / padrão de vídeo", |ui| {
-        ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
-        ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
-        ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
-        ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
-    });
+    ui.label("Região do Master System");
+    ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
+    ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
+    ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
+    ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
+    ui.small("A região é aplicada ao carregar uma ROM.");
     ui.menu_button("Execução", |ui| {
         render_machine_controls(ui, state.viewport, state.machine_command);
     });
-    ui.menu_button("Controles", |ui| {
-        render_input_controls(ui, state.devices, state.selected_gamepad, state.input_error);
-        ui.separator();
-        ui.small("Jogo: setas / Z / X · P solicita NMI");
-        ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
-        ui.small("F8 reset · F9 quadro · F11 tela cheia");
-        ui.small("Gamepad: direcional / analógico · A / B · Start");
+    ui.small("Região selecionada: aplicada ao carregar a próxima ROM.");
+    ui.separator();
+    ui.menu_button("Execução", |ui| {
+        render_machine_controls(ui, state.viewport, state.machine_command);
     });
 }
 
@@ -1646,16 +1866,16 @@ fn render_runtime_status(
 ) {
     let mut enabled = diagnostics_enabled;
     if ui
-        .checkbox(&mut enabled, "Ativar coleta de diagnóstico")
-        .on_hover_text("Desligado por padrão. A coleta usa o writer assíncrono compartilhado.")
+        .checkbox(&mut enabled, "Ativar DEBUG e coleta de dados")
+        .on_hover_text("Desativado por padrão. Habilita logs e métricas diagnósticas opcionais.")
         .changed()
     {
         *diagnostics_command = Some(enabled);
     }
     ui.label(if diagnostics_enabled {
-        "Coleta ativa — gravação assíncrona"
+        "DEBUG ATIVO — coleta diagnóstica habilitada"
     } else {
-        "Coleta desativada — nenhum diagnóstico gravado"
+        "DEBUG DESATIVADO — logs e métricas opcionais suspensos"
     });
     if let Some(error) = diagnostics_error {
         ui.colored_label(egui::Color32::RED, error);
@@ -1663,7 +1883,11 @@ fn render_runtime_status(
     ui.separator();
     ui.label(format!("Estado: {}", viewport.status()));
     if let Some(worker) = viewport.worker.as_ref() {
-        render_runtime_telemetry(ui, worker);
+        if diagnostics_enabled {
+            render_runtime_telemetry(ui, worker);
+        } else {
+            ui.weak("As métricas detalhadas não são coletadas enquanto DEBUG estiver desligado.");
+        }
         render_output_errors(ui, worker);
     }
 }
@@ -1896,17 +2120,36 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::SegaApp;
+    use super::{FpsCounter, SegaApp};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn diagnostics_collection_is_opt_in_by_default() {
         let app = SegaApp::default();
         assert!(!app.diagnostics_enabled);
         assert!(app.diagnostics_error.is_none());
+    }
+
+    #[test]
+    fn fps_counter_ignores_short_sampling_windows() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(10, now);
+        assert!(!counter.update(20, now + Duration::from_millis(250)));
+        assert_eq!(counter.fps, 0.0);
+    }
+
+    #[test]
+    fn fps_counter_uses_presented_frame_delta() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, now);
+        assert!(counter.update(160, now + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
     }
 
     #[test]

@@ -6,7 +6,9 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
+#[cfg(test)]
+use std::sync::Condvar;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -68,6 +70,7 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
 #[derive(Debug, Default)]
 struct WorkerTelemetry {
     running: AtomicBool,
+    diagnostics_enabled: AtomicBool,
     frame_number: AtomicU64,
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
@@ -88,12 +91,14 @@ struct WorkerTelemetry {
     video_last_published_sequence: AtomicU64,
     video_replaced_frames: AtomicU64,
     runtime_error: Mutex<Option<String>>,
+    #[cfg(test)]
     frame_signal: (Mutex<u64>, Condvar),
 }
 
 impl WorkerTelemetry {
     fn set_frame_number(&self, frame_number: u64) {
         self.frame_number.store(frame_number, Ordering::Release);
+        #[cfg(test)]
         if let Ok(mut observed) = self.frame_signal.0.lock() {
             *observed = frame_number;
             self.frame_signal.1.notify_all();
@@ -118,7 +123,35 @@ impl WorkerTelemetry {
         }
     }
 
+    fn set_diagnostics_enabled(&self, enabled: bool) {
+        self.diagnostics_enabled.store(enabled, Ordering::Release);
+        if !enabled {
+            self.total_instructions.store(0, Ordering::Release);
+            self.video_replaced_frames.store(0, Ordering::Release);
+            self.audio_underruns.store(0, Ordering::Release);
+            self.audio_dropped_blocks.store(0, Ordering::Release);
+            self.audio_sample_rate_hz.store(0, Ordering::Release);
+            self.audio_queue_capacity_frames.store(0, Ordering::Release);
+            self.audio_queue_queued_frames.store(0, Ordering::Release);
+            self.audio_queue_high_water_frames.store(0, Ordering::Release);
+            self.audio_accepted_frames.store(0, Ordering::Release);
+            self.audio_consumed_frames.store(0, Ordering::Release);
+            self.audio_dropped_frames.store(0, Ordering::Release);
+            self.audio_underrun_frames.store(0, Ordering::Release);
+            self.audio_flushed_frames.store(0, Ordering::Release);
+            self.audio_endpoint_starvation_events.store(0, Ordering::Release);
+            self.audio_submission_failed_frames.store(0, Ordering::Release);
+        }
+    }
+
+    fn diagnostics_enabled(&self) -> bool {
+        self.diagnostics_enabled.load(Ordering::Acquire)
+    }
+
     fn set_audio_metrics(&self, metrics: AudioOutputMetrics) {
+        if !self.diagnostics_enabled() {
+            return;
+        }
         self.audio_underruns
             .store(metrics.underrun_events, Ordering::Release);
         self.audio_dropped_blocks
@@ -266,6 +299,11 @@ impl SmsTemporalWorker {
 
     pub fn load_rom(&self, rom: Vec<u8>) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::LoadRom(rom, reply))
+    }
+
+    /// Enable or disable optional diagnostic telemetry without changing emulation.
+    pub fn set_diagnostics_enabled(&self, enabled: bool) {
+        self.telemetry.set_diagnostics_enabled(enabled);
     }
 
     pub fn reset(&self) -> Result<(), String> {
@@ -594,9 +632,11 @@ fn execute_frame(
     let step_frame_elapsed = step_started.elapsed();
     let machine_time_end = machine.now().ticks();
     let machine_time_delta = machine_time_end.saturating_sub(machine_time_start);
-    telemetry
-        .total_instructions
-        .fetch_add(instructions as u64, Ordering::AcqRel);
+    if telemetry.diagnostics_enabled() {
+        telemetry
+            .total_instructions
+            .fetch_add(instructions as u64, Ordering::AcqRel);
+    }
     telemetry.set_frame_number(machine.frame_number());
 
     *video_sequence = video_sequence
@@ -620,11 +660,13 @@ fn execute_frame(
                 telemetry
                     .video_last_published_sequence
                     .store(*video_sequence, Ordering::Release);
-                match mailbox.replaced_frames() {
-                    Ok(replaced) => telemetry
-                        .video_replaced_frames
-                        .store(replaced, Ordering::Release),
-                    Err(error) => video_error = Some(error.to_string()),
+                if telemetry.diagnostics_enabled() {
+                    match mailbox.replaced_frames() {
+                        Ok(replaced) => telemetry
+                            .video_replaced_frames
+                            .store(replaced, Ordering::Release),
+                        Err(error) => video_error = Some(error.to_string()),
+                    }
                 }
             }
             Err(error) => video_error = Some(error),
@@ -648,14 +690,18 @@ fn execute_frame(
     match audio_result {
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                if telemetry.diagnostics_enabled() {
+                    telemetry.set_audio_metrics(session.metrics());
+                }
             }
         }
         Some(Err(error)) => {
             if let Some(mut failed_session) = audio_session.take() {
                 // Preserve the backend's terminal counters before close drops
                 // its producer endpoint and makes queue occupancy unavailable.
-                telemetry.set_audio_metrics(failed_session.metrics());
+                if telemetry.diagnostics_enabled() {
+                    telemetry.set_audio_metrics(failed_session.metrics());
+                }
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
@@ -756,7 +802,9 @@ fn worker_loop(
                         if let Err(error) = session.suspend_and_flush() {
                             telemetry.set_audio_error(Some(error));
                         }
-                        telemetry.set_audio_metrics(session.metrics());
+                        if telemetry.diagnostics_enabled() {
+                            telemetry.set_audio_metrics(session.metrics());
+                        }
                     }
                 }
                 if running && !frame_wait.is_zero() {
@@ -826,7 +874,9 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.resume());
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                if telemetry.diagnostics_enabled() {
+                    telemetry.set_audio_metrics(session.metrics());
+                }
             }
             match result {
                 Ok(()) => {
@@ -847,7 +897,9 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.suspend_and_flush());
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                if telemetry.diagnostics_enabled() {
+                    telemetry.set_audio_metrics(session.metrics());
+                }
             }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
@@ -864,7 +916,9 @@ fn handle_command(
                     Ok(())
                 });
                 if let Some(session) = audio_session.as_ref() {
-                    telemetry.set_audio_metrics(session.metrics());
+                    if telemetry.diagnostics_enabled() {
+                        telemetry.set_audio_metrics(session.metrics());
+                    }
                 }
                 match result {
                     Ok(()) => {
@@ -894,7 +948,9 @@ fn handle_command(
                             Ok(())
                         });
                     if let Some(session) = audio_session.as_ref() {
-                        telemetry.set_audio_metrics(session.metrics());
+                        if telemetry.diagnostics_enabled() {
+                            telemetry.set_audio_metrics(session.metrics());
+                        }
                     }
                     match result {
                         Ok(()) => {
@@ -987,7 +1043,9 @@ fn handle_command(
                     };
                     match result {
                         Ok(()) => {
-                            telemetry.set_audio_metrics(session.metrics());
+                            if telemetry.diagnostics_enabled() {
+                                telemetry.set_audio_metrics(session.metrics());
+                            }
                             *audio_session = Some(session);
                             telemetry.set_audio_error(None);
                             let _ = reply.send(Ok(()));
@@ -1090,11 +1148,39 @@ mod tests {
             submission_failed_frames: 7,
         };
 
+        telemetry.set_diagnostics_enabled(true);
         telemetry.set_audio_metrics(expected);
         assert_eq!(telemetry.audio_output_metrics(), expected);
     }
 
-    #[derive(Clone, Default)]
+    #[test]
+    fn optional_diagnostic_telemetry_is_disabled_by_default() {
+        let telemetry = WorkerTelemetry::default();
+        assert!(!telemetry.diagnostics_enabled());
+        telemetry.set_audio_metrics(AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            underrun_events: 3,
+            ..AudioOutputMetrics::default()
+        });
+        assert_eq!(telemetry.audio_output_metrics(), AudioOutputMetrics::default());
+    }
+
+    #[test]
+    fn disabling_diagnostics_clears_optional_telemetry_counters() {
+        let telemetry = WorkerTelemetry::default();
+        telemetry.set_diagnostics_enabled(true);
+        telemetry.set_audio_metrics(AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            underrun_events: 3,
+            ..AudioOutputMetrics::default()
+        });
+        telemetry.total_instructions.store(99, Ordering::Release);
+        telemetry.set_diagnostics_enabled(false);
+        assert_eq!(telemetry.audio_output_metrics(), AudioOutputMetrics::default());
+        assert_eq!(telemetry.total_instructions.load(Ordering::Acquire), 0);
+    }
+
+    #[derive(Clone, Default)
     struct RecordingSink(Arc<Mutex<Vec<Vec<u8>>>>);
 
     impl PcmSink for RecordingSink {
