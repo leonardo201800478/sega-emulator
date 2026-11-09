@@ -153,8 +153,7 @@ fn execute_microsequencer(prefixes: &[u8], opcode: u8, waits: &[u32]) -> (Z80Mic
         assert_eq!(fetch.base_tstates, 4);
         cpu = round_trip_at(cpu, "between prefix and terminal M1");
         assert_eq!(
-            cpu.q_previous,
-            0,
+            cpu.q_previous, 0,
             "DD/FD prefix clears previous-Q before terminal opcode"
         );
     }
