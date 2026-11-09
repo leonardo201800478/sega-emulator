@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | F-037: 32.000 vetores externos PASS. A divergência Q/previous-Q em DD/FD antes de SCF/CCF foi reproduzida: PR #695, run #42624833386, DD 37 0001 esperado F=65 e obtido F=45. O teste falhou antes de alcançar FD 3F. PR #696 contém correção em validação; preservar E4A/E4B e exceções 66/6E/74/75. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | F-037: 32.000 vetores externos PASS. A divergência Q/previous-Q em DD/FD antes de SCF/CCF foi reproduzida: PR #695, run #42624833386, DD 37 0001 esperado F=65 e obtido F=45. O teste falhou antes de alcançar FD 3F. PR #700 contém correção em validação; preservar E4A/E4B e exceções 66/6E/74/75. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
@@ -123,7 +123,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | S-003 | SP/PC/I/R | AUDIT_PARTIAL | Wrap, refresh e efeitos de fetch/interrupt. |
 | S-004 | IFF1/IFF2, IM e EI delay | AUDIT_PARTIAL | Transições, snapshot e interrupções nas fronteiras. |
 | S-005 | WZ/MEMPTR | AUDIT_PARTIAL | Tabela por família com vetores independentes. |
-| S-006 | Q/previous-Q | AUDIT_PARTIAL | Divergência DD/FD→SCF/CCF reproduzida em DD 37 0001 (esperado F=65, obtido F=45; run #42624833386). FD 3F está incluído, mas não foi alcançado pelo fail-fast. Correção nos dois executores e snapshot/restore em PR #696, CI pendente. |
+| S-006 | Q/previous-Q | AUDIT_PARTIAL | Divergência DD/FD→SCF/CCF reproduzida em DD 37 0001 (esperado F=65, obtido F=45; run #42624833386). FD 3F está incluído, mas não foi alcançado pelo fail-fast. Correção nos dois executores e snapshot/restore em PR #700, CI pendente. |
 | S-007 | S/Z/H/PV/N/C | AUDIT_PARTIAL | Fórmulas e fronteiras por família. |
 | S-008 | X/Y e flags não documentadas | AUDIT_PARTIAL | Proveniência NMOS/CMOS e vetores discriminantes. |
 | S-009 | Preservação de flags | NOT_AUDITED | Verificar instruções que preservam total ou parcialmente F. |
