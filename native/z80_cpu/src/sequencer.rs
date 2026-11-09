@@ -988,8 +988,10 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseInternal { opcode, .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
                 Z80PrefixState::Index(_) => {
-                    matches!(opcode, 0x09 | 0x19 | 0x23 | 0x24 | 0x25 | 0x29 | 0x2B | 0x2C | 0x2D | 0x39 | 0xF9)
-                        && state.opcode == Some(opcode)
+                    matches!(
+                        opcode,
+                        0x09 | 0x19 | 0x23 | 0x24 | 0x25 | 0x29 | 0x2B | 0x2C | 0x2D | 0x39 | 0xF9
+                    ) && state.opcode == Some(opcode)
                 }
                 _ => false,
             },
