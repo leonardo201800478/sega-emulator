@@ -89,7 +89,11 @@ fn assert_resume_case(
     assert_eq!(restored.cpu().registers.f, initial.f, "F is not affected");
     assert_eq!(restored.cpu().q, 0);
     assert_eq!(restored.cpu().q_previous, INITIAL_Q);
-    assert_eq!(restored.cpu().refresh, 0x80, "R7 preserved across refresh wrap");
+    assert_eq!(
+        restored.cpu().refresh,
+        0x80,
+        "R7 preserved across refresh wrap"
+    );
 
     for &(address, value) in expected_memory {
         assert_eq!(restored.memory().read(address), value);
@@ -111,7 +115,10 @@ fn assert_resume_case(
             _ => None,
         })
         .collect();
-    assert_eq!(bus_completions, expected_bus, "opcode {expected_opcode:02X} bus trace");
+    assert_eq!(
+        bus_completions, expected_bus,
+        "opcode {expected_opcode:02X} bus trace"
+    );
 }
 
 #[test]
