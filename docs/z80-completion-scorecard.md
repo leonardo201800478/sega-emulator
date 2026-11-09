@@ -215,11 +215,23 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 | Família | Estado | Evidência / pendência |
 |---|---|---|
 | F-028 — IXH/IXL/IYH/IYL | AUDIT_PARTIAL | INC/DEC e LD imediato integrados por #680; LD r,r' está em #684; ALU half-register permanece pendente em F-037. |
-| F-036 — LD r,r' register-only | IMPLEMENTED_PENDING_VALIDATION | PR #684, commit de código `181be7aec287eaf66cda26d4bd0823446b435031`. Teste de 48 combinações DD/FD, oracle de registradores, comparação atômica, 8T/2 M1, WAIT, snapshot/restore, prefixos repetidos e HALT. CI ainda NOT RUN nesta fotografia. |
+| F-036 — LD r,r' register-only | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`; HEAD `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`, run #42614755935 PASS. 48 combinações DD/FD, oracle, comparação atômica, 8T/2 M1, WAIT, snapshot/restore, prefixos repetidos e HALT. D3D12/áudio/SDL3/workspace SKIPPED e agregador PASS. |
 | F-037 — ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | Próxima implementação, em PR separada após F-036. Exige vetores fixos independentes, carry de entrada, flags completas, Q e caminho retomável. |
 | E7.7 — auditoria semântica integral | IN_PROGRESS | Outras famílias, efeitos observáveis, proveniência independente e auditoria temporal ainda pendentes. |
 | E8 — ZEXDOC/ZEXALL | BLOCKED | Não iniciar antes do fechamento formal de E7. |
 
-**Regra de promoção:** F-036 só pode passar a CLOSED depois do CI verde no HEAD final da PR #684, merge confirmado e validação dos checks aplicáveis. O resultado SKIPPED de D3D12/áudio/SDL3 em uma PR exclusivamente Z80 deve permanecer NOT RUN na classificação interna e ser aceito pelo GitHub como check satisfeito; a execução real da PR #684 comprovará esse comportamento.
+**Regra de promoção:** F-036 foi promovida a CLOSED somente após CI verde no HEAD final da PR #684 e merge confirmado. Os jobs D3D12/áudio/SDL3/workspace foram SKIPPED, classificados internamente como NOT RUN, e o GitHub aceitou o merge; comportamento comprovado em PR real.
 
-**Próxima tarefa objetiva:** concluir CI/merge de F-036; em seguida implementar F-037 em PR pequena e separada. Não avançar para E8.
+**Próxima tarefa objetiva:** implementar F-037 em PR pequena e separada. Não avançar para E8.
+
+
+## 19. Fechamento F-036 — evidência final
+
+- PR #684: merged.
+- HEAD validado: `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`.
+- CI final: #42614755935 — PASS no HEAD exato. Z80 focused, documentation hygiene e agregador PASS; jobs não aplicáveis SKIPPED.
+- Falhas intermediárias registradas: #42614347670 (rustfmt) e #42614617507 (Clippy field_reassign_with_default). Corrigidas antes do HEAD final.
+- Merge SHA e main atual: `0b9b298f0f9791a6fa6db17580ad741db5c0515d`.
+- F-036 CLOSED; F-037 GAP_CONFIRMED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+**Próxima tarefa:** F-037 — ALU A,IXH/IXL/IYH/IYL — com vetores independentes para ADD/ADC/SUB/SBC/AND/XOR/OR/CP, carry de entrada, flags completas, Q, caminho retomável, WAIT e snapshot/restore.
