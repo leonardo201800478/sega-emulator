@@ -1692,6 +1692,9 @@ fn run_xaudio2_worker(
         unsafe {
             source_voice.GetState(&mut current_state, 0);
         }
+        // XAUDIO2_VOICE_STATE is a packed FFI structure. Copy its field to
+        // an aligned local before passing it to tracing or arithmetic.
+        let buffers_queued = current_state.BuffersQueued;
         let completed = signals.completed_buffers.load(Ordering::Acquire);
         if completed != last_completion_count {
             let observed_at = Instant::now();
@@ -1708,14 +1711,14 @@ fn run_xaudio2_worker(
                 callback_completed_buffers = completed,
                 callback_completion_delta = completion_delta,
                 completion_observation_interval_ns,
-                buffers_queued = current_state.BuffersQueued,
-                in_flight_frames = u64::from(current_state.BuffersQueued)
+                buffers_queued,
+                in_flight_frames = u64::from(buffers_queued)
                     .saturating_mul(frames_per_buffer as u64),
                 fifo_queued_frames = consumer.metrics().queued_frames,
                 "XAudio2 buffer completions observed"
             );
         }
-        let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
+        let is_underrun = voice_started && buffers_queued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
             record_audio_underrun(&underruns, "XAudio2", 0);
         }
