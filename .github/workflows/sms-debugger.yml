@@ -18,7 +18,7 @@ on:
       - ".github/workflows/sms-debugger.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: sms-debugger-${{ github.event.pull_request.number || github.ref }}
@@ -32,7 +32,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
 
       - name: Install pinned Rust toolchain
         run: |
@@ -40,7 +41,25 @@ jobs:
           rustup default 1.99.1
 
       - name: Format standalone debugger workspace
+        run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all
+
+      - name: Verify Rust formatting
         run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all -- --check
+
+      - name: Commit rustfmt changes to the pull request branch
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native/debugger_core/src/lib.rs native/sms_debugger/src/app.rs
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "style(debugger): apply rustfmt"
+            git push origin "HEAD:$env:HEAD_REF"
+          }
 
       - name: Clippy standalone debugger workspace
         run: cargo clippy --manifest-path native/sms_debugger/Cargo.toml --all-targets -- -D warnings
