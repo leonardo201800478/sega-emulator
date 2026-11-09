@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09, após PRs #709 e #710). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `fa069162306fb330864b6d77633ceba0f976e3ca` (2026-11-09, após PR #711). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -382,3 +382,18 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - E7 permanece IN_PROGRESS. E8/ZEXDOC/ZEXALL permanece BLOCKED.
 - E7.7 continua exigindo reconciliação do inventário global F-001..F-034, flags e efeitos observáveis de outras famílias, interrupções, prefixos e determinismo. A execução do ROM v5.0 completo e validação física SMS não são declaradas PASS.
 - Não transferir os resultados de CI #6034/#6036/#6037 para suites que não foram executadas; jobs SKIPPED permanecem NOT RUN.
+
+
+## 30. F-022 — flags de bloco observáveis durante interrupção IM2 (candidata PR #712)
+
+**Baseline main:** `fa069162306fb330864b6d77633ceba0f976e3ca`.
+
+A candidata adiciona `ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume` em `native/z80_cpu/src/sequencer.rs`. Para LDIR/LDDR/CPIR/CPDR, o teste injeta INT no último T-state do ciclo interno de repetição, atende IM2, observa F por `PUSH AF`, retorna com `POP AF; EI; RETI` e verifica a retomada da instrução ED. O snapshot encode/decode ocorre em cada fronteira de barramento/ciclo interno do microsequenciador.
+
+**Frente documental:** UM0080 especifica o decremento de BC e as flags documentadas das operações de bloco; não especifica X/Y no caso interrompido. O teste público Z80 Block Flags Test v5.0 documenta que, quando uma instrução de bloco repetitiva já executou uma iteração e a interrupção é aceita em vez da repetição, YF corresponde a PC.13 e XF a PC.11. O próprio autor classifica o teste como limitado e alerta para diferenças em clones/CMOS.
+
+**Frente de engenharia reversa:** MAME (`src/devices/cpu/z80/z80.lst`, macros `ldir`, `lddr`, `cpir`, `cpdr`) e ares (`ares/component/processor/z80/instructions.cpp`, `instructionLDIR/LDDR/CPIR/CPDR`) também substituem X/Y pelos bits correspondentes do PC após recuo de dois bytes; ambos ajustam WZ/MEMPTR para PC+1. redcode/Z80 fornece macros equivalentes para LDXR/CPXR. Foram consultadas apenas como referências de comportamento; nenhum código foi copiado.
+
+**Oráculo e limites:** os valores esperados de F no handler derivam do comportamento descrito pelo teste v5.0 e das flags documentadas no UM0080. A comparação atômico↔microsequenciador é somente diferencial interna. O WZ=PC+1 é confrontado com MAME/ares, não alegado como observação física independente. O teste cobre um vetor dirigido por opcode, não uma varredura combinatória. F-022 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED. Hardware SMS, CMOS e clones não foram validados.
+
+**Validação:** aguardando CI da PR #712 no HEAD exato. Nenhum resultado PASS é atribuído antes da execução.
