@@ -2,7 +2,7 @@
 
 # Pesquisa comparativa: comportamentos Z80 pouco documentados
 
-**Data:** 22/10/2026  
+**Data:** 22/10/2026
 **Objetivo:** usar implementações públicas de Gearsystem, MEKA, Genesis Plus GX e ares para transformar comportamentos pouco documentados do Z80 em hipóteses testáveis e tarefas de implementação. Esta pesquisa não altera o núcleo CPU nem afirma que os comportamentos estejam validados em hardware.
 
 ## Conclusão executiva
