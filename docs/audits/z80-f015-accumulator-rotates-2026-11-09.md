@@ -1,8 +1,10 @@
 # Auditoria E7.7 — F-015: RLCA / RRCA / RLA / RRA
 
 **Baseline main antes da PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+**PR:** #728 — squash merge `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**HEAD validado da PR:** `c198cff1629270378a3bdd22a1126ca3d98a44b8`.
 **Família:** F-015 — rotações do acumulador.
-**Estado nesta branch:** IMPLEMENTED_PENDING_VALIDATION.
+**Estado:** CLOSED no perfil NMOS delimitado.
 **Escopo de perfil:** Zilog Z80 NMOS; sem alegação de medição física ou compatibilidade universal.
 
 ## 1. Escopo
@@ -85,7 +87,8 @@ Arquivo: `native/sms_core/tests/z80_f015_temporal.rs`.
 ## 6. Validação CI e estado
 
 **HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
-**CI #6129 / run `42678520765`: PASS no HEAD exato.**
+**CI #6129 / run `42678520765`: PASS no HEAD de código `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.**
+**CI final #6131 / run `42678804879`: PASS no HEAD PR `c198cff1629270378a3bdd22a1126ca3d98a44b8`, incluindo a reconciliação documental.
 
 | Gate | Resultado | Evidência |
 |---|---|---|
@@ -108,4 +111,6 @@ Arquivo: `native/sms_core/tests/z80_f015_temporal.rs`.
 
 Nenhuma falha exigiu alteração de runtime; foram corrigidos somente testes.
 
-**Estado:** F-015 permanece `IMPLEMENTED_PENDING_VALIDATION` até squash merge e confirmação do SHA da main. A CI focada passou no HEAD indicado. Sem validação física; X/Y permanece comportamento de compatibilidade comparativo. E7 IN_PROGRESS; E8/ZEXDOC/ZEXALL BLOCKED.
+**Integração:** PR #728 integrada por squash no SHA `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**CI pós-merge:** NOT VERIFIED nesta consulta; não há status check associado retornado para o SHA de merge. Não atribuir PASS.
+**Limites:** F-015 CLOSED somente para semântica de software no perfil Zilog NMOS delimitado. Sem validação física; X/Y permanece comportamento de compatibilidade comparativo MAME/ares. Sem alegação de compatibilidade universal CMOS/clones. F-023 permanece gate transversal. E7 IN_PROGRESS; E8/ZEXDOC/ZEXALL BLOCKED.
