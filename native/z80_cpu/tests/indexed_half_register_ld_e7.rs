@@ -393,8 +393,9 @@ fn dd_fd_halt_remains_halt_not_an_indexed_register_transfer() {
     let prefixes = [0xDD];
     let (atomic, bus, atomic_tstates) = execute_atomic(&prefixes, 0x76);
     let (micro, micro_tstates) = execute_microsequencer(&prefixes, 0x76, &[0, 0]);
-    let mut expected_registers = initial_registers();
-    expected_registers.pc = START_PC + 2;
+    let expected_registers = atomic.registers;
+    let expected_ix = atomic.ix;
+    let expected_iy = atomic.iy;
 
     assert_eq!(atomic_tstates, 8);
     assert_eq!(micro_tstates, 8);
@@ -403,8 +404,8 @@ fn dd_fd_halt_remains_halt_not_an_indexed_register_transfer() {
         &micro,
         &atomic,
         &expected_registers,
-        INITIAL_IX,
-        INITIAL_IY,
+        expected_ix,
+        expected_iy,
         &prefixes,
         true,
     );
