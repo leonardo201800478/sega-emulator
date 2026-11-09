@@ -152,6 +152,7 @@ fn execute_microsequencer(prefixes: &[u8], opcode: u8, waits: &[u32]) -> (Z80Mic
         assert_eq!(fetch.operation, Z80BusOperation::OpcodeFetch);
         assert_eq!(fetch.base_tstates, 4);
         cpu = round_trip_at(cpu, "between prefix and terminal M1");
+        assert_eq!(cpu.q_previous, 0, "DD/FD prefix clears previous-Q before terminal opcode");
     }
 
     let opcode_wait = prefixes.len();
@@ -270,7 +271,8 @@ fn assert_architecture(
     assert_eq!(atomic.alternate, initial_alternate());
     assert_eq!(micro.refresh, expected_refresh(prefixes.len() + 1));
     assert_eq!(atomic.r, expected_refresh(prefixes.len() + 1));
-    assert_eq!(micro.q_previous, INITIAL_Q);
+    assert_eq!(micro.q_previous, 0);
+    assert_eq!(atomic.export_architectural_state().q_previous, 0);
     assert_eq!(micro.q, 0, "LD/HALT does not write flags");
     assert_eq!(atomic.q, 0, "atomic executor Q latch");
     assert_eq!(micro.wz, INITIAL_WZ);
