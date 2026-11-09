@@ -10874,11 +10874,17 @@ mod ed_block_io_differential_tests {
             initial_bus.memory[usize::from(pc.wrapping_add(1))] = opcode;
             initial_bus.memory[0xC0FF] = 0x00;
             initial_bus.memory[0xC100] = 0x90;
-            initial_bus.memory[0x9000] = 0xF5; // IM2 handler: PUSH AF
+            initial_bus.memory[0x9000] = 0xF5; // PUSH AF
+            initial_bus.memory[0x9001] = 0xF1; // POP AF
+            initial_bus.memory[0x9002] = 0xFB; // EI
+            initial_bus.memory[0x9003] = 0xED;
+            initial_bus.memory[0x9004] = 0x4D; // RETI
             if input {
                 initial_bus.ports[usize::from((u16::from(initial_b) << 8) | u16::from(c))] = value;
+                initial_bus.ports[usize::from((u16::from(b_after) << 8) | u16::from(c))] = value;
             } else {
                 initial_bus.memory[usize::from(hl)] = value;
+                initial_bus.memory[usize::from(hl.wrapping_add_signed(direction))] = value;
             }
 
             let low_term = if input {
@@ -10930,6 +10936,24 @@ mod ed_block_io_differential_tests {
             assert_eq!(atomic_bus.memory[0xCFFD], 0xA1);
             assert_eq!(atomic_bus.memory[0xCFFE], pc as u8);
             assert_eq!(atomic_bus.memory[0xCFFF], (pc >> 8) as u8);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(10)); // POP AF
+            assert_eq!(atomic.registers.sp, 0xCFFE);
+            assert_eq!(atomic.registers.a, 0xA1);
+            assert_eq!(atomic.registers.f, expected_flags);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(4)); // EI
+            assert!(atomic.export_architectural_state().iff1);
+            assert!(atomic.export_architectural_state().iff2);
+            assert_eq!(atomic.export_architectural_state().ei_delay, 1);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(14)); // RETI
+            assert_eq!(atomic.registers.pc, pc);
+            assert_eq!(atomic.registers.sp, 0xD000);
+            assert!(atomic.export_architectural_state().iff1);
+            assert!(atomic.export_architectural_state().iff2);
+            assert_eq!(atomic.export_architectural_state().ei_delay, 0);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(21)); // resumed block iteration
+            assert_eq!(atomic.registers.b, b_after.wrapping_sub(1));
+            assert_eq!(atomic.registers.pc, pc);
+            assert_eq!(atomic.wz, pc.wrapping_add(1));
 
             let mut sequenced = Z80MicroSequencer::default();
             sequenced.import_architectural_state(state).unwrap();
@@ -10955,6 +10979,36 @@ mod ed_block_io_differential_tests {
             assert_eq!(sequenced_bus.memory[0xCFFD], 0xA1);
             assert_eq!(sequenced_bus.memory[0xCFFE], pc as u8);
             assert_eq!(sequenced_bus.memory[0xCFFF], (pc >> 8) as u8);
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                10
+            ); // POP AF
+            assert_eq!(sequenced.registers.sp, 0xCFFE);
+            assert_eq!(sequenced.registers.a, 0xA1);
+            assert_eq!(sequenced.registers.f, expected_flags);
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                4
+            ); // EI
+            assert!(sequenced.export_architectural_state().iff1);
+            assert!(sequenced.export_architectural_state().iff2);
+            assert_eq!(sequenced.export_architectural_state().ei_delay, 1);
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                14
+            ); // RETI
+            assert_eq!(sequenced.registers.pc, pc);
+            assert_eq!(sequenced.registers.sp, 0xD000);
+            assert!(sequenced.export_architectural_state().iff1);
+            assert!(sequenced.export_architectural_state().iff2);
+            assert_eq!(sequenced.export_architectural_state().ei_delay, 0);
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                21
+            ); // resumed block iteration
+            assert_eq!(sequenced.registers.b, b_after.wrapping_sub(1));
+            assert_eq!(sequenced.registers.pc, pc);
+            assert_eq!(sequenced.wz, pc.wrapping_add(1));
             assert_eq!(
                 sequenced.export_architectural_state(),
                 atomic.export_architectural_state()
