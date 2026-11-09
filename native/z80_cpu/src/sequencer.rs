@@ -95,6 +95,10 @@ fn is_indexed_displacement_opcode(opcode: u8) -> bool {
         || is_indexed_memory_inc_dec_opcode(opcode)
 }
 
+fn is_indexed_half_register_inc_dec_load_opcode(opcode: u8) -> bool {
+    matches!(opcode, 0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E)
+}
+
 fn is_indexed_load_opcode(opcode: u8) -> bool {
     opcode == 0x36
         || is_indexed_memory_load_opcode(opcode)
@@ -838,7 +842,11 @@ impl Z80MicroSequencer {
                 match state.prefix_state {
                     Z80PrefixState::None => true,
                     Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        let class = classify_index_opcode(opcode);
+                        let ignored_prefix_load = class == Z80IndexOpcodeClass::Ignored;
+                        let indexed_half_load = class == Z80IndexOpcodeClass::UsesIndex
+                            && matches!(opcode, 0x26 | 0x2E);
+                        (ignored_prefix_load || indexed_half_load)
                             && matches!(opcode, 0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E)
                             && destination == ((opcode >> 3) & 0x07)
                             && state.mcycle_index >= 2
@@ -980,8 +988,10 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseInternal { opcode, .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
                 Z80PrefixState::Index(_) => {
-                    matches!(opcode, 0x09 | 0x19 | 0x23 | 0x29 | 0x2B | 0x39 | 0xF9)
-                        && state.opcode == Some(opcode)
+                    matches!(
+                        opcode,
+                        0x09 | 0x19 | 0x23 | 0x24 | 0x25 | 0x29 | 0x2B | 0x2C | 0x2D | 0x39 | 0xF9
+                    ) && state.opcode == Some(opcode)
                 }
                 _ => false,
             },
@@ -2523,7 +2533,10 @@ impl Z80MicroSequencer {
                 Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
                 Z80PrefixState::Index(_) => {
                     state.opcode.is_some_and(|opcode| {
-                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        let class = classify_index_opcode(opcode);
+                        class == Z80IndexOpcodeClass::Ignored
+                            || (class == Z80IndexOpcodeClass::UsesIndex
+                                && matches!(opcode, 0x26 | 0x2E))
                     }) && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
                         .and_then(|count| minimum_prefixed_tstates(count, 0))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
@@ -3274,7 +3287,10 @@ impl Z80MicroSequencer {
             }
             match index_class {
                 Z80IndexOpcodeClass::UsesIndex => {
-                    if !(indexed_16bit_opcode || is_indexed_displacement_opcode(opcode)) {
+                    if !(indexed_16bit_opcode
+                        || is_indexed_displacement_opcode(opcode)
+                        || is_indexed_half_register_inc_dec_load_opcode(opcode))
+                    {
                         return self.unsupported(opcode);
                     }
                 }
@@ -3497,9 +3513,9 @@ impl Z80MicroSequencer {
                     )
                 } else {
                     let decrement = opcode & 0x01 != 0;
-                    let old = self.read_register(register);
+                    let old = self.read_indexed_register(register, true);
                     let value = self.increment_decrement_register(old, decrement);
-                    self.write_register(register, value);
+                    self.write_indexed_register(register, value, true);
                     self.retire(opcode)
                 }
             }
@@ -3603,7 +3619,7 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
-                self.write_register(destination, value);
+                self.write_indexed_register(destination, value, true);
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
@@ -5826,6 +5842,45 @@ impl Z80MicroSequencer {
             7 => self.registers.a = value,
             _ => unreachable!("memory operand is not a register"),
         }
+    }
+
+    fn read_indexed_register(&self, code: u8, halves: bool) -> u8 {
+        if halves {
+            match (self.prefix_state, code) {
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 4) => (self.ix >> 8) as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 5) => self.ix as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 4) => (self.iy >> 8) as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 5) => self.iy as u8,
+                _ => self.read_register(code),
+            }
+        } else {
+            self.read_register(code)
+        }
+    }
+
+    fn write_indexed_register(&mut self, code: u8, value: u8, halves: bool) {
+        if halves {
+            match (self.prefix_state, code) {
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 4) => {
+                    self.ix = (self.ix & 0x00FF) | (u16::from(value) << 8);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 5) => {
+                    self.ix = (self.ix & 0xFF00) | u16::from(value);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 4) => {
+                    self.iy = (self.iy & 0x00FF) | (u16::from(value) << 8);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 5) => {
+                    self.iy = (self.iy & 0xFF00) | u16::from(value);
+                    return;
+                }
+                _ => {}
+            }
+        }
+        self.write_register(code, value);
     }
 
     fn issue_read(
@@ -11137,9 +11192,14 @@ mod base_16bit_register_differential_tests {
         }
     }
 
-    fn run_sequencer(
+    fn run_sequencer(cpu: Z80MicroSequencer, bus: &mut TestBus) -> (Z80ArchitecturalState, u32) {
+        run_sequencer_with_waits(cpu, bus, 0)
+    }
+
+    fn run_sequencer_with_waits(
         mut cpu: Z80MicroSequencer,
         bus: &mut TestBus,
+        wait_tstates_per_request: u32,
     ) -> (Z80ArchitecturalState, u32) {
         let mut step = cpu.begin_instruction().unwrap();
         for _ in 0..32 {
@@ -11158,7 +11218,14 @@ mod base_16bit_register_differential_tests {
                         }
                         operation => panic!("unexpected BASE bus operation: {operation:?}"),
                     };
-                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                    if wait_tstates_per_request != 0 {
+                        cpu.insert_wait_tstates(wait_tstates_per_request).unwrap();
+                        cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    }
+                    let next = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    // Every completed bus boundary must survive snapshot/restore.
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    next
                 }
                 Z80MicroStep::InternalCycle { .. } => {
                     // Every internal safe point must survive snapshot/restore.
@@ -11176,7 +11243,107 @@ mod base_16bit_register_differential_tests {
                 }
             };
         }
-        panic!("BASE 16-bit opcode did not retire within 32 micro-operations");
+        panic!("BASE/indexed 8-bit opcode did not retire within 32 micro-operations");
+    }
+
+    #[test]
+    fn dd_fd_index_half_inc_dec_and_immediate_load_match_atomic_with_waits() {
+        for prefix in [0xDD, 0xFD] {
+            for opcode in [0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E] {
+                let mut initial = initial_state();
+                initial.registers.pc = 0x2000;
+                initial.registers.f = 0x01;
+                let selected_index = match opcode {
+                    0x24 => 0x7F57,
+                    0x25 => 0x8057,
+                    0x26 => 0x1357,
+                    0x2C => 0x137F,
+                    0x2D => 0x1380,
+                    0x2E => 0x1357,
+                    _ => unreachable!(),
+                };
+                if prefix == 0xDD {
+                    initial.ix = selected_index;
+                    initial.iy = 0xBEEF;
+                } else {
+                    initial.ix = 0xBEEF;
+                    initial.iy = selected_index;
+                }
+
+                let mut initial_bus = TestBus::default();
+                initial_bus.memory[0x2000] = prefix;
+                initial_bus.memory[0x2001] = opcode;
+                initial_bus.memory[0x2002] = 0x39;
+
+                let mut atomic = Z80::default();
+                atomic.import_architectural_state(initial).unwrap();
+                let mut atomic_bus = initial_bus.clone();
+                let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+                let expected_tstates = if matches!(opcode, 0x26 | 0x2E) { 11 } else { 8 };
+                assert_eq!(atomic_tstates, expected_tstates);
+
+                let mut micro = Z80MicroSequencer::default();
+                micro.import_architectural_state(initial).unwrap();
+                let mut micro_bus = initial_bus.clone();
+                let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+                assert_eq!(micro_tstates, atomic_tstates, "DD/FD {opcode:02X}");
+                assert_eq!(
+                    micro_state,
+                    atomic.export_architectural_state(),
+                    "architectural mismatch for prefix {prefix:02X} opcode {opcode:02X}"
+                );
+                assert_eq!(micro_bus.memory.as_ref(), atomic_bus.memory.as_ref());
+
+                let mut waited_micro = Z80MicroSequencer::default();
+                waited_micro.import_architectural_state(initial).unwrap();
+                let mut waited_bus = initial_bus;
+                let (waited_state, waited_tstates) =
+                    run_sequencer_with_waits(waited_micro, &mut waited_bus, 1);
+                let wait_cycles = if matches!(opcode, 0x26 | 0x2E) { 3 } else { 2 };
+                assert_eq!(
+                    waited_tstates,
+                    atomic_tstates + wait_cycles,
+                    "WAIT accounting for prefix {prefix:02X} opcode {opcode:02X}"
+                );
+                assert_eq!(
+                    waited_state,
+                    atomic.export_architectural_state(),
+                    "WAIT/snapshot architectural mismatch for prefix {prefix:02X} opcode {opcode:02X}"
+                );
+                assert_eq!(waited_bus.memory.as_ref(), atomic_bus.memory.as_ref());
+
+                let expected_index = match opcode {
+                    0x24 => selected_index.wrapping_add(0x0100),
+                    0x25 => selected_index.wrapping_sub(0x0100),
+                    0x26 => (selected_index & 0x00FF) | 0x3900,
+                    0x2C => selected_index.wrapping_add(1),
+                    0x2D => selected_index.wrapping_sub(1),
+                    0x2E => (selected_index & 0xFF00) | 0x0039,
+                    _ => unreachable!(),
+                };
+                let selected_after = if prefix == 0xDD {
+                    micro_state.ix
+                } else {
+                    micro_state.iy
+                };
+                let other_after = if prefix == 0xDD {
+                    micro_state.iy
+                } else {
+                    micro_state.ix
+                };
+                assert_eq!(selected_after, expected_index);
+                assert_eq!(other_after, 0xBEEF);
+                assert_eq!(micro_state.registers.f & 0x01, 0x01);
+                assert_eq!(
+                    micro_state.registers.pc,
+                    if matches!(opcode, 0x26 | 0x2E) {
+                        0x2003
+                    } else {
+                        0x2002
+                    }
+                );
+            }
+        }
     }
 
     #[test]
