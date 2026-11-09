@@ -52,7 +52,9 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
 
         assert_eq!(restored.now(), MachineTime::from_ticks(27));
         assert_eq!(restored.cpu().registers.pc, 1);
-        assert_eq!(restored.cpu().refresh & 0x7F, 1);
+        assert_eq!(restored.cpu().refresh, 0x81);
+        assert_eq!(restored.cpu().q, 0);
+        assert_eq!(restored.cpu().q_previous, 0x3C);
         assert_eq!(restored.cpu().registers.f, 0xA5);
 
         let (expected_operation, expected_data) = if store {
