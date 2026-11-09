@@ -6,51 +6,81 @@
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
 
+/// A named CPU register and its current unsigned value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisterValue {
+    /// Register display name, such as AF, PC or IX.
     pub name: String,
+    /// Register value, stored in the low bits.
     pub value: u32,
+    /// Architectural register width in bits.
     pub width_bits: u8,
 }
 
+/// Architecture-neutral view of the processor state at a debugger stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuSnapshot {
+    /// Human-readable CPU architecture name.
     pub architecture: String,
+    /// Current program counter, when the target exposes one.
     pub pc: Option<u32>,
+    /// Current stack pointer, when the target exposes one.
     pub sp: Option<u32>,
+    /// Registers selected by the target for its diagnostic view.
     pub registers: Vec<RegisterValue>,
+    /// HALT state, when meaningful for the selected CPU.
     pub halted: Option<bool>,
+    /// Interrupt mode, when meaningful for the selected CPU.
     pub interrupt_mode: Option<u8>,
 }
 
+/// One human-readable hardware register or status value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HardwareValue {
+    /// Hardware component name, for example VDP or cartridge mapper.
     pub component: String,
+    /// Register or status field name.
     pub name: String,
+    /// Formatted value suitable for display and text reports.
     pub value: String,
 }
 
+/// Cross-console snapshot used by debugger views and diagnostic reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DebugSnapshot {
+    /// Console system name.
     pub console: String,
+    /// Processor state.
     pub cpu: CpuSnapshot,
+    /// Absolute machine time in the target's master-clock ticks.
     pub machine_ticks: u128,
+    /// Hardware-specific state exposed by the target adapter.
     pub hardware: Vec<HardwareValue>,
 }
 
+/// Normalized bus or internal-cycle event retained by the debugger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TraceEvent {
+    /// Absolute timestamp in machine master-clock ticks.
     pub timestamp_ticks: u128,
+    /// Operation label, such as OpcodeFetch, MemoryWrite or INTERNAL.
     pub operation: String,
+    /// Bus address, when the event has one.
     pub address: Option<u32>,
+    /// Data transferred, when the event has one.
     pub data: Option<u8>,
+    /// Wait-state count, when applicable.
     pub wait_tstates: Option<u32>,
+    /// Additional target-specific details.
     pub detail: String,
 }
 
+/// Optional rendered output from a target, in packed RGB888 format.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameBuffer {
+    /// Pixel width.
     pub width: usize,
+    /// Pixel height.
     pub height: usize,
     /// Packed RGB888 pixels, row-major.
     pub rgb: Vec<u8>,
@@ -59,22 +89,40 @@ pub struct FrameBuffer {
 /// Adapter implemented by each console runtime. Methods are called by the
 /// debugger UI thread through coarse-grained operations, never per T-state.
 pub trait DebugTarget {
+    /// Return the current CPU and hardware snapshot.
     fn snapshot(&self) -> DebugSnapshot;
+
+    /// Return the current PC without constructing a full snapshot when possible.
     fn program_counter(&self) -> Option<u32> {
         self.snapshot().cpu.pc
     }
+
+    /// Execute exactly one architectural instruction, including its temporal bus work.
     fn execute_instruction(&mut self) -> Result<(), String>;
+
+    /// Read a range through the target's active memory map.
     fn read_memory(&self, address: u32, length: usize) -> Vec<u8>;
+
+    /// Drain trace events accumulated since the previous call.
     fn drain_trace(&mut self) -> Vec<TraceEvent>;
+
+    /// Return the latest rendered frame when the console has video output.
     fn framebuffer(&self) -> Option<FrameBuffer>;
 }
 
+/// Reason why a bounded run operation stopped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunStopReason {
+    /// The requested instruction budget was exhausted.
     InstructionBudget,
+    /// Execution stopped before the instruction at this PC.
     Breakpoint(u32),
 }
 
+/// Stateful debugger session shared by console-specific frontends.
+///
+/// The session owns only breakpoints and a bounded diagnostic trace. Hardware
+/// state and timing remain exclusively owned by the target implementation.
 pub struct DebugSession<T: DebugTarget> {
     target: T,
     breakpoints: BTreeSet<u32>,
@@ -83,6 +131,7 @@ pub struct DebugSession<T: DebugTarget> {
 }
 
 impl<T: DebugTarget> DebugSession<T> {
+    /// Create a session with a maximum retained trace-event count.
     pub fn new(target: T, trace_capacity: usize) -> Self {
         Self {
             target,
@@ -92,43 +141,52 @@ impl<T: DebugTarget> DebugSession<T> {
         }
     }
 
+    /// Borrow the console-specific target.
     pub fn target(&self) -> &T {
         &self.target
     }
 
+    /// Return the current cross-console snapshot.
     pub fn snapshot(&self) -> DebugSnapshot {
         self.target.snapshot()
     }
 
+    /// Return all configured program-counter breakpoints.
     pub fn breakpoints(&self) -> &BTreeSet<u32> {
         &self.breakpoints
     }
 
+    /// Add a breakpoint; return false when it was already present.
     pub fn add_breakpoint(&mut self, address: u32) -> bool {
         self.breakpoints.insert(address)
     }
 
+    /// Remove a breakpoint; return false when it was not present.
     pub fn remove_breakpoint(&mut self, address: u32) -> bool {
         self.breakpoints.remove(&address)
     }
 
+    /// Remove every configured breakpoint.
     pub fn clear_breakpoints(&mut self) {
         self.breakpoints.clear();
     }
 
+    /// Borrow the retained trace in chronological order.
     pub fn trace(&self) -> &VecDeque<TraceEvent> {
         &self.trace
     }
 
+    /// Read a range from the target's active memory map.
     pub fn read_memory(&self, address: u32, length: usize) -> Vec<u8> {
         self.target.read_memory(address, length)
     }
 
+    /// Return the target's latest rendered frame, if available.
     pub fn framebuffer(&self) -> Option<FrameBuffer> {
         self.target.framebuffer()
     }
 
-    /// Execute exactly one instruction and collect any newly emitted bus events.
+    /// Execute exactly one instruction and collect newly emitted bus events.
     pub fn step_instruction(&mut self) -> Result<(), String> {
         self.target.execute_instruction()?;
         self.collect_trace();
@@ -147,7 +205,7 @@ impl<T: DebugTarget> DebugSession<T> {
             self.target.execute_instruction()?;
             self.collect_trace();
         }
-        let pc = self.target.snapshot().cpu.pc.unwrap_or_default();
+        let pc = self.target.program_counter().unwrap_or_default();
         if self.breakpoints.contains(&pc) {
             Ok(RunStopReason::Breakpoint(pc))
         } else {
@@ -167,8 +225,9 @@ impl<T: DebugTarget> DebugSession<T> {
         }
     }
 
-    /// Produce a concise, ROM-content-free diagnostic report suitable for a
-    /// local text file. Instruction bytes and cartridge data are never exported.
+    /// Produce a concise, ROM-content-free report suitable for a local text file.
+    ///
+    /// Instruction bytes and cartridge data are never exported.
     pub fn diagnostic_report(&self) -> String {
         let snapshot = self.snapshot();
         let mut output = String::new();
