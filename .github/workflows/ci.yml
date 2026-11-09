@@ -149,6 +149,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -168,6 +169,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
         run: cargo test --workspace --locked
+      - name: Clippy observability runtime feature
+        run: cargo clippy --manifest-path native/observability/Cargo.toml --features runtime --all-targets --locked -- -D warnings
+      - name: Test observability runtime feature
+        run: cargo test --manifest-path native/observability/Cargo.toml --features runtime --locked
 
   z80-focused:
     name: Z80 focused validation
@@ -408,19 +413,22 @@ jobs:
 
   refresh-lockfiles:
     name: Refresh Cargo lockfiles (manual artifact)
-    if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
+    if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - name: Refresh root workspace dependencies
         run: cargo update --workspace
       - name: Refresh standalone audio-output workspace
         run: cargo update --manifest-path native/audio_output/Cargo.toml
+      - name: Refresh standalone egui application workspace
+        run: cargo update --manifest-path native/sega_app/Cargo.toml
       - name: Verify refreshed lockfiles
         shell: bash
         run: |
@@ -438,6 +446,7 @@ jobs:
           path: |
             Cargo.lock
             native/audio_output/Cargo.lock
+            native/sega_app/Cargo.lock
           if-no-files-found: error
           retention-days: 1
 
@@ -455,7 +464,7 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles)
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any applicable validation failed or was cancelled

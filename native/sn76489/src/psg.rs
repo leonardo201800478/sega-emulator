@@ -235,6 +235,14 @@ impl Sn76489Core {
             usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let filter_history = vec![0.0; filter_coefficients.len()];
+        sega_observability::tracing::info!(
+            target: "sega::psg",
+            clock_hz,
+            sample_rate,
+            profile = ?profile,
+            sample_buffer_capacity,
+            "SN76489 PSG initialized"
+        );
         let mut device = Self {
             profile,
             clock_hz,
@@ -341,10 +349,19 @@ impl Sn76489Core {
     }
 
     pub fn reset(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::psg",
+            "SN76489 PSG reset"
+        );
         self.reset_inner();
     }
 
     pub fn write(&mut self, value: u8) {
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            value,
+            "SN76489 register write"
+        );
         self.write_inner(value);
     }
 
@@ -353,12 +370,21 @@ impl Sn76489Core {
     }
 
     pub fn drain_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        let available_samples = self.pending_samples.len();
         let count = max_samples
-            .unwrap_or(self.pending_samples.len())
-            .min(self.pending_samples.len());
-        (0..count)
+            .unwrap_or(available_samples)
+            .min(available_samples);
+        let samples = (0..count)
             .filter_map(|_| self.pending_samples.pop_front())
-            .collect()
+            .collect::<Vec<_>>();
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            available_samples,
+            drained_samples = samples.len(),
+            remaining_samples = self.pending_samples.len(),
+            "SN76489 sample queue drained"
+        );
+        samples
     }
 
     pub fn render(&mut self, sample_count: usize) -> Vec<f64> {
@@ -526,6 +552,11 @@ impl Sn76489Core {
                         self.render_pending.push_back(sample);
                     } else {
                         if self.pending_samples.len() == self.sample_buffer_capacity {
+                            sega_observability::tracing::trace!(
+                                target: "sega::psg",
+                                capacity = self.sample_buffer_capacity,
+                                "PSG sample queue overflow; oldest pending sample discarded"
+                            );
                             self.pending_samples.pop_front();
                             self.dropped_samples += 1;
                         }

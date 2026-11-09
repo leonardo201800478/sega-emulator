@@ -156,6 +156,15 @@ impl Sg1000Machine {
         psg_clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, MachineError> {
+        sega_observability::tracing::info!(
+            target: "sega::machine",
+            platform = "SG-1000",
+            rom_bytes = rom.len(),
+            memory_config = ?memory_config,
+            psg_clock_hz,
+            sample_rate,
+            "SG-1000 machine initialized"
+        );
         Ok(Self {
             cpu: Z80::default(),
             memory: Sg1000Memory::new(rom, memory_config)?,
@@ -200,6 +209,12 @@ impl Sg1000Machine {
     /// Disabling this is a diagnostic/nonstandard mode; the default remains
     /// enabled to preserve the SG-1000 VDP behavior.
     pub fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        sega_observability::tracing::debug!(
+            target: "sega::vdp",
+            platform = "SG-1000",
+            sprite_limit_enabled = enabled,
+            "SG-1000 sprite-per-line limit changed"
+        );
         self.vdp.set_sprite_limit_enabled(enabled);
     }
 
@@ -287,6 +302,14 @@ impl Sg1000Machine {
 
     /// Capture a port write at an explicit nominal machine T-state.
     pub fn write_port_at(&mut self, address: u16, value: u8, tstate: u64) {
+        sega_observability::tracing::trace!(
+            target: "sega::io",
+            platform = "SG-1000",
+            address,
+            value,
+            tstate,
+            "SG-1000 I/O port write"
+        );
         match (address as u8) & 0xC1 {
             0x80 | 0x81 => {
                 if tstate > self.cpu.total_tstates {

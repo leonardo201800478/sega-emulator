@@ -7,3 +7,6 @@ publish = false
 [lib]
 name = "sega_temporal_core"
 path = "src/lib.rs"
+
+[dependencies]
+sega-observability.workspace = true

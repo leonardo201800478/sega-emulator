@@ -9,6 +9,7 @@ name = "sega_audio_output"
 path = "src/lib.rs"
 
 [dependencies]
+sega-observability = { path = "../observability" }
 rtrb = "0.3"
 sega-audio-runtime = { path = "../audio_runtime" }
 

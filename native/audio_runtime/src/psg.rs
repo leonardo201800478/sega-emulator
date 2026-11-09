@@ -49,6 +49,14 @@ impl ScheduledPsg {
         clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, PsgError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::psg",
+            clock_domain_id = domain.0,
+            profile = ?profile,
+            clock_hz,
+            sample_rate,
+            "scheduled PSG created"
+        );
         Ok(Self {
             domain,
             core: Sn76489Core::new_with_profile(clock_hz, sample_rate, profile)?,

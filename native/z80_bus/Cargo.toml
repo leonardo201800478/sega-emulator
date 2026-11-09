@@ -7,3 +7,6 @@ publish = false
 [lib]
 name = "sega_z80_bus"
 path = "src/lib.rs"
+
+[dependencies]
+sega-observability.workspace = true

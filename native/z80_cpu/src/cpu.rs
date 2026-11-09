@@ -194,6 +194,12 @@ impl Z80 {
     /// General-purpose, alternate, index and stack registers are not reset.
     /// The external INT level and machine T-state timeline are also preserved.
     pub fn reset(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            pc = self.registers.pc,
+            total_tstates = self.total_tstates,
+            "Z80 reset asserted"
+        );
         self.registers.pc = 0;
         self.i = 0;
         self.r = 0;
@@ -221,11 +227,28 @@ impl Z80 {
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
     pub fn request_nmi(&mut self) {
+        if !self.nmi_pending {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                "NMI request latched"
+            );
+        }
         self.nmi_pending = true;
     }
 
     /// Latch a maskable interrupt and the byte supplied by the external data bus.
     pub fn request_int(&mut self, data_bus: u8) {
+        if self.int_pending != Some(data_bus) {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                data_bus,
+                interrupt_mode = self.interrupt_mode,
+                "INT request latched or vector changed"
+            );
+        }
         self.int_pending = Some(data_bus);
     }
 
@@ -235,6 +258,13 @@ impl Z80 {
     }
 
     fn service_nmi<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            return_pc = self.registers.pc,
+            vector = 0x0066_u16,
+            total_tstates = self.total_tstates,
+            "NMI accepted"
+        );
         self.nmi_pending = false;
         self.halted = false;
         self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
@@ -251,6 +281,14 @@ impl Z80 {
 
     fn service_int<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         let data_bus = self.int_pending.take().unwrap_or(0xFF);
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            pc = self.registers.pc,
+            data_bus,
+            interrupt_mode = self.interrupt_mode,
+            total_tstates = self.total_tstates,
+            "INT accepted"
+        );
         let return_address = self.registers.pc;
         self.halted = false;
         self.iff1 = false;
@@ -353,6 +391,15 @@ impl Z80 {
             bus.observe_instruction_trace(trace);
         } else {
             self.capture_opcode_trace = false;
+        }
+        if let Err(error) = &result {
+            sega_observability::tracing::error!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                error = ?error,
+                "Z80 instruction execution failed"
+            );
         }
         result
     }

@@ -103,6 +103,13 @@ impl SmsVdp {
 
     /// Construct the VDP with an explicit ASIC and regional profile.
     pub fn new_with_profile(profile: SmsVdpProfile) -> Self {
+        sega_observability::tracing::info!(
+            target: "sega::vdp",
+            revision = ?profile.revision,
+            video_standard = ?profile.video_standard,
+            sprite_limit = ?profile.sprite_limit,
+            "SMS VDP initialized"
+        );
         Self {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
@@ -280,6 +287,12 @@ impl SmsVdp {
     }
 
     pub fn reset(&mut self, clear_vram: bool) {
+        sega_observability::tracing::debug!(
+            target: "sega::vdp",
+            clear_vram,
+            frame_number = self.frame_number,
+            "SMS VDP reset"
+        );
         self.cram.fill(0);
         self.registers.fill(0);
         self.latched_scroll_x = 0;
@@ -417,6 +430,13 @@ impl SmsVdp {
             }
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
+                sega_observability::tracing::trace!(
+                    target: "sega::vdp",
+                    scanline = line,
+                    reload_value = self.registers[10],
+                    frame_number = self.frame_number,
+                    "SMS VDP line interrupt asserted"
+                );
                 self.line_counter = self.registers[10];
             } else {
                 self.line_counter = self.line_counter.wrapping_sub(1);
@@ -429,6 +449,13 @@ impl SmsVdp {
             }
             self.status |= VBLANK;
             self.frame_ready = true;
+            sega_observability::tracing::debug!(
+                target: "sega::vdp",
+                frame_number = self.frame_number,
+                visible_height = height,
+                video_standard = ?self.profile.video_standard,
+                "SMS VDP entered VBlank"
+            );
             self.framebuffer.clone_from(&self.working_framebuffer);
             match self.stereo_eye {
                 SmsVdpEye::Left => self.left_frame.clone_from(&self.working_framebuffer),
@@ -468,7 +495,19 @@ impl SmsVdp {
             self.address = ((u16::from(value & 0x3F) << 8) | u16::from(first)) & 0x3FFF;
             let register = usize::from(value & 0x0F);
             if register <= 10 {
+                let previous = self.registers[register];
                 self.registers[register] = first;
+                if previous != first && register <= 1 {
+                    sega_observability::tracing::debug!(
+                        target: "sega::vdp",
+                        register,
+                        previous,
+                        value = first,
+                        visible_height = self.visible_height(),
+                        video_standard = ?self.profile.video_standard,
+                        "SMS VDP display-control register changed"
+                    );
+                }
                 if register == 8
                     && (self.scanline >= self.visible_height()
                         || self.current_hpos() <= SMS_R8_LATCH_HPOS)

@@ -3,6 +3,24 @@
 mod pcm_convert;
 mod pcm_fifo;
 
+#[cfg(windows)]
+fn record_audio_underrun(
+    underruns: &AtomicU64,
+    backend: &'static str,
+    inserted_silence_frames: u64,
+) {
+    let count = underruns.fetch_add(1, Ordering::Relaxed) + 1;
+    if count.is_power_of_two() {
+        sega_observability::tracing::warn!(
+            target: "sega::audio::backend",
+            backend,
+            underrun_events = count,
+            inserted_silence_frames,
+            "audio output underrun detected"
+        );
+    }
+}
+
 fn audio_output_metrics_from_queue(
     sample_rate_hz: u32,
     queue: PcmFrameQueueMetrics,
@@ -360,6 +378,15 @@ impl NativeWasapiOutput {
         queue_blocks: usize,
         balance: i8,
     ) -> Result<Self, AudioOutputError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            balance,
+            "native audio backend initialization requested"
+        );
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
@@ -405,24 +432,47 @@ impl NativeWasapiOutput {
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => Ok(Self {
-                    producer: Some(producer),
-                    worker: Some(worker),
-                    shutdown,
-                    underruns,
-                    dropped_blocks,
-                    sample_rate,
-                    buffer_size,
-                    balance,
-                    control,
-                }),
+                Ok(Ok(())) => {
+                    sega_observability::tracing::info!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        sample_rate,
+                        buffer_size,
+                        queue_blocks,
+                        balance,
+                        "WASAPI render endpoint initialized"
+                    );
+                    Ok(Self {
+                        producer: Some(producer),
+                        worker: Some(worker),
+                        shutdown,
+                        underruns,
+                        dropped_blocks,
+                        sample_rate,
+                        buffer_size,
+                        balance,
+                        control,
+                    })
+                }
                 Ok(Err(message)) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %message,
+                        "WASAPI initialization failed"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI initialization timed out"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
@@ -467,7 +517,20 @@ impl NativeWasapiOutput {
             let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
             if dropped_frames > 0 {
-                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                let dropped_blocks = self.dropped_blocks.fetch_add(1, Ordering::Relaxed) + 1;
+                if dropped_blocks.is_power_of_two() {
+                    let metrics = producer.metrics();
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        dropped_frames,
+                        dropped_blocks,
+                        queued_frames = metrics.queued_frames,
+                        capacity_frames = metrics.capacity_frames,
+                        high_water_mark_frames = metrics.high_water_frames,
+                        "WASAPI producer queue saturated; oldest frames discarded"
+                    );
+                }
             }
             Ok(())
         }
@@ -596,6 +659,12 @@ fn run_wasapi_worker(
     let sample_rate = config.sample_rate;
     let buffer_size = config.buffer_size;
     if let Err(error) = initialize_mta().ok() {
+        sega_observability::tracing::error!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            error = %error,
+            "WASAPI COM apartment initialization failed"
+        );
         let _ = ready.send(Err(error.to_string()));
         return;
     }
@@ -678,9 +747,21 @@ fn run_wasapi_worker(
             Ok(state) => state,
             Err(message) => {
                 if first_start {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %message,
+                        "default render endpoint initialization failed"
+                    );
                     let _ = ready.send(Err(message));
                     return;
                 }
+                sega_observability::tracing::warn!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    error = %message,
+                    "render endpoint reconnect attempt failed"
+                );
                 thread::sleep(Duration::from_millis(250));
                 continue;
             }
@@ -700,13 +781,31 @@ fn run_wasapi_worker(
         let prebuffer_frames = initial_buffer_frames
             .min(consumer.metrics().capacity_frames)
             .max(1);
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "WASAPI",
+            endpoint = "default render",
+            sample_rate,
+            channels = 2,
+            bits_per_sample = 16,
+            block_align,
+            initial_buffer_frames,
+            prebuffer_frames,
+            "WASAPI PCM16 stereo format negotiated"
+        );
         let mut scratch_frames = vec![[0_i16; 2]; initial_buffer_frames];
         let mut pending = VecDeque::<u8>::with_capacity(staging_bytes);
         pending.resize(staging_bytes, 0);
-        if render_client
-            .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
-            .is_err()
+        if let Err(error) =
+            render_client.write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
         {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                error = %error,
+                frames = initial_buffer_frames,
+                "failed to prime the WASAPI render buffer"
+            );
             if first_start {
                 let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
                 return;
@@ -716,6 +815,12 @@ fn run_wasapi_worker(
         }
         pending.clear();
         if let Err(error) = audio_client.start_stream() {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                error = %error,
+                "WASAPI render stream failed to start"
+            );
             if first_start {
                 let _ = ready.send(Err(error.to_string()));
                 return;
@@ -727,6 +832,14 @@ fn run_wasapi_worker(
         if first_start {
             let _ = ready.send(Ok(()));
             first_start = false;
+        } else {
+            sega_observability::tracing::info!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                sample_rate,
+                buffer_size,
+                "WASAPI render endpoint reconnected"
+            );
         }
 
         let mut disconnected = false;
@@ -749,7 +862,13 @@ fn run_wasapi_worker(
                     consumer.discard_queued_frames();
                     Ok::<(), String>(())
                 })();
-                if flush_result.is_err() {
+                if let Err(error) = &flush_result {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI suspend/flush operation failed"
+                    );
                     control.failed.store(true, Ordering::Release);
                     disconnected = true;
                 }
@@ -764,7 +883,13 @@ fn run_wasapi_worker(
                     let stopped = audio_client
                         .stop_stream()
                         .and_then(|()| audio_client.reset_stream());
-                    if stopped.is_err() {
+                    if let Err(error) = stopped {
+                        sega_observability::tracing::error!(
+                            target: "sega::audio::backend",
+                            backend = "WASAPI",
+                            error = %error,
+                            "WASAPI stream failed to stop/reset during suspend"
+                        );
                         control.failed.store(true, Ordering::Release);
                         disconnected = true;
                         break;
@@ -783,23 +908,45 @@ fn run_wasapi_worker(
                 let prebuffer = &mut scratch_frames[..prebuffer_frames];
                 let report = consumer.read_frames(prebuffer);
                 if report.silence_frames > 0 {
-                    underruns.fetch_add(1, Ordering::Relaxed);
+                    record_audio_underrun(&underruns, "WASAPI", report.silence_frames as u64);
                 }
                 pending.clear();
                 for [left, right] in prebuffer.iter() {
                     pending.extend(left.to_le_bytes());
                     pending.extend(right.to_le_bytes());
                 }
-                if pending.len() != prebuffer_frames.saturating_mul(block_align)
-                    || render_client
-                        .write_to_device_from_deque(prebuffer_frames, &mut pending, None)
-                        .is_err()
+                if pending.len() != prebuffer_frames.saturating_mul(block_align) {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        pending_bytes = pending.len(),
+                        expected_bytes = prebuffer_frames.saturating_mul(block_align),
+                        "WASAPI prebuffer byte count invariant violated"
+                    );
+                    disconnected = true;
+                    break;
+                }
+                if let Err(error) =
+                    render_client.write_to_device_from_deque(prebuffer_frames, &mut pending, None)
                 {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        frames = prebuffer_frames,
+                        "WASAPI prebuffer submission failed"
+                    );
                     disconnected = true;
                     break;
                 }
                 pending.clear();
-                if audio_client.start_stream().is_err() {
+                if let Err(error) = audio_client.start_stream() {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI render stream failed to restart"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -811,7 +958,13 @@ fn run_wasapi_worker(
                 // The short timeout is intentional: it bounds control-command
                 // latency while retaining event-driven rendering. A failed
                 // endpoint is detected by the next client-space query.
-                if audio_client.get_available_space_in_frames().is_err() {
+                if let Err(error) = audio_client.get_available_space_in_frames() {
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI endpoint stopped responding after event timeout"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -820,7 +973,13 @@ fn run_wasapi_worker(
 
             let frames = match audio_client.get_available_space_in_frames() {
                 Ok(frames) => frames as usize,
-                Err(_) => {
+                Err(error) => {
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "WASAPI",
+                        error = %error,
+                        "WASAPI available-buffer query failed; endpoint will be reopened"
+                    );
                     disconnected = true;
                     break;
                 }
@@ -829,12 +988,19 @@ fn run_wasapi_worker(
                 continue;
             }
             if frames > scratch_frames.len() {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    available_frames = frames,
+                    scratch_capacity = scratch_frames.len(),
+                    "WASAPI endpoint reported more frames than the staging buffer can hold"
+                );
                 disconnected = true;
                 break;
             }
             let report = consumer.read_frames(&mut scratch_frames[..frames]);
             if report.silence_frames > 0 {
-                underruns.fetch_add(1, Ordering::Relaxed);
+                record_audio_underrun(&underruns, "WASAPI", report.silence_frames as u64);
             }
 
             pending.clear();
@@ -842,14 +1008,38 @@ fn run_wasapi_worker(
                 pending.extend(left.to_le_bytes());
                 pending.extend(right.to_le_bytes());
             }
-            if pending.len() != frames.saturating_mul(block_align)
-                || render_client
-                    .write_to_device_from_deque(frames, &mut pending, None)
-                    .is_err()
-            {
+            if pending.len() != frames.saturating_mul(block_align) {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    pending_bytes = pending.len(),
+                    expected_bytes = frames.saturating_mul(block_align),
+                    "WASAPI render buffer byte count invariant violated"
+                );
                 disconnected = true;
                 break;
             }
+            if let Err(error) = render_client.write_to_device_from_deque(frames, &mut pending, None)
+            {
+                sega_observability::tracing::warn!(
+                    target: "sega::audio::backend",
+                    backend = "WASAPI",
+                    error = %error,
+                    frames,
+                    "WASAPI render buffer submission failed; endpoint will be reopened"
+                );
+                disconnected = true;
+                break;
+            }
+            sega_observability::tracing::trace!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                submitted_frames = frames,
+                consumed_frames = report.queued_frames,
+                silence_frames = report.silence_frames,
+                queued_frames = consumer.metrics().queued_frames,
+                "WASAPI render buffer submitted"
+            );
             if report.producer_closed {
                 disconnected = true;
                 break;
@@ -865,6 +1055,11 @@ fn run_wasapi_worker(
             break;
         }
         if disconnected {
+            sega_observability::tracing::warn!(
+                target: "sega::audio::backend",
+                backend = "WASAPI",
+                "WASAPI endpoint disconnected; retrying default render device"
+            );
             thread::sleep(Duration::from_millis(250));
         }
     }
@@ -918,6 +1113,15 @@ impl NativeXAudio2Output {
         queue_blocks: usize,
         balance: i8,
     ) -> Result<Self, AudioOutputError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::backend",
+            backend = "XAudio2",
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            balance,
+            "native audio backend initialization requested"
+        );
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
@@ -966,25 +1170,48 @@ impl NativeXAudio2Output {
                 .map_err(|error| AudioOutputError::Device(error.to_string()))?;
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => Ok(Self {
-                    producer: Some(producer),
-                    worker: Some(worker),
-                    shutdown,
-                    underruns,
-                    dropped_blocks,
-                    submission_failed_frames,
-                    sample_rate,
-                    buffer_size,
-                    balance,
-                    control,
-                }),
+                Ok(Ok(())) => {
+                    sega_observability::tracing::info!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        sample_rate,
+                        buffer_size,
+                        queue_blocks,
+                        balance,
+                        "XAudio2 mastering and source voices initialized"
+                    );
+                    Ok(Self {
+                        producer: Some(producer),
+                        worker: Some(worker),
+                        shutdown,
+                        underruns,
+                        dropped_blocks,
+                        submission_failed_frames,
+                        sample_rate,
+                        buffer_size,
+                        balance,
+                        control,
+                    })
+                }
                 Ok(Err(message)) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        error = %message,
+                        "XAudio2 initialization failed"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        error = %error,
+                        "XAudio2 initialization timed out"
+                    );
                     shutdown.store(true, Ordering::Release);
                     drop(producer);
                     let _ = worker.join();
@@ -1029,7 +1256,20 @@ impl NativeXAudio2Output {
             let dropped_frames = push_mono_pcm16_bounded(producer, &pcm, self.balance)
                 .map_err(|_| AudioOutputError::WorkerStopped)?;
             if dropped_frames > 0 {
-                self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                let dropped_blocks = self.dropped_blocks.fetch_add(1, Ordering::Relaxed) + 1;
+                if dropped_blocks.is_power_of_two() {
+                    let metrics = producer.metrics();
+                    sega_observability::tracing::warn!(
+                        target: "sega::audio::backend",
+                        backend = "XAudio2",
+                        dropped_frames,
+                        dropped_blocks,
+                        queued_frames = metrics.queued_frames,
+                        capacity_frames = metrics.capacity_frames,
+                        high_water_mark_frames = metrics.high_water_frames,
+                        "XAudio2 producer queue saturated; oldest frames discarded"
+                    );
+                }
             }
             Ok(())
         }
@@ -1155,6 +1395,12 @@ fn run_xaudio2_worker(
     let frames_per_buffer = config.buffer_size as usize;
     let max_queued_buffers = config.queue_blocks;
     if let Err(error) = initialize_mta().ok() {
+        sega_observability::tracing::error!(
+            target: "sega::audio::backend",
+            backend = "XAudio2",
+            error = %error,
+            "XAudio2 COM apartment initialization failed"
+        );
         let _ = ready.send(Err(error.to_string()));
         return;
     }
@@ -1243,10 +1489,26 @@ fn run_xaudio2_worker(
     let (engine, mastering_voice, source_voice) = match setup {
         Ok(state) => state,
         Err(message) => {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                error = %message,
+                "XAudio2 device and voice setup failed"
+            );
             let _ = ready.send(Err(message));
             return;
         }
     };
+    sega_observability::tracing::info!(
+        target: "sega::audio::backend",
+        backend = "XAudio2",
+        sample_rate,
+        channels = 2,
+        bits_per_sample = 16,
+        frames_per_buffer,
+        max_queued_buffers,
+        "XAudio2 PCM16 stereo format negotiated"
+    );
     let _ = ready.send(Ok(()));
 
     let mut submitted = XAudio2SubmittedBuffers::new(max_queued_buffers, frames_per_buffer);
@@ -1258,6 +1520,12 @@ fn run_xaudio2_worker(
             break;
         }
         if signals.voice_error.load(Ordering::Acquire) || control.failed.load(Ordering::Acquire) {
+            sega_observability::tracing::error!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                callback_error = signals.voice_error.load(Ordering::Relaxed),
+                "XAudio2 voice callback or backend control reported failure"
+            );
             control.failed.store(true, Ordering::Release);
             break;
         }
@@ -1304,7 +1572,13 @@ fn run_xaudio2_worker(
                 consumer.discard_queued_frames();
                 Ok::<(), String>(())
             })();
-            if flush_result.is_err() {
+            if let Err(error) = &flush_result {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 flush barrier failed"
+                );
                 control.failed.store(true, Ordering::Release);
             }
             control.flush_acknowledged.store(true, Ordering::Release);
@@ -1324,7 +1598,13 @@ fn run_xaudio2_worker(
         }
 
         if voice_muted {
-            if unsafe { source_voice.SetVolume(1.0, 0) }.is_err() {
+            if let Err(error) = unsafe { source_voice.SetVolume(1.0, 0) } {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 source voice could not be unmuted"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
@@ -1346,17 +1626,41 @@ fn run_xaudio2_worker(
                 pAudioData: audio_data,
                 ..Default::default()
             };
-            if unsafe { source_voice.SubmitSourceBuffer(&buffer, None) }.is_err() {
+            if let Err(error) = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) } {
                 let lost_frames = submitted.rollback_last_submission();
-                submission_failed_frames.fetch_add(lost_frames as u64, Ordering::Relaxed);
+                let total_failed_frames = submission_failed_frames
+                    .fetch_add(lost_frames as u64, Ordering::Relaxed)
+                    + lost_frames as u64;
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    lost_frames,
+                    total_failed_frames,
+                    error = %error,
+                    "XAudio2 buffer submission failed"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
             submitted_new = true;
+            sega_observability::tracing::trace!(
+                target: "sega::audio::backend",
+                backend = "XAudio2",
+                submitted_frames = frames_per_buffer,
+                submitted_bytes = audio_bytes,
+                queued_buffers = submitted.submitted_len(),
+                "XAudio2 source buffer submitted"
+            );
         }
 
         if !voice_started && submitted_new {
-            if unsafe { source_voice.Start(0, 0) }.is_err() {
+            if let Err(error) = unsafe { source_voice.Start(0, 0) } {
+                sega_observability::tracing::error!(
+                    target: "sega::audio::backend",
+                    backend = "XAudio2",
+                    error = %error,
+                    "XAudio2 source voice failed to start"
+                );
                 control.failed.store(true, Ordering::Release);
                 break;
             }
@@ -1369,7 +1673,7 @@ fn run_xaudio2_worker(
         }
         let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
-            underruns.fetch_add(1, Ordering::Relaxed);
+            record_audio_underrun(&underruns, "XAudio2", 0);
         }
         was_underrun = is_underrun;
         thread::sleep(Duration::from_millis(2));

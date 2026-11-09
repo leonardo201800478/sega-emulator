@@ -9,4 +9,5 @@ name = "sega_machine_scheduler"
 path = "src/lib.rs"
 
 [dependencies]
+sega-observability.workspace = true
 sega-temporal-core = { path = "../temporal_core" }

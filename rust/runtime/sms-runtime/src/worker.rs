@@ -577,9 +577,14 @@ fn execute_frame(
     telemetry: &WorkerTelemetry,
 ) -> Result<(usize, Duration), String> {
     let frame_started = Instant::now();
+    let machine_time_start = machine.now().ticks();
+    let step_started = Instant::now();
     let instructions = machine
         .step_frame(max_instructions)
         .map_err(|error| error.to_string())?;
+    let step_frame_elapsed = step_started.elapsed();
+    let machine_time_end = machine.now().ticks();
+    let machine_time_delta = machine_time_end.saturating_sub(machine_time_start);
     telemetry
         .total_instructions
         .fetch_add(instructions as u64, Ordering::AcqRel);
@@ -622,6 +627,7 @@ fn execute_frame(
     }
 
     let samples = machine.drain_audio_samples(None);
+    let audio_submit_started = Instant::now();
     let audio_result = audio_session.as_mut().map(|session| {
         if publish_audio {
             session.process_samples(&samples)
@@ -629,6 +635,7 @@ fn execute_frame(
             session.process_samples_discarding_output(&samples)
         }
     });
+    let audio_submit_elapsed = audio_submit_started.elapsed();
     match audio_result {
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
@@ -647,12 +654,34 @@ fn execute_frame(
         None => {}
     }
 
-    let sample_count = samples.len().max(1) as f64;
-    let frame_duration = Duration::from_secs_f64(sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
-    Ok((
+    let sample_count = samples.len();
+    let pacing_sample_count = sample_count.max(1) as f64;
+    let frame_duration =
+        Duration::from_secs_f64(pacing_sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
+    let processing_elapsed = frame_started.elapsed();
+    let frame_wait = frame_duration.saturating_sub(processing_elapsed);
+
+    // One TRACE event per completed frame. The tracing subscriber uses a
+    // bounded lossy queue and a dedicated writer thread; no disk I/O or
+    // synchronous diagnostics formatting runs on the machine worker.
+    sega_observability::tracing::trace!(
+        target: "sega::audio::pacing",
+        frame_number = machine.frame_number(),
+        machine_time_start_ticks = machine_time_start,
+        machine_time_end_ticks = machine_time_end,
+        machine_time_delta_ticks = machine_time_delta,
         instructions,
-        frame_duration.saturating_sub(frame_started.elapsed()),
-    ))
+        psg_samples = sample_count,
+        step_frame_elapsed_ns = step_frame_elapsed.as_nanos(),
+        audio_submit_elapsed_ns = audio_submit_elapsed.as_nanos(),
+        frame_processing_elapsed_ns = processing_elapsed.as_nanos(),
+        pacing_budget_ns = frame_duration.as_nanos(),
+        pacing_wait_ns = frame_wait.as_nanos(),
+        publish_audio,
+        "SMS frame pacing diagnostic"
+    );
+
+    Ok((instructions, frame_wait))
 }
 
 fn worker_loop(
