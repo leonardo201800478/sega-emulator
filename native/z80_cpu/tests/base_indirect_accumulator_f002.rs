@@ -7,7 +7,7 @@
 
 use sega_z80_cpu::bus::CpuBus;
 use sega_z80_cpu::{
-    Z80, Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerState,
+    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState,
     Z80MicroStep, Z80Registers,
 };
 
