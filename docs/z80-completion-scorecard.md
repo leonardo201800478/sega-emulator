@@ -436,3 +436,17 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 - 16 vetores microsequenciados dirigidos passaram com WAIT por pedido de barramento, snapshot/restore em cada ciclo e ordem de barramento confirmada.
 - fmt PASS; Clippy PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD PASS; agregador Rust quality/unit PASS. Workspace regression e jobs não relacionados ficaram NOT RUN.
 - F-023 permanece AUDIT_PARTIAL: X/Y e WZ não têm prova física independente, ROM dedicado e hardware SMS NOT RUN, CMOS/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 34. F-024 — LD I,A / LD R,A / LD A,I / LD A,R — CLOSED no perfil NMOS clássico
+
+**Main:** `56d75cc79803494e9fd8a54e8930871c9101fc84` (PR #716 integrada). **HEAD validado:** `9338f8dfee679fee6270c01f9670d6b678d219a0`. **CI:** #6062 / run `42653692191` PASS no HEAD da PR; #6063 / run `42653949243` PASS no HEAD pós-merge.
+
+- 4.096 vetores: quatro opcodes × 256 valores × IFF2 0/1 × Carry 0/1.
+- LD A,R considera os dois M1 de fetch antes da leitura de R; LD R,A confirma a cópia integral de A; LD I,A confirma que R ainda recebe os dois incrementos M1.
+- Flags S/Z/PV/H/N/C verificadas por fórmula independente; X/Y derivado do valor carregado segue concordância MAME/ares e permanece evidência de compatibilidade, não especificação UM0080.
+- Microsequenciador: WAIT em cada M1, snapshot encode/decode + restore em cada fronteira; 9T nominal / 11T com dois WAITs.
+- Erratum: INT após LD A,I/R limpa PV; ambos os estados de IFF2 e Carry cobertos nos executores atômico SMS e microsequenciado. NMI e consumo do latch por instrução intermediária continuam cobertos pelos testes dedicados anteriores.
+- fmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD e agregador Rust quality/unit PASS. Workspace regression e outros subsistemas NOT RUN por política de impacto.
+
+**Limites:** CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 documenta o erratum e as flags normativas; X/Y e sua fonte são tratados como comportamento de referência MAME/ares, sem prova física. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 permanece IN_PROGRESS por outras famílias; E8 permanece BLOCKED.
