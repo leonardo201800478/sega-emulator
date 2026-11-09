@@ -10721,6 +10721,247 @@ mod ed_block_io_differential_tests {
         }
     }
 
+    fn run_sequenced_block_io_with_int(
+        cpu: &mut Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> u32 {
+        let mut step = cpu.begin_instruction().unwrap();
+        let mut injected_int = false;
+        round_trip(cpu);
+        loop {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("INT acknowledge occurred before the block-I/O instruction retired")
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        Z80BusOperation::PortRead => Some(bus.read_port(request.address)),
+                        Z80BusOperation::PortWrite { value } => {
+                            bus.write_port(request.address, value);
+                            None
+                        }
+                    };
+                    let next = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    round_trip(cpu);
+                    next
+                }
+                Z80MicroStep::InternalCycle { tstates } => {
+                    assert_eq!(tstates, 1);
+                    let state = cpu.export_state();
+                    if matches!(
+                        state.phase,
+                        super::Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
+                            remaining_tstates: 1,
+                            ..
+                        }
+                    ) {
+                        assert!(!injected_int, "INT was sampled more than once");
+                        cpu.set_int_line(Some(0xFF));
+                        injected_int = true;
+                        round_trip(cpu);
+                    }
+                    let next = cpu.complete_internal_cycle().unwrap();
+                    round_trip(cpu);
+                    next
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    assert!(injected_int, "INT was not asserted during the final repeat T-state");
+                    return tstates;
+                }
+                Z80MicroStep::InterruptAcknowledge { .. }
+                | Z80MicroStep::InterruptServiced { .. } => {
+                    panic!("interrupt service must begin only at the next instruction boundary")
+                }
+            };
+        }
+    }
+
+    fn run_sequenced_im2_interrupt(
+        cpu: &mut Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> u32 {
+        let mut step = cpu.begin_instruction().unwrap();
+        round_trip(cpu);
+        loop {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    let data = match request.operation {
+                        Z80BusOperation::InterruptAcknowledge => Some(0xFF),
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        Z80BusOperation::PortRead => Some(bus.read_port(request.address)),
+                        Z80BusOperation::PortWrite { value } => {
+                            bus.write_port(request.address, value);
+                            None
+                        }
+                    };
+                    let next = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    round_trip(cpu);
+                    next
+                }
+                Z80MicroStep::InternalCycle { tstates } => {
+                    assert_eq!(tstates, 1);
+                    let next = cpu.complete_internal_cycle().unwrap();
+                    round_trip(cpu);
+                    next
+                }
+                Z80MicroStep::InterruptAcknowledge { vector, tstates } => {
+                    assert_eq!(vector, 0xFF);
+                    assert_eq!(tstates, 7);
+                    let next = cpu.begin_instruction().unwrap();
+                    round_trip(cpu);
+                    next
+                }
+                Z80MicroStep::InterruptServiced { kind, tstates } => {
+                    assert_eq!(kind, super::Z80InterruptKind::Int);
+                    return tstates;
+                }
+                Z80MicroStep::InstructionRetired { .. } => {
+                    panic!("IM2 interrupt entry must not retire an instruction")
+                }
+            };
+        }
+    }
+
+    #[test]
+    fn block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_tstate() {
+        for (opcode, input, direction, hl) in [
+            (0xB2, true, 1_i16, 0x4000_u16),  // INIR
+            (0xBA, true, -1_i16, 0x4000_u16), // INDR
+            (0xB3, false, 1_i16, 0x4010_u16), // OTIR
+            (0xBB, false, -1_i16, 0x4010_u16), // OTDR
+        ] {
+            let initial_b = 0x10_u8;
+            let b_after = initial_b.wrapping_sub(1);
+            let c = 0xFE_u8;
+            let value = 0xFF_u8;
+            let pc = 0xA802_u16;
+            let mut state = state_with_registers(
+                Z80Registers {
+                    a: 0xA1,
+                    b: initial_b,
+                    c,
+                    h: (hl >> 8) as u8,
+                    l: hl as u8,
+                    pc,
+                    sp: 0xD000,
+                    ..Z80Registers::default()
+                },
+                0,
+            );
+            state.i = 0xC0;
+            state.iff1 = true;
+            state.iff2 = true;
+            state.interrupt_mode = 2;
+
+            let mut initial_bus = TestBus::default();
+            initial_bus.memory[usize::from(pc)] = 0xED;
+            initial_bus.memory[usize::from(pc.wrapping_add(1))] = opcode;
+            initial_bus.memory[0xC0FF] = 0x00;
+            initial_bus.memory[0xC100] = 0x90;
+            initial_bus.memory[0x9000] = 0xF5; // IM2 handler: PUSH AF
+            if input {
+                initial_bus.ports[usize::from((u16::from(initial_b) << 8) | u16::from(c))] =
+                    value;
+            } else {
+                initial_bus.memory[usize::from(hl)] = value;
+            }
+
+            let low_term = if input {
+                c.wrapping_add_signed(direction as i8)
+            } else {
+                hl.wrapping_add_signed(direction) as u8
+            };
+            let sum = u16::from(value) + u16::from(low_term);
+            let carry = sum > 0xFF;
+            let negative = value & 0x80 != 0;
+            let b_alu = if carry {
+                if negative {
+                    b_after.wrapping_sub(1)
+                } else {
+                    b_after.wrapping_add(1)
+                }
+            } else {
+                b_after
+            };
+            let parity_arg = (sum as u8 & 0x07) ^ b_after ^ (b_alu & 0x07);
+            let mut expected_flags = (b_after & 0x80) | (((pc >> 8) as u8) & 0x28);
+            if negative {
+                expected_flags |= 0x02;
+            }
+            if carry {
+                expected_flags |= 0x01;
+            }
+            if (b_alu ^ b_after) & 0x10 != 0 {
+                expected_flags |= 0x10;
+            }
+            if parity_arg.count_ones().is_multiple_of(2) {
+                expected_flags |= 0x04;
+            }
+
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(state).unwrap();
+            let mut atomic_bus = initial_bus.clone();
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(21));
+            assert_eq!(atomic.registers.f, expected_flags);
+            atomic.request_int(0xFF);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(19));
+            assert_eq!(atomic.registers.pc, 0x9000);
+            assert_eq!(atomic.registers.sp, 0xCFFE);
+            assert_eq!(atomic.registers.f, expected_flags);
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(11));
+            assert_eq!(atomic.registers.sp, 0xCFFC);
+            assert_eq!(atomic_bus.memory[0xCFFC], expected_flags);
+            assert_eq!(atomic_bus.memory[0xCFFD], 0xA1);
+            assert_eq!(atomic_bus.memory[0xCFFE], pc as u8);
+            assert_eq!(atomic_bus.memory[0xCFFF], (pc >> 8) as u8);
+
+            let mut sequenced = Z80MicroSequencer::default();
+            sequenced.import_architectural_state(state).unwrap();
+            let mut sequenced_bus = initial_bus;
+            assert_eq!(
+                run_sequenced_block_io_with_int(&mut sequenced, &mut sequenced_bus),
+                21
+            );
+            assert_eq!(sequenced.registers.f, expected_flags);
+            assert_eq!(run_sequenced_im2_interrupt(&mut sequenced, &mut sequenced_bus), 19);
+            assert_eq!(sequenced.registers.pc, 0x9000);
+            assert_eq!(sequenced.registers.sp, 0xCFFE);
+            assert_eq!(sequenced.registers.f, expected_flags);
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                11
+            );
+            assert_eq!(sequenced.registers.sp, 0xCFFC);
+            assert_eq!(sequenced_bus.memory[0xCFFC], expected_flags);
+            assert_eq!(sequenced_bus.memory[0xCFFD], 0xA1);
+            assert_eq!(sequenced_bus.memory[0xCFFE], pc as u8);
+            assert_eq!(sequenced_bus.memory[0xCFFF], (pc >> 8) as u8);
+            assert_eq!(
+                sequenced.export_architectural_state(),
+                atomic.export_architectural_state()
+            );
+            assert_eq!(sequenced_bus.memory.as_ref(), atomic_bus.memory.as_ref());
+            assert_eq!(sequenced_bus.ports.as_ref(), atomic_bus.ports.as_ref());
+            assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+            assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+            assert_eq!(sequenced_bus.port_reads, atomic_bus.port_reads);
+            assert_eq!(sequenced_bus.port_writes, atomic_bus.port_writes);
+        }
+    }
+
     #[test]
     fn block_io_repeat_uses_pc_plus_one_memptr_and_five_extra_tstates() {
         let state = state_with_registers(
