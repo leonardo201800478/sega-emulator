@@ -4,11 +4,11 @@
 //! thread. The host sends only coarse-grained commands; CPU, Scheduler, VDP, PSG,
 //! audio pacing and state transitions remain inside Rust.
 
+#[cfg(test)]
+use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
-#[cfg(test)]
-use std::sync::Condvar;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -133,14 +133,17 @@ impl WorkerTelemetry {
             self.audio_sample_rate_hz.store(0, Ordering::Release);
             self.audio_queue_capacity_frames.store(0, Ordering::Release);
             self.audio_queue_queued_frames.store(0, Ordering::Release);
-            self.audio_queue_high_water_frames.store(0, Ordering::Release);
+            self.audio_queue_high_water_frames
+                .store(0, Ordering::Release);
             self.audio_accepted_frames.store(0, Ordering::Release);
             self.audio_consumed_frames.store(0, Ordering::Release);
             self.audio_dropped_frames.store(0, Ordering::Release);
             self.audio_underrun_frames.store(0, Ordering::Release);
             self.audio_flushed_frames.store(0, Ordering::Release);
-            self.audio_endpoint_starvation_events.store(0, Ordering::Release);
-            self.audio_submission_failed_frames.store(0, Ordering::Release);
+            self.audio_endpoint_starvation_events
+                .store(0, Ordering::Release);
+            self.audio_submission_failed_frames
+                .store(0, Ordering::Release);
         }
     }
 
@@ -1162,7 +1165,10 @@ mod tests {
             underrun_events: 3,
             ..AudioOutputMetrics::default()
         });
-        assert_eq!(telemetry.audio_output_metrics(), AudioOutputMetrics::default());
+        assert_eq!(
+            telemetry.audio_output_metrics(),
+            AudioOutputMetrics::default()
+        );
     }
 
     #[test]
@@ -1176,7 +1182,10 @@ mod tests {
         });
         telemetry.total_instructions.store(99, Ordering::Release);
         telemetry.set_diagnostics_enabled(false);
-        assert_eq!(telemetry.audio_output_metrics(), AudioOutputMetrics::default());
+        assert_eq!(
+            telemetry.audio_output_metrics(),
+            AudioOutputMetrics::default()
+        );
         assert_eq!(telemetry.total_instructions.load(Ordering::Acquire), 0);
     }
 
