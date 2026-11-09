@@ -2237,7 +2237,7 @@ mod tests {
 
     #[test]
     fn accumulator_rotate_and_flag_control_opcodes_are_supported() {
-        let mut bus = AtomicTestBus([0; 0x10000]);
+        let mut bus = TestBus([0; 0x10000]);
         bus.0[..6].copy_from_slice(&[0x3E, 0x81, 0x07, 0x2F, 0x37, 0x3F]);
         let mut cpu = Z80::default();
         assert_eq!(cpu.step(&mut bus), Ok(7));
@@ -3951,7 +3951,7 @@ mod architectural_state_tests {
 
     #[test]
     fn indexed_ld_sp_ix_iy_transfer_index_pair_without_changing_flags_or_hl() {
-        let mut bus = TestBus([0; 0x10000]);
+        let mut bus = AtomicTestBus([0; 0x10000]);
         bus.0[..4].copy_from_slice(&[
             0xDD, 0xF9, // LD SP,IX
             0xFD, 0xF9, // LD SP,IY
