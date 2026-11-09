@@ -158,7 +158,7 @@ impl<T> BoundedHistory<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BoundedHistory, BreakpointSet, MAX_BREAKPOINTS};
+    use super::{BoundedHistory, BreakpointSet};
 
     #[test]
     fn breakpoints_are_unique_sorted_and_removable() {
