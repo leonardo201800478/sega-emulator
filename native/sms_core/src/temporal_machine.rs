@@ -1437,7 +1437,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_ed_decode_resumes_after_prefix_snapshot_and_retries_deterministically() {
+    fn reserved_ed_nop_retires_after_prefix_snapshot_and_retries_deterministically() {
         let mut rom = vec![0; 0x4000];
         rom[..2].copy_from_slice(&[0xED, 0x00]);
         let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
@@ -1462,18 +1462,16 @@ mod tests {
         );
 
         let mut restored = SmsTemporalMachine::restore_state(prefix_snapshot.clone()).unwrap();
-        let first_error = restored.resume_instruction(0).unwrap_err();
-        assert!(matches!(
-            first_error,
-            SmsTemporalMachineError::Cpu(Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: 0x00,
-                ..
-            })
-        ));
+        let first_retirement = restored.resume_instruction(0).unwrap();
+        retired(first_retirement, 0x00, 8);
+        assert_eq!(restored.now(), MachineTime::from_ticks(24));
+        assert_eq!(restored.cpu().registers.pc, 2);
+        assert_eq!(restored.cpu().refresh & 0x7F, 2);
 
         let mut retried = SmsTemporalMachine::restore_state(prefix_snapshot).unwrap();
-        let retry_error = retried.resume_instruction(0).unwrap_err();
-        assert_eq!(retry_error, first_error);
+        let retry_retirement = retried.resume_instruction(0).unwrap();
+        assert_eq!(retry_retirement, first_retirement);
+        assert_eq!(retried.export_state(), restored.export_state());
     }
 
     #[test]

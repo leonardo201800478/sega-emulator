@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline de runtime Z80:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (merge da PR #702, 2026-11-09). As PRs documentais #703 e #704 reconciliaram o ledger sem alterar o runtime. A validação externa no HEAD da PR #702 totalizou 34.000 vetores PASS; evidências nas seções 22–24.
+**Baseline de main consultada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613` (2026-11-09). As PRs documentais #703 e #704 reconciliaram o ledger sem alterar o runtime. A validação externa no HEAD da PR #702 totalizou 34.000 vetores PASS; evidências nas seções 22–24.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -311,3 +311,21 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 **Classificação:** a divergência específica Q/previous-Q de DD/FD→SCF/CCF está RESOLVED. F-028 permanece AUDIT_PARTIAL porque a auditoria integral de todas as exceções DD/FD, prefixos, HALT, flags e efeitos arquiteturais ainda não foi concluída. F-036 CLOSED; F-037 CLOSED; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 
 **Pendências E7 que não são resolvidas por esta PR:** microsequenciador para os 178 bytes ED reservados (F-033), classificação/validação dos aliases e encodings não documentados (F-034), auditoria global das famílias F-001..F-034, interrupções/WAIT/barramento e determinismo sistêmico.
+
+
+## 25. Candidata F-033 — aposentadoria ED reservada no microsequenciador — 2026-11-09
+
+**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
+**PR:** #706 — `fix/z80-f033-ed-reserved-resume-20261109`
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
+**Estado:** IMPLEMENTED_PENDING_VALIDATION — ainda não integrada.
+
+- O fallback residual de `execute_ed_register_control()` agora aposenta a instrução após os dois fetches M1 já consumidos, sem ciclos internos artificiais nem transações extras de memória/I/O.
+- A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 bytes fora das 78 codificações explícitas e verifica 8 T-states, PC com wrap, dois refresh increments, F/Q/previous-Q/WZ/P/IFF/IM, fase Ready e ausência de request pendente.
+- A suíte também cobre WAIT aditivo e snapshot/restore antes e depois do byte terminal ED.
+- Regressões antigas no sequenciador e no SMS temporal foram atualizadas de `UnsupportedOpcode` para aposentadoria determinística.
+- A hipótese de 8T/no-effect é delimitada ao perfil Zilog NMOS clássico. UM0080 não especifica universalmente todos os bytes reservados; MAME e fontes secundárias são evidência de implementação/referência, não prova de silício. CMOS, R800, Z80N e clones permanecem fora da afirmação.
+- CI #42631919433 no HEAD candidato: Z80 focused PASS; Rust quality and unit regression PASS; Windows x64 D3D12 PASS. Rust workspace regression, documentação e outros jobs aparecem SKIPPED/NOT RUN por não aplicabilidade; a política de CI determina pacote focado para mudanças exclusivamente Z80. Nenhum resultado de outro SHA é transferido.
+- A revisão automática Codex da PR não concluiu por limite de uso; não há review threads inline abertas nem reviews submetidas na consulta. Isso não equivale a aprovação de revisão.
+
+**Classificação:** F-033 permanece IMPLEMENTED_PENDING_VALIDATION até merge. F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.

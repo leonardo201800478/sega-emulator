@@ -319,3 +319,20 @@ A contagem 78 explícitas / 178 fallback continua descrevendo o despachante atô
 ## 12. Reconciliação após PR #702
 
 A PR #702 corrigiu Q/previous-Q para DD/FD→SCF/CCF e validou 34.000 vetores externos. Não alterou decoder, despachante, sequenciador ou fallback ED. A divergência permanece inalterada: 178 bytes reservados são NOP de 8T no executor atômico e `UnsupportedOpcode` no microsequenciador. F-033 permanece GAP_CONFIRMED; não inferir que a integração Q resolveu qualquer parte do fallback ED.
+
+
+## 13. Candidata F-033 — PR #706 — 2026-11-09
+
+**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
+**Estado:** implementação candidata; não integrada.
+
+O fallback residual em `execute_ed_register_control()` foi alterado para aposentadoria normal via `retire(opcode)`. Como o byte terminal já foi obtido pelo segundo M1, o caminho não adiciona M-cycles/T-states internos nem acesso extra de barramento. A duração agregada esperada é 8 T-states nominais, acrescida dos WAIT efetivamente inseridos nos dois fetches.
+
+A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos bytes não cobertos pelas 78 codificações explícitas e verifica PC/wrap, R, F, Q/previous-Q, WZ, P, IFF1/IFF2, IM, fase Ready e ausência de request pendente. Também valida WAIT e snapshot/restore com retomada entre prefixo e byte terminal. O teste do SMS temporal e o teste unitário do sequenciador foram atualizados para o novo contrato de aposentadoria.
+
+**Limite da evidência:** o comportamento de 8T/no-effect é assumido somente para o perfil Zilog NMOS clássico. UM0080 não especifica todos os bytes reservados. A implementação MAME fixada e fontes secundárias sustentam a hipótese de compatibilidade, mas não constituem prova de silício. Nenhuma afirmação é feita para CMOS, R800, Z80N ou clones.
+
+**CI #42631919433:** Z80 focused validation PASS; Rust quality and unit regression PASS; Windows x64 D3D12 PASS. Rust workspace regression e demais jobs não aplicáveis ficaram SKIPPED/NOT RUN conforme a política impact-based em `docs/ci-validation-policy.md`. Esse resultado é específico do HEAD candidato acima.
+
+F-033 só pode ser promovida a CLOSED após integração da PR e reconciliação documental na main. F-034 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.

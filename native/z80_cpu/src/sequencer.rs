@@ -5428,7 +5428,9 @@ impl Z80MicroSequencer {
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            _ => self.unsupported(opcode),
+            // Reserved ED encodings consume only their two opcode-fetch M1 cycles.
+            // No extra internal cycle or architectural side effect is introduced.
+            _ => self.retire(opcode),
         }
     }
 
@@ -7411,16 +7413,21 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_ed_opcode_does_not_leave_a_phantom_pending_request() {
+    fn reserved_ed_opcode_retires_without_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
         let prefix_fetch = request(cpu.begin_instruction().unwrap());
         let subopcode_fetch = request(cpu.complete_bus_cycle(prefix_fetch.id, Some(0xED)).unwrap());
-        assert!(matches!(
+        assert_eq!(
             cpu.complete_bus_cycle(subopcode_fetch.id, Some(0x00)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. })
-        ));
+            Ok(Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 8,
+            })
+        );
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh & 0x7F, 2);
     }
     #[test]
     fn restore_rejects_incdec_read_address_mismatch_with_hl() {
