@@ -130,7 +130,7 @@ fn initial_registers(
         h: 0x55,
         l: 0x66,
         sp: 0xA000,
-        pc: PROGRAM_COUNTER,
+        pc: program_counter,
     };
 
     let hl = match source {
@@ -152,6 +152,7 @@ fn initial_registers(
 
 fn assert_differential_case(
     opcode: u8,
+    program_counter: u16,
     initial_registers: Z80Registers,
     memory: &mut [u8; 65_536],
     memory_result: Option<(u16, u8)>,
@@ -180,7 +181,7 @@ fn assert_differential_case(
     micro.q = INITIAL_Q;
     let (micro, micro_tstates, accesses) = run_microsequenced(micro, memory);
 
-    let context = format!("opcode={opcode:02X}, pc={PROGRAM_COUNTER:04X}");
+    let context = format!("opcode={opcode:02X}, pc={program_counter:04X}");
     assert_eq!(atomic_tstates, expected_tstates, "{context}: atomic timing");
     assert_eq!(
         micro_tstates,
@@ -227,7 +228,7 @@ fn register_matrix_case(
     let destination = (opcode >> 3) & 0x07;
     let source = opcode & 0x07;
     let flags = value.rotate_left(1) ^ 0xA5;
-    let registers = initial_registers(source, destination, value, address, flags);
+    let registers = initial_registers(source, destination, value, address, flags, PROGRAM_COUNTER);
     let hl = registers.hl();
 
     memory[usize::from(PROGRAM_COUNTER)] = opcode;
@@ -274,6 +275,7 @@ fn register_matrix_case(
     };
     assert_differential_case(
         opcode,
+        PROGRAM_COUNTER,
         registers,
         memory,
         memory_result,
@@ -287,6 +289,7 @@ fn immediate_load_case(
     opcode: u8,
     value: u8,
     address: u16,
+    program_counter: u16,
     memory: &mut [u8; 65_536],
 ) {
     let destination = (opcode >> 3) & 0x07;
@@ -301,7 +304,7 @@ fn immediate_load_case(
         h: 0x55,
         l: 0x66,
         sp: 0xA000,
-        pc: PROGRAM_COUNTER,
+        pc: program_counter,
     };
     if destination == 6 {
         registers.set_hl(address);
@@ -309,8 +312,8 @@ fn immediate_load_case(
         registers.set_hl(0xC100);
     }
 
-    memory[usize::from(PROGRAM_COUNTER)] = opcode;
-    memory[usize::from(PROGRAM_COUNTER.wrapping_add(1))] = value;
+    memory[usize::from(program_counter)] = opcode;
+    memory[usize::from(program_counter.wrapping_add(1))] = value;
     let memory_result = if destination == 6 {
         memory[usize::from(address)] = 0x96;
         Some((address, value))
@@ -322,17 +325,17 @@ fn immediate_load_case(
     if destination != 6 {
         write_register(&mut expected_registers, destination, value);
     }
-    expected_registers.pc = PROGRAM_COUNTER.wrapping_add(2);
+    expected_registers.pc = program_counter.wrapping_add(2);
 
     let mut expected_accesses = vec![
         Access {
             operation: Z80BusOperation::OpcodeFetch,
-            address: PROGRAM_COUNTER,
+            address: program_counter,
             base_tstates: 4,
         },
         Access {
             operation: Z80BusOperation::MemoryRead,
-            address: PROGRAM_COUNTER.wrapping_add(1),
+            address: program_counter.wrapping_add(1),
             base_tstates: 3,
         },
     ];
@@ -346,6 +349,7 @@ fn immediate_load_case(
 
     assert_differential_case(
         opcode,
+        program_counter,
         registers,
         memory,
         memory_result,
@@ -397,17 +401,23 @@ fn all_base_immediate_ld_encodings_cover_every_byte_and_hl_boundary() {
 
     for opcode in [0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E] {
         for value in u8::MIN..=u8::MAX {
-            immediate_load_case(opcode, value, 0xC100, &mut memory);
+            immediate_load_case(opcode, value, 0xC100, PROGRAM_COUNTER, &mut memory);
             tested += 1;
         }
     }
 
     for value in u8::MIN..=u8::MAX {
         for address in HL_ADDRESS_VECTORS {
-            immediate_load_case(0x36, value, address, &mut memory);
+            immediate_load_case(0x36, value, address, PROGRAM_COUNTER, &mut memory);
             tested += 1;
         }
     }
 
     assert_eq!(tested, 2_816, "all F-001 immediate LD values and (HL) boundaries");
+}
+
+#[test]
+fn base_immediate_ld_wraps_operand_fetch_from_ffff_to_0000() {
+    let mut memory = Box::new([0u8; 65_536]);
+    immediate_load_case(0x3E, 0xA5, 0xC100, 0xFFFF, &mut memory);
 }
