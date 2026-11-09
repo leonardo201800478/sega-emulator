@@ -1,8 +1,8 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota após PR #686:** `e7e37290e1baa9119326e9e7213f77cadcc37f5e` (2026-11-09).
-**Baseline documental encontrada:** scorecard e matriz DD/FD ainda apontavam para `043ecb61d8d1cc77245fa72639d7f210d88cab26`; a divergência deve ser reconciliada nesta trilha.
+**Baseline remota após PR #687:** `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09). PR #687 atualizou scorecard, matriz e checklist após o fechamento de F-037; nenhuma alteração de runtime.
+**Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
 **Estado global:** `IN_PROGRESS`. E8/ZEXDOC/ZEXALL permanece bloqueada até o fechamento formal de E7.
@@ -311,3 +311,11 @@ A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
 **Estado:** F-036 CLOSED; F-037 CLOSED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 
 **Próxima tarefa:** auditoria residual Z80 orientada por evidência externa e cobertura semântica/temporal. Não iniciar ZEXDOC/ZEXALL.
+
+
+## 22. Reconciliação da baseline documental — PR #688
+
+- Main de entrada: `4d8a862f254097e9dd1d0d1640edcd74f40ab12c`.
+- Scorecard e matriz DD/FD tinham cabeçalhos com baselines antigas apesar de conterem os fechamentos #684/#686 em seções posteriores.
+- Esta PR atualiza os cabeçalhos para a baseline corrente, mantendo as baselines anteriores como histórico e sem alegar reexecução de testes antigos.
+- Estado semântico: F-036 CLOSED; F-037 CLOSED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
