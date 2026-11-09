@@ -5428,7 +5428,9 @@ impl Z80MicroSequencer {
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            _ => self.unsupported(opcode),
+            // Reserved ED encodings consume only their two opcode-fetch M1 cycles.
+            // No extra internal cycle or architectural side effect is introduced.
+            _ => self.retire(opcode),
         }
     }
 
