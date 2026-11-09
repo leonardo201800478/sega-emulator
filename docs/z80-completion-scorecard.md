@@ -550,13 +550,16 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 IN_PROGRESS; E8 BLOCKED.
 
 
-## 40. F-015 — RLCA/RRCA/RLA/RRA — implementação de testes candidata
+## 40. F-015 — RLCA/RRCA/RLA/RRA — candidata validada, merge pendente
 
 **Baseline main pré-PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+**HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
+**CI:** #6129 / run `42678520765` PASS no HEAD exato.
 **Escopo:** BASE `07/0F/17/1F`; 1 M1 / 4T por opcode.
 **Implementação:** `native/z80_cpu/tests/base_accumulator_rotates_f015.rs`; integração SMS em `native/sms_core/tests/z80_f015_temporal.rs`; relatório em `docs/audits/z80-f015-accumulator-rotates-2026-11-09.md`.
 **Matriz:** 262.144 vetores (4 × 256 A × 256 F), mais 1.024 casos snapshot/restore e quatro PC-wrap. SMS: 192 casos com WAIT M1, snapshot/restore e comparação de trace.
 **Semântica documentada:** S/Z/PV preservadas; H/N resetadas; C do bit deslocado; RLA/RRA consomem carry anterior; 4T. UM0080 pp. 205/207/209/211 não documenta X/Y.
 **Comparação:** MAME/ares calculam X/Y a partir do novo A. Q não deve ser comparado em representação bruta entre projetos: este runtime guarda o último F escrito em `q`; após rotate, `q=F` e previous-Q preserva o latch anterior.
+**Gates:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED.
 **Runtime:** nenhuma alteração.
-**Estado:** IMPLEMENTED_PENDING_VALIDATION. Aguardando rustfmt, Clippy, testes Z80/SMS/SG-1000 e documentation hygiene no HEAD exato. E7 IN_PROGRESS; E8 BLOCKED.
+**Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Gates focados aprovados no HEAD indicado. Sem validação física; X/Y permanece comparativo. E7 IN_PROGRESS; E8 BLOCKED.
