@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
 **Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
-**Baseline atualizada:** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #692 integrada).
+**Baseline atualizada:** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
