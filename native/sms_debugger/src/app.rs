@@ -42,8 +42,8 @@ impl DebugTarget for SmsTarget {
                     RegisterValue { name: "I".into(), value: u32::from(cpu.i), width_bits: 8 },
                     RegisterValue { name: "R".into(), value: u32::from(cpu.refresh), width_bits: 8 },
                     RegisterValue { name: "WZ".into(), value: u32::from(cpu.wz), width_bits: 16 },
-                    RegisterValue { name: "IFF1".into(), value: u32::from(cpu.iff1), width_bits: 1 },
-                    RegisterValue { name: "IFF2".into(), value: u32::from(cpu.iff2), width_bits: 1 },
+                    RegisterValue { name: "IFF1".into(), value: u32::from(u8::from(cpu.iff1)), width_bits: 1 },
+                    RegisterValue { name: "IFF2".into(), value: u32::from(u8::from(cpu.iff2)), width_bits: 1 },
                 ],
                 halted: Some(cpu.halted),
                 interrupt_mode: Some(cpu.interrupt_mode),
@@ -146,7 +146,7 @@ impl DebuggerApp {
     }
 
     fn render_video(&mut self, ui: &mut egui::Ui) {
-        let Some(frame) = self.session.as_ref().and_then(DebugSession::framebuffer) else { ui.label("Sem vídeo"); return; };
+        let Some(frame) = self.session.as_ref().and_then(|session| session.framebuffer()) else { ui.label("Sem vídeo"); return; };
         let image = egui::ColorImage::from_rgb([frame.width,frame.height], &frame.rgb);
         if let Some(texture) = self.texture.as_mut() { texture.set(image,egui::TextureOptions::NEAREST); }
         else { self.texture = Some(ui.ctx().load_texture("sms-debug-frame",image,egui::TextureOptions::NEAREST)); }
