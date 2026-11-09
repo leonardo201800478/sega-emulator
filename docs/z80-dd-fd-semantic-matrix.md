@@ -1,6 +1,6 @@
 # Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
-**Atualização de baseline (2026-11-09):** o conteúdo histórico desta matriz foi originalmente auditado na baseline `043ecb61d8d1cc77245fa72639d7f210d88cab26`. A main documental consultada imediatamente após PR #681 era `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`; isso não significa que toda a matriz tenha sido revalidada nesse SHA. A auditoria incremental atual está registrada em [Checklist mestre de auditoria Z80](z80-master-audit-checklist.md). Não atribuir à matriz histórica evidência posterior sem atualizar a linha correspondente e registrar o SHA.
+**Baseline documental reconciliada (2026-11-09):** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` após PR #692. O histórico anterior permanece preservado; a nova evidência externa F-037 e a pendência Q/previous-Q estão registradas na seção 23.
 
 **Data:** 2026-11-09
 **Baseline remota auditada:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09, após PR #687 documental). A mudança #687 não alterou runtime Z80 nem a matriz de opcodes.
@@ -413,3 +413,34 @@ A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A no
 - 10.816 casos diferenciais, vetores fixos para A/F e X/Y de CP, carry-in, Q/previous-Q, WAIT, snapshot/restore e prefixos repetidos.
 - F-037 CLOSED. F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 - Evidência complementar pendente: importar vetores externos SingleStepTests Z80 NMOS com atribuição/licença MIT e testar a execução retomável contra esses estados finais.
+
+
+## 23. Reconciliação após PR #692 — F-037 externo e F-028 residual
+
+### F-037 — ALU com metades IX/IY
+
+- PR #692 integrada na main `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
+- HEAD validado `1606556814a8746a445d3ad32fc948ab97f0fde5`; CI #42622828177 PASS.
+- SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (MIT).
+- 32 arquivos × 1.000 casos = **32.000/32.000 PASS** no microsequenciador retomável.
+- Abrange DD/FD 84/85, 8C/8D, 94/95, 9C/9D, A4/A5, AC/AD, B4/B5 e BC/BD.
+- Comparação arquitetural inclui F, Q/P, PC, R, WZ, registradores alternativos, IFF/IM/EI, IX/IY e RAM. A comparação temporal limita-se às duas requisições lógicas M1 e 8 T-states agregados; não declara equivalência elétrica.
+
+### F-028 — exceções e Q/previous-Q
+
+**Exceções H/L com memória:** a inspeção dos dois executores confirma que DD/FD 66/6E escrevem H/L reais e 74/75 leem H/L reais. No executor atômico, os helpers de index register são chamados com substituição de metades desabilitada; no microsequenciador, os estados MemoryReadRegister/MemoryWrite usam read_register/write_register comuns. Não alterar E4A/E4B sem divergência reproduzida.
+
+**Prefixos:** prefix_fsm.rs cobre repetição/alternância e last-prefix-wins; prefix_fallback_e6.rs cobre prefixos ignorados e retomada. A classificação de 76 como prefixo ignorado preserva HALT como opcode terminal.
+
+**Pendência identificada por inspeção semântica:** para Zilog NMOS, DD/FD imediatamente antes de SCF/CCF devem ser tratados como a instrução precedente não modificadora de flags. A referência de hardware Z80Decoder informa que o prefixo faz perder o estado de modificação de flags anterior. O código atual mantém q_previous ao atravessar DD/FD.
+
+Vetores externos discriminantes fixados na mesma revisão SingleStepTests:
+
+| Fixture | Git blob SHA-1 | Estado inicial | Estado final esperado |
+|---|---|---|---|
+| DD 37 0001 | `c68369350b5a47ebb481d35a7b9e4dd86e292716` | A=50, F=75, Q=75 | F=65, Q=65 |
+| FD 3F 0001 | `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345` | A=06, F=ED, Q=ED | F=FC, Q=FC |
+
+A fórmula atual, preservando q_previous=F, produziria F=45 no primeiro caso e F=D4 no segundo; com q_previous limpo, os resultados esperados são F=65 e F=FC. Esta é uma divergência estática derivada do código e dos vetores; o teste no harness e a correção ainda estão pendentes.
+
+**Próxima tarefa objetiva:** adicionar DD 37 e FD 3F ao harness externo, reproduzir no microsequenciador e executor atômico, corrigir a fronteira de prefixo sem alterar E4A/E4B e validar snapshot/restore após o primeiro M1.
