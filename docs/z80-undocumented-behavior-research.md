@@ -208,4 +208,4 @@ Na revisão SingleStepTests/Z80 `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`:
 - `DD 37 0001`, blob `c68369350b5a47ebb481d35a7b9e4dd86e292716`: A=50, F=75, Q=75; final esperado F=65, Q=65.
 - `FD 3F 0001`, blob `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345`: A=06, F=ED, Q=ED; final esperado F=FC, Q=FC.
 
-A reprodução no harness ocorreu na PR #695, run #42624833386: DD 37 0001 retornou F=45 em vez de F=65. O teste falhou no primeiro vetor e não alcançou os 1.000 casos FD 3F; a previsão estática para FD 3F permanece F=D4 em vez de F=FC. A PR #700 implementa a limpeza de q_previous nos dois executores e adiciona teste de snapshot/restore; validação CI pendente.
+A reprodução no harness ocorreu na PR #695, run #42624833386: DD 37 0001 retornou F=45 em vez de F=65. O teste falhou no primeiro vetor e não alcançou os 1.000 casos FD 3F; a previsão estática para FD 3F permanece F=D4 em vez de F=FC. A PR de correção Q/previous-Q implementa a limpeza de q_previous nos dois executores e adiciona teste de snapshot/restore; validação CI pendente.
