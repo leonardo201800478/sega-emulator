@@ -2,8 +2,8 @@
 
 # Especificação documental do Z80 — manuais ZiLOG
 
-**Projeto:** Sega Emulator — Emulação de Alta Precisão  
-**Status:** síntese documental inicial, orientada à implementação e aos testes; não representa certificação do núcleo.  
+**Projeto:** Sega Emulator — Emulação de Alta Precisão
+**Status:** síntese documental inicial, orientada à implementação e aos testes; não representa certificação do núcleo.
 **Data:** 23/10/2026.
 
 ## 1. Objetivo e método
