@@ -215,3 +215,11 @@ A reprodução ocorreu na PR #695, run #42624833386: DD 37 0001 retornou F=45 em
 O despachante atômico retorna 8T para os 178 bytes ED sem handler explícito; `execute_ed_register_control` no microsequenciador ainda retorna `UnsupportedOpcode`. O MAME `z80.lst` os classifica como `illegal_2` (referência de implementação, não prova de silício). A revisão SingleStepTests fixada possui fixtures ED77 e ED7F com 1.000 casos cada; outros bytes reservados amostrados não têm arquivos encontrados. A etapa atual adiciona teste retomável sintético para os 178 e vetores externos ED77/ED7F. Resultado pendente de CI. 
 
 Fuse mantém estado Q/last_Q no núcleo Z80 e documenta perfis CMOS/NMOS; seu manual descreve que `OUT (C),0` difere entre CMOS (0xFF) e NMOS (0x00). Isso reforça a necessidade de separar variantes e não generalizar o comportamento de ED71. A implementação Fuse é referência comparativa, não prova de silício.
+
+## 10. Referências independentes consultadas — 2026-11-09
+
+- **Fuse source:** [z80_ops.c](https://sourceforge.net/p/fuse-emulator/fuse/ci/master/tree/z80/z80_ops.c/) mantém Q/last_Q no núcleo; [z80.c](https://sourceforge.net/p/fuse-emulator/fuse/ci/master/tree/z80/z80.c/) contém tratamento de IFF2/NMI. Fonte de implementação, não prova de silício.
+- **Fuse manual:** [fuse(1)](https://manpages.debian.org/unstable/fuse-emulator/fuse.1.en.html) documenta perfil CMOS/NMOS e a diferença de `OUT (C),0` (0xFF em CMOS, 0x00 em NMOS).
+- **MAME:** [z80.lst fixado](https://github.com/mamedev/mame/blob/c7541016a35d83a3eb5db5db5d20a5cb79a17a43/src/devices/cpu/z80/z80.lst) é usado como referência de implementação para aliases e ED reservados.
+- **Klive IDE** e **CPCWiki** são referências secundárias comunitárias para aliases e encodings sem efeito; não são especificações primárias.
+- **SMS Power:** [pinouts e sinais do Master System](https://www.smspower.org/Development/Pinouts) documenta M1, WAIT, INT/NMI e clock; [Pause Button](https://www.smspower.org/Development/PauseButton) documenta o uso de NMI e o vetor 0x0066. Esses materiais serão usados na auditoria temporal, sem inferir que todos os periféricos Sega geram WAIT.
