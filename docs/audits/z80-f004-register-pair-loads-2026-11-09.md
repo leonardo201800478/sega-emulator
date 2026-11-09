@@ -83,13 +83,30 @@ Arquivo: `native/sms_core/tests/z80_f004_temporal.rs`.
 
 **Contagem da matriz:** 3.612 vetores principais (1.052 + 2.560), mais seis casos de wrap de PC; integração temporal cobre os quatro opcodes imediatos e ambos os absolutos HL.
 
-## 6. Critérios de aceite e estado
+## 6. Validação CI e estado
 
-- Rustfmt: pendente no HEAD final da PR.
-- Clippy com `-D warnings`: pendente no HEAD final da PR.
-- Testes focados Z80/SMS/SG-1000: pendentes.
-- Regressão integral do workspace: classificar conforme política de impacto; NOT RUN não é PASS.
-- Documentação hygiene: pendente.
-- Nenhuma alteração de runtime é autorizada sem falha reproduzível nos testes e confronto do oracle.
-- F-004 permanece `IMPLEMENTED_PENDING_VALIDATION` até todos os gates aplicáveis passarem e a PR ser integrada por squash.
-- E7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED.
+**HEAD validado:** `ee085aeb00290a470c2018c3399e3943fe96e006`.
+**CI #6119 / run `42676687551`: PASS no HEAD exato.**
+
+| Gate | Resultado | Evidência |
+|---|---|---|
+| Change impact classification | PASS | CI #6119 |
+| Rustfmt Z80/SMS/SG-1000 | PASS | `cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check` |
+| Clippy focado | PASS | `cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings` |
+| Testes Z80/SMS/SG-1000 | PASS | `cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core` |
+| Testes F-004 | PASS | 4 testes em `base_register_pair_f004.rs` e 2 testes em `z80_f004_temporal.rs` |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores; regressão adjacente, não parte da matriz F-004 |
+| Documentation patch hygiene | PASS | CI #6119 |
+| Agregador Rust quality/unit | PASS | CI #6119 |
+| `cargo test --workspace --locked` | NOT RUN | Job workspace SKIPPED pela classificação de impacto |
+| Scheduler stress / hosts / VDP / PSG | NOT RUN | Jobs não relacionados SKIPPED; não promover a PASS |
+
+**Histórico de correções de CI:**
+- #6115 / run `42676262904`: FAIL somente em rustfmt; ajustes de formatação aplicados.
+- #6117 / run `42676421427`: rustfmt PASS; Clippy FAIL por tipo inteiro ambíguo em `value.to_le_bytes()`; tipo do vetor temporal explicitado.
+- #6118 / run `42676555020`: rustfmt PASS; Clippy FAIL por `too_many_arguments` no helper de integração temporal; a exceção local foi explicitada e restrita ao helper.
+- #6119 / run `42676687551`: todos os gates aplicáveis PASS no HEAD acima.
+
+Nenhuma dessas falhas exigiu alteração de runtime; foram corrigidos somente testes.
+
+**Estado:** F-004 permanece `IMPLEMENTED_PENDING_VALIDATION` até integração por squash e confirmação do SHA da main. A CI focada passou no HEAD indicado. Não alegar validação física do hardware. E7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED.
