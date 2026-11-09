@@ -8775,9 +8775,14 @@ mod ed_register_control_differential_tests {
     #[test]
     fn ed_im_aliases_match_explicit_nmos_profile_mapping() {
         for (opcode, expected_mode) in [
-            (0x46, 0), (0x4E, 0), (0x66, 0), (0x6E, 0),
-            (0x56, 1), (0x76, 1),
-            (0x5E, 2), (0x7E, 2),
+            (0x46, 0),
+            (0x4E, 0),
+            (0x66, 0),
+            (0x6E, 0),
+            (0x56, 1),
+            (0x76, 1),
+            (0x5E, 2),
+            (0x7E, 2),
         ] {
             let architectural = state(0xA5, true);
             let mut atomic = Z80::default();
@@ -8786,7 +8791,10 @@ mod ed_register_control_differential_tests {
             atomic_bus.memory[0xFFFE] = 0xED;
             atomic_bus.memory[0xFFFF] = opcode;
             assert_eq!(atomic.step(&mut atomic_bus), Ok(8));
-            assert_eq!(atomic.interrupt_mode, expected_mode, "atomic ED {opcode:02X}");
+            assert_eq!(
+                atomic.interrupt_mode, expected_mode,
+                "atomic ED {opcode:02X}"
+            );
 
             let mut sequenced = Z80MicroSequencer::default();
             sequenced.import_architectural_state(architectural).unwrap();
@@ -8802,7 +8810,10 @@ mod ed_register_control_differential_tests {
                 retired,
                 Z80MicroStep::InstructionRetired { opcode, tstates: 8 }
             );
-            assert_eq!(sequenced.interrupt_mode, expected_mode, "sequenced ED {opcode:02X}");
+            assert_eq!(
+                sequenced.interrupt_mode, expected_mode,
+                "sequenced ED {opcode:02X}"
+            );
             assert_eq!(
                 sequenced.export_architectural_state(),
                 atomic.export_architectural_state()
