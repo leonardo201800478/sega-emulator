@@ -5,8 +5,8 @@
 //! complete documented flags and the undocumented X/Y behavior of CP.
 
 use sega_z80_cpu::{
-    bus::CpuBus, Z80, Z80AlternateRegisters, Z80BusOperation, Z80BusRequest,
-    Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep, Z80Registers,
+    Z80, Z80AlternateRegisters, Z80BusOperation, Z80BusRequest, Z80MicroSequencer,
+    Z80MicroSequencerState, Z80MicroStep, Z80Registers, bus::CpuBus,
 };
 
 const START_PC: u16 = 0x4000;
@@ -25,10 +25,7 @@ struct FlatBus {
 impl CpuBus for FlatBus {
     fn read_memory(&mut self, address: u16) -> u8 {
         let offset = address.wrapping_sub(START_PC);
-        self.program
-            .get(usize::from(offset))
-            .copied()
-            .unwrap_or(0)
+        self.program.get(usize::from(offset)).copied().unwrap_or(0)
     }
 
     fn write_memory(&mut self, address: u16, value: u8) {
@@ -107,12 +104,7 @@ fn seed_atomic(
     (cpu, bus)
 }
 
-fn seed_microsequencer(
-    accumulator: u8,
-    flags: u8,
-    ix: u16,
-    iy: u16,
-) -> Z80MicroSequencer {
+fn seed_microsequencer(accumulator: u8, flags: u8, ix: u16, iy: u16) -> Z80MicroSequencer {
     let mut cpu = Z80MicroSequencer::default();
     cpu.registers = initial_registers(accumulator, flags);
     cpu.alternate = initial_alternate();
@@ -239,11 +231,7 @@ struct ExpectedAluState<'a> {
     atomic_tstates: u32,
 }
 
-fn assert_shared_state(
-    micro: &Z80MicroSequencer,
-    atomic: &Z80,
-    expected: ExpectedAluState<'_>,
-) {
+fn assert_shared_state(micro: &Z80MicroSequencer, atomic: &Z80, expected: ExpectedAluState<'_>) {
     let ExpectedAluState {
         expected_a,
         expected_f,
@@ -266,7 +254,10 @@ fn assert_shared_state(
     assert_eq!(micro.refresh, expected_refresh(prefixes.len() + 1));
     assert_eq!(atomic.r, expected_refresh(prefixes.len() + 1));
     assert_eq!(micro.q_previous, INITIAL_Q);
-    assert_eq!(micro.q, expected_f, "Q follows the flags written by the ALU");
+    assert_eq!(
+        micro.q, expected_f,
+        "Q follows the flags written by the ALU"
+    );
     assert_eq!(atomic.q, expected_f);
     assert_eq!(micro.wz, INITIAL_WZ);
     assert_eq!(atomic.wz, INITIAL_WZ);
@@ -316,7 +307,10 @@ fn all_16_dd_fd_half_register_alu_forms_match_atomic_boundary_matrix() {
 
                             assert_eq!(atomic_tstates, 8);
                             assert_eq!(micro_tstates, 8);
-                            assert!(bus.writes.is_empty(), "register-source ALU must not access data memory");
+                            assert!(
+                                bus.writes.is_empty(),
+                                "register-source ALU must not access data memory"
+                            );
                             assert_eq!(micro.registers.a, atomic.registers.a);
                             assert_eq!(micro.registers.f, atomic.registers.f);
                             assert_eq!(micro.ix, ix);
@@ -406,10 +400,22 @@ fn fixed_vectors_pin_all_alu_flags_and_cp_operand_xy_behavior() {
                 assert_eq!(atomic_tstates, 8);
                 assert_eq!(micro_tstates, 8);
                 assert!(bus.writes.is_empty());
-                assert_eq!(atomic.registers.a, expected_a, "atomic A {prefix:02X}/{opcode:02X}");
-                assert_eq!(atomic.registers.f, expected_f, "atomic F {prefix:02X}/{opcode:02X}");
-                assert_eq!(micro.registers.a, expected_a, "micro A {prefix:02X}/{opcode:02X}");
-                assert_eq!(micro.registers.f, expected_f, "micro F {prefix:02X}/{opcode:02X}");
+                assert_eq!(
+                    atomic.registers.a, expected_a,
+                    "atomic A {prefix:02X}/{opcode:02X}"
+                );
+                assert_eq!(
+                    atomic.registers.f, expected_f,
+                    "atomic F {prefix:02X}/{opcode:02X}"
+                );
+                assert_eq!(
+                    micro.registers.a, expected_a,
+                    "micro A {prefix:02X}/{opcode:02X}"
+                );
+                assert_eq!(
+                    micro.registers.f, expected_f,
+                    "micro F {prefix:02X}/{opcode:02X}"
+                );
                 assert_shared_state(
                     &micro,
                     &atomic,
