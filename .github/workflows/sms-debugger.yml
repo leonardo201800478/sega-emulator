@@ -51,4 +51,3 @@ jobs:
 
       - name: Test standalone debugger workspace
         run: cargo test --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked
-
