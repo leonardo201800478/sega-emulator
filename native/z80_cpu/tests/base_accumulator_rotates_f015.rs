@@ -103,6 +103,7 @@ fn retire_micro(
     (cpu, tstates, operation, address, base_tstates)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn assert_rotate_case(
     opcode: u8,
     operation: u8,
