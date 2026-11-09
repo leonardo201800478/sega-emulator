@@ -152,7 +152,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | D-001 | Codec versionado e compatibilidade de schema | AUDIT_PARTIAL | Conferir evolução, rejeição e migração. |
 | D-002 | Snapshot em cada fase do sequenciador | AUDIT_PARTIAL | Matriz por fase e payload. |
 | D-003 | Request pendente e identidade | AUDIT_PARTIAL | Preservar request ID, operação, endereço e dados. |
-| D-004 | WAIT pendente e retomada | GAP_CONFIRMED | PR #680 possui falha reportada em restore durante WAIT; diagnosticar antes de integrar. |
+| D-004 | WAIT pendente e retomada | IMPLEMENTED_PENDING_VALIDATION | Causa da rejeição de snapshot em DD/FD 26/2E corrigida no candidato #680 (`48aad1f...`); teste focado e workspace passam em #5929, aguardando validações restantes e merge. |
 | D-005 | Estados inválidos/inconsistentes | AUDIT_PARTIAL | Validar todos os campos e combinações por fase. |
 | D-006 | Execução contínua vs. step/resume | AUDIT_PARTIAL | Comparar estado completo e sequência de transações. |
 | D-007 | Execução em blocos de tamanhos diferentes | NOT_AUDITED | Testar equivalência determinística global aplicável. |
@@ -186,7 +186,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | C-007 | Contadores temporais e overflow | NOT_AUDITED | Conferir aritmética checked e invariantes. |
 | C-008 | Duplicidade de CPU por plataforma | AUDIT_PARTIAL | Confirmar uso do crate canônico e evitar divergência SMS/SG-1000. |
 | C-009 | Testes tautológicos/hipóteses compartilhadas | AUDIT_PARTIAL | Identificar comparações que não são independentes. |
-| C-010 | Warnings, lint e testes de workspace | NOT RUN | Executar gates no HEAD final de cada PR. |
+| C-010 | Warnings, lint e testes de workspace | AUDIT_PARTIAL | No candidato #680 HEAD `268ece8...`, fmt, Clippy workspace, testes workspace, Clippy/test observability e suíte focada Z80/SMS/SG-1000 passaram em #5929; D3D12/WASAPI ainda estavam em execução nesta fotografia. Revalidar no SHA final e após merge. |
 | C-011 | Documentação/scorecard/matrizes | GAP_CONFIRMED | Baselines documentais estavam atrás da main; reconciliar por PR. |
 
 ## 9. Estado inicial e bloqueios confirmados
@@ -204,12 +204,13 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 
 - PR: https://github.com/leonardo201800478/sega-emulator/pull/680
 - Branch: `feat/z80-e7-index-half-incdec-load-sequencer-20261109`.
-- HEAD candidato atual: `ed1130410742fb4540502a8d42ab3e969fda8216`.
+- HEAD candidato atual: `268ece8cc4189bf70f5b1be92967a6d2de5e551f`.
 - A falha inicial #5921 (`42572152572`) foi reproduzida: 241 testes passaram e `dd_fd_index_half_inc_dec_and_immediate_load_match_atomic_with_waits` falhou com `InvalidState`.
 - Causa isolada: `ImmediateReadRegister` permitia DD/FD 26/2E no validador de fase, mas `indices_valid` aceitava somente prefixos ignorados.
 - Correção no commit `48aad1f67b6eb4f03a87f3581249c8a51f6602bb`: aceitar precisamente 26/2E `UsesIndex` na validação de índices, sem relaxar outras invariantes. CI #5924 (`42575151294`) passou no HEAD desse commit: fmt, Clippy Z80/SMS/SG-1000 e testes focados; `sega-z80-cpu` reportou 242/242 testes.
-- Commit adicional `ed113041...` ajusta o workflow para executar regressão integral em mudanças Z80. CI #5925 (`42575339923`) está em andamento: fmt, Clippy workspace e `cargo test --workspace --locked` já passaram; jobs Windows D3D12 ainda estão em execução nesta fotografia.
-- A PR #680 cobre DD/FD 24,25,26,2C,2D,2E (INC/DEC e LD imediato IXH/IXL/IYH/IYL). Não integrar até o workflow #5925 concluir com sucesso no HEAD exato.
+- Commit `ed113041...` passou a acionar a regressão completa para mudanças Z80. CI #5925 (`42575339923`) passou em fmt, Clippy workspace, testes workspace, observability, Linux áudio, Windows áudio, SDL3, D3D12 e PowerShell, mas o merge foi bloqueado porque o job Z80-focused estava SKIPPED e dois checks obrigatórios eram esperados.
+- Commit `268ece8...` removeu a exclusão do job Z80-focused quando `full=true`, para executar os dois gates simultaneamente. CI #5929 (`42575886280`) no HEAD atual: Z80-focused PASS (242 testes do crate e integração SMS/SG-1000), Rust workspace PASS (fmt, Clippy workspace, `cargo test --workspace --locked`, observability). Linux áudio, SDL3 e PowerShell PASS; D3D12 e WASAPI/XAudio2 ainda em execução nesta fotografia.
+- A PR #680 cobre DD/FD 24,25,26,2C,2D,2E (INC/DEC e LD imediato IXH/IXL/IYH/IYL). Não integrar até CI #5929 concluir com sucesso no HEAD exato e os checks obrigatórios estarem presentes.
 
 ### 9.3 Prioridade imediata
 
