@@ -291,7 +291,7 @@ fn assert_architecture(
     assert!(micro.iff2 && atomic.iff2);
     assert_eq!(micro.interrupt_mode, 2);
     assert_eq!(atomic.interrupt_mode, 2);
-    assert!(micro.p && atomic.p);
+    assert!(!micro.p && !atomic.p, "normal opcode fetch consumes the LD A,I/R P latch");
     assert_eq!(micro.halted, expected_halted);
     assert_eq!(atomic.halted, expected_halted);
 }
