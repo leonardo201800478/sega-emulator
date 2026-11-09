@@ -140,7 +140,8 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.other_rust == 'true' ||
+       (needs.changes.outputs.z80 == 'true' ||
+        needs.changes.outputs.other_rust == 'true' ||
         needs.changes.outputs.audio == 'true' ||
         needs.changes.outputs.full == 'true'))
     runs-on: ubuntu-latest
