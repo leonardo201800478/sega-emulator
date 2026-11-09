@@ -1,6 +1,6 @@
 # Shared Debugger MVP — Architecture and Delivery Plan
 
-Status: implementation foundation in progress  
+Status: implementation foundation in progress
 Scope owner: emulator runtime; GUI is a presentation and command surface only.
 
 ## Objective
