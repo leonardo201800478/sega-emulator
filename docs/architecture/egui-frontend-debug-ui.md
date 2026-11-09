@@ -24,7 +24,7 @@ FPS is calculated from the D3D12 session's presented-frame sequence, sampled at 
 
 ## DEBUG collection policy
 
-DEBUG is off by default. Toggling it controls the observability writer and optional worker telemetry. With DEBUG off, the worker does not accumulate instruction totals, audio output metric snapshots, or replaced-frame diagnostics. The machine frame number and presented-frame sequence remain available as runtime/presentation state; they are not optional diagnostic histories.
+DEBUG is off by default. Toggling it controls the observability writer and optional worker telemetry. With DEBUG off, the worker does not sample or emit per-frame timing traces, accumulate instruction totals, query audio output metric snapshots, or inspect replaced-frame diagnostics. The machine frame number and presented-frame sequence remain available as runtime/presentation state; they are not optional diagnostic histories.
 
 Diagnostic histories and writer queues must remain bounded. UI callbacks may send coarse-grained commands and render snapshots only; they must never own or advance machine hardware or scheduler time.
 
