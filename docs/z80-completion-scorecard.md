@@ -349,6 +349,23 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 **PR #708:** merged; squash SHA `d364b901e2547f44d53faf7ca107151e551d2c2e`. CI #6025 SUCCESS no HEAD exato `42284d251d21645ba73a28ef4923cf934c068f59`. NEG: todos os oito aliases × 256 valores de A com fórmula independente de resultado/flags no executor atômico; microsequenciador diferencial para todos os valores e ambos os estados de IFF2.
 
-**Cobertura complementar implementada, pendente do CI desta PR:** ED70 tem vetores para todos os 256 bytes de entrada no executor atômico e no microsequenciador; verificam leitura em BC, flags S/Z/H/PV/N, preservação de Carry, descarte do dado, WZ, snapshot/restore da requisição e WAIT aditivo. ED71 tem asserção explícita de escrita zero no endereço BC e comparação dos traces nos dois executores. RETN/RETI: semântica de retorno/restore IFF é testada; notificação RETI daisy-chain é NOT_APPLICABLE aos perfis SMS/SG-1000 sem dispositivo daisy-chain. Modos IM: os oito encodings/aliases (IM0: ED46/4E/66/6E; IM1: ED56/76; IM2: ED5E/7E) agora têm asserções independentes do modo esperado nos dois executores.
+**Cobertura complementar integrada:** ED70 tem vetores para todos os 256 bytes de entrada no executor atômico e no microsequenciador; verificam leitura em BC, flags S/Z/H/PV/N, preservação de Carry, descarte do dado, WZ, snapshot/restore da requisição e WAIT aditivo. ED71 tem asserção explícita de escrita zero no endereço BC e comparação dos traces nos dois executores. RETN/RETI: semântica de retorno/restore IFF é testada; notificação RETI daisy-chain é NOT_APPLICABLE aos perfis SMS/SG-1000 sem dispositivo daisy-chain. Modos IM: os oito encodings/aliases (IM0: ED46/4E/66/6E; IM1: ED56/76; IM2: ED5E/7E) agora têm asserções independentes do modo esperado nos dois executores.
 
 **Limites:** nenhum teste em hardware físico foi executado; não se reivindica equivalência de silício, CMOS, R800, Z80N ou clones. MAME é comparador de implementação, não autoridade de silício. A classificação só pode ser CLOSED para o perfil de compatibilidade NMOS clássico adotado pelo projeto e para os sistemas-alvo declarados.
+
+
+## 28. Fechamento F-034 após CI e merge da PR #709 — 2026-11-09
+
+**Main:** `5dd98ddcadbb9a1d0316c41044e0dd3767a6fab8` (PR #709, squash). **HEAD validado da PR:** `b6e5db79047e7802620e76ad98f5cfd08deefd57`. **CI #6034 / run `42645765052`: SUCCESS no HEAD exato.**
+
+- Documentation patch hygiene: PASS.
+- Z80 focused validation: PASS — fmt, Clippy, testes Z80/SMS/SG-1000 e vetores externos DD/FD.
+- Rust quality and unit regression aggregate: PASS.
+- Jobs de workspace regression e subsistemas não relacionados: SKIPPED pela política de impacto; classificados NOT RUN, não PASS.
+- PR #709 merged; sem review threads inline ou reviews submetidas na consulta final.
+- ED70: 256/256 valores de entrada no executor atômico e microsequenciador; flags documentadas, Carry, destino descartado, WZ, WAIT e snapshot/restore da operação pendente.
+- ED71: OUT(C),0 preservado apenas como comportamento de compatibilidade NMOS observado; não documentado por UM0080 nem generalizado a variantes.
+- NEG: oito aliases × 256 valores com oracle algébrico independente no executor atômico e comparação microsequenciada.
+- RETN/RETI e IM: aliases e modos aceitos pelo perfil atual cobertos; sinalização RETI daisy-chain NOT_APPLICABLE aos perfis SMS/SG-1000 sem consumidor.
+
+**Classificação vigente:** F-034 CLOSED exclusivamente para o perfil de compatibilidade Zilog NMOS clássico adotado pelo projeto nos alvos SMS/SG-1000. Não há alegação de equivalência de silício, compatibilidade CMOS/R800/Z80N/clones ou validação física. F-033 permanece CLOSED com limite de evidência; E7 permanece IN_PROGRESS por auditoria global e outras famílias/efeitos ainda pendentes; E8 permanece BLOCKED até o fechamento formal de E7.
