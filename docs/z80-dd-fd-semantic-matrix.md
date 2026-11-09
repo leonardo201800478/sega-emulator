@@ -1,11 +1,11 @@
-# Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
+# Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
 **Atualização de baseline (2026-11-09):** o conteúdo histórico desta matriz foi originalmente auditado na baseline `043ecb61d8d1cc77245fa72639d7f210d88cab26`. A main documental consultada imediatamente após PR #681 era `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`; isso não significa que toda a matriz tenha sido revalidada nesse SHA. A auditoria incremental atual está registrada em [Checklist mestre de auditoria Z80](z80-master-audit-checklist.md). Não atribuir à matriz histórica evidência posterior sem atualizar a linha correspondente e registrar o SHA.
 
 **Data:** 2026-11-09
-**Baseline auditada:** `main` — `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
+**Baseline remota auditada:** `main` — `43772d5cd5395de273bd3898895cf1deed81aa53` (2026-11-09, após PR #683).
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
-**Schema do microsequenciador:** 28 (E5 integrada)
+**Schema do microsequenciador:** 32 (baseline após PR #680)
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
 **Natureza:** inventário do código ativo e das evidências disponíveis; E5 e E6 estão integradas com QUICK_PASS/SHORT_PASS nos escopos registrados, sem declarar conclusão funcional integral nem temporal do Z80.
 **Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para critérios de cobertura, níveis de evidência e critérios de conclusão.
@@ -18,6 +18,7 @@
 | `IMPLEMENTED_MICROSEQUENCED` | Há fases retomáveis no microsequenciador, com testes direcionados e snapshot/WAIT nos safe points cobertos; não equivale a conformidade formal ou temporal. |
 | `RECOGNIZED_ONLY` | O microsequenciador reconhece o byte de prefixo e agenda outro fetch M1, mas ainda não executa a família indexada. |
 | `NOT_IMPLEMENTED` | A família não tem execução no microsequenciador retomável; o decode termina em `UnsupportedOpcode`. |
+| `IMPLEMENTED_PENDING_VALIDATION` | Há implementação candidata no microsequenciador e testes direcionados na branch de PR, mas o HEAD final ainda não passou CI/merge na main. |
 | `FUNCTIONAL_UNVERIFIED` | Existe handler, mas os testes localizados não demonstram a semântica integral da família. |
 | `DIFFERENTIAL_PARTIAL` | Há comparação/fixtures selecionadas; não cobre todo o espaço da família nem constitui oráculo independente de silício. |
 | `TEMPORAL_UNVERIFIED` | Não há trace de barramento por T-state validado independentemente para a família. |
@@ -86,13 +87,13 @@ Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-state
 | `E3` | EX (SP),IX/IY | 2 | Lê low/high, escreve o par antigo low/high; SP preservado; WZ recebe word lida; flags preservadas | 23 (6 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 2 testes E3A2c |
 | `E9` | JP (IX/IY) | 2 | PC recebe IX/IY; sem operandos adicionais; flags preservadas | 8 (2 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
 | `F9` | LD SP,IX/IY | 2 | SP recebe IX/IY; flags preservadas | 10 (2 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
-| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | 2 / 2 / 3 | Atualiza metade alta; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | 2 / 2 / 3 | Atualiza metade baixa; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `40`–`7F`, exceto `76` | LD r,r' | 2 | H/L substituídos por IXH/IXL ou IYH/IYL quando aplicável; flags preservadas; HALT `76` não é indexado | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
+| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | 2 / 2 / 3 | Atualiza metade alta; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM0080 | 8 / 8 / 11 (prefixo + operação; trace independente pendente) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; PR #680, WAIT/snapshot e 6 opcodes DD/FD |
+| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | 2 / 2 / 3 | Atualiza metade baixa; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM0080 | 8 / 8 / 11 (prefixo + operação; trace independente pendente) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; PR #680, WAIT/snapshot e 6 opcodes DD/FD |
+| `40`–`7F`, exceto `76` | LD r,r' | 2 | H/L substituídos por IXH/IXL ou IYH/IYL quando aplicável; flags preservadas; HALT `76` não é indexado | 8 (dois M1; sem ciclo interno artificial) | IMPLEMENTED_ATOMIC; matriz dirigida | IMPLEMENTED_PENDING_VALIDATION; PR #684, 48 formas, oracle de registradores, WAIT/snapshot e prefixos repetidos |
 | `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | 3 | EA=index+sign_extend(d); memória lida/escrita; H/L do outro operando são H/L normais; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, 10 testes, IX/IY e matriz de registradores |
 | `34`, `35` | INC/DEC (IX/IY+d) | 3 | EA=index+sign_extend(d); read-modify-write; flags S/Z/H/PV/N atualizadas; C preservado | 23 (6 M-cycles: 4,4,3,5,4,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4C, 5 testes, WAIT/snapshot/prefixos |
 | `36` | LD (IX/IY+d),n | 4 | Lê displacement e imediato; escreve EA; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, WAIT e snapshots por fase |
-| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; half-register não documentado como operando independente no UM008011 | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; half-register não documentado como operando independente no UM0080 | 8 (dois M1; sem ciclo interno artificial) | IMPLEMENTED_ATOMIC; matriz dirigida | NOT_IMPLEMENTED; F-037 GAP_CONFIRMED |
 | `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | 3 | EA=index+sign_extend(d); memória lida; A/F atualizados; CP preserva A e copia X/Y do operando | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4B, 16 vetores x IX/IY, WAIT/snapshot/prefixos |
 | Demais opcodes | Prefixo ignorado, prefixo repetido, ED ou fallback da instrução base | Prefixos extras + comprimento BASE | Sem substituição IX/IY; PC/R e custo do prefixo precisam ser mantidos; ED cancela indexação | BASE + 4T por prefixo ignorado | Fallback implementado no executor atômico | NOT_IMPLEMENTED / gap de fallback |
 
@@ -373,3 +374,13 @@ Baseline atual: `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
 As PRs #677 e #678 adicionaram somente testes ao módulo Z80: observação das flags de I/O em bloco por INT IM2, execução de PUSH AF/POP AF/EI/RETI e retomada da instrução repetitiva. Nenhuma semântica DD/FD, decoder de prefixos ou runtime foi alterada.
 
 A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A notificação externa de daisy-chain continua diferida até existir um periférico suportado; isso não bloqueia a semântica de retorno já implementada. E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+## Reconciliação atual — main 2026-11-09 e candidato F-036
+
+- **Main integrada:** `43772d5cd5395de273bd3898895cf1deed81aa53`. PR #680 integrou os seis opcodes INC/DEC/LD imediato das metades IX/IY; CI #42609912469 passou no HEAD `e20ec4b6c858bcaca265114ba543c19301dbb2e0`.
+- PR #683 integrou a política de CI seletivo, com jobs focados PSG/VDP/input e agregador de qualidade; CI #42613123290 passou no HEAD `eaa88a249989b2ca6aee931e2a963df75a396008`.
+- **F-036 candidato:** PR #684, commit de implementação `181be7aec287eaf66cda26d4bd0823446b435031`. A suíte `indexed_half_register_ld_e7.rs` cobre as 24 formas register-only por prefixo, HALT, prefixos repetidos, WAIT e snapshot/restore. Estado: `IMPLEMENTED_PENDING_VALIDATION`; não confundir com integração concluída.
+- As exceções DD/FD 66, 6E, 74 e 75 continuam no caminho E4A de displacement e usam H/L reais. Não alterar essa separação.
+- **F-037** (ALU A,IXH/IXL/IYH/IYL) permanece `NOT_IMPLEMENTED` no microsequenciador e será uma PR separada após F-036.
+- E7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED. Nenhum QUICK_PASS/SHORT_PASS adicional é atribuído até a execução da suíte no HEAD final da PR #684.
