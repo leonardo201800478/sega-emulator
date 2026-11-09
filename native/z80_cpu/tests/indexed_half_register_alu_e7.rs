@@ -18,26 +18,20 @@ const ALU_OPERANDS: [u8; 13] = [
 ];
 
 struct FlatBus {
-    memory: Vec<u8>,
+    program: Vec<u8>,
     writes: Vec<(u16, u8)>,
-}
-
-impl Default for FlatBus {
-    fn default() -> Self {
-        Self {
-            memory: vec![0; 0x1_0000],
-            writes: Vec::new(),
-        }
-    }
 }
 
 impl CpuBus for FlatBus {
     fn read_memory(&mut self, address: u16) -> u8 {
-        self.memory[usize::from(address)]
+        let offset = address.wrapping_sub(START_PC);
+        self.program
+            .get(usize::from(offset))
+            .copied()
+            .unwrap_or(0)
     }
 
     fn write_memory(&mut self, address: u16, value: u8) {
-        self.memory[usize::from(address)] = value;
         self.writes.push((address, value));
     }
 }
@@ -106,10 +100,10 @@ fn seed_atomic(
     cpu.q = INITIAL_Q;
     cpu.p = true;
 
-    let mut bus = FlatBus::default();
-    for (offset, byte) in prefixes.iter().copied().chain([opcode]).enumerate() {
-        bus.memory[usize::from(START_PC) + offset] = byte;
-    }
+    let bus = FlatBus {
+        program: prefixes.iter().copied().chain([opcode]).collect(),
+        writes: Vec::new(),
+    };
     (cpu, bus)
 }
 
