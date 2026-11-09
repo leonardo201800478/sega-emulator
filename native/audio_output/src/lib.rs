@@ -62,7 +62,9 @@ use std::thread;
 #[cfg(windows)]
 use std::thread::JoinHandle;
 #[cfg(any(windows, test))]
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(windows)]
+use std::time::Instant;
 
 #[cfg(any(windows, test))]
 use std::collections::VecDeque;
@@ -843,6 +845,8 @@ fn run_wasapi_worker(
         }
 
         let mut disconnected = false;
+        // Measure monotonic spacing between endpoint render events; this is
+        // host-service cadence, not emulated machine time.
         let mut last_event_at: Option<Instant> = None;
         loop {
             if shutdown.load(Ordering::Acquire) {
@@ -1528,6 +1532,8 @@ fn run_xaudio2_worker(
     let mut was_underrun = false;
     let mut voice_started = false;
     let mut voice_muted = false;
+    // The callback only increments an atomic. This worker-side timestamp is
+    // when a completion is observed, not the exact callback invocation time.
     let mut last_completion_count = signals.completed_buffers.load(Ordering::Acquire);
     let mut last_completion_observed_at = Instant::now();
     loop {
