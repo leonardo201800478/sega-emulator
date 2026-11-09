@@ -1,8 +1,8 @@
 # F-022 — flags observáveis no ciclo de repetição interrompido
 
 **Data:** 2026-11-09  
-**Baseline main:** \`fa069162306fb330864b6d77633ceba0f976e3ca\`  
-**Branch candidata:** \`test/z80-f022-repeat-im2-observation-20261109\`  
+**Baseline main:** `fa069162306fb330864b6d77633ceba0f976e3ca`  
+**Branch candidata:** `test/z80-f022-repeat-im2-observation-20261109`  
 **Escopo:** LDIR/LDDR/CPIR/CPDR; visibilidade de F quando INT é aceita durante o ciclo interno de repetição.
 
 ## 1. Frente documental
@@ -30,23 +30,23 @@ Foram inspecionadas implementações de referência sem reutilização de códig
 
 | Referência | Arquivos/funções | Comportamento relevante | Limite |
 |---|---|---|---|
-| MAME | \`src/devices/cpu/z80/z80.lst\`: macros \`ldir\`, \`lddr\`, \`cpir\`, \`cpdr\` | Após a operação, quando há repetição, executa o ciclo interno de 5 T, recua PC em 2, define WZ=PC+1 e deriva X/Y do byte alto de PC | Implementação de emulador, não prova de silício |
-| ares | \`ares/component/processor/z80/instructions.cpp\`: \`instructionLDIR\`, \`instructionLDDR\`, \`instructionCPIR\`, \`instructionCPDR\` | Mesmo recuo de PC e substituição de XF=PC.11/YF=PC.13; WZ=PC+1 | Implementação de emulador; não tratada como oracle físico |
-| redcode/Z80 | \`sources/Z80.c\`: macros \`LDXR\` e \`CPXR\` | Repete com contador não-zero e, no caminho repetitivo, define X/Y com bits do PC | Implementação de referência; licença não usada para copiar código |
+| MAME | `src/devices/cpu/z80/z80.lst`: macros `ldir`, `lddr`, `cpir`, `cpdr` | Após a operação, quando há repetição, executa o ciclo interno de 5 T, recua PC em 2, define WZ=PC+1 e deriva X/Y do byte alto de PC | Implementação de emulador, não prova de silício |
+| ares | `ares/component/processor/z80/instructions.cpp`: `instructionLDIR`, `instructionLDDR`, `instructionCPIR`, `instructionCPDR` | Mesmo recuo de PC e substituição de XF=PC.11/YF=PC.13; WZ=PC+1 | Implementação de emulador; não tratada como oracle físico |
+| redcode/Z80 | `sources/Z80.c`: macros `LDXR` e `CPXR` | Repete com contador não-zero e, no caminho repetitivo, define X/Y com bits do PC | Implementação de referência; licença não usada para copiar código |
 
 A concordância entre MAME, ares e redcode é evidência comparativa de implementação. A confirmação física relevante vem do teste v5.0, com as limitações acima.
 
 ## 3. Frente de arquitetura e modelo
 
-A alteração candidata acrescenta em \`native/z80_cpu/src/sequencer.rs\` o teste:
+A alteração candidata acrescenta em `native/z80_cpu/src/sequencer.rs` o teste:
 
-\`ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume\`
+`ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume`
 
-O cenário executa LDIR, LDDR, CPIR e CPDR com contador não-zero após a primeira iteração. A linha INT é afirmada no último T-state do estado \`EdBlockRepeatInternal\`. A interrupção é atendida em IM2 com vetor FF e handler em 9000h.
+O cenário executa LDIR, LDDR, CPIR e CPDR com contador não-zero após a primeira iteração. A linha INT é afirmada no último T-state do estado `EdBlockRepeatInternal`. A interrupção é atendida em IM2 com vetor FF e handler em 9000h.
 
 O handler executa:
 
-\`PUSH AF; POP AF; EI; RETI\`
+`PUSH AF; POP AF; EI; RETI`
 
 O teste inspeciona o byte F salvo na pilha, confirma o retorno ao endereço ED, a restauração de SP/IFF1/IFF2 e a execução da iteração seguinte. O estado do microsequenciador passa por encode/decode + restore em cada fronteira de barramento e ciclo interno.
 
