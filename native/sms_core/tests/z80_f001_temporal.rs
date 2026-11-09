@@ -97,12 +97,6 @@ fn assert_scheduler_case(
             _ => None,
         })
         .collect();
-    let expected_bus = expected_bus
-        .into_iter()
-        .map(|(operation, address, base_tstates, wait_tstates, data)| {
-            (operation, address, base_tstates, wait_tstates, data)
-        })
-        .collect::<Vec<_>>();
     assert_eq!(bus_completions, expected_bus, "opcode {:02X} bus trace", program[0]);
 }
 
