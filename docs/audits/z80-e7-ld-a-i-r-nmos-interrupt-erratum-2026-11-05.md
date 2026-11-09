@@ -1,9 +1,9 @@
 # E7.7 — LD A,I / LD A,R: erratum P/V no aceite de INT
 
-**Data:** 2026-11-05  
-**Baseline histórica de implementação:** `1da784f556b9524f5a6f43ce8a7c525e68354f9e`  
-**Main após PR #716:** `56d75cc79803494e9fd8a54e8930871c9101fc84`  
-**Escopo:** ED 57 (LD A,I) e ED 5F (LD A,R), latch P e aceite de INT/NMI.  
+**Data:** 2026-11-05
+**Baseline histórica de implementação:** `1da784f556b9524f5a6f43ce8a7c525e68354f9e`
+**Main após PR #716:** `56d75cc79803494e9fd8a54e8930871c9101fc84`
+**Escopo:** ED 57 (LD A,I) e ED 5F (LD A,R), latch P e aceite de INT/NMI.
 **Referência normativa:** ZiLOG UM008011-0816, páginas impressas 94–95.
 
 ## 1. Evidência documental
