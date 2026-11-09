@@ -318,3 +318,17 @@ A PR #702 altera somente o tratamento de Q/previous-Q em prefixos DD/FD e os tes
 - A expectativa de 8T/no-effect é compatibilidade para Zilog NMOS clássico, não comportamento universal especificado por UM0080. MAME/referências secundárias não são prova de silício.
 
 **Estado após merge da PR #706:** os 178 bytes reservados aposentam no microsequenciador após dois M1, com cobertura de estado arquitetural, WAIT e snapshot/restore. F-033 está CLOSED para o perfil NMOS clássico delimitado pela auditoria. F-034 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## Estado integrado após PR #709 — F-034 — 2026-11-09
+
+**PR #709:** merged; HEAD validado `b6e5db79047e7802620e76ad98f5cfd08deefd57`; CI #6034 / run `42645765052` SUCCESS no HEAD exato; merge SHA `5dd98ddcadbb9a1d0316c41044e0dd3767a6fab8`.
+
+- ED70: todos os 256 valores são verificados nos executores atômico e retomável; leitura em BC, descarte, S/Z/H/PV/N, Carry, WZ, WAIT e snapshot/restore.
+- ED71: escrita zero em BC/12T é mantida como comportamento de compatibilidade NMOS observado, não como especificação UM0080.
+- NEG: oito aliases × 256 valores; fórmula independente no executor atômico e comparação microsequenciada.
+- IM: ED46/4E/66/6E→IM0; ED56/76→IM1; ED5E/7E→IM2 no perfil atual, sem alegação universal de silício.
+- RETI daisy-chain: NOT_APPLICABLE aos perfis SMS/SG-1000 atuais sem dispositivo consumidor; não emitir evento fictício.
+- CI: documentação, Z80 focused (fmt/Clippy/testes Z80/SMS/SG-1000/vetores externos DD/FD) e agregador Rust quality/unit regression PASS. Workspace regression e jobs de outros subsistemas SKIPPED/NOT RUN pela política de impacto.
+
+**Estado:** F-034 CLOSED apenas para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000; sem validação física ou generalização para CMOS, R800, Z80N ou clones. E7 continua IN_PROGRESS por pendências globais independentes; E8 continua BLOCKED até E7 formalmente fechado.
