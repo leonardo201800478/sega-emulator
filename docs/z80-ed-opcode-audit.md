@@ -28,8 +28,8 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 | `47` | LD I,A | Copia A para I | 9 | Vetor dirigido para LD I,A e LD R,A; faltam valores de fronteira adicionais |
 | `4F` | LD R,A | Copia A para R | 9 | Vetor dirigido confirma cópia dos oito bits de A; faltam casos adicionais |
 | `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; o latch `p` aplica o erratum NMOS quando INT é aceito na fronteira seguinte | 9 | Executor atômico e microsequenciador cobertos para INT imediato, NMI, instrução intermediária e snapshot/restore; ver auditoria complementar E7.7 |
-| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap de endereço ainda pendente |
-| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap de endereço ainda pendente |
+| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap FFFF→0000 coberto por `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` (PR #673, CI PASS) |
+| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap FFFF→0000 coberto por `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` (PR #673, CI PASS) |
 | `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; overflow, half-carry e carry de entrada têm casos específicos, mas não é varredura combinatória |
 | `42, 52, 62, 72` | SBC HL,BC/DE/HL/SP | Usa borrow/carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; borrow e fronteiras aritméticas têm casos específicos, mas não é varredura combinatória |
 | `40,48,50,58,60,68,70,78` | IN r,(C) | Lê porta BC; destino código 6 descarta o valor; atualiza S/Z/PV/X/Y e preserva C; WZ=BC+1 | 12 | Teste com bus de I/O verifica os oito destinos, endereço BC e flags para valor 0xA5; falta varredura de valores/estados |
@@ -246,3 +246,16 @@ A matriz cobre BC, DE, HL e SP:
 A implementação de runtime já usava aritmética de 16 bits com wrap; esta alteração adiciona evidência de borda e não altera código de produção. O teste compara resultados arquiteturais explícitos e não usa o executor como oráculo.
 
 A execução focada e os gates Rust devem passar no HEAD exato desta PR. Diferencial de hardware: NOT RUN. E7.7 global permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+---
+
+## Reconciliação da baseline — main 2026-11-09
+
+**SHA atual:** `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+
+- PR #673 adicionou o teste de fronteira `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` para os oito opcodes de transferência absoluta de palavras. O teste foi executado no CI #42568163213 (HEAD `b6f94ff010782a5dd18e6c684e625c2eec9d7a6e`) com sucesso; merge SHA `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+- A cobertura verifica store/load de BC, DE, HL e SP, segundo byte em `0x0000` após endereço `0xFFFF`, WZ=0000, PC, flags preservadas e 20 T-states.
+- A subquestão de flags de repetição em I/O de bloco recebeu uma fonte adicional de hardware: `Z80 Block Flags Test v5.0`, documentada por Peter Helcmanovsky e testada em hardware Z80 NMOS. A auditoria específica separa o escopo confirmado do que ainda não foi executado ou provado: [auditoria de evidência de hardware](audits/z80-e7-block-io-hardware-evidence-2026-11-09.md).
+- O teste de hardware citado é limitado à interrupção IM2 durante repetição de instruções de bloco; não substitui uma validação exaustiva nem comprova diretamente o Master System.
+- E7.7 global permanece IN_PROGRESS. E8 permanece BLOCKED.
