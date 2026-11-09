@@ -91,6 +91,12 @@ jobs:
               - '!native/sg1000_core/src/cpu.rs'
               - '!native/sg1000_core/src/alu.rs'
               - '!native/sg1000_core/src/bus.rs'
+              - '!native/sms_core/Cargo.toml'
+              - '!native/sg1000_core/Cargo.toml'
+              - '!native/sms_core/tests/z80_*.rs'
+              - '!native/sms_core/src/temporal*.rs'
+              - '!native/sms_core/src/bin/z80test_runner.rs'
+              - '!native/sg1000_core/src/temporal*.rs'
               - '!native/sega_app/**'
               - '!native/audio_output/**'
             z80:
