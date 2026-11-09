@@ -3601,7 +3601,10 @@ mod tests {
                         );
                         if matches!(opcode, 0xA0 | 0xA8) {
                             assert_eq!(bus.0[0xC200], memory_value);
-                            assert_eq!(cpu.registers.de(), 0xC200_u16.wrapping_add_signed(direction));
+                            assert_eq!(
+                                cpu.registers.de(),
+                                0xC200_u16.wrapping_add_signed(direction)
+                            );
                         } else {
                             assert_eq!(cpu.registers.a, accumulator);
                         }
