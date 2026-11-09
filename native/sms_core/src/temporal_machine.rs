@@ -756,17 +756,34 @@ impl SmsTemporalMachine {
         &mut self,
         max_instructions: usize,
     ) -> Result<usize, SmsTemporalMachineError> {
+        self.step_frame_until(max_instructions, |_| false)
+            .map(|(instructions, _)| instructions)
+    }
+
+    /// Advance until a frame completes or the supplied PC predicate requests a stop.
+    ///
+    /// The predicate is checked only at instruction boundaries. A breakpoint
+    /// therefore never suspends a partially completed M-cycle or bus transaction.
+    pub fn step_frame_until(
+        &mut self,
+        max_instructions: usize,
+        mut should_break: impl FnMut(u16) -> bool,
+    ) -> Result<(usize, bool), SmsTemporalMachineError> {
         if max_instructions == 0 {
             return Err(SmsTemporalMachineError::FrameStepLimitReached);
         }
         let initial_frame = self.frame_number();
-        for instructions in 1..=max_instructions {
+        for completed in 0..max_instructions {
+            let pc = self.cpu.export_architectural_state().registers.pc;
+            if should_break(pc) {
+                return Ok((completed, true));
+            }
             let step = self.step_instruction(0)?;
             if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
                 let _ = self.resume_instruction(0)?;
             }
             if self.frame_number() != initial_frame {
-                return Ok(instructions);
+                return Ok((completed + 1, false));
             }
         }
         Err(SmsTemporalMachineError::FrameStepLimitReached)
@@ -3265,5 +3282,21 @@ mod temporal_frame_tests {
         let samples = machine.drain_audio_samples(None);
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
+    }
+
+    #[test]
+    fn breakpoint_stops_before_instruction_at_safe_boundary() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x8000], 1).unwrap();
+
+        let (instructions, breakpoint_hit) =
+            machine.step_frame_until(4, |pc| pc == 0x0001).unwrap();
+
+        assert_eq!(instructions, 1);
+        assert!(breakpoint_hit);
+        assert_eq!(
+            machine.cpu().export_architectural_state().registers.pc,
+            0x0001
+        );
+        assert_eq!(machine.now().ticks(), 4);
     }
 }

@@ -149,6 +149,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sega-debugger-core"
+version = "0.1.0"
+
+[[package]]
 name = "sega-observability"
 version = "0.1.0"
 dependencies = [
@@ -189,6 +193,7 @@ name = "sega-sms-runtime"
 version = "0.1.0"
 dependencies = [
  "sega-audio-runtime",
+ "sega-debugger-core",
  "sega-observability",
  "sega-sms-core",
  "sega-video-runtime",
