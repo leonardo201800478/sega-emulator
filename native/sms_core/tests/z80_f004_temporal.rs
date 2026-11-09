@@ -123,12 +123,13 @@ fn assert_resume_case(
 
 #[test]
 fn ld_register_pair_immediate_all_four_pairs_resume_identically_through_sms_scheduler() {
-    for (opcode, pair, value) in [
+    let cases: [(u8, u8, u16); 4] = [
         (0x01, 0, 0xA55A),
         (0x11, 1, 0x5AA5),
         (0x21, 2, 0xC39D),
         (0x31, 3, 0xF00D),
-    ] {
+    ];
+    for (opcode, pair, value) in cases {
         let [low, high] = value.to_le_bytes();
         let program = [opcode, low, high];
         let initial = initial_registers();
