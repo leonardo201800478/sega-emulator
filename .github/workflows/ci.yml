@@ -37,6 +37,8 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       other_rust: ${{ steps.filter.outputs.other_rust }}
       z80: ${{ steps.filter.outputs.z80 }}
+      psg: ${{ steps.filter.outputs.psg }}
+      vdp: ${{ steps.filter.outputs.vdp }}
       docs: ${{ steps.filter.outputs.docs }}
       video: ${{ steps.filter.outputs.video }}
       audio: ${{ steps.filter.outputs.audio }}
@@ -85,42 +87,90 @@ jobs:
               - '!native/z80_cpu/**'
               - '!native/z80_alu/**'
               - '!native/z80_bus/**'
+              - '!native/sms_core/src/cpu.rs'
+              - '!native/sms_core/src/alu.rs'
+              - '!native/sms_core/src/bus.rs'
+              - '!native/sg1000_core/src/cpu.rs'
+              - '!native/sg1000_core/src/alu.rs'
+              - '!native/sg1000_core/src/bus.rs'
+              - '!native/sms_core/tests/z80_*.rs'
+              - '!native/sms_core/src/temporal*.rs'
+              - '!native/sms_core/src/bin/z80test_runner.rs'
+              - '!native/sg1000_core/src/temporal*.rs'
+              - '!native/sn76489/**'
+              - '!native/audio_runtime/**'
+              - '!native/video_core/**'
+              - '!native/video_runtime/**'
+              - '!native/input_runtime/**'
+              - '!native/sg1000_core/src/psg.rs'
+              - '!native/sg1000_core/src/vdp.rs'
+              - '!native/sms_core/src/vdp.rs'
+              - '!native/sg1000_core/src/input.rs'
+              - '!native/sms_core/src/input.rs'
               - '!native/sega_app/**'
               - '!native/audio_output/**'
             z80:
               - 'native/z80_cpu/**'
               - 'native/z80_alu/**'
               - 'native/z80_bus/**'
+              - 'native/sms_core/src/cpu.rs'
+              - 'native/sms_core/src/alu.rs'
+              - 'native/sms_core/src/bus.rs'
+              - 'native/sg1000_core/src/cpu.rs'
+              - 'native/sg1000_core/src/alu.rs'
+              - 'native/sg1000_core/src/bus.rs'
               - 'native/sms_core/Cargo.toml'
               - 'native/sg1000_core/Cargo.toml'
               - 'native/sms_core/tests/z80_*.rs'
               - 'native/sms_core/src/temporal*.rs'
               - 'native/sms_core/src/bin/z80test_runner.rs'
               - 'native/sg1000_core/src/temporal*.rs'
+            psg:
+              - 'native/sn76489/**'
+              - 'native/audio_runtime/**'
+              - 'native/sg1000_core/src/psg.rs'
+            vdp:
+              - 'native/video_core/**'
+              - 'native/sms_core/src/vdp.rs'
+              - 'native/sg1000_core/src/vdp.rs'
+              - 'native/video_core/tests/**'
             video:
-              - 'native/video_runtime/**/*.rs'
-              - 'native/video_runtime/Cargo.toml'
-              - 'native/video_runtime/Cargo.lock'
-              - 'native/video_runtime/build.rs'
+              - 'native/video_core/**'
+              - 'native/video_runtime/**'
+              - 'native/sms_core/src/vdp.rs'
+              - 'native/sg1000_core/src/vdp.rs'
+              - 'native/observability/**'
             audio:
               - 'native/sn76489/**'
-              - 'native/audio_output/**/*.rs'
-              - 'native/audio_output/Cargo.toml'
-              - 'native/audio_output/Cargo.lock'
-              - 'native/audio_output/build.rs'
-              - 'native/audio_runtime/**/*.rs'
-              - 'native/audio_runtime/Cargo.toml'
+              - 'native/sg1000_core/src/psg.rs'
+              - 'native/audio_output/**'
+              - 'native/audio_runtime/**'
+              - 'native/machine_scheduler/**'
+              - 'native/temporal_core/**'
+              - 'native/observability/**'
             input:
-              - 'native/input_runtime/**/*.rs'
-              - 'native/input_runtime/Cargo.toml'
-              - 'native/input_runtime/Cargo.lock'
-              - 'native/input_runtime/build.rs'
+              - 'native/input_runtime/**'
+              - 'native/sms_core/src/input.rs'
+              - 'native/sg1000_core/src/input.rs'
+              - 'native/observability/**'
             app:
               - 'rust/runtime/sms-runtime/**'
-              - 'native/sega_app/**/*.rs'
-              - 'native/sega_app/Cargo.toml'
-              - 'native/sega_app/Cargo.lock'
-              - 'native/sega_app/build.rs'
+              - 'native/sega_app/**'
+              - 'native/video_runtime/**'
+              - 'native/video_core/**'
+              - 'native/audio_output/**'
+              - 'native/audio_runtime/**'
+              - 'native/input_runtime/**'
+              - 'native/machine_scheduler/**'
+              - 'native/temporal_core/**'
+              - 'native/sn76489/**'
+              - 'native/observability/**'
+              - 'native/sms_core/**'
+              - '!native/sms_core/src/cpu.rs'
+              - '!native/sms_core/src/alu.rs'
+              - '!native/sms_core/src/bus.rs'
+              - '!native/sms_core/tests/z80_*.rs'
+              - '!native/sms_core/src/bin/z80test_runner.rs'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
@@ -132,6 +182,7 @@ jobs:
               - 'Cargo.lock'
               - 'rust-toolchain*'
               - '.cargo/**'
+              - 'build.rs'
               - 'scripts/common.ps1'
 
   rust-workspace:
@@ -140,9 +191,7 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.z80 == 'true' ||
-        needs.changes.outputs.other_rust == 'true' ||
-        needs.changes.outputs.audio == 'true' ||
+       (needs.changes.outputs.other_rust == 'true' ||
         needs.changes.outputs.full == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -190,12 +239,72 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Format root Rust workspace
-        run: cargo fmt --all -- --check
+      - name: Format Z80 and console integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy Z80 and console integration packages
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80, SMS and SG-1000 integration packages
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
+
+  psg-focused:
+    name: PSG core and console integration validation
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.psg == 'true' && needs.changes.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format PSG and console audio integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-sn76489 --package sega-audio-runtime --package sega-sms-core --package sega-sg1000-core -- --check
+      - name: Clippy PSG and console audio integration
+        run: cargo clippy --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
+      - name: Test PSG and console audio integration
+        run: cargo test --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
+
+  vdp-focused:
+    name: VDP core and console integration validation
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.vdp == 'true' && needs.changes.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format VDP and console integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-video --package sega-sms-core --package sega-sg1000-core -- --check
+      - name: Clippy VDP and console integration
+        run: cargo clippy --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core -- -D warnings
+      - name: Test VDP and console integration
+        run: cargo test --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core
+
+  input-focused:
+    name: Input core and console integration validation
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true' && needs.changes.outputs.full != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format input and console integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-input-runtime --package sega-sms-core --package sega-sg1000-core -- --check
+      - name: Clippy input and console integration
+        run: cargo clippy --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
+      - name: Test input and console integration
+        run: cargo test --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core
 
   docs-format:
     name: Documentation patch hygiene
@@ -456,6 +565,9 @@ jobs:
       - changes
       - rust-workspace
       - z80-focused
+      - psg-focused
+      - vdp-focused
+      - input-focused
       - docs-format
       - windows-d3d12
       - windows-audio
@@ -471,10 +583,16 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.z80 == 'true' || needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' }}
           Z80: ${{ needs.z80-focused.result }}
+          EXPECT_PSG: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.psg == 'true' && needs.changes.outputs.full != 'true' }}
+          PSG: ${{ needs.psg-focused.result }}
+          EXPECT_VDP: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.vdp == 'true' && needs.changes.outputs.full != 'true' }}
+          VDP: ${{ needs.vdp-focused.result }}
+          EXPECT_INPUT_FOCUSED: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true' && needs.changes.outputs.full != 'true' }}
+          INPUT_FOCUSED: ${{ needs.input-focused.result }}
           EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
@@ -515,6 +633,9 @@ jobs:
           fi
           check_job "Rust workspace" "$EXPECT_RUST_WORKSPACE" "$RUST_WORKSPACE"
           check_job "Z80 focused" "$EXPECT_Z80" "$Z80"
+          check_job "PSG focused" "$EXPECT_PSG" "$PSG"
+          check_job "VDP focused" "$EXPECT_VDP" "$VDP"
+          check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
           check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
