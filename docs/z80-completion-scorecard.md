@@ -189,9 +189,9 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 **Estado:** auditoria global IN_PROGRESS; PR #680 permanece aberta e bloqueada por CI FAIL; E8/ZEXDOC/ZEXALL permanece BLOCKED.
 
 
-## 17. Reabertura do inventário operacional — baseline documental #681
+## 17. Reabertura do inventário operacional — snapshot documental após PR #681
 
-**Baseline atual da main:** `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` (PR #681, checklist mestre, merge concluído).
+**Baseline da main consultada para esta varredura:** `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` (PR #681, checklist mestre, merge concluído).
 
 - O checklist `docs/z80-master-audit-checklist.md` passa a ser o registro de cobertura e evidências por ID.
 - A primeira varredura estática DD/FD confirmou que o executor atômico cobre famílias IXH/IXL/IYH/IYL que ainda não têm dispatch equivalente no microsequenciador: LD r,r' register-only e ALU A,IXH/IXL/IYH/IYL.
