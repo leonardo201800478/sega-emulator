@@ -3948,6 +3948,38 @@ mod architectural_state_tests {
         );
         assert_eq!(cpu.export_architectural_state(), before);
     }
+
+    #[test]
+    fn indexed_ld_sp_ix_iy_transfer_index_pair_without_changing_flags_or_hl() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..4].copy_from_slice(&[
+            0xDD, 0xF9, // LD SP,IX
+            0xFD, 0xF9, // LD SP,IY
+        ]);
+        let mut cpu = Z80::default();
+        cpu.ix = 0x1234;
+        cpu.iy = 0xABCD;
+        cpu.registers.sp = 0xC000;
+        cpu.registers.set_hl(0x5678);
+        cpu.registers.f = 0xD7;
+        cpu.wz = 0x9ABC;
+
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.sp, 0x1234);
+        assert_eq!(cpu.registers.hl(), 0x5678);
+        assert_eq!((cpu.ix, cpu.iy), (0x1234, 0xABCD));
+        assert_eq!(cpu.registers.f, 0xD7);
+        assert_eq!(cpu.wz, 0x9ABC);
+
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.sp, 0xABCD);
+        assert_eq!(cpu.registers.hl(), 0x5678);
+        assert_eq!((cpu.ix, cpu.iy), (0x1234, 0xABCD));
+        assert_eq!(cpu.registers.f, 0xD7);
+        assert_eq!(cpu.wz, 0x9ABC);
+        assert_eq!(cpu.registers.pc, 4);
+    }
+
 }
 
 #[cfg(test)]
