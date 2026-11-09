@@ -242,7 +242,12 @@ impl FpsOverlayPosition {
     }
 }
 
-fn fps_overlay_position(root_min: egui::Pos2, viewport: egui::Rect, size: egui::Vec2, anchor: FpsOverlayPosition) -> egui::Pos2 {
+fn fps_overlay_position(
+    root_min: egui::Pos2,
+    viewport: egui::Rect,
+    size: egui::Vec2,
+    anchor: FpsOverlayPosition,
+) -> egui::Pos2 {
     let margin = egui::vec2(12.0, 12.0);
     let min = root_min + viewport.min.to_vec2();
     let max = root_min + viewport.max.to_vec2();
@@ -1014,6 +1019,7 @@ impl SegaApp {
         let overlay_size = self.fps_overlay_size.dimensions();
         let position = fps_overlay_position(root_bounds.min, viewport_rect, overlay_size, self.fps_overlay_position);
         let fps_value = Arc::clone(&self.fps_shared_value);
+        let font_size = self.fps_overlay_size.font_size();
         let builder = egui::ViewportBuilder::default()
             .with_title("Sega Emulator FPS")
             .with_position(position)
@@ -1041,7 +1047,7 @@ impl SegaApp {
                                 egui::RichText::new(format!("{fps:.0} FPS"))
                                     .color(egui::Color32::from_rgb(170, 255, 170))
                                     .strong()
-                                    .size(self.fps_overlay_size.font_size()),
+                                    .size(font_size),
                             );
                         },
                     );
@@ -1796,10 +1802,26 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         egui::ComboBox::from_id_salt("fps_overlay_position")
             .selected_text(state.fps_overlay_position.label())
             .show_ui(ui, |ui| {
-                ui.selectable_value(state.fps_overlay_position, FpsOverlayPosition::TopLeft, "Superior esquerdo");
-                ui.selectable_value(state.fps_overlay_position, FpsOverlayPosition::TopRight, "Superior direito");
-                ui.selectable_value(state.fps_overlay_position, FpsOverlayPosition::BottomLeft, "Inferior esquerdo");
-                ui.selectable_value(state.fps_overlay_position, FpsOverlayPosition::BottomRight, "Inferior direito");
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::TopLeft,
+                    "Superior esquerdo",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::TopRight,
+                    "Superior direito",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::BottomLeft,
+                    "Inferior esquerdo",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::BottomRight,
+                    "Inferior direito",
+                );
             });
     });
     ui.separator();
@@ -2238,7 +2260,12 @@ mod tests {
         let root = egui::pos2(100.0, 50.0);
         let viewport = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
         let size = FpsOverlaySize::Medium.dimensions();
-        for anchor in [FpsOverlayPosition::TopLeft, FpsOverlayPosition::TopRight, FpsOverlayPosition::BottomLeft, FpsOverlayPosition::BottomRight] {
+        for anchor in [
+            FpsOverlayPosition::TopLeft,
+            FpsOverlayPosition::TopRight,
+            FpsOverlayPosition::BottomLeft,
+            FpsOverlayPosition::BottomRight,
+        ] {
             let point = super::fps_overlay_position(root, viewport, size, anchor);
             assert!(point.x >= root.x + viewport.left() + 12.0);
             assert!(point.y >= root.y + viewport.top() + 12.0);
