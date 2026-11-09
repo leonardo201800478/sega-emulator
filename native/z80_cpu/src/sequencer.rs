@@ -111,6 +111,10 @@ fn is_indexed_half_register_ld_r_r_opcode(opcode: u8) -> bool {
         && (matches!(destination, 0x04 | 0x05) || matches!(source, 0x04 | 0x05))
 }
 
+fn is_indexed_half_register_alu_opcode(opcode: u8) -> bool {
+    (0x80..=0xBF).contains(&opcode) && matches!(opcode & 0x07, 0x04 | 0x05)
+}
+
 fn is_indexed_load_opcode(opcode: u8) -> bool {
     opcode == 0x36
         || is_indexed_memory_load_opcode(opcode)
@@ -3302,7 +3306,8 @@ impl Z80MicroSequencer {
                     if !(indexed_16bit_opcode
                         || is_indexed_displacement_opcode(opcode)
                         || is_indexed_half_register_inc_dec_load_opcode(opcode)
-                        || is_indexed_half_register_ld_r_r_opcode(opcode))
+                        || is_indexed_half_register_ld_r_r_opcode(opcode)
+                        || is_indexed_half_register_alu_opcode(opcode))
                     {
                         return self.unsupported(opcode);
                     }
@@ -3565,7 +3570,7 @@ impl Z80MicroSequencer {
                         self.registers.hl(),
                     )
                 } else {
-                    let operand = self.read_register(opcode & 0x07);
+                    let operand = self.read_indexed_register(opcode & 0x07, true);
                     self.execute_alu_operation(operation, operand);
                     self.retire(opcode)
                 }
