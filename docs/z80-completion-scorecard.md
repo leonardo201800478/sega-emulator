@@ -401,8 +401,8 @@ A candidata adiciona `ed_block_transfer_repeat_interrupt_tests::block_transfer_a
 
 ## 31. Integração da evidência F-022 — PR #712
 
-**Main:** `5e4a703daefdebe62fb7f8d220752359df59f8e3` (squash merge da PR #712; merge SHA idêntico ao HEAD).  
-**HEAD da PR validado:** `7390744d9d6dc61ef2db3786f75fc9073dabdc12`.  
+**Main:** `5e4a703daefdebe62fb7f8d220752359df59f8e3` (squash merge da PR #712; merge SHA idêntico ao HEAD).
+**HEAD da PR validado:** `7390744d9d6dc61ef2db3786f75fc9073dabdc12`.
 **CI:** #6045 / run `42649308679` PASS no HEAD exato; CI pós-merge #6046 / run `42649608469` PASS no HEAD da main.
 
 - `ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume` executa LDIR, LDDR, CPIR e CPDR.
