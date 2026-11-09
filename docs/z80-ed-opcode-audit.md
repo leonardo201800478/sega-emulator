@@ -1,6 +1,6 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
+**Baseline atualizada:** `main` = `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada; sem alteração no subsistema ED).
 **Baseline atualizada:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
@@ -314,3 +314,8 @@ A contagem 78 explícitas / 178 fallback continua descrevendo o despachante atô
 2. Confirmar aposentadoria de 8T e ausência de efeitos colaterais.
 3. Comparar com o executor atômico apenas como diferencial interno.
 4. Manter a classificação de variante explícita; não inferir comportamento CMOS ou de clones.
+
+
+## 12. Reconciliação após PR #702
+
+A PR #702 corrigiu Q/previous-Q para DD/FD→SCF/CCF e validou 34.000 vetores externos. Não alterou decoder, despachante, sequenciador ou fallback ED. A divergência permanece inalterada: 178 bytes reservados são NOP de 8T no executor atômico e `UnsupportedOpcode` no microsequenciador. F-033 permanece GAP_CONFIRMED; não inferir que a integração Q resolveu qualquer parte do fallback ED.

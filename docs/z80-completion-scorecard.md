@@ -291,3 +291,23 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - O problema decorre da preservação de q_previous através de DD/FD antes de SCF/CCF no perfil Zilog NMOS.
 - PR de correção Q/previous-Q limpa q_previous nos caminhos atômico e retomável, atualiza o teste interno e valida snapshot/restore após o prefixo. CI ainda pendente nesta baseline documental.
 - F-028 permanece AUDIT_PARTIAL até CI PASS e auditoria das demais exceções/variantes. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 24. F-028 — fechamento da divergência Q/previous-Q em DD/FD — 2026-11-09
+
+**Main após merge:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`
+**PR:** #702 — MERGED (squash)
+**HEAD exato validado:** `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`
+**Workflow runs:** #42626811588 e #42626765522 — CI SUCCESS.
+
+- Executor atômico: limpa `q_previous` ao entrar em `execute_indexed`.
+- Microsequenciador: limpa `q_previous` ao transitar/continuar no estado Index; cobre prefixos DD/FD únicos, repetidos e alternados.
+- Testes F-036/F-037 foram reconciliados para a semântica de prefixo; E4A/E4B não foram alterados.
+- Teste diferencial interno DD 37 / FD 3F verifica F, Q/previous-Q, 8T e snapshot/restore entre prefixo e opcode terminal.
+- SingleStepTests/Z80: 32.000 vetores F-037 + 2.000 vetores DD 37/FD 3F = **34.000/34.000 PASS**, executados no microsequenciador retomável.
+- O log do job Z80 focused validation confirma os dois testes externos executados e aprovados; o harness compara estado arquitetural e T-states agregados, não equivalência elétrica de pinos.
+- rustfmt, Clippy, testes Z80, integração SMS/SG-1000, workspace regression e documentação: PASS nos runs registrados.
+
+**Classificação:** a divergência específica Q/previous-Q de DD/FD→SCF/CCF está RESOLVED. F-028 permanece AUDIT_PARTIAL porque a auditoria integral de todas as exceções DD/FD, prefixos, HALT, flags e efeitos arquiteturais ainda não foi concluída. F-036 CLOSED; F-037 CLOSED; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+**Pendências E7 que não são resolvidas por esta PR:** microsequenciador para os 178 bytes ED reservados (F-033), classificação/validação dos aliases e encodings não documentados (F-034), auditoria global das famílias F-001..F-034, interrupções/WAIT/barramento e determinismo sistêmico.
