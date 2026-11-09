@@ -45,12 +45,12 @@ fn assert_resume_case(
     program: &[u8],
     expected_opcode: u8,
     expected_tstates: u32,
+    initial: Z80Registers,
     expected_registers: Z80Registers,
     expected_wz: u16,
     expected_memory: &[(u16, u8)],
     expected_bus: Vec<(Z80BusOperation, u16, u8, u32, Option<u8>)>,
 ) {
-    let initial = initial_registers();
     let mut continuous = SmsTemporalMachine::new(program.to_vec(), 3).unwrap();
     configure(&mut continuous, initial);
 
@@ -124,7 +124,8 @@ fn ld_register_pair_immediate_all_four_pairs_resume_identically_through_sms_sche
     ] {
         let [low, high] = value.to_le_bytes();
         let program = [opcode, low, high];
-        let mut expected_registers = initial_registers();
+        let initial = initial_registers();
+        let mut expected_registers = initial;
         set_pair(&mut expected_registers, pair, value);
         expected_registers.pc = 3;
 
@@ -132,6 +133,7 @@ fn ld_register_pair_immediate_all_four_pairs_resume_identically_through_sms_sche
             &program,
             opcode,
             13,
+            initial,
             expected_registers,
             INITIAL_WZ,
             &[],
@@ -147,13 +149,15 @@ fn ld_register_pair_immediate_all_four_pairs_resume_identically_through_sms_sche
 fn ld_hl_absolute_word_store_and_load_resume_through_sms_scheduler() {
     // LD (C000),HL: low byte is written first, then high byte.
     let store_program = [0x22, 0x00, 0xC0];
-    let mut store_registers = initial_registers();
-    store_registers.set_hl(0xBEEF);
+    let mut store_initial = initial_registers();
+    store_initial.set_hl(0xBEEF);
+    let mut store_registers = store_initial;
     store_registers.pc = 3;
     assert_resume_case(
         &store_program,
         0x22,
         21,
+        store_initial,
         store_registers,
         0xC001,
         &[(0xC000, 0xEF), (0xC001, 0xBE)],
@@ -180,13 +184,15 @@ fn ld_hl_absolute_word_store_and_load_resume_through_sms_scheduler() {
     // LD HL,(0000): reads the opcode byte at 0000 as the low byte and byte
     // 0001 as the high byte, exercising the low/high memory order.
     let load_program = [0x2A, 0x00, 0x00];
-    let mut load_registers = initial_registers();
-    load_registers.set_hl(0x5566);
+    let load_initial = initial_registers();
+    let mut load_registers = load_initial;
+    load_registers.set_hl(0x002A);
     load_registers.pc = 3;
     assert_resume_case(
         &load_program,
         0x2A,
         21,
+        load_initial,
         load_registers,
         0x0001,
         &[],
