@@ -10048,7 +10048,6 @@ mod ed_block_transfer_differential_tests {
         let expected_wz = if repeats { 0x1001 } else { initial_wz };
         assert_eq!(atomic.wz, expected_wz, "atomic ED {opcode:02X} WZ");
 
-
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
         let (sequenced, sequenced_bus, tstates, cycles) =
@@ -10281,7 +10280,11 @@ mod ed_block_compare_differential_tests {
 
         let result = accumulator.wrapping_sub(memory_value);
         let initial_wz = initial.wz;
-        let direction = if matches!(opcode, 0xA9 | 0xB9) { -1_i16 } else { 1_i16 };
+        let direction = if matches!(opcode, 0xA9 | 0xB9) {
+            -1_i16
+        } else {
+            1_i16
+        };
         let repeats =
             matches!(opcode, 0xB1 | 0xB9) && initial_count.wrapping_sub(1) != 0 && result != 0;
         let expected_tstates = if repeats { 21 } else { 16 };
