@@ -293,7 +293,7 @@ jobs:
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80, SMS and SG-1000 integration packages
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
-      - name: Run all pinned SingleStepTests DD/FD indexed ALU vectors
+      - name: Run all pinned SingleStepTests Z80 external vectors (F-037/F-028/F-033)
         env:
           SINGLESTEP_Z80_DIR: ${{ github.workspace }}/vendor/SingleStepTests-z80/v1
         run: cargo test --locked -p sega-z80-cpu --test singlestep_indexed_alu -- --ignored
