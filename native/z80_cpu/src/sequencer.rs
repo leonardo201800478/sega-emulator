@@ -10598,7 +10598,7 @@ mod ed_block_io_differential_tests {
         const FLAG_N: u8 = 0x02;
         const FLAG_C: u8 = 0x01;
         let pc_sites = [0x8002_u16, 0x8802, 0xA002, 0xA802];
-        let cases = [
+        let cases: [(u8, bool, u8, u16); 6] = [
             (0xB3, false, 0xFF, 0x4010), // OTIR: carry, M.7=1
             (0xBB, false, 0xFF, 0x4010), // OTDR: carry, M.7=1
             (0xB3, false, 0x47, 0x40E0), // OTIR: carry, M.7=0
