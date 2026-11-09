@@ -7808,7 +7808,9 @@ mod architectural_state_tests {
 
 #[cfg(test)]
 mod indirect_bc_de_tests {
-    use super::{Z80MicroSequencer, Z80MicroStep};
+    use super::{
+        Z80MicroSequencer, Z80MicroStep, FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z,
+    };
     use crate::{Z80BusOperation, Z80Registers};
 
     fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
