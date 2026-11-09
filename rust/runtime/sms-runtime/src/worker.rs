@@ -1062,8 +1062,8 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
-        WorkerTelemetry, build_sms_temporal_machine, execute_frame,
+        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
+        SmsTemporalWorker, WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
@@ -1415,8 +1415,9 @@ mod tests {
         let mut video_mailbox = None;
         let mut video_sequence = 0;
 
-        let (instructions, _) = execute_frame(
+        let (instructions, _, _) = execute_frame(
             &mut machine,
+            &BreakpointSet::default(),
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
             true,
             &mut audio_session,
