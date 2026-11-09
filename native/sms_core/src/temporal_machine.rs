@@ -2636,6 +2636,35 @@ mod base_call_rst_temporal_tests {
     }
 
     #[test]
+    fn direct_boot_default_sp_call_overwrites_sega_mapper_registers() {
+        let mut rom = vec![0x00; 0x1_0000];
+        rom[0..3].copy_from_slice(&[0xCD, 0x06, 0x00]); // CALL $0006
+
+        let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
+        assert_eq!(machine.cpu().registers.pc, 0x0000);
+        assert_eq!(machine.cpu().registers.sp, 0x0000);
+        assert_eq!(machine.memory().control_port(), 0xAB);
+        assert_eq!(machine.memory().selected_banks(), [0, 1, 2]);
+
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCD,
+                tstates: 17,
+            }
+        );
+
+        // CALL pushes return address $0003: high byte to $FFFF, then low
+        // byte to $FFFE. With the no-BIOS $AB memory-control profile, the
+        // Sega mapper is enabled and those addresses are its slot registers.
+        assert_eq!(machine.cpu().registers.pc, 0x0006);
+        assert_eq!(machine.cpu().registers.sp, 0xFFFE);
+        assert_eq!(machine.memory().selected_banks(), [0, 3, 0]);
+        assert_eq!(machine.memory().read(0xFFFE), 0x03);
+        assert_eq!(machine.memory().read(0xFFFF), 0x00);
+    }
+
+    #[test]
     fn call_and_rst_internal_safe_points_restore_with_scheduler_state() {
         let mut call = SmsTemporalMachine::new(vec![0xCD, 0x03, 0x00], 3).unwrap();
         call.cpu_mut().registers.sp = 0xC100;
