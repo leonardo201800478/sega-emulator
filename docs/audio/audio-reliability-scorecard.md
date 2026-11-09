@@ -1,6 +1,6 @@
 # Scorecard — confiabilidade de áudio (SMS / Hosts compartilhados)
 
-**Baseline de referência:** `main` = `ce4d14763fee258d5eea9aea109920eb2dac58cd` (2026-11-09).
+**Baseline de referência:** `main` = `c67056e3c4c9bb7839d819345cb6e7b45cce66ae` (2026-11-09).
 **Estado geral: BLOCKED** — investigação de qualidade sonora e validação física pendentes.
 **Escopo:** geração digital, conversão/resampling, transporte PCM, worker e saídas WASAPI/XAudio2.
 **Autoridade temporal:** MachineScheduler; backend de áudio não pode modificar clocks da máquina.
@@ -17,11 +17,11 @@ Este scorecard acompanha o trabalho de áudio separado do scorecard Z80. Não al
 | AUDIO-03 | Resampler e continuidade | Testes de fase, chunking, flush/epoch e round-trip de formato | PARTIAL — chunking em 22.05/44.1/48/96 kHz; validação física/epoch completa pendente |
 | AUDIO-04 | FIFO e contabilização | Underflow em frames, silêncio, overflow, flush e perdas separados | PARTIAL — flush contado separadamente; CI Linux/Windows PASS |
 | AUDIO-05 | Estado terminal dos backends | Falha XAudio2/WASAPI impede escrita falsa de sucesso e é exposta ao worker/UI | PARTIAL — escritas rejeitadas após estado terminal; SubmitSourceBuffer contabilizado; CI Windows PASS |
-| AUDIO-06 | Métricas por backend | FIFO, endpoint starvation, WASAPI padding e buffers XAudio2 em voo separados | PARTIAL — branch de diagnóstico adiciona padding/intervalo WASAPI e conclusão/in-flight XAudio2; CI pendente |
+| AUDIO-06 | Métricas por backend | FIFO, endpoint starvation, WASAPI padding e buffers XAudio2 em voo separados | PARTIAL — instrumentação integrada na PR #733; Linux audio-output e Windows WASAPI/XAudio2 CI PASS; loopback físico pendente |
 | AUDIO-07 | Lifecycle | Pause/Resume/Stop/Reset/Load/Close/StepFrame com epoch e snapshot coerentes | PARTIAL — snapshots após Start/Pause/Stop/Reset/Load; validação de endpoint pendente |
 | AUDIO-08 | Comparação PCM comum | Mesma sequência PCM testada em WASAPI e XAudio2 | NOT RUN |
 | AUDIO-09 | Validação física Windows | Loopback, waveform, taxa efetiva, pitch, clipping e gaps em ambos | NOT RUN |
-| AUDIO-10 | Regressão sistêmica | fmt, Clippy, workspace, host Windows e SG-1000 no mesmo SHA | PARTIAL — #666 integrada; CI da baseline atual executou quality/docs/impact PASS, mas workspace, PSG, Linux audio, Windows WASAPI/XAudio2 e stress Scheduler ficaram SKIPPED/NOT RUN |
+| AUDIO-10 | Regressão sistêmica | fmt, Clippy, workspace, host Windows e SG-1000 no mesmo SHA | PARTIAL — #733 integrada; CI 6156 PASS para Linux audio-output, Windows WASAPI/XAudio2, Windows egui fmt/Clippy/testes, docs e impact; workspace, PSG, Scheduler, Z80, SDL3, PowerShell e D3D12/DXGI NOT RUN/SKIPPED |
 
 ## 2. Achados bloqueadores
 
@@ -64,8 +64,9 @@ Os contadores precisam definir epoch, ponto de incremento e unidade. Snapshots i
 | Rust fmt | NOT RUN para esta trilha | `cargo fmt --all -- --check` |
 | Rust Clippy | NOT RUN para esta trilha | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Rust workspace tests | NOT RUN para esta trilha | `cargo test --workspace --locked` |
-| Linux audio-output | SKIPPED no CI da baseline | Job executado e PASS no SHA candidato |
-| Windows WASAPI/XAudio2 | SKIPPED no CI da baseline | Build/testes host executados no SHA candidato |
+| Linux audio-output | PASS no CI 6156 / HEAD `0b78d93b` | Job fmt, Clippy e testes executado |
+| Windows WASAPI/XAudio2 | PASS no CI 6156 / HEAD `0b78d93b` | Job fmt, Clippy e testes executado |
+
 | Loopback WASAPI | NOT RUN | Captura e análise documentadas |
 | XAudio2 physical endpoint | NOT RUN | Captura e análise documentadas |
 | Comparação mesma sequência PCM | NOT RUN | Vetor idêntico e resultados comparados |
@@ -79,7 +80,7 @@ Os contadores precisam definir epoch, ponto de incremento e unidade. Snapshots i
 - `PASS`: executado com evidência reproduzível no SHA declarado.
 - `SKIPPED` no CI deve ser registrado como `NOT RUN`, nunca como PASS.
 - Evidência manual e CI são categorias separadas; uma não substitui a outra.
-- Mudanças de código devem ser pequenas, em branch e PR; sem commit direto na main.
+- Mudanças devem ser pequenas, compiláveis e validadas. A publicação direta na `main` está autorizada pelo mantenedor, mas as regras de proteção do repositório podem exigir PR; gates não podem ser ignorados.
 
 ## 6. Gate para sair da prioridade de áudio
 
@@ -104,7 +105,8 @@ A CI confirma compilação e comportamento automatizado, não qualidade audível
 
 ## 8. Atualização da baseline e instrumentação de endpoint — 2026-11-09
 
-**Baseline auditada:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`.
+**Baseline anterior:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`.
+**HEAD integrado na main:** `c67056e3c4c9bb7839d819345cb6e7b45cce66ae` (PR #733, squash).
 
 A PR #661 (interpolação fracionária do SN76489) e a PR #666 (tratamento de falhas e telemetria PCM) estão integradas na `main`. A issue #640 e a issue #659 continuam abertas; não há causa raiz demonstrada nem validação física de loopback.
 
@@ -115,7 +117,9 @@ A PR #661 (interpolação fracionária do SN76489) e a PR #666 (tratamento de fa
 - WASAPI emite `WASAPI render buffer submitted`, com frames submetidos/consumidos, silêncio e ocupação FIFO.
 - XAudio2 emite `XAudio2 source buffer submitted`, com quantidade de buffers submetidos.
 
-### Incremento proposto na branch `diagnostics/sms-audio-endpoint-timing-20261109`
+### Incremento integrado — PR #733
+
+A instrumentação descrita abaixo foi integrada na `main` pelo commit `c67056e3c4c9bb7839d819345cb6e7b45cce66ae`.
 
 - WASAPI: adicionar capacidade do endpoint, espaço disponível, padding derivado e intervalo monotônico entre eventos de renderização.
 - XAudio2: observar a variação do contador de callbacks `OnBufferEnd`, intervalo entre observações, buffers ainda enfileirados, frames estimados em voo e ocupação FIFO.
@@ -125,7 +129,17 @@ A PR #661 (interpolação fracionária do SN76489) e a PR #666 (tratamento de fa
 
 ### Validação deste incremento
 
-**Revalidação CI:** a execução inicial da branch falhou em Windows com E0793 ao referenciar diretamente `XAUDIO2_VOICE_STATE::BuffersQueued`, campo de estrutura FFI empacotada. A correção foi aplicada em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20` copiando o campo para variável local alinhada. Nova execução do CI está em andamento; não promover o resultado anterior a PASS.
+**Revalidação CI:** workflow [42695223070 / CI 6156](https://github.com/leonardo201800478/sega-emulator/actions/runs/42695223070) no HEAD `0b78d93b59feba73f734f0eb2ddacb6a84eeafd3` — SUCCESS. A execução inicial falhou em Windows com E0793 ao referenciar diretamente `XAUDIO2_VOICE_STATE::BuffersQueued`; corrigido em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20` copiando o campo para variável local alinhada.
+
+| Suíte CI 6156 | Estado |
+|---|---|
+| Linux audio-output: fmt, Clippy, testes | PASS |
+| Windows WASAPI/XAudio2: fmt, Clippy, testes | PASS |
+| Windows egui: fmt, Clippy, testes | PASS |
+| Documentação e classificação de impacto | PASS |
+| D3D12/DXGI | NOT RUN — steps SKIPPED pela classificação de impacto |
+| Workspace completo, PSG, Scheduler, Z80, SDL3, PowerShell | NOT RUN — SKIPPED pela classificação de impacto |
+| Loopback físico / validação acústica | BLOCKED — endpoint Windows real necessário |
 
 | Suíte | Estado |
 |---|---|
@@ -133,9 +147,9 @@ A PR #661 (interpolação fracionária do SN76489) e a PR #666 (tratamento de fa
 | `cargo fmt --all -- --check` | NOT RUN — sem checkout local nesta sessão |
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | NOT RUN — sem checkout local nesta sessão |
 | `cargo test --workspace --locked` | NOT RUN — sem checkout local nesta sessão |
-| CI Windows WASAPI/XAudio2 no HEAD da branch | PENDING |
+| CI Windows WASAPI/XAudio2 no HEAD da branch | PASS — CI 6156 |
 | Captura de loopback e comparação acústica | BLOCKED — depende de endpoint Windows físico |
 
 A CI da baseline `ce4d1476` teve 15 checks: 3 PASS e 12 SKIPPED. Os jobs de workspace, PSG, Linux audio-output, Windows WASAPI/XAudio2 e Scheduler stress foram NOT RUN. Não promover esses resultados a PASS.
 
-**Decisão:** manter #640 e #659 abertas. Não ajustar buffers ou clocks até analisar as novas séries temporais e executar captura física.
+**Decisão:** PR #733 integrada. Manter #640 e #659 abertas. Não ajustar buffers ou clocks até analisar as novas séries temporais e executar captura física.
