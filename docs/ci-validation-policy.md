@@ -25,7 +25,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 2. A change spanning multiple components runs the union of those components' required suites.
 3. Changes to global Cargo configuration, the root workspace manifest/lockfile, Rust toolchain configuration, or CI workflows trigger broad regression.
 4. A component-local manifest or lockfile change triggers that component's validation, not a full Windows matrix by default.
-5. Any Z80-focused change runs the full root-workspace regression as well as the focused Z80/SMS/SG-1000 packages. The focused job may be skipped when a full/workflow change already causes the workspace suite to run; in that case the full workspace test includes the Z80 packages. A skipped workspace suite is never accepted as PASS.
+5. Any Z80-focused change runs both the full root-workspace regression and the focused Z80/SMS/SG-1000 package suite, including when the same patch changes CI/workflow files. Both required status checks must conclude success on the exact final HEAD; neither suite substitutes for the other.
 6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
 
 ## Determinism and hardware validation
