@@ -509,12 +509,12 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Estado:** CLOSED para semântica de software do perfil NMOS delimitado; integrada por squash na PR #722, commit `29462cf0a788d5905de7a5e9e0499a1f1361fec1`. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
 
 
-## 38. F-003 — LD A,(nn) / LD (nn),A — candidata em auditoria
+## 38. F-003 — LD A,(nn) / LD (nn),A — candidata validada, aguardando integração
 
 **Baseline main pré-PR:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1`.
 **PR ativa:** #724 (substitui a #723, encerrada sem merge).
-**HEAD atual da candidata:** `cb1583823511cdd9db00bdf5367f98f1e1b4a8d5`.
-**Validação:** NOT RUN no HEAD atual. O run #6099 falhou exclusivamente em rustfmt no HEAD anterior; o formato foi corrigido. Os runs #6101–#6103 não produziram validação focada PASS; a classificação dos jobs não concluiu os gates Z80 no HEAD atual. Não promover qualquer SKIPPED a PASS.
+**HEAD validado:** `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
+**CI:** #6108 / run `42674749663` PASS no HEAD exato.
 
 - 2.560 vetores: `LD A,(nn)` e `LD (nn),A` × cinco endereços (0000, 00FF, 1234, FFFE, FFFF) × 256 bytes.
 - Todos os 256 padrões de F; F preservado, Q zerado, previous-Q retido e refresh/R7.
@@ -523,8 +523,18 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 - Quatro M-cycles / 13T nominais; M1, leitura low, leitura high e ciclo de dados.
 - WAITs de 1T/2T/3T/1T por pedido, snapshot encode/decode + restore antes/depois de cada resposta.
 - Diferencial atômico × microsequenciador, oracle WZ separado e integração SMS com snapshot durante M1, WAIT, retomada e comparação de trace.
-- Não houve alteração de runtime.
+- Nenhuma alteração de runtime.
+
+**Validação no HEAD exato `ed20e79c`:**
+- Change impact classification: PASS.
+- Rustfmt Z80/SMS/SG-1000: PASS.
+- Clippy Z80/SMS/SG-1000 com `-D warnings`: PASS.
+- Testes Z80/SMS/SG-1000: PASS; os dois testes F-003 atômicos e o teste de integração temporal SMS foram executados e passaram.
+- SingleStepTests DD/FD: PASS, 34.000/34.000 vetores (2.000 + 32.000); regressão adjacente, não parte da matriz F-003.
+- Documentation patch hygiene: PASS.
+- Agregador Rust quality/unit: PASS.
+- Regressão integral `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/subsistemas não relacionados: NOT RUN/SKIPPED pela classificação de impacto; não são promovidos a PASS.
 
 **Referências:** ZiLOG UM008011-0816, LD A,(nn), p. 90, e LD (nn),A, p. 93; MAME `z80.lst`; ares `instructions.cpp`. O manual documenta operação/temporização, mas não WZ; as fórmulas WZ são comportamento comparativo NMOS de implementações, não prova física.
 
-**Estado:** AUDIT_PARTIAL / BLOCKED pela validação CI focada do HEAD exato. Não fechar F-003 nem E7 até gates verdes e auditoria independente concluída. E8 permanece BLOCKED.
+**Estado:** AUDIT_PARTIAL somente até a integração por squash na main. Gates focados aprovados no HEAD indicado; não declarar CLOSED antes do merge. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
