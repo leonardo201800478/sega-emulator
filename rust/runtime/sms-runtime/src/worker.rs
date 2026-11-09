@@ -764,6 +764,7 @@ fn worker_loop(
                             if !handle_command(
                                 command,
                                 &mut machine,
+                                &mut breakpoints,
                                 &mut rom,
                                 &region,
                                 &mut running,
@@ -1382,8 +1383,9 @@ mod tests {
         let mut video_mailbox = None;
         let mut video_sequence = 0;
 
-        let (instructions, _) = execute_frame(
+        let (instructions, _, _) = execute_frame(
             &mut machine,
+            &BreakpointSet::default(),
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
             false,
             &mut audio_session,
