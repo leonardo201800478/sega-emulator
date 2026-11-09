@@ -125,6 +125,8 @@ A PR #661 (interpolação fracionária do SN76489) e a PR #666 (tratamento de fa
 
 ### Validação deste incremento
 
+**Revalidação CI:** a execução inicial da branch falhou em Windows com E0793 ao referenciar diretamente `XAUDIO2_VOICE_STATE::BuffersQueued`, campo de estrutura FFI empacotada. A correção foi aplicada em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20` copiando o campo para variável local alinhada. Nova execução do CI está em andamento; não promover o resultado anterior a PASS.
+
 | Suíte | Estado |
 |---|---|
 | Inspeção estática dos pontos de instrumentação | PASS |
