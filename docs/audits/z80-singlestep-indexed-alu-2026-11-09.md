@@ -1,10 +1,10 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
 **Status:** integração proposta; resultados de execução ainda pendentes.  
-**Sega Emulator baseline:** \x6095dacafb083847991b7fbc59bcfa099e8f297685\x60.  
+**Sega Emulator baseline:** `95dacafb083847991b7fbc59bcfa099e8f297685`.  
 **Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).  
-**Revisão fixada:** \x60ebe1875d48f374bcfd4b505d8eb8ee751568b5f7\x60 (10/04/2026).  
-**Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do \x60LICENSE\x60 original junto aos fixtures.  
+**Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).  
+**Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.  
 **Proveniência:** o README upstream declara que os vetores foram produzidos por tradução do núcleo Z80 do Ares e correção de bugs. São uma referência externa útil, mas não um oráculo independente do Ares nem evidência de execução em silício.
 
 ## Configuração e formato
@@ -14,8 +14,8 @@
 - REFRESH values on address pins during opcode fetch: habilitado.
 - Null address during wait state: desabilitado.
 - Cada arquivo JSON contém exatamente 1.000 casos.
-- Cada caso contém \x60initial\x60, \x60final\x60 e \x60cycles\x60; os estados incluem registradores principais e alternativos, flags, \x60Q\x60, \x60P\x60, \x60WZ\x60, \x60R\x60, IFF, IM, EI e RAM.
-- \x60cycles\x60 representa amostras de estados do barramento entre ciclos. Para estas instruções register-only, a suíte compara a duração agregada e as duas requisições lógicas de opcode-fetch; não afirma equivalência elétrica dos pinos.
+- Cada caso contém `initial`, `final` e `cycles`; os estados incluem registradores principais e alternativos, flags, `Q`, `P`, `WZ`, `R`, IFF, IM, EI e RAM.
+- `cycles` representa amostras de estados do barramento entre ciclos. Para estas instruções register-only, a suíte compara a duração agregada e as duas requisições lógicas de opcode-fetch; não afirma equivalência elétrica dos pinos.
 
 ## Cobertura inicial
 
@@ -30,7 +30,7 @@
 - DD/FD B4, B5: OR IXH/IXL ou IYH/IYL.
 - DD/FD BC, BD: CP IXH/IXL ou IYH/IYL.
 
-O harness \x60native/z80_cpu/tests/singlestep_indexed_alu.rs\x60 executa o **microsequenciador retomável**. O executor atômico não é usado como oráculo externo; permanece apenas como diferencial interno nas suítes já existentes. São comparados estado arquitetural final, memória indicada pelo vetor, PC/R/WZ/Q/P e T-states agregados.
+O harness `native/z80_cpu/tests/singlestep_indexed_alu.rs` executa o **microsequenciador retomável**. O executor atômico não é usado como oráculo externo; permanece apenas como diferencial interno nas suítes já existentes. São comparados estado arquitetural final, memória indicada pelo vetor, PC/R/WZ/Q/P e T-states agregados.
 
 ## Hashes dos fixtures
 
@@ -38,38 +38,38 @@ Os valores abaixo são os Git blob SHA-1 retornados pela API de conteúdo do Git
 
 | Arquivo | Git blob SHA-1 |
 |---|---|
-| \x60dd 84.json\x60 | \x609d9b002ef4b7e05fe290c71bbd87b0a622411040\x60 |
-| \x60dd 85.json\x60 | \x6060e745c68c9560799c240a0d8583fdde331f1fb2\x60 |
-| \x60dd 8c.json\x60 | \x60b306f9ebfaa88322ac60ff4ec64f9b71c3aa9a55\x60 |
-| \x60dd 8d.json\x60 | \x600b7d4e0a7b599399ca3d5b3aca64d18f1e2ab678\x60 |
-| \x60dd 94.json\x60 | \x60777f25a5e20c9f0a5fe532e52982a29a888f6f73\x60 |
-| \x60dd 95.json\x60 | \x6083623f50960d9bf1feec5a39552c183da7aba520\x60 |
-| \x60dd 9c.json\x60 | \x6002d6df95b142cf4baecca039fb794bc7ff4c9692\x60 |
-| \x60dd 9d.json\x60 | \x60058cbb0a541e29557fcdf99c8e67f1aaafa42dc8\x60 |
-| \x60dd a4.json\x60 | \x60bca6b0ade586ae24f86b236ef4674b0dc8e67cbb\x60 |
-| \x60dd a5.json\x60 | \x600feb3576fb14f6a1bcc2c32cd25c05e92ecb8565\x60 |
-| \x60dd ac.json\x60 | \x6082920d0f208cdffc74bca67a146909590e6052df\x60 |
-| \x60dd ad.json\x60 | \x601a0cbd1af7e97880a15eafd8bb80376bd9b0818f\x60 |
-| \x60dd b4.json\x60 | \x60970b214b8f514f5841927d741ee3637f154625d0\x60 |
-| \x60dd b5.json\x60 | \x60ad895f9f596014a99e6268c94fa60f90a876c167\x60 |
-| \x60dd bc.json\x60 | \x60252cec202c8391d57758e61f3873ae227245978d\x60 |
-| \x60dd bd.json\x60 | \x60a97a7ad27e6203c0585334b0e900e312862db5c3\x60 |
-| \x60fd 84.json\x60 | \x6043a2ecc73f122d5c8b4e4c18e13edcf57968f189\x60 |
-| \x60fd 85.json\x60 | \x600568bcd3cc5d0332130a4a81be1808ede272461f\x60 |
-| \x60fd 8c.json\x60 | \x60a163e17a0c4612ae3404f3e9708601850e2fd050\x60 |
-| \x60fd 8d.json\x60 | \x606c0f42dde50ebb899bc4c625f1edc68f1c442cd6\x60 |
-| \x60fd 94.json\x60 | \x60b468591bd7c5b7edd2b291cd755065c92a91fdc3\x60 |
-| \x60fd 95.json\x60 | \x60e929b84476a724a1215b1d6681e4c7126b141dd8\x60 |
-| \x60fd 9c.json\x60 | \x60329b92c30dbb61f5bee586a17db5d7cacbee4357\x60 |
-| \x60fd 9d.json\x60 | \x60ee7dad056b01225d856c8e4edf61efe7872d0731\x60 |
-| \x60fd a4.json\x60 | \x60fdce6084a234a7fb745aef43d4da8521bdead5d5\x60 |
-| \x60fd a5.json\x60 | \x60b887386ccd3ba9462f6ba5f751f1a261208b43d\x60 |
-| \x60fd ac.json\x60 | \x60a4bededc713e86d21a02db4102088a5ae57ebeb3\x60 |
-| \x60fd ad.json\x60 | \x608c8ebf197bd234404725f456451ac96963e4f918\x60 |
-| \x60fd b4.json\x60 | \x600573fb238e601e5502f55e7e40a65eba257e4482\x60 |
-| \x60fd b5.json\x60 | \x60fc4a5ed76439393c804298975bed7044aa1a4472\x60 |
-| \x60fd bc.json\x60 | \x60060fd80237ce9b71a2b981973b7ecef38c29a4af\x60 |
-| \x60fd bd.json\x60 | \x6098199f836074844f2d121e3abd1c4add644ccef8\x60 |
+| `dd 84.json` | `9d9b002ef4b7e05fe290c71bbd87b0a622411040` |
+| `dd 85.json` | `60e745c68c9560799c240a0d8583fdde331f1fb2` |
+| `dd 8c.json` | `b306f9ebfaa88322ac60ff4ec64f9b71c3aa9a55` |
+| `dd 8d.json` | `0b7d4e0a7b599399ca3d5b3aca64d18f1e2ab678` |
+| `dd 94.json` | `777f25a5e20c9f0a5fe532e52982a29a888f6f73` |
+| `dd 95.json` | `83623f50960d9bf1feec5a39552c183da7aba520` |
+| `dd 9c.json` | `02d6df95b142cf4baecca039fb794bc7ff4c9692` |
+| `dd 9d.json` | `058cbb0a541e29557fcdf99c8e67f1aaafa42dc8` |
+| `dd a4.json` | `bca6b0ade586ae24f86b236ef4674b0dc8e67cbb` |
+| `dd a5.json` | `0feb3576fb14f6a1bcc2c32cd25c05e92ecb8565` |
+| `dd ac.json` | `82920d0f208cdffc74bca67a146909590e6052df` |
+| `dd ad.json` | `1a0cbd1af7e97880a15eafd8bb80376bd9b0818f` |
+| `dd b4.json` | `970b214b8f514f5841927d741ee3637f154625d0` |
+| `dd b5.json` | `ad895f9f596014a99e6268c94fa60f90a876c167` |
+| `dd bc.json` | `252cec202c8391d57758e61f3873ae227245978d` |
+| `dd bd.json` | `a97a7ad27e6203c0585334b0e900e312862db5c3` |
+| `fd 84.json` | `43a2ecc73f122d5c8b4e4c18e13edcf57968f189` |
+| `fd 85.json` | `0568bcd3cc5d0332130a4a81be1808ede272461f` |
+| `fd 8c.json` | `a163e17a0c4612ae3404f3e9708601850e2fd050` |
+| `fd 8d.json` | `6c0f42dde50ebb899bc4c625f1edc68f1c442cd6` |
+| `fd 94.json` | `b468591bd7c5b7edd2b291cd755065c92a91fdc3` |
+| `fd 95.json` | `e929b84476a724a1215b1d6681e4c7126b141dd8` |
+| `fd 9c.json` | `329b92c30dbb61f5bee586a17db5d7cacbee4357` |
+| `fd 9d.json` | `ee7dad056b01225d856c8e4edf61efe7872d0731` |
+| `fd a4.json` | `fdce6084a234a7fb745aef43d4da8521bdead5d5` |
+| `fd a5.json` | `b887386ccd3ba9462f6ba5f751f1a2612085b43d` |
+| `fd ac.json` | `a4bededc713e86d21a02db4102088a5ae57ebeb3` |
+| `fd ad.json` | `8c8ebf197bd234404725f456451ac96963e4f918` |
+| `fd b4.json` | `0573fb238e601e5502f55e7e40a65eba257e4482` |
+| `fd b5.json` | `fc4a5ed76439393c804298975bed7044aa1a4472` |
+| `fd bc.json` | `060fd80237ce9b71a2b981973b7ecef38c29a4af` |
+| `fd bd.json` | `98199f836074844f2d121e3abd1c4add644ccef8` |
 
 ## Limites
 
