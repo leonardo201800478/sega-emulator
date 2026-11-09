@@ -98,3 +98,14 @@ Fixtures adicionais no mesmo commit upstream:
 | FD 3F (CCF) | `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345` | 1.000 |
 
 A execução de reprodução na PR #695, run #42624833386, falhou no primeiro vetor DD 37: F esperado 0x65, obtido 0x45. O teste foi fail-fast e não alcançou FD 3F. A PR de correção Q/previous-Q adiciona a correção nos dois executores e a validação de snapshot/restore; resultado CI ainda pendente.
+
+## Resultado final após PR #702 — 2026-11-09
+
+- PR #702 MERGED; main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`.
+- HEAD validado `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`.
+- Runs #42626811588 e #42626765522: SUCCESS.
+- F-037: 32.000/32.000 vetores PASS.
+- DD 37/FD 3F Q/previous-Q: 2.000/2.000 vetores PASS.
+- Total: **34.000/34.000 vetores externos PASS** no microsequenciador retomável.
+- A correção não afirma equivalência elétrica dos traces nem prova independente de silício; o corpus SingleStepTests é Ares-derived.
+- A divergência específica DD/FD→SCF/CCF está resolvida. F-028 permanece AUDIT_PARTIAL para as demais exceções e efeitos arquiteturais.
