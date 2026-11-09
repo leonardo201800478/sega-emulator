@@ -1,6 +1,6 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Baseline atualizada:** `main` = `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada; sem alteração no subsistema ED).
+**Baseline remota reconciliada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09; PRs #709/#710 integradas).
 **Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
@@ -325,14 +325,15 @@ A PR #702 corrigiu Q/previous-Q para DD/FD→SCF/CCF e validou 34.000 vetores ex
 
 **Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
 **HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
-**Estado:** implementação candidata; não integrada.
+**Estado integrado:** PR #706 MERGED; HEAD validado `b2291a83848e236d2354d8f03e22b831f9030b72`; CI #42635309051 SUCCESS. A PR #709/#710 não alterou o comportamento de F-033.
 
-O fallback residual em `execute_ed_register_control()` foi alterado para aposentadoria normal via `retire(opcode)`. Como o byte terminal já foi obtido pelo segundo M1, o caminho não adiciona M-cycles/T-states internos nem acesso extra de barramento. A duração agregada esperada é 8 T-states nominais, acrescida dos WAIT efetivamente inseridos nos dois fetches.
+O fallback residual em `execute_ed_register_control()` aposenta via `retire(opcode)` após os dois M1 já consumidos. Não adiciona M-cycles/T-states internos nem acesso extra de barramento; duração nominal de 8T, acrescida dos WAIT efetivamente inseridos nos dois fetches.
 
-A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos bytes não cobertos pelas 78 codificações explícitas e verifica PC/wrap, R, F, Q/previous-Q, WZ, P, IFF1/IFF2, IM, fase Ready e ausência de request pendente. Também valida WAIT e snapshot/restore com retomada entre prefixo e byte terminal. O teste do SMS temporal e o teste unitário do sequenciador foram atualizados para o novo contrato de aposentadoria.
+A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos bytes não cobertos pelas 78 codificações explícitas e verifica PC/wrap, R, F, Q/previous-Q, WZ, P, IFF1/IFF2, IM, fase Ready e ausência de request pendente. Também valida WAIT e snapshot/restore com retomada entre prefixo e byte terminal.
 
-**Limite da evidência:** o comportamento de 8T/no-effect é assumido somente para o perfil Zilog NMOS clássico. UM0080 não especifica todos os bytes reservados. A implementação MAME fixada e fontes secundárias sustentam a hipótese de compatibilidade, mas não constituem prova de silício. Nenhuma afirmação é feita para CMOS, R800, Z80N ou clones.
+**Limite da evidência:** CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 não especifica universalmente todos os bytes reservados. MAME e fontes secundárias sustentam a hipótese de compatibilidade, mas não constituem prova de silício. Nenhuma afirmação é feita para CMOS, R800, Z80N ou clones. F-034 foi posteriormente fechada pela PR #709; E7 continua IN_PROGRESS e E8 BLOCKED.
 
-**CI #42631919433:** Z80 focused validation PASS; Rust quality and unit regression PASS; Windows x64 D3D12 PASS. Rust workspace regression e demais jobs não aplicáveis ficaram SKIPPED/NOT RUN conforme a política impact-based em `docs/ci-validation-policy.md`. Esse resultado é específico do HEAD candidato acima.
 
-F-033 só pode ser promovida a CLOSED após integração da PR e reconciliação documental na main. F-034 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+## Reconciliação pós-PR #710 — 2026-11-09
+
+A baseline remota é `1142eb567746afe64356b60f2ce466581e1c0cef`. F-033 está CLOSED para o perfil Zilog NMOS clássico, com a cobertura dos 178 bytes reservados e os limites acima. F-034 está CLOSED para o perfil de compatibilidade NMOS clássico SMS/SG-1000, conforme PR #709 (CI #6034 no HEAD exato) e reconciliação documental #710 (CI #6036). Essas classificações não representam compatibilidade universal de variantes nem validação física. E7 permanece IN_PROGRESS por auditoria semântica global; E8 permanece BLOCKED.
