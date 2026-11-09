@@ -90,7 +90,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-012 | ADC/SBC HL,rr | AUDIT_PARTIAL | Todos os pares, carry de entrada e fronteiras. |
 | F-013 | INC/DEC de pares de 16 bits | AUDIT_PARTIAL | Wraparound e flags preservadas. |
 | F-014 | DAA, CPL, NEG, CCF e SCF | AUDIT_PARTIAL | Fórmulas e flags X/Y/Q; NEG inclui aliases ED. |
-| F-015 | RLCA/RRCA/RLA/RRA | IMPLEMENTED_PENDING_VALIDATION | PR de testes em preparação: 262.144 vetores A×F, 1.024 snapshot/restore, quatro PC-wrap e 192 casos SMS/MachineScheduler. Verifica S/Z/PV, H/N, C, X/Y comparativo, Q=F, previous-Q, WZ, R e 4T+WAIT. Nenhuma alteração de runtime. Aguardar gates no HEAD exato. |
+| F-015 | RLCA/RRCA/RLA/RRA | IMPLEMENTED_PENDING_VALIDATION (gates focados PASS; merge pendente) | PR #728, HEAD `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`; CI #6129 / run `42678520765` PASS. 262.144 vetores A×F, 1.024 snapshot/restore, quatro PC-wrap e 192 casos SMS/MachineScheduler. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED. Nenhuma alteração de runtime. X/Y comparativo; sem prova física. CLOSED somente após squash merge. |
 | F-016 | RLC/RRC/RL/RR/SLA/SRA/SLL/SRL | AUDIT_PARTIAL | Matriz CB para todos os destinos aplicáveis. |
 | F-017 | BIT/RES/SET para registradores e (HL) | AUDIT_PARTIAL | Flags BIT, ausência de write-back e endereços. |
 | F-018 | JP/JR/DJNZ, condicional e incondicional | AUDIT_PARTIAL | PC, offsets assinados, wrap e tempos tomados/não tomados. |
@@ -493,3 +493,18 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 | #533 | OPEN | Contrato de conclusão |
 
 Todas permanecem abertas e fora do escopo da F-015; qualquer integração exige auditoria independente de dependências, conflitos, CI e supersessão.
+
+
+## 37. F-015 — RLCA/RRCA/RLA/RRA — gates focados aprovados — 2026-11-09
+
+- **Baseline main pré-PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+- **PR #728 HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
+- **CI #6129 / run `42678520765`: PASS** no HEAD exato.
+- **Matriz semântica:** 262.144 vetores (4 opcodes × 256 A × 256 F); verifica resultado A/F, S/Z/PV, H/N, C, X/Y comparativo, Q=F, previous-Q, WZ preservado, PC e R/R7.
+- **Snapshot/restore:** 1.024 casos comparando execução contínua e retomada; quatro casos PC FFFF→0000.
+- **Integração SMS:** 192 casos; WAIT no M1, snapshot com M1 pendente, restore, trace e 5T/15 master ticks.
+- **Gates:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation patch hygiene PASS; agregador PASS.
+- **Histórico de correção:** #6126 rustfmt FAIL (formatação corrigida); #6128 Clippy FAIL (`too_many_arguments` localizado e justificado); #6129 PASS nos gates aplicáveis.
+- **Escopo NOT RUN/SKIPPED:** `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados. Não são PASS.
+- **Runtime:** nenhuma alteração.
+- **Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da main. X/Y permanece comparação MAME/ares, sem prova física. E7 IN_PROGRESS; E8 BLOCKED.
