@@ -441,6 +441,6 @@ Vetores externos discriminantes fixados na mesma revisão SingleStepTests:
 | DD 37 0001 | `c68369350b5a47ebb481d35a7b9e4dd86e292716` | A=50, F=75, Q=75 | F=65, Q=65 |
 | FD 3F 0001 | `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345` | A=06, F=ED, Q=ED | F=FC, Q=FC |
 
-Reprodução obtida na PR #695, workflow run #42624833386: DD 37 0001 falhou com F obtido=45 e esperado=65. O teste interrompeu no primeiro mismatch; FD 3F ainda não foi alcançado. A fórmula atual, preservando q_previous=F, prevê F=45 no primeiro caso e F=D4 no segundo; com q_previous limpo, os resultados esperados são F=65 e F=FC. A correção dos dois executores e a validação de snapshot/restore estão na PR #700, ainda pendente de CI.
+Reprodução obtida na PR #695, workflow run #42624833386: DD 37 0001 falhou com F obtido=45 e esperado=65. O teste interrompeu no primeiro mismatch; FD 3F ainda não foi alcançado. A fórmula atual, preservando q_previous=F, prevê F=45 no primeiro caso e F=D4 no segundo; com q_previous limpo, os resultados esperados são F=65 e F=FC. A correção dos dois executores e a validação de snapshot/restore estão na PR de correção Q/previous-Q, ainda pendente de CI.
 
 **Próxima tarefa objetiva:** adicionar DD 37 e FD 3F ao harness externo, reproduzir no microsequenciador e executor atômico, corrigir a fronteira de prefixo sem alterar E4A/E4B e validar snapshot/restore após o primeiro M1.
