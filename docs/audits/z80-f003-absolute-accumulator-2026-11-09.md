@@ -2,8 +2,10 @@
 
 **Baseline main pré-PR:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1`.
 **PR:** #724 — `test(z80): audit absolute accumulator transfers (F-003)`.
-**HEAD atual da candidata:** `cb1583823511cdd9db00bdf5367f98f1e1b4a8d5`.
-**Validação CI:** BLOCKED/NOT RUN no HEAD atual. Run #6099 falhou em rustfmt no HEAD anterior; formatação corrigida. Runs #6101–#6103 não produziram Z80 focused validation PASS no HEAD atual. Não houve integração.
+**HEAD auditado pelo run #6107:** `8b4899b341b1986ed560a4e67d8e12541ddbcbd2`.
+**CI #6107 / run `42672954884`:** FAILURE no agregador, sem execução dos gates Z80 ou documentação. A classificação concluiu SUCCESS e marcou `EXPECT_Z80=true` e `EXPECT_DOCS=true`, mas os resultados recebidos foram `Z80=abandoned` e `DOCS=abandoned`. O agregador falhou corretamente ao recusar validar jobs obrigatórios ausentes. Não classificar isso como falha funcional, nem como PASS.
+**Estado dos gates neste HEAD:** rustfmt NOT RUN; Clippy focado NOT RUN; testes Z80/SMS/SG-1000 NOT RUN; SingleStepTests DD/FD NOT RUN; documentação `git diff --check` NOT RUN; regressão integral do workspace NOT RUN.
+**Ação corretiva:** esta atualização documental gera evento `synchronize` na PR para reexecutar o workflow no HEAD atualizado. Exigir jobs Z80 focused e Documentation concluídos, além do agregador SUCCESS. Se os jobs continuarem ausentes, investigar a orquestração antes de qualquer fechamento.
 
 ## 1. Escopo e referência primária
 
@@ -47,12 +49,13 @@ Arquivo: `native/sms_core/tests/z80_f003_temporal.rs`.
 
 | Suíte | Estado | Evidência |
 |---|---|---|
-| Rustfmt do HEAD anterior | FAIL | CI #6099 |
-| Rustfmt após correção | NOT RUN | Correção aplicada no HEAD atual |
-| Clippy Z80/SMS/SG-1000 no HEAD atual | NOT RUN | CI focado não executado |
-| Testes Z80/SMS/SG-1000 no HEAD atual | NOT RUN | CI focado não executado |
-| SingleStepTests DD/FD | NOT RUN | Não aplicável ao escopo F-003; sem execução nesta candidata |
-| Regressão integral do workspace | NOT RUN | Não disparada |
+| Rustfmt no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
+| Clippy Z80/SMS/SG-1000 no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
+| Testes Z80/SMS/SG-1000 no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
+| SingleStepTests DD/FD | NOT RUN | Job Z80 focused não executado |
+| Documentation patch hygiene | NOT RUN | Job docs `abandoned` no run #6107 |
+| Agregador Rust quality/unit | FAIL (orquestração) | Exigiu Z80/docs SUCCESS, recebeu `abandoned` |
+| Regressão integral do workspace | NOT RUN | Não aplicável ao escopo; não foi disparada |
 | Validação física SMS | NOT RUN | Sem alegação de hardware |
 
 A candidata não altera runtime. F-003 permanece AUDIT_PARTIAL até a CI focada passar no HEAD exato e qualquer divergência ser corrigida. Sem validação física SMS; sem alegação de compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS e E8/ZEXDOC/ZEXALL BLOCKED.
