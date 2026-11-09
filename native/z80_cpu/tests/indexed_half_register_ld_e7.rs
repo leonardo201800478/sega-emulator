@@ -42,18 +42,18 @@ impl CpuBus for FlatBus {
 }
 
 fn initial_registers() -> Z80Registers {
-    let mut registers = Z80Registers::default();
-    registers.a = 0x76;
-    registers.f = 0xD7;
-    registers.b = 0x10;
-    registers.c = 0x21;
-    registers.d = 0x32;
-    registers.e = 0x43;
-    registers.h = 0x54;
-    registers.l = 0x65;
-    registers.sp = 0x9000;
-    registers.pc = START_PC;
-    registers
+    Z80Registers {
+        a: 0x76,
+        f: 0xD7,
+        b: 0x10,
+        c: 0x21,
+        d: 0x32,
+        e: 0x43,
+        h: 0x54,
+        l: 0x65,
+        sp: 0x9000,
+        pc: START_PC,
+    }
 }
 
 fn initial_alternate() -> Z80AlternateRegisters {
