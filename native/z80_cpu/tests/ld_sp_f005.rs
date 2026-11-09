@@ -185,10 +185,7 @@ fn repeated_and_alternating_dd_fd_prefixes_use_the_last_index_prefix() {
         assert_eq!(cpu.registers.hl(), 0x5678);
         assert_eq!(cpu.registers.f, 0xD7);
         assert_eq!(cpu.wz, 0xBEEF);
-        assert_eq!(
-            cpu.refresh,
-            0x80 | ((0x7E + prefix_count + 1) & 0x7F) as u8
-        );
+        assert_eq!(cpu.refresh, 0x80 | ((0x7E + prefix_count + 1) & 0x7F) as u8);
         assert_eq!(cpu.registers.pc, prefix_count as u16 + 1);
     }
 }
@@ -215,8 +212,7 @@ fn run_waited_indexed_f9(with_snapshots: bool) -> (Z80MicroStep, Z80MicroSequenc
     }
 
     assert_eq!(
-        cpu.complete_bus_cycle(opcode_fetch.id, Some(0xF9))
-            .unwrap(),
+        cpu.complete_bus_cycle(opcode_fetch.id, Some(0xF9)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
     if with_snapshots {
