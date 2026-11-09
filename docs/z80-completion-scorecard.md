@@ -243,7 +243,7 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 - **PR:** #686 — `feat/z80-e7-indexed-half-alu-20261109`.
 - **Commit de implementação:** `5f9ca825feb45633c2baf200e502f1a05bf99c7d`.
-- **HEAD candidato documentado:** `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- **Último commit de teste/otimização antes desta atualização documental:** `2ef8d4c0c73cf5a339f8d258ba9e314bfeebcdd2`. O HEAD final da PR será consultado no GitHub antes do merge.
 - **Estado:** IMPLEMENTED_PENDING_VALIDATION. O microsequenciador agora tem allowlist e dispatch para as 16 combinações DD/FD de ADD, ADC, SUB, SBC, AND, XOR, OR e CP com IXH/IXL/IYH/IYL.
 - A implementação reutiliza `read_indexed_register()` e `execute_alu_operation()`; não duplica a ALU nem cria ciclos internos artificiais.
 - A suíte `indexed_half_register_alu_e7.rs` contém 10.816 casos diferenciais (8 operações, 2 fontes, DD/FD, 13 acumuladores, 13 operandos e 2 carry-in), 16 vetores fixos por prefixo/fonte, WAIT nos dois M1, snapshot/restore, prefixos repetidos e verificações de A/F/Q/previous-Q/WZ/PC/R/IFF/I/IX/IY/H/L.
