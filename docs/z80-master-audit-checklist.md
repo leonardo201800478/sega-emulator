@@ -99,7 +99,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-021 | INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR | AUDIT_PARTIAL | Flags, B, HL, WZ, L pós-atualização, repetição e evidência NMOS. |
 | F-022 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | AUDIT_PARTIAL | PR #712 integrada em `5e4a703daefdebe62fb7f8d220752359df59f8e3`; HEAD validado `7390744d9d6dc61ef2db3786f75fc9073dabdc12`, CI #6045 e pós-merge #6046 PASS. Fixture IM2 cobre LDIR/LDDR/CPIR/CPDR, F via PUSH AF, RETI, retomada e snapshot/restore. Restam matriz independente mais ampla, flags simples, WZ/MEMPTR nos caminhos não repetitivos e demais fronteiras. Não fechar a família com este teste isolado. |
 | F-023 | RRD/RLD | AUDIT_PARTIAL | PR #714 integrada em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`, CI #6056 e pós-merge #6057 PASS. Adiciona 262.144 vetores atômicos (2 opcodes × 256 A × 256 (HL) × 2 estados C) para permutação e flags documentadas, além de 16 vetores microsequenciados com WAIT/snapshot e ordem de barramento. X/Y e WZ=HL+1 são somente comparativos MAME/ares; não são evidência física. Restam prova independente de X/Y/WZ e validação física SMS/variantes. |
-| F-024 | LD I,A; LD R,A; LD A,I; LD A,R | AUDIT_PARTIAL | Flags, refresh, PV/IFF2 e erratum após interrupção. |
+| F-024 | LD I,A; LD R,A; LD A,I; LD A,R | CLOSED (perfil NMOS delimitado) | PR #716 integrada em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062/#6063 PASS. 4.096 vetores cobrem os quatro opcodes, todos os bytes, IFF2/C, refresh, flags e P; WAIT/snapshot no microsequenciador; erratum INT em ambos os executores. X/Y é referência MAME/ares, não especificação UM0080. Sem hardware SMS ou CMOS/clones. |
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
@@ -385,3 +385,12 @@ A evidência de timing/flags documentadas é do UM0080. MAME e ares concordam em
 ## 29. Fechamento documental da PR #714 — 2026-11-09
 
 PR #714 MERGED; HEAD de validação `bb15e672f30d8aae3777761f1545347fc3d520ea`; CI #6056 PASS no HEAD da PR e CI #6057 PASS no HEAD da main `3a81437362dad79577058852b5f469381d3bde2c`. A cobertura integrada é 262.144 vetores atômicos e 16 vetores microsequenciados com WAIT/snapshot. F-023 continua AUDIT_PARTIAL pelos limites de X/Y/WZ, ROM dedicado e hardware SMS. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 30. F-024 — fechamento no perfil NMOS clássico — 2026-11-09
+
+F-024 CLOSED no perfil de compatibilidade Zilog NMOS clássico pela PR #716 (squash merge `56d75cc79803494e9fd8a54e8930871c9101fc84`). HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062 / run `42653692191` PASS; CI pós-merge #6063 / run `42653949243` PASS.
+
+Cobertura: 4.096 vetores para ED 47/4F/57/5F (todos os valores de byte, IFF2 e Carry); refresh R inclui os dois M1; LD R,A copia os oito bits; flags normativas S/Z/PV/H/N/C; X/Y verificado como referência MAME/ares. Microsequenciador com WAIT e snapshot/restore em cada fronteira, 9T/11T. Erratum P/V=0 quando INT é aceito durante LD A,I/R, ambas as combinações IFF2/C e ambos os executores; NMI e instrução intermediária cobertos pelos testes existentes.
+
+Limite: não generalizar a CMOS/clones; X/Y não é declarado como especificação UM0080 nem prova física. Hardware SMS NOT RUN. E7 IN_PROGRESS; E8 BLOCKED.
