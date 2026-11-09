@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
 **Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
-**Baseline atualizada:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
+**Baseline atualizada:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
@@ -289,3 +289,28 @@ O teste `block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_
 A INT é assertada no último T-state do ciclo interno de repetição. O microsequenciador mantém a linha level-sensitive até o teste desassertá-la após o serviço; o executor atômico usa a solicitação one-shot equivalente. O teste cobre INIR/INDR/OTIR/OTDR.
 
 Isso conclui o fixture adaptado de IM2/RETI/retomada no core. O ROM v5.0 completo continua NOT_RUN; SMS físico continua NOT_RUN; CMOS/clones continuam NOT_VERIFIED. E7.7 permanece IN_PROGRESS e E8 permanece BLOCKED.
+
+
+## 11. Reconciliação do microsequenciador — 2026-11-09
+
+A contagem 78 explícitas / 178 fallback continua descrevendo o despachante atômico em `native/z80_cpu/src/cpu.rs`. Ela não pode ser transferida automaticamente ao caminho retomável.
+
+### Divergência identificada
+
+- Executor atômico: os 78 bytes explícitos são tratados por famílias; o braço `_ => 8` final faz os outros 178 retornarem 8 T-states. Os testes `all_256_ed_encodings_match_nominal_cycle_vectors` e `every_ed_fallback_encoding_is_an_eight_tstate_no_op` pertencem a esse caminho.
+- Microsequenciador: `execute_ed_register_control` em `native/z80_cpu/src/sequencer.rs` retorna `UnsupportedOpcode` no braço `_`. A chamada ocorre após a leitura do segundo byte ED; não existe fallback equivalente de aposentadoria de 8T para os 178 bytes.
+- Portanto, os testes atômicos existentes não comprovam o caminho retomável. F-033 permanece GAP_CONFIRMED até teste dirigido de todos os 178 bytes no microsequenciador e implementação validada.
+
+### Confronto documental e de referência
+
+- UM0080 (Zilog Z80 CPU User Manual, edição UM008011-0816) documenta as instruções ED oficiais, mas não define o comportamento de todos os bytes reservados.
+- MAME `z80.lst`, revisão `c7541016a35d83a3eb5db5db5d20a5cb79a17a43`, lista 178 bytes `DB ED` encaminhados a `illegal_2()`. Isso é comportamento de implementação de referência, não prova de silício.
+- Referências secundárias descrevem esses bytes reservados como operações sem efeito no Z80 clássico. A hipótese de 8T NOP é adequada ao perfil NMOS-alvo, mas deve permanecer delimitada e testável.
+- A matriz byte a byte foi criada em `docs/z80-ed-opcode-matrix.md`.
+
+### Aceite pendente
+
+1. Testar os 178 bytes no microsequenciador, com estado inicial discriminante e PC/R/WZ/flags/Q/P/memória.
+2. Confirmar aposentadoria de 8T e ausência de efeitos colaterais.
+3. Comparar com o executor atômico apenas como diferencial interno.
+4. Manter a classificação de variante explícita; não inferir comportamento CMOS ou de clones.
