@@ -3527,12 +3527,13 @@ mod tests {
 
     #[test]
     fn ed_block_simple_forms_exhaustively_preserve_flags_and_track_wz() {
+        let mut bus = TestBus([0; 0x10000]);
         for opcode in [0xA0_u8, 0xA8, 0xA1, 0xA9] {
             let decrement = matches!(opcode, 0xA8 | 0xA9);
             for accumulator in 0_u8..=u8::MAX {
                 for memory_value in 0_u8..=u8::MAX {
                     for initial_count in [1_u16, 2] {
-                        let mut bus = TestBus([0; 0x10000]);
+                        bus.0[0xC200] = 0;
                         bus.0[0x1000] = 0xED;
                         bus.0[0x1001] = opcode;
                         bus.0[0xC100] = memory_value;
