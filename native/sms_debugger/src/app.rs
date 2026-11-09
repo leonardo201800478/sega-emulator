@@ -216,6 +216,7 @@ impl DebugTarget for SmsTarget {
     }
 }
 
+/// Native egui application for interactive SMS ROM diagnostics.
 pub struct DebuggerApp {
     session: Option<DebugSession<SmsTarget>>,
     rom_path: Option<PathBuf>,
