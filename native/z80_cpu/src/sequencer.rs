@@ -8518,6 +8518,13 @@ mod ed_port_io_differential_tests {
             assert_eq!(io_request.address, 0x1234);
             assert_eq!(io_request.base_tstates, 4);
 
+            if opcode == 0x71 {
+                assert_eq!(
+                    io_request.operation,
+                    Z80BusOperation::PortWrite { value: 0 },
+                    "ED 71 is the NMOS compatibility OUT (C),0 encoding"
+                );
+            }
             let retired = match io_request.operation {
                 Z80BusOperation::PortRead => {
                     let value = sequenced_bus.read_port(io_request.address);
@@ -8548,6 +8555,59 @@ mod ed_port_io_differential_tests {
             assert_eq!(sequenced_bus.port_reads, atomic_bus.port_reads);
             assert_eq!(sequenced_bus.port_writes, atomic_bus.port_writes);
             assert_eq!(sequenced.pending_request(), None);
+        }
+    }
+
+    #[test]
+    fn ed70_all_port_values_match_atomic_flags_and_discarded_destination() {
+        for value in 0_u8..=u8::MAX {
+            let mut architectural = state();
+            architectural.registers.c = value ^ architectural.registers.b;
+            architectural.registers.a = 0xA5;
+            architectural.registers.f = 0x01;
+
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(architectural).unwrap();
+            let mut atomic_bus = TestBus::default();
+            atomic_bus.memory[0xFFFE] = 0xED;
+            atomic_bus.memory[0xFFFF] = 0x70;
+
+            let mut sequenced = Z80MicroSequencer::default();
+            sequenced.import_architectural_state(architectural).unwrap();
+            let mut sequenced_bus = atomic_bus.clone();
+
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(12));
+            let first = request(sequenced.begin_instruction().unwrap());
+            let second = read_opcode(
+                &mut sequenced,
+                &mut sequenced_bus,
+                Z80MicroStep::BusRequest(first),
+            );
+            sequenced = roundtrip(sequenced);
+            let io_request = request(read_opcode(&mut sequenced, &mut sequenced_bus, second));
+            assert_eq!(io_request.operation, Z80BusOperation::PortRead);
+            assert_eq!(io_request.address, architectural.registers.bc());
+            let input = sequenced_bus.read_port(io_request.address);
+            assert_eq!(input, value);
+            let retired = sequenced.complete_bus_cycle(io_request.id, Some(input)).unwrap();
+            assert_eq!(
+                retired,
+                Z80MicroStep::InstructionRetired {
+                    opcode: 0x70,
+                    tstates: 12
+                }
+            );
+            assert_eq!(
+                sequenced.export_architectural_state(),
+                atomic.export_architectural_state(),
+                "ED 70 architectural mismatch for input {value:02X}"
+            );
+            assert_eq!(sequenced_bus.port_reads, atomic_bus.port_reads);
+            assert!(sequenced_bus.port_writes.is_empty());
+            assert_eq!(sequenced.pending_request(), None);
+            assert_eq!(sequenced.export_architectural_state().registers.a, 0xA5);
+            assert_eq!(sequenced.export_architectural_state().registers.b, architectural.registers.b);
+            assert_eq!(sequenced.export_architectural_state().registers.c, architectural.registers.c);
         }
     }
 
