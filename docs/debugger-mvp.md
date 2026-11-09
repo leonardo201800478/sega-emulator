@@ -26,7 +26,7 @@ changing the generic breakpoint, trace retention, report or UI model.
   sequencer phase and machine ticks.
 - Inspect a 64-byte memory window.
 - View the latest 24 bus/CPU trace records; retention is capped at 2,048 events.
-- Export a local text report. ROM bytes are never included.
+- Export a local text report. Data bytes from the cartridge address range below `0xC000` are redacted; RAM and port diagnostics may retain values.
 
 ## Build
 
@@ -47,5 +47,5 @@ the normal workspace format, Clippy and test gates.
 - The trace reports actual temporal bus dispatches, but the UI does not claim
   instruction disassembly or reverse execution.
 - The memory window is a read-only view through the SMS memory mapper.
-- No commercial ROM, BIOS image, ROM bytes or copyrighted instruction dump is
-  written to the repository or diagnostic report.
+- No commercial ROM or BIOS image is written to the repository. Cartridge-region
+  data bytes are redacted from exported reports; no ROM bytes are exported.
