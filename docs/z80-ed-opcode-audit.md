@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
 **Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
-**Baseline atualizada:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada).
+**Baseline atualizada:** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #692 integrada).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
@@ -314,3 +314,7 @@ A contagem 78 explícitas / 178 fallback continua descrevendo o despachante atô
 2. Confirmar aposentadoria de 8T e ausência de efeitos colaterais.
 3. Comparar com o executor atômico apenas como diferencial interno.
 4. Manter a classificação de variante explícita; não inferir comportamento CMOS ou de clones.
+
+### Disponibilidade de vetores externos reservados
+
+Na revisão SingleStepTests/Z80 `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, foram confirmados fixtures ED77 (`ed18dc5f3216eb620e401ab6675bded6d758eb80`) e ED7F (`542123e1e3cb77ea26150c4f65919025839b3d81`), com 1.000 vetores cada. Os arquivos ED00, ED3F, ED80, ED9F, EDA4, EDB4, EDBC e EDFF não foram encontrados na revisão consultada. Isso é uma amostra de disponibilidade, não uma enumeração exaustiva do corpus.
