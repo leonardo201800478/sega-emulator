@@ -95,6 +95,10 @@ fn is_indexed_displacement_opcode(opcode: u8) -> bool {
         || is_indexed_memory_inc_dec_opcode(opcode)
 }
 
+fn is_indexed_half_register_inc_dec_load_opcode(opcode: u8) -> bool {
+    matches!(opcode, 0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E)
+}
+
 fn is_indexed_load_opcode(opcode: u8) -> bool {
     opcode == 0x36
         || is_indexed_memory_load_opcode(opcode)
@@ -838,7 +842,11 @@ impl Z80MicroSequencer {
                 match state.prefix_state {
                     Z80PrefixState::None => true,
                     Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        let class = classify_index_opcode(opcode);
+                        let ignored_prefix_load = class == Z80IndexOpcodeClass::Ignored;
+                        let indexed_half_load = class == Z80IndexOpcodeClass::UsesIndex
+                            && matches!(opcode, 0x26 | 0x2E);
+                        (ignored_prefix_load || indexed_half_load)
                             && matches!(opcode, 0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E)
                             && destination == ((opcode >> 3) & 0x07)
                             && state.mcycle_index >= 2
@@ -3603,7 +3611,7 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
-                self.write_register(destination, value);
+                self.write_indexed_register(destination, value, true);
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
@@ -5826,6 +5834,45 @@ impl Z80MicroSequencer {
             7 => self.registers.a = value,
             _ => unreachable!("memory operand is not a register"),
         }
+    }
+
+    fn read_indexed_register(&self, code: u8, halves: bool) -> u8 {
+        if halves {
+            match (self.prefix_state, code) {
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 4) => (self.ix >> 8) as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 5) => self.ix as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 4) => (self.iy >> 8) as u8,
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 5) => self.iy as u8,
+                _ => return self.read_register(code),
+            }
+        } else {
+            self.read_register(code)
+        }
+    }
+
+    fn write_indexed_register(&mut self, code: u8, value: u8, halves: bool) {
+        if halves {
+            match (self.prefix_state, code) {
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 4) => {
+                    self.ix = (self.ix & 0x00FF) | (u16::from(value) << 8);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Ix), 5) => {
+                    self.ix = (self.ix & 0xFF00) | u16::from(value);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 4) => {
+                    self.iy = (self.iy & 0x00FF) | (u16::from(value) << 8);
+                    return;
+                }
+                (Z80PrefixState::Index(Z80IndexRegister::Iy), 5) => {
+                    self.iy = (self.iy & 0xFF00) | u16::from(value);
+                    return;
+                }
+                _ => {}
+            }
+        }
+        self.write_register(code, value);
     }
 
     fn issue_read(
