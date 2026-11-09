@@ -235,3 +235,19 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - F-036 CLOSED; F-037 GAP_CONFIRMED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 
 **Próxima tarefa:** F-037 — ALU A,IXH/IXL/IYH/IYL — com vetores independentes para ADD/ADC/SUB/SBC/AND/XOR/OR/CP, carry de entrada, flags completas, Q, caminho retomável, WAIT e snapshot/restore.
+
+
+## 20. Candidato F-037 — ALU com metades IX/IY — 2026-11-09
+
+**Main remota de entrada:** `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4`.
+
+- **PR:** #686 — `feat/z80-e7-indexed-half-alu-20261109`.
+- **Commit de implementação:** `5f9ca825feb45633c2baf200e502f1a05bf99c7d`.
+- **HEAD candidato documentado:** `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- **Estado:** IMPLEMENTED_PENDING_VALIDATION. O microsequenciador agora tem allowlist e dispatch para as 16 combinações DD/FD de ADD, ADC, SUB, SBC, AND, XOR, OR e CP com IXH/IXL/IYH/IYL.
+- A implementação reutiliza `read_indexed_register()` e `execute_alu_operation()`; não duplica a ALU nem cria ciclos internos artificiais.
+- A suíte `indexed_half_register_alu_e7.rs` contém 10.816 casos diferenciais (8 operações, 2 fontes, DD/FD, 13 acumuladores, 13 operandos e 2 carry-in), 16 vetores fixos por prefixo/fonte, WAIT nos dois M1, snapshot/restore, prefixos repetidos e verificações de A/F/Q/previous-Q/WZ/PC/R/IFF/I/IX/IY/H/L.
+- CP mantém A e valida X/Y derivados do operando. As formas com fonte código 6 continuam no caminho E4B de memória indexada.
+- F-036 permanece CLOSED. F-037 aguarda CI/merge. F-028 permanece AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED.
+
+**Próximo gate:** validar o HEAD final da PR #686 com a suíte focada Z80 e os consumidores SMS/SG-1000; comprovar novamente que hosts não relacionados são SKIPPED. Só depois integrar F-037 e prosseguir à auditoria mestre residual.
