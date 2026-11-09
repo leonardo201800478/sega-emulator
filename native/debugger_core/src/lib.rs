@@ -202,10 +202,18 @@ impl<T: DebugTarget> DebugSession<T> {
             let _ = writeln!(output, "{}.{}: {}", item.component, item.name, item.value);
         }
         let _ = writeln!(output, "Breakpoints: {:?}", self.breakpoints);
-        let _ = writeln!(output, "TRACE (oldest first, max {} events)", self.trace_capacity);
+        let _ = writeln!(
+            output,
+            "TRACE (oldest first, max {} events)",
+            self.trace_capacity
+        );
         for event in &self.trace {
-            let address = event.address.map_or_else(|| "----".to_owned(), |v| format!("{v:04X}"));
-            let data = event.data.map_or_else(|| "--".to_owned(), |v| format!("{v:02X}"));
+            let address = event
+                .address
+                .map_or_else(|| "----".to_owned(), |v| format!("{v:04X}"));
+            let data = event
+                .data
+                .map_or_else(|| "--".to_owned(), |v| format!("{v:02X}"));
             let _ = writeln!(
                 output,
                 "{} {} {} {} wait={} {}",
@@ -213,7 +221,9 @@ impl<T: DebugTarget> DebugSession<T> {
                 event.operation,
                 address,
                 data,
-                event.wait_tstates.map_or_else(|| "-".to_owned(), |v| v.to_string()),
+                event
+                    .wait_tstates
+                    .map_or_else(|| "-".to_owned(), |v| v.to_string()),
                 event.detail
             );
         }
@@ -275,7 +285,10 @@ mod tests {
 
     #[test]
     fn run_stops_before_executing_breakpoint_address() {
-        let target = FakeTarget { pc: 0, trace: Vec::new() };
+        let target = FakeTarget {
+            pc: 0,
+            trace: Vec::new(),
+        };
         let mut session = DebugSession::new(target, 8);
         session.add_breakpoint(3);
         assert_eq!(session.run_for(10).unwrap(), RunStopReason::Breakpoint(3));
@@ -284,7 +297,10 @@ mod tests {
 
     #[test]
     fn trace_buffer_discards_oldest_events_at_capacity() {
-        let target = FakeTarget { pc: 0, trace: Vec::new() };
+        let target = FakeTarget {
+            pc: 0,
+            trace: Vec::new(),
+        };
         let mut session = DebugSession::new(target, 2);
         session.run_for(4).unwrap();
         assert_eq!(session.trace().len(), 2);
@@ -294,7 +310,10 @@ mod tests {
 
     #[test]
     fn zero_capacity_trace_does_not_retain_events() {
-        let target = FakeTarget { pc: 0, trace: Vec::new() };
+        let target = FakeTarget {
+            pc: 0,
+            trace: Vec::new(),
+        };
         let mut session = DebugSession::new(target, 0);
         session.step_instruction().unwrap();
         assert!(session.trace().is_empty());
