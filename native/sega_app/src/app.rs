@@ -247,8 +247,7 @@ impl NativeViewportState {
             let _ = session.shutdown();
         }
         self.child = None;
-        self.parent_hwnd = None;
-        self.last_bounds = None;
+        self.parent_hwnd = None;        self.last_bounds = None;
         self.ready = false;
         self.start_requested = false;
     }
@@ -394,7 +393,7 @@ impl SegaApp {
                     egui::ViewportClass::Immediate => "immediate",
                     egui::ViewportClass::EmbeddedWindow => "embedded_window",
                 };
-                record_ui_diagnostic("menu.viewport.render", "");
+                record_ui_diagnostic("menu.viewport.render", class_name);
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
@@ -497,7 +496,6 @@ impl SegaApp {
                                     diagnostics_error: self.diagnostics_error.as_deref(),
                                 };
                                 render_menu_content(menu_ui, menu, &mut header_state);
-
                                 let close_requested = menu_ui.input(|input| {
                                     input.key_pressed(egui::Key::Escape)
                                         || input.viewport().close_requested()
@@ -747,8 +745,7 @@ impl SegaApp {
         if let Err(error) = poll_result {
             let error = error.to_string();
             if let Some(Ok(mut backend)) = self.input_backend.take() {
-                backend.shutdown();
-            }
+                backend.shutdown();            }
             self.input_backend = Some(Err(error));
             return (ControllerButtons::default(), false);
         }
@@ -997,8 +994,7 @@ impl SegaApp {
                         }
                     }
                 }
-                context.request_repaint();
-            }
+                context.request_repaint();            }
             Err(error) => {
                 self.native_viewport.error = Some(format!("Falha ao conectar vídeo SMS: {error}"));
             }
@@ -1247,8 +1243,7 @@ fn update_recent_rom_list(recent_roms: &mut Vec<PathBuf>, path: &Path) {
 fn remember_recent_rom(recent_roms: &mut Vec<PathBuf>, path: &Path) {
     update_recent_rom_list(recent_roms, path);
     if let Err(error) = save_recent_roms(recent_roms) {
-        eprintln!("Não foi possível salvar a lista de ROMs recentes: {error}");
-    }
+        eprintln!("Não foi possível salvar a lista de ROMs recentes: {error}");    }
 }
 
 /// Persist only the last selected directory; the ROM itself is not copied.
@@ -1497,8 +1492,7 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 }
 
 /// Render less frequently used machine and input options.
-fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
-    let mut show_status = state.footer_mode.is_visible();
+fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {    let mut show_status = state.footer_mode.is_visible();
     if ui
         .checkbox(&mut show_status, "Exibir status no rodapé")
         .changed()
@@ -1748,7 +1742,6 @@ fn render_audio_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
         audio.accepted_frames, audio.consumed_frames
     ));
     ui.end_row();
-
     ui.label("Áudio — backlog FIFO estimado");
     ui.label(audio.queue_duration_micros().map_or_else(
         || "indisponível".to_owned(),
@@ -1997,7 +1990,6 @@ mod tests {
         assert!((super::AspectRatioMode::FourThree.value() - 4.0 / 3.0).abs() < f32::EPSILON);
         assert!((super::AspectRatioMode::SixteenNine.value() - 16.0 / 9.0).abs() < f32::EPSILON);
     }
-
     #[test]
     fn viewport_fit_keeps_square_ratio_inside_wide_window() {
         let available = egui::vec2(1600.0, 800.0);
