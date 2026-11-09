@@ -6,12 +6,14 @@
 
 pub mod clock;
 pub mod contract;
+pub mod debug;
 pub mod event;
 pub mod state;
 
 pub use clock::{
     ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
 };
+pub use debug::{BoundedTrace, BreakpointSet};
 pub use contract::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     DeviceProgress, MCycleIndex, TStateIndex,
