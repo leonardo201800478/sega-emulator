@@ -3364,9 +3364,8 @@ mod tests {
                     } else {
                         0xC000
                     };
-                    bus.0[usize::from(address)] = memory_value;
-
                     for carry in [0, FLAG_C] {
+                        bus.0[usize::from(address)] = memory_value;
                         let (expected_a, expected_memory) = if opcode == 0x67 {
                             (
                                 (accumulator & 0xF0) | (memory_value & 0x0F),
