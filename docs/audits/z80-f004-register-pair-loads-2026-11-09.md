@@ -1,8 +1,12 @@
 # Auditoria E7.7 — F-004: loads de pares de 16 bits
 
-**Baseline main antes da PR:** `355a35662643ca357ca9360031e002964e5a5aef` (PR #725, reconciliação documental F-003).
+**Baseline main antes da PR:** `355a35662643ca357ca9360031e002964e5a5aef` (após PR #725, reconciliação documental F-003).
+**PR:** #726, integrada por squash em `6ce8399aa96937547e72c24e75f1521dc5a9d550`.
+**HEAD validado:** `d4e0c6bcf7b339fee8674102fe26e5b2dd4d131a`.
+**CI pré-merge:** #6122 / run `42676982272` PASS no HEAD exato.
+**Main pós-merge:** `6ce8399aa96937547e72c24e75f1521dc5a9d550`.
 **Família:** F-004 — `LD rr,nn` e transferências entre pares.
-**Estado nesta branch:** IMPLEMENTED_PENDING_VALIDATION.
+**Estado após squash:** CLOSED no perfil de compatibilidade NMOS delimitado.
 **Escopo de perfil:** Zilog Z80 NMOS; evidência de software e comparação entre implementações, sem alegação de medição física.
 
 ## 1. Escopo fechado para esta fatia
@@ -109,4 +113,4 @@ Arquivo: `native/sms_core/tests/z80_f004_temporal.rs`.
 
 Nenhuma dessas falhas exigiu alteração de runtime; foram corrigidos somente testes.
 
-**Estado:** F-004 permanece `IMPLEMENTED_PENDING_VALIDATION` até integração por squash e confirmação do SHA da main. A CI focada passou no HEAD indicado. Não alegar validação física do hardware. E7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED.
+**Estado:** F-004 CLOSED após squash da PR #726. CI focada pré-merge passou no HEAD indicado; CI pós-merge NOT VERIFIED, pois a consulta não retornou check/run associado ao SHA de merge. Não alegar validação física do hardware nem compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED.

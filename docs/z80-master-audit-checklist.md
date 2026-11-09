@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `355a35662643ca357ca9360031e002964e5a5aef` (2026-11-09, após PR #725 de reconciliação documental F-003). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `6ce8399aa96937547e72c24e75f1521dc5a9d550` (2026-11-09, após squash da PR #726/F-004). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -79,7 +79,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-001 | LD r,r', LD r,n, LD r,(HL), LD (HL),r/n | CLOSED (NMOS delimitado) | Integrada pela PR #721 no squash commit `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`; 28.161 vetores, oracle independente, flags/Q/WZ/R/PC, WAIT, snapshot/restore e equivalência scheduler contínua/retomada. CI #6091 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. |
 | F-002 | LD A,(BC)/(DE), LD (BC)/(DE),A | CLOSED (NMOS delimitado) | Integrada pela PR #722 no squash commit `29462cf0a788d5905de7a5e9e0499a1f1361fec1`; 5.120 vetores, WZ/MEMPTR, wrap, flags/Q/R, WAIT, snapshot/restore e integração temporal. CI #6097 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. PR #720 foi encerrada como supersedida, sem merge. |
 | F-003 | LD A,(nn), LD (nn),A | CLOSED (NMOS delimitado) | PR #724 integrada por squash em `7fde212aabc07e8c4b7df56938f8845f99d29499`; HEAD validado `455ae4ea5ce68fdba53de1958fe0123afd39dc6d`; CI #6111 / run `42675073118` PASS. 2.560 vetores, WZ, PC wrap, 13T/4 M-cycles, WAITs diferenciados, snapshot/restore e integração SMS. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e hosts não relacionados NOT RUN/SKIPPED. Nenhuma alteração de runtime. CI pós-merge não confirmado; hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. PR #723 encerrada sem merge. |
-| F-004 | LD rr,nn e transferências entre pares | IMPLEMENTED_PENDING_VALIDATION (gates focados PASS; merge pendente) | PR #726, HEAD `ee085aeb00290a470c2018c3399e3943fe96e006`; CI #6119 / run `42676687551` PASS. 1.052 vetores imediatos + 2.560 absolutos, seis casos PC-wrap, WAITs, snapshot/restore, diferencial atômico/micro e integração SMS. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e hosts não relacionados NOT RUN/SKIPPED. Runtime não alterado. DD/FD E3A1/E3A2, ED F-034 e SP F-005 não duplicados. CLOSED somente após squash merge. |
+| F-004 | LD rr,nn e transferências entre pares | CLOSED (NMOS delimitado) | PR #726 integrada por squash em `6ce8399aa96937547e72c24e75f1521dc5a9d550`; HEAD validado `d4e0c6bcf7b339fee8674102fe26e5b2dd4d131a`; CI #6122 / run `42676982272` PASS. 1.052 vetores imediatos + 2.560 absolutos, seis casos PC-wrap, WAITs, snapshot/restore, diferencial atômico/micro e integração SMS. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e hosts não relacionados NOT RUN/SKIPPED. Runtime não alterado. DD/FD E3A1/E3A2, ED F-034 e SP F-005 não duplicados. CI pós-merge NOT VERIFIED; hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. |
 | F-005 | LD SP,HL/IX/IY; LD (nn),SP; LD SP,(nn) quando aplicável | AUDIT_PARTIAL | Confirmar semântica e tempos nominais. |
 | F-006 | EX DE,HL; EX AF,AF'; EXX; EX (SP),HL/IX/IY | AUDIT_PARTIAL | Conferir bancos alternativos, ordem de barramento e WZ. |
 | F-007 | PUSH/POP de todos os pares, inclusive AF e IX/IY | AUDIT_PARTIAL | Conferir ordem da pilha, wrap e flags. |
@@ -432,7 +432,7 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 - **Próxima candidata:** F-004 — LD rr,nn e transferências entre pares; auditar código, testes, escopo e dependências antes de implementar. Não iniciar E8.
 
 
-## 34. F-004 — LD rr,nn e transferências absolutas HL — gates focados aprovados — 2026-11-09
+## 34. F-004 — candidata validada, registro histórico pré-merge — 2026-11-09 (supersedido pela seção 35)
 
 - **Baseline main pré-PR:** `355a35662643ca357ca9360031e002964e5a5aef`.
 - **PR #726 HEAD validado:** `ee085aeb00290a470c2018c3399e3943fe96e006`.
@@ -445,5 +445,19 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 - **Gates:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados ficaram SKIPPED/NOT RUN.
 - **Histórico de correção:** #6115 rustfmt FAIL (formatação corrigida); #6117 Clippy FAIL (tipo do vetor temporal explicitado); #6118 Clippy FAIL (`too_many_arguments` tratado localmente); #6119 PASS integral dos gates aplicáveis.
 - **Runtime:** nenhuma alteração. Nenhuma falha funcional exigiu modificação do Z80.
-- **Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Sem validação física SMS.
+- **Estado à época do registro:** gates focados aprovados; integração pendente. **Atualização posterior:** PR #726 integrada por squash e F-004 CLOSED na seção 35. CI pós-merge permanece NOT VERIFIED.
+- **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 35. Fechamento F-004 — PR #726 integrada — 2026-11-09
+
+- **Main pré-PR:** `355a35662643ca357ca9360031e002964e5a5aef`.
+- **PR:** #726 — squash merge `6ce8399aa96937547e72c24e75f1521dc5a9d550`.
+- **HEAD validado:** `d4e0c6bcf7b339fee8674102fe26e5b2dd4d131a`.
+- **CI pré-merge:** #6122 / run `42676982272` PASS. Change classification, rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS.
+- **Escopo NOT RUN/SKIPPED:** regressão integral `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados.
+- **Auditoria do diff:** somente testes e documentação; nenhum runtime Z80 alterado.
+- **CI pós-merge:** NOT VERIFIED; status/check run associado ao SHA de merge não retornado nesta consulta.
+- **F-004:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones.
+- **Próxima auditoria:** reavaliar dependências globais E7, especialmente F-023 (evidência independente X/Y/WZ), F-026 (HALT/NOP/refresh/interrupções) e F-027–F-032 (DD/FD/prefixos), antes de fixar a próxima implementação. F-005 continua na sequência de famílias.
 - **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
