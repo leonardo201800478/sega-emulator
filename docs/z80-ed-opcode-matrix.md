@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Baseline:** Sega Emulator main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
+**Baseline:** Sega Emulator main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
@@ -292,3 +292,14 @@ A coluna “Microsequenciador” descreve o estado atual em main: os 78 casos ex
 3. Adicionar amostras SingleStepTests ED em famílias representativas e registrar proveniência/hash.
 4. Auditar aliases ED, RETI/RETN, IM e efeitos de variante; não inventar semântica para bytes indefinidos.
 5. Não iniciar E8 antes do fechamento formal de E7.
+
+
+
+## Estado após PR #702 — 2026-11-09
+
+A PR #702 altera somente o tratamento de Q/previous-Q em prefixos DD/FD e os testes/documentação associados. Não altera o decoder ED nem o despachante ED. Portanto, as classificações desta matriz permanecem:
+
+- Executor atômico: 78 encodings explicitamente tratados e 178 bytes no fallback de 8T.
+- Microsequenciador: os 178 bytes reservados continuam retornando `UnsupportedOpcode`; F-033 permanece GAP_CONFIRMED.
+- F-034 permanece AUDIT_PARTIAL até classificação e validação por variante dos aliases, bytes indefinidos e reservados.
+- E8 permanece BLOCKED. O fechamento Q/previous-Q não autoriza iniciar ZEXDOC/ZEXALL.
