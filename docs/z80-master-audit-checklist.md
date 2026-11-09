@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota atual:** `0b9b298f0f9791a6fa6db17580ad741db5c0515d` (2026-11-09, após PR #684).
+**Baseline remota de entrada desta etapa:** `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4` (2026-11-09, após PR #685).
 **Baseline documental encontrada:** scorecard e matriz DD/FD ainda apontavam para `043ecb61d8d1cc77245fa72639d7f210d88cab26`; a divergência deve ser reconciliada nesta trilha.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #680 integrou INC/DEC e LD imediato; PR #684 contém candidato F-036 para LD r,r' register-only; F-037 ALU ainda é GAP_CONFIRMED. Não fechar a família até F-037 e auditoria residual. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #680 integrou INC/DEC e LD imediato; PR #684 fechou F-036 LD r,r' register-only; PR #686 contém candidato F-037 ALU. Não fechar a família até F-037 e auditoria residual. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
@@ -112,7 +112,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | NOT_AUDITED | Classificar explicitamente documentado, alias, não documentado, ignorado ou reservado. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
 | F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`. CI #42614755935 PASS no HEAD exato `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`: Z80 focused, docs hygiene e agregador PASS; D3D12/áudio/SDL3/workspace SKIPPED. 48 combinações, oracle de registradores, comparação atômica, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. As exceções 66/6E/74/75 permanecem no caminho E4A. |
-| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; o caminho retomável ainda não despacha os 16 opcodes ALU com fonte IXH/IXL/IYH/IYL. Próxima PR separada após integração de F-036. |
+| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | IMPLEMENTED_PENDING_VALIDATION | PR #686, commit de implementação `5f9ca825feb45633c2baf200e502f1a05bf99c7d`: allowlist e dispatch reutilizam `read_indexed_register()` e `execute_alu_operation()`. Teste `indexed_half_register_alu_e7.rs` cobre 10.816 combinações, vetores fixos de flags/X/Y/CP, Q/previous-Q, WAIT, snapshot/restore e prefixos repetidos. Aguardando CI e merge. |
 
 ## 4. Checklist de estado arquitetural e flags
 
@@ -247,6 +247,7 @@ A inspeção cruzada de `native/z80_cpu/src/prefix.rs`, `cpu.rs` e `sequencer.rs
 | 2026-11-09 | `04527a59e0695a800d4fd048d2da85c51126de68` | PR #680 integrada: INC/DEC IXH/IXL/IYH/IYL e LD imediato; run #42609912469 PASS no HEAD `e20ec4b6c858bcaca265114ba543c19301dbb2e0` | CLOSED | D-004 fechado; E7 segue em auditoria global. |
 | 2026-11-09 | `43772d5cd5395de273bd3898895cf1deed81aa53` | PR #683 integrou seleção inteligente de CI, jobs focados PSG/VDP/input e agregador; run #42613123290 PASS no HEAD `eaa88a249989b2ca6aee931e2a963df75a396008` | CLOSED | PR #637 encerrada como supersedida; CI otimizado integrado. |
 | 2026-11-09 | `0b9b298f0f9791a6fa6db17580ad741db5c0515d` | PR #684 integrada: F-036 LD r,r' register-only no microsequenciador; CI #42614755935 PASS no HEAD `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3` | CLOSED | Merge squash confirmado; D3D12/áudio/SDL3 SKIPPED e merge aceito pelo GitHub. |
+| 2026-11-09 | `ed25c9b96cba284c57fc473cd960d7052f35d0e6` | PR #686 candidata F-037: ALU A,IXH/IXL/IYH/IYL no microsequenciador | IMPLEMENTED_PENDING_VALIDATION | 10.816 casos diferenciais e vetores fixos adicionados; CI ainda pendente. |
 
 ### Modelo obrigatório para cada atualização
 
@@ -283,3 +284,15 @@ Adicionar uma linha no histórico e atualizar os IDs afetados:
 - **F-036:** CLOSED. **F-037:** GAP_CONFIRMED. **F-028:** AUDIT_PARTIAL. **E7.7:** IN_PROGRESS. **E8:** BLOCKED.
 
 A próxima tarefa é F-037 — ALU A,IXH/IXL/IYH/IYL — em PR independente. Não iniciar ZEXDOC/ZEXALL.
+
+
+## 20. Candidato F-037 — ALU com metades IX/IY — 2026-11-09
+
+- **PR:** #686 — `feat/z80-e7-indexed-half-alu-20261109`.
+- **Main de entrada:** `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4`.
+- **Commit de implementação:** `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; HEAD candidato atual `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- O dispatch cobre as 16 combinações DD/FD de ADD/ADC/SUB/SBC/AND/XOR/OR/CP com IXH/IXL/IYH/IYL, reutilizando a ALU compartilhada. O operando código 6 permanece no caminho de memória indexada E4B.
+- A suíte `indexed_half_register_alu_e7.rs` contém 10.816 casos diferenciais, vetores fixos para flags completas e X/Y de CP, preservação de A/IX/IY/H/L, Q/previous-Q, PC/R/WZ, WAIT nos dois M1, snapshot/restore e prefixos repetidos.
+- **Estado:** IMPLEMENTED_PENDING_VALIDATION. Nenhuma suíte da PR #686 é PASS até o resultado no HEAD final. F-036 permanece CLOSED; F-028 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
