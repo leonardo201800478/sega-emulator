@@ -62,6 +62,7 @@ pub struct SegaApp {
     diagnostics_enabled: bool,
     diagnostics_error: Option<String>,
     fps_overlay_enabled: bool,
+    fps_overlay_was_active: bool,
     fps_overlay_size: FpsOverlaySize,
     fps_overlay_position: FpsOverlayPosition,
     fps_counter: FpsCounter,
@@ -97,6 +98,7 @@ impl Default for SegaApp {
             diagnostics_enabled: false,
             diagnostics_error: None,
             fps_overlay_enabled: true,
+            fps_overlay_was_active: false,
             fps_overlay_size: FpsOverlaySize::Medium,
             fps_overlay_position: FpsOverlayPosition::BottomRight,
             fps_counter: FpsCounter::default(),
@@ -210,7 +212,11 @@ impl FpsCounter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FpsOverlaySize { Small, Medium, Large }
+enum FpsOverlaySize {
+    Small,
+    Medium,
+    Large,
+}
 
 impl FpsOverlaySize {
     const fn dimensions(self) -> egui::Vec2 {
@@ -221,15 +227,28 @@ impl FpsOverlaySize {
         }
     }
     const fn font_size(self) -> f32 {
-        match self { Self::Small => 14.0, Self::Medium => 18.0, Self::Large => 22.0 }
+        match self {
+            Self::Small => 14.0,
+            Self::Medium => 18.0,
+            Self::Large => 22.0,
+        }
     }
     const fn label(self) -> &'static str {
-        match self { Self::Small => "Pequeno", Self::Medium => "Médio", Self::Large => "Grande" }
+        match self {
+            Self::Small => "Pequeno",
+            Self::Medium => "Médio",
+            Self::Large => "Grande",
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FpsOverlayPosition { TopLeft, TopRight, BottomLeft, BottomRight }
+enum FpsOverlayPosition {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
 
 impl FpsOverlayPosition {
     const fn label(self) -> &'static str {
@@ -997,11 +1016,22 @@ impl SegaApp {
 
     fn render_fps_overlay(&mut self, context: &egui::Context, viewport_rect: egui::Rect) {
         if !self.fps_overlay_enabled || !self.native_viewport.video_attached {
+            self.fps_overlay_was_active = false;
             return;
         }
 
         let now = Instant::now();
-        if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL {
+        if !self.fps_overlay_was_active {
+            let presented_sequence = self
+                .native_viewport
+                .worker
+                .as_ref()
+                .map_or(0, SmsTemporalWorker::video_last_presented_sequence);
+            self.fps_counter.reset(presented_sequence, now);
+            self.fps_shared_value
+                .store(0.0_f32.to_bits(), Ordering::Relaxed);
+            self.fps_overlay_was_active = true;
+        } else if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL {
             let presented_sequence = self
                 .native_viewport
                 .worker
@@ -1017,7 +1047,12 @@ impl SegaApp {
             return;
         };
         let overlay_size = self.fps_overlay_size.dimensions();
-        let position = fps_overlay_position(root_bounds.min, viewport_rect, overlay_size, self.fps_overlay_position);
+        let position = fps_overlay_position(
+            root_bounds.min,
+            viewport_rect,
+            overlay_size,
+            self.fps_overlay_position,
+        );
         let fps_value = Arc::clone(&self.fps_shared_value);
         let font_size = self.fps_overlay_size.font_size();
         let builder = egui::ViewportBuilder::default()
@@ -2246,6 +2281,18 @@ mod tests {
         let mut counter = FpsCounter::default();
         counter.reset(100, now);
         assert!(counter.update(160, now + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_counter_restarts_from_the_presented_sequence_when_overlay_is_reenabled() {
+        let hidden_since = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, hidden_since);
+
+        let reenabled_at = hidden_since + Duration::from_secs(30);
+        counter.reset(1_900, reenabled_at);
+        assert!(counter.update(1_960, reenabled_at + Duration::from_secs(1)));
         assert!((counter.fps - 60.0).abs() < 0.01);
     }
 
