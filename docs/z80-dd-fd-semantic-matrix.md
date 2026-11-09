@@ -1,6 +1,6 @@
 # Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
-**Baseline documental reconciliada (2026-11-09):** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` após PR #692. O histórico anterior permanece preservado; a nova evidência externa F-037 e a pendência Q/previous-Q estão registradas na seção 23.
+**Baseline documental reconciliada (2026-11-09):** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` após PR #702. O histórico anterior permanece preservado; F-037 e Q/previous-Q têm validação externa complementar registrada na seção 23.
 
 **Data:** 2026-11-09
 **Baseline remota auditada:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09, após PR #687 documental). A mudança #687 não alterou runtime Z80 nem a matriz de opcodes.
@@ -443,4 +443,4 @@ Vetores externos discriminantes fixados na mesma revisão SingleStepTests:
 
 Reprodução obtida na PR #695, workflow run #42624833386: DD 37 0001 falhou com F obtido=45 e esperado=65. O teste interrompeu no primeiro mismatch; FD 3F ainda não foi alcançado. A fórmula atual, preservando q_previous=F, prevê F=45 no primeiro caso e F=D4 no segundo; com q_previous limpo, os resultados esperados são F=65 e F=FC. A correção dos dois executores foi integrada pela PR #702. Os 2.000 vetores Q (DD37/FD3F), os 32.000 vetores F-037 e o teste diferencial com snapshot/restore passaram no HEAD validado da PR #702.
 
-**Próxima tarefa objetiva:** adicionar DD 37 e FD 3F ao harness externo, reproduzir no microsequenciador e executor atômico, corrigir a fronteira de prefixo sem alterar E4A/E4B e validar snapshot/restore após o primeiro M1.
+**Próxima tarefa objetiva:** revisar as exceções DD/FD restantes e as variantes não documentadas de F-028; em seguida fechar F-033 (ED reservados). Não reabrir a correção Q/previous-Q já integrada.
