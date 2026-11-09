@@ -2,8 +2,7 @@
 
 use sega_z80_cpu::bus::CpuBus;
 use sega_z80_cpu::{
-    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
-    Z80Registers,
+    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep, Z80Registers,
 };
 
 const PROGRAM_COUNTER: u16 = 0x0200;
@@ -130,11 +129,13 @@ fn assert_differential_case(
     let context = format!("opcode={opcode:02X}, pc={program_counter:04X}");
     assert_eq!(atomic_tstates, 13, "{context}: atomic timing");
     assert_eq!(
-        micro_tstates,
-        20,
+        micro_tstates, 20,
         "{context}: 13 nominal T-states plus 7 WAIT T-states"
     );
-    assert_eq!(accesses, expected_accesses, "{context}: bus order and waits");
+    assert_eq!(
+        accesses, expected_accesses,
+        "{context}: bus order and waits"
+    );
     assert_eq!(
         atomic.registers, expected_registers,
         "{context}: independent register/PC oracle"
