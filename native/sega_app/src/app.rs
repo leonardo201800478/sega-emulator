@@ -164,7 +164,7 @@ impl TopLevelMenu {
             Self::Video => egui::vec2(320.0, 220.0),
             Self::Audio => egui::vec2(340.0, 280.0),
             Self::Controls => egui::vec2(460.0, 420.0),
-            Self::Options => egui::vec2(440.0, 280.0),
+            Self::Options => egui::vec2(440.0, 380.0),
             Self::Debug => egui::vec2(640.0, 540.0),
         }
     }
