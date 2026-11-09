@@ -1624,16 +1624,16 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 
 /// Render display aspect-ratio selection.
 fn render_system_menu(ui: &mut egui::Ui) {
-    ui.label("Sistema ativo");
-    ui.add_enabled(false, egui::Button::new("Sega Master System  ·  ativo"));
+    ui.horizontal(|ui| {
+        ui.strong("Sega Master System");
+        ui.colored_label(egui::Color32::LIGHT_GREEN, "ATIVO");
+    });
     ui.separator();
     ui.label("Outros sistemas");
     for system in ["SG-1000", "Game Gear", "Mega Drive / Genesis", "Sega CD", "32X"] {
-        ui.add_enabled(
-            false,
-            egui::Button::new(format!("{system}  ·  não integrado nesta interface")),
-        );
+        ui.add_enabled(false, egui::Button::new(system));
     }
+    ui.small("Indisponíveis: o runtime ainda não está conectado a esta interface.");
 }
 
 fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
@@ -1742,13 +1742,9 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
     ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
     ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
-    ui.small("A região é aplicada ao carregar uma ROM.");
-    ui.menu_button("Execução", |ui| {
-        render_machine_controls(ui, state.viewport, state.machine_command);
-    });
-    ui.small("Região selecionada: aplicada ao carregar a próxima ROM.");
+    ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
     ui.separator();
-    ui.menu_button("Execução", |ui| {
+    ui.menu_button("Controles de execução", |ui| {
         render_machine_controls(ui, state.viewport, state.machine_command);
     });
 }
