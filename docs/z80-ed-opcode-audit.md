@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
 **Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
-**Baseline atualizada:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
+**Baseline atualizada:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
@@ -268,7 +268,7 @@ A execução focada e os gates Rust devem passar no HEAD exato desta PR. Diferen
 
 **Baseline:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
 
-A PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` no módulo de testes do microsequenciador.
+A PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop`; PR #677 integrou observação IM2 no último T-state; PR #678 integrou o retorno RETI e retomada do bloco.
 
 - B inicial: `0x10..=0xD0`, passo 3 (65 valores).
 - Endereços de instrução: `0x8002`, `0x8802`, `0xA002`, `0xA802`, cobrindo as combinações de XY vindas de PC.13/PC.11.
@@ -278,3 +278,14 @@ A PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_
 - CI #42568885363: SUCCESS no HEAD `33d3dcf8d41f2f18d0826a1401013e9e1582503e`; merge SHA `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
 
 Este fixture não executa o ROM v5.0 no core e não é uma nova medição em hardware. A evidência física segue parcial e limitada ao perfil NMOS. E7.7 continua IN_PROGRESS; E8 continua BLOCKED.
+
+
+## Atualização IM2/RETI — PRs #677 e #678
+
+Baseline: `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+
+O teste `block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_tstate` foi estendido para o handler `PUSH AF; POP AF; EI; RETI`. Após o RETI, a CPU retorna ao endereço ED e executa a iteração repetitiva seguinte. O teste verifica F no stack, A/F restaurados, SP, PC, IFF1/IFF2, EI delay, B, WZ, transações e tempos.
+
+A INT é assertada no último T-state do ciclo interno de repetição. O microsequenciador mantém a linha level-sensitive até o teste desassertá-la após o serviço; o executor atômico usa a solicitação one-shot equivalente. O teste cobre INIR/INDR/OTIR/OTDR.
+
+Isso conclui o fixture adaptado de IM2/RETI/retomada no core. O ROM v5.0 completo continua NOT_RUN; SMS físico continua NOT_RUN; CMOS/clones continuam NOT_VERIFIED. E7.7 permanece IN_PROGRESS e E8 permanece BLOCKED.
