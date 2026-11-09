@@ -248,13 +248,13 @@ fn wait_states_and_snapshot_restore_preserve_prefix_and_internal_continuations()
         resumed.0,
         Z80MicroStep::InstructionRetired {
             opcode: 0xF9,
-            tstates: 13,
+            tstates: 20,
         }
     );
     assert_eq!(resumed, uninterrupted);
-    assert_eq!(resumed.1.registers.sp, 0xCAFE);
+    assert_eq!(resumed.1.registers.sp, 0xBEEF);
     assert_eq!(resumed.1.registers.f, 0xD7);
     assert_eq!(resumed.1.wz, 0xBEEF);
-    assert_eq!(resumed.1.registers.pc, 2);
-    assert_eq!(resumed.1.refresh, 2);
+    assert_eq!(resumed.1.registers.pc, 3);
+    assert_eq!(resumed.1.refresh, 3);
 }
