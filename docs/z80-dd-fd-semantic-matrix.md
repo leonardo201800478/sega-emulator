@@ -1,6 +1,6 @@
 # Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
-**Baseline remota consultada:** main `1142eb567746afe64356b60f2ce466581e1c0cef` após PRs #709/#710. A divergência Q/previous-Q DD/FD→SCF/CCF permanece corrigida; demais lacunas F-028 permanecem.
+**Baseline remota consultada:** main `f0cfc7b9df1834ae8ad418c6241702e9003f072e` após PRs #709–#718. A divergência Q/previous-Q DD/FD→SCF/CCF permanece corrigida; demais lacunas F-028 permanecem.
 
 **Data:** 2026-11-09
 **Baseline remota auditada:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09, após PR #687 documental). A mudança #687 não alterou runtime Z80 nem a matriz de opcodes.
@@ -461,3 +461,8 @@ Reprodução obtida na PR #695, workflow run #42624833386: DD 37 0001 falhou com
 ## 25. Reconciliação documental após PRs #709/#710 — 2026-11-09
 
 A main atual é `1142eb567746afe64356b60f2ce466581e1c0cef`. As PRs #709/#710 trataram a auditoria ED e sua reconciliação documental; não reabriram a correção Q/previous-Q nem alteraram as conclusões F-036/F-037. F-028 continua AUDIT_PARTIAL: a divergência específica DD/FD→SCF/CCF está RESOLVED, mas a auditoria de todas as exceções, prefixos e efeitos arquiteturais permanece incompleta. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 26. Baseline reconciliada após PR #718 — 2026-11-09
+
+Main `f0cfc7b9df1834ae8ad418c6241702e9003f072e`. A PR #718 fechou F-025 (RETN/RETI/IM) sem modificar o runtime DD/FD, os decoders de prefixo ou as regras de substituição IX/IY. As conclusões da matriz DD/FD permanecem inalteradas; F-028 continua AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED.
