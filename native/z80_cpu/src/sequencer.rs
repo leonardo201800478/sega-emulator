@@ -10825,6 +10825,10 @@ mod ed_block_io_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { kind, tstates } => {
                     assert_eq!(kind, super::Z80InterruptKind::Int);
+                    assert_eq!(cpu.export_state().int_pending, Some(0xFF));
+                    // INT is level-sensitive in the sequencer; the interrupting
+                    // device deasserts its line after the acknowledge/service.
+                    cpu.set_int_line(None);
                     return tstates;
                 }
                 Z80MicroStep::InstructionRetired { .. } => {
@@ -10916,6 +10920,7 @@ mod ed_block_io_differential_tests {
             assert_eq!(atomic.registers.f, expected_flags);
             atomic.request_int(0xFF);
             assert_eq!(atomic.step(&mut atomic_bus), Ok(19));
+            atomic.clear_int_request();
             assert_eq!(atomic.registers.pc, 0x9000);
             assert_eq!(atomic.registers.sp, 0xCFFE);
             assert_eq!(atomic.registers.f, expected_flags);
