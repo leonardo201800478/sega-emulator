@@ -180,8 +180,7 @@ jobs:
     needs: [changes]
     if: |
       github.event_name != 'workflow_dispatch' &&
-      needs.changes.outputs.z80 == 'true' &&
-      needs.changes.outputs.full != 'true'
+      needs.changes.outputs.z80 == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
