@@ -281,7 +281,7 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 **Limite de proveniência:** o README upstream informa que os vetores foram traduzidos do núcleo Z80 do Ares e corrigidos. O corpus é externo ao repositório, mas não é independente do Ares nem constitui prova direta de silício.
 
-**Estado após integração:** F-036 CLOSED; F-037 CLOSED com validação externa complementar; F-028 AUDIT_PARTIAL; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+**Estado após integração:** F-036 CLOSED; F-037 CLOSED com validação externa complementar; F-028 AUDIT_PARTIAL; F-033 CLOSED para o perfil NMOS clássico delimitado após PR #706; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 
 ## 23. F-028 — reprodução da divergência Q/previous-Q — 2026-11-09
 
@@ -318,7 +318,7 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 **Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
 **PR:** #706 — `fix/z80-f033-ed-reserved-resume-20261109`
 **HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
-**Estado:** IMPLEMENTED_PENDING_VALIDATION — ainda não integrada.
+**Estado histórico:** IMPLEMENTED_PENDING_VALIDATION na abertura da PR; a implementação foi posteriormente integrada.
 
 - O fallback residual de `execute_ed_register_control()` agora aposenta a instrução após os dois fetches M1 já consumidos, sem ciclos internos artificiais nem transações extras de memória/I/O.
 - A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 bytes fora das 78 codificações explícitas e verifica 8 T-states, PC com wrap, dois refresh increments, F/Q/previous-Q/WZ/P/IFF/IM, fase Ready e ausência de request pendente.
@@ -328,4 +328,18 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - CI #42631919433 no HEAD candidato: Z80 focused PASS; Rust quality and unit regression PASS; Windows x64 D3D12 PASS. Rust workspace regression, documentação e outros jobs aparecem SKIPPED/NOT RUN por não aplicabilidade; a política de CI determina pacote focado para mudanças exclusivamente Z80. Nenhum resultado de outro SHA é transferido.
 - A revisão automática Codex da PR não concluiu por limite de uso; não há review threads inline abertas nem reviews submetidas na consulta. Isso não equivale a aprovação de revisão.
 
-**Classificação:** F-033 permanece IMPLEMENTED_PENDING_VALIDATION até merge. F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+**Classificação após merge:** F-033 CLOSED exclusivamente para o perfil de compatibilidade Zilog NMOS clássico descrito nesta seção. F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 26. Reconciliação pós-merge da PR #706 — 2026-11-09
+
+**Main:** `2d15a2311cda9d087bbdd6c05f6c3851d52f4150`
+**PR integrada:** #706, HEAD validado `b2291a83848e236d2354d8f03e22b831f9030b72`.
+**CI no HEAD exato:** run #42635309051 SUCCESS. Z80 focused validation, Rust quality/unit regression e Windows x64 D3D12 PASS. Jobs não aplicáveis foram SKIPPED/NOT RUN pela política de impacto; não são classificados como PASS.
+
+- O microsequenciador aposenta os 178 bytes ED reservados após os dois M1 já consumidos, sem ciclos internos ou transações extras.
+- `native/z80_cpu/tests/ed_reserved_f033.rs` cobre todos os 178 bytes, estado arquitetural discriminante, WAIT e snapshot/restore.
+- A implementação é uma política de compatibilidade para Zilog NMOS clássico. UM0080 não especifica universalmente esses encodings; MAME e referências secundárias não são prova de silício. CMOS, R800, Z80N e clones permanecem fora da afirmação.
+- O fallback do executor atômico permanece distinto e não é usado como substituto da evidência temporal do microsequenciador.
+
+**Classificação atualizada:** F-033 CLOSED com limite de evidência; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED. E8 não pode começar antes do fechamento formal de E7.
