@@ -11,16 +11,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
 use sega_z80_cpu::{
     Z80AlternateRegisters, Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroStep,
     Z80Registers,
 };
+use serde::Deserialize;
 
 const UPSTREAM_REVISION: &str = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7";
 const OPCODES: [u8; 16] = [
-    0x84, 0x85, 0x8C, 0x8D, 0x94, 0x95, 0x9C, 0x9D, 0xA4, 0xA5, 0xAC, 0xAD, 0xB4, 0xB5,
-    0xBC, 0xBD,
+    0x84, 0x85, 0x8C, 0x8D, 0x94, 0x95, 0x9C, 0x9D, 0xA4, 0xA5, 0xAC, 0xAD, 0xB4, 0xB5, 0xBC, 0xBD,
 ];
 
 const FIXTURES: [(&str, u8, &str); 32] = [
@@ -143,7 +142,8 @@ fn assert_fixture_blob(repository_root: &Path, fixture_path: &Path, expected_blo
         "hash pinned SingleStepTests fixture",
     );
     assert_eq!(
-        actual, expected_blob_sha1,
+        actual,
+        expected_blob_sha1,
         "fixture content hash mismatch: {}",
         fixture_path.display()
     );
@@ -242,21 +242,13 @@ fn run_vector(vector: &TestVector) {
     let memory: BTreeMap<u16, u8> = vector.initial.ram.iter().copied().collect();
     let mut cpu = seed_microsequencer(&vector.initial);
 
-    let first_fetch = opcode_fetch(
-        cpu.begin_instruction().unwrap(),
-        vector.initial.pc,
-        name,
-    );
+    let first_fetch = opcode_fetch(cpu.begin_instruction().unwrap(), vector.initial.pc, name);
     let first_byte = byte_at(&memory, first_fetch.address, name);
     let second_step = cpu
         .complete_bus_cycle(first_fetch.id, Some(first_byte))
         .unwrap();
 
-    let second_fetch = opcode_fetch(
-        second_step,
-        vector.initial.pc.wrapping_add(1),
-        name,
-    );
+    let second_fetch = opcode_fetch(second_step, vector.initial.pc.wrapping_add(1), name);
     let second_byte = byte_at(&memory, second_fetch.address, name);
     let retired = cpu
         .complete_bus_cycle(second_fetch.id, Some(second_byte))
@@ -273,7 +265,10 @@ fn run_vector(vector: &TestVector) {
 
     assert_architectural_state(&cpu, &vector.final_state, name);
     let final_memory: BTreeMap<u16, u8> = vector.final_state.ram.iter().copied().collect();
-    assert_eq!(memory, final_memory, "{name}: register-only ALU memory effects");
+    assert_eq!(
+        memory, final_memory,
+        "{name}: register-only ALU memory effects"
+    );
 }
 
 #[test]
