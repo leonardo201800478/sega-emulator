@@ -23,8 +23,7 @@ impl SmsTarget {
 
 impl DebugTarget for SmsTarget {
     fn snapshot(&self) -> DebugSnapshot {
-        let state = self.machine.export_state();
-        let cpu = &state.cpu;
+        let cpu = self.machine.cpu().export_state();
         let r = &cpu.registers;
         DebugSnapshot {
             console: "Sega Master System".into(),
@@ -50,13 +49,17 @@ impl DebugTarget for SmsTarget {
             },
             machine_ticks: self.machine.now().ticks(),
             hardware: vec![
-                HardwareValue { component: "Mapper".into(), name: "Sega banks".into(), value: format!("{:02X}/{:02X}/{:02X}", state.bus.memory.selected_banks()[0],state.bus.memory.selected_banks()[1],state.bus.memory.selected_banks()[2]) },
-                HardwareValue { component: "Memory".into(), name: "control $3E".into(), value: format!("{:02X}", state.bus.memory.control_port()) },
-                HardwareValue { component: "VDP".into(), name: "frame".into(), value: state.bus.vdp.frame_number().to_string() },
+                HardwareValue { component: "Mapper".into(), name: "Sega banks".into(), value: format!("{:02X}/{:02X}/{:02X}", self.machine.selected_mapper_banks()[0],self.machine.selected_mapper_banks()[1],self.machine.selected_mapper_banks()[2]) },
+                HardwareValue { component: "Memory".into(), name: "control $3E".into(), value: format!("{:02X}", self.machine.memory_control()) },
+                HardwareValue { component: "VDP".into(), name: "frame".into(), value: self.machine.vdp().frame_number().to_string() },
                 HardwareValue { component: "CPU".into(), name: "sequencer".into(), value: format!("{:?}", cpu.phase) },
                 HardwareValue { component: "CPU".into(), name: "instruction T-states".into(), value: cpu.instruction_tstates.to_string() },
             ],
         }
+    }
+
+    fn program_counter(&self) -> Option<u32> {
+        Some(u32::from(self.machine.cpu().registers.pc))
     }
 
     fn execute_instruction(&mut self) -> Result<(), String> {
@@ -69,9 +72,8 @@ impl DebugTarget for SmsTarget {
     }
 
     fn read_memory(&self, address: u32, length: usize) -> Vec<u8> {
-        let state = self.machine.export_state();
         let start = address as u16;
-        (0..length.min(65536)).map(|i| state.bus.memory.read(start.wrapping_add(i as u16))).collect()
+        (0..length.min(65536)).map(|i| self.machine.inspect_memory(start.wrapping_add(i as u16))).collect()
     }
 
     fn drain_trace(&mut self) -> Vec<TraceEvent> {

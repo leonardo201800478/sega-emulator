@@ -871,6 +871,21 @@ impl SmsTemporalMachine {
         &self.cpu
     }
 
+    /// Read one byte through the active cartridge mapper for debugger inspection.
+    pub fn inspect_memory(&self, address: u16) -> u8 {
+        self.bus.memory().read(address)
+    }
+
+    /// Current mapper bank selection for diagnostic displays.
+    pub fn selected_mapper_banks(&self) -> [u8; 3] {
+        self.bus.memory().selected_banks()
+    }
+
+    /// Current memory-control latch written through port $3E.
+    pub fn memory_control(&self) -> u8 {
+        self.bus.memory().control_port()
+    }
+
     /// Mutable CPU access for initial register setup and deterministic tests.
     pub fn cpu_mut(&mut self) -> &mut Z80MicroSequencer {
         &mut self.cpu

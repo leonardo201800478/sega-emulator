@@ -60,6 +60,9 @@ pub struct FrameBuffer {
 /// debugger UI thread through coarse-grained operations, never per T-state.
 pub trait DebugTarget {
     fn snapshot(&self) -> DebugSnapshot;
+    fn program_counter(&self) -> Option<u32> {
+        self.snapshot().cpu.pc
+    }
     fn execute_instruction(&mut self) -> Result<(), String>;
     fn read_memory(&self, address: u32, length: usize) -> Vec<u8>;
     fn drain_trace(&mut self) -> Vec<TraceEvent>;
@@ -136,7 +139,7 @@ impl<T: DebugTarget> DebugSession<T> {
     /// breakpoint address is executed. Hardware time advances only in target.
     pub fn run_for(&mut self, instruction_budget: usize) -> Result<RunStopReason, String> {
         for _ in 0..instruction_budget {
-            let pc = self.target.snapshot().cpu.pc.unwrap_or_default();
+            let pc = self.target.program_counter().unwrap_or_default();
             if self.breakpoints.contains(&pc) {
                 self.collect_trace();
                 return Ok(RunStopReason::Breakpoint(pc));
