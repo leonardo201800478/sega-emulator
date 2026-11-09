@@ -11218,6 +11218,7 @@ mod base_16bit_register_differential_tests {
                     };
                     if wait_tstates_per_request != 0 {
                         cpu.insert_wait_tstates(wait_tstates_per_request).unwrap();
+                        cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     }
                     let next = cpu.complete_bus_cycle(request.id, data).unwrap();
                     // Every completed bus boundary must survive snapshot/restore.
