@@ -82,13 +82,30 @@ Arquivo: `native/sms_core/tests/z80_f015_temporal.rs`.
 - Compara estado serializado, A/F, WZ, Q/previous-Q, refresh, relógio e trace com execução contínua.
 - Confirma ausência de transações de barramento de dados.
 
-## 6. Critérios de aceite e estado
+## 6. Validação CI e estado
 
-- Rustfmt: pendente no HEAD final da PR.
-- Clippy com `-D warnings`: pendente.
-- Testes Z80/SMS/SG-1000: pendentes.
-- Documentation patch hygiene: pendente.
-- Regressão integral do workspace: classificar conforme política de impacto; NOT RUN não é PASS.
-- Nenhuma alteração de runtime autorizada sem falha reproduzível e divergência comprovada contra o oracle.
-- F-015 permanece `IMPLEMENTED_PENDING_VALIDATION` até gates aplicáveis verdes e squash merge.
-- Sem validação física; X/Y permanece comportamento de compatibilidade comparativo. E7 IN_PROGRESS; E8/ZEXDOC/ZEXALL BLOCKED.
+**HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
+**CI #6129 / run `42678520765`: PASS no HEAD exato.**
+
+| Gate | Resultado | Evidência |
+|---|---|---|
+| Change impact classification | PASS | CI #6129 |
+| Rustfmt Z80/SMS/SG-1000 | PASS | `cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check` |
+| Clippy focado | PASS | `cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings` |
+| Testes Z80/SMS/SG-1000 | PASS | `cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core` |
+| Matriz F-015 | PASS | 3 testes em `base_accumulator_rotates_f015.rs`: 262.144 vetores A×F, 1.024 snapshot/restore e quatro PC-wrap |
+| Integração SMS F-015 | PASS | 1 teste em `z80_f015_temporal.rs`: 192 casos, WAIT, snapshot M1 e trace |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores; regressão adjacente, não parte da matriz F-015 |
+| Documentation patch hygiene | PASS | CI #6129 |
+| Agregador Rust quality/unit | PASS | CI #6129 |
+| `cargo test --workspace --locked` | NOT RUN | Job workspace SKIPPED pela classificação de impacto |
+| Scheduler stress / hosts / VDP / PSG | NOT RUN | Jobs não relacionados SKIPPED; não promover a PASS |
+
+**Histórico de correções de CI:**
+- #6126 / run `42678203298`: FAIL somente em rustfmt; formatação corrigida.
+- #6128 / run `42678364631`: rustfmt PASS; Clippy FAIL por `too_many_arguments` em `assert_rotate_case`; exceção local restrita ao helper.
+- #6129 / run `42678520765`: todos os gates aplicáveis PASS no HEAD acima.
+
+Nenhuma falha exigiu alteração de runtime; foram corrigidos somente testes.
+
+**Estado:** F-015 permanece `IMPLEMENTED_PENDING_VALIDATION` até squash merge e confirmação do SHA da main. A CI focada passou no HEAD indicado. Sem validação física; X/Y permanece comportamento de compatibilidade comparativo. E7 IN_PROGRESS; E8/ZEXDOC/ZEXALL BLOCKED.
