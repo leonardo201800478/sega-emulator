@@ -63,7 +63,6 @@ fn all_178_reserved_ed_encodings_retire_after_two_m1_fetches() {
         cpu.q = 0xA5;
         cpu.q_previous = 0x5A;
         cpu.wz = 0xBEEF;
-        cpu.p = true;
         cpu.iff1 = true;
         cpu.iff2 = true;
         cpu.interrupt_mode = 2;
@@ -100,7 +99,7 @@ fn all_178_reserved_ed_encodings_retire_after_two_m1_fetches() {
         assert_eq!(state.q, 0x00, "ED {opcode:02X}: no F write");
         assert_eq!(state.q_previous, 0xA5, "ED {opcode:02X}: previous Q");
         assert_eq!(state.wz, 0xBEEF, "ED {opcode:02X}: WZ preserved");
-        assert!(state.p, "ED {opcode:02X}: P latch preserved");
+        assert!(!state.p, "ED {opcode:02X}: P latch consumed at instruction boundary");
         assert!(state.iff1 && state.iff2, "ED {opcode:02X}: IFF preserved");
         assert_eq!(state.interrupt_mode, 2, "ED {opcode:02X}: IM preserved");
         assert_eq!(state.phase, sega_z80_cpu::Z80MicroSequencerPhase::Ready);
@@ -113,7 +112,7 @@ fn all_178_reserved_ed_encodings_retire_after_two_m1_fetches() {
 fn reserved_ed_fallback_preserves_wait_states_and_snapshot_resume() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.registers.f = 0xD7;
-    cpu.refresh = 0x7E;
+    cpu.refresh = 0x80;
     cpu.wz = 0x1234;
 
     let prefix_fetch = request(cpu.begin_instruction().expect("instruction starts"));
