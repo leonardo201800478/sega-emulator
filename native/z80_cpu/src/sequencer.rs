@@ -10736,7 +10736,9 @@ mod ed_block_io_differential_tests {
                             Some(bus.read_memory(request.address))
                         }
                         Z80BusOperation::InterruptAcknowledge => {
-                            panic!("INT acknowledge occurred before the block-I/O instruction retired")
+                            panic!(
+                                "INT acknowledge occurred before the block-I/O instruction retired"
+                            )
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -10772,7 +10774,10 @@ mod ed_block_io_differential_tests {
                     next
                 }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
-                    assert!(injected_int, "INT was not asserted during the final repeat T-state");
+                    assert!(
+                        injected_int,
+                        "INT was not asserted during the final repeat T-state"
+                    );
                     return tstates;
                 }
                 Z80MicroStep::InterruptAcknowledge { .. }
@@ -10783,10 +10788,7 @@ mod ed_block_io_differential_tests {
         }
     }
 
-    fn run_sequenced_im2_interrupt(
-        cpu: &mut Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> u32 {
+    fn run_sequenced_im2_interrupt(cpu: &mut Z80MicroSequencer, bus: &mut TestBus) -> u32 {
         let mut step = cpu.begin_instruction().unwrap();
         round_trip(cpu);
         loop {
@@ -10838,9 +10840,9 @@ mod ed_block_io_differential_tests {
     #[test]
     fn block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_tstate() {
         for (opcode, input, direction, hl) in [
-            (0xB2, true, 1_i16, 0x4000_u16),  // INIR
-            (0xBA, true, -1_i16, 0x4000_u16), // INDR
-            (0xB3, false, 1_i16, 0x4010_u16), // OTIR
+            (0xB2, true, 1_i16, 0x4000_u16),   // INIR
+            (0xBA, true, -1_i16, 0x4000_u16),  // INDR
+            (0xB3, false, 1_i16, 0x4010_u16),  // OTIR
             (0xBB, false, -1_i16, 0x4010_u16), // OTDR
         ] {
             let initial_b = 0x10_u8;
@@ -10873,8 +10875,7 @@ mod ed_block_io_differential_tests {
             initial_bus.memory[0xC100] = 0x90;
             initial_bus.memory[0x9000] = 0xF5; // IM2 handler: PUSH AF
             if input {
-                initial_bus.ports[usize::from((u16::from(initial_b) << 8) | u16::from(c))] =
-                    value;
+                initial_bus.ports[usize::from((u16::from(initial_b) << 8) | u16::from(c))] = value;
             } else {
                 initial_bus.memory[usize::from(hl)] = value;
             }
