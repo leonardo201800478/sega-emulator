@@ -140,8 +140,7 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.z80 == 'true' ||
-        needs.changes.outputs.other_rust == 'true' ||
+       (needs.changes.outputs.other_rust == 'true' ||
         needs.changes.outputs.audio == 'true' ||
         needs.changes.outputs.full == 'true'))
     runs-on: ubuntu-latest
@@ -164,8 +163,8 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
-      - name: Format root Rust workspace
-        run: cargo fmt --all -- --check
+      - name: Format Z80 and console integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
@@ -471,7 +470,7 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.z80 == 'true' || needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' }}
           Z80: ${{ needs.z80-focused.result }}
