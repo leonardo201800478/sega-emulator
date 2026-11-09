@@ -125,7 +125,9 @@ fn run_sequenced_with_waits_and_snapshots(
     assert_eq!(second.address, 0x1001);
     cpu.insert_wait_tstates(1).unwrap();
     let second_data = bus.read_memory(second.address);
-    let internal = cpu.complete_bus_cycle(second.id, Some(second_data)).unwrap();
+    let internal = cpu
+        .complete_bus_cycle(second.id, Some(second_data))
+        .unwrap();
     round_trip(cpu);
 
     assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
