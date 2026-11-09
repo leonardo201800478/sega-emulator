@@ -175,8 +175,8 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
-      - name: Format Z80 and console integration packages
-        run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
+      - name: Format root Rust workspace
+        run: cargo fmt --all -- --check
       - name: Clippy workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
@@ -201,8 +201,8 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Format root Rust workspace
-        run: cargo fmt --all -- --check
+      - name: Format Z80 and console integration packages
+        run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy Z80 and console integration packages
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80, SMS and SG-1000 integration packages
