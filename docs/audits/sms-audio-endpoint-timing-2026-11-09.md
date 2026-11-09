@@ -1,9 +1,9 @@
 # Instrumentação temporal dos endpoints de áudio SMS
 
-**Data:** 2026-11-09  
-**Baseline:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`  
-**Branch:** `diagnostics/sms-audio-endpoint-timing-20261109`  
-**Issues:** [#640](https://github.com/leonardo201800478/sega-emulator/issues/640), [#659](https://github.com/leonardo201800478/sega-emulator/issues/659)  
+**Data:** 2026-11-09
+**Baseline:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`
+**Branch:** `diagnostics/sms-audio-endpoint-timing-20261109`
+**Issues:** [#640](https://github.com/leonardo201800478/sega-emulator/issues/640), [#659](https://github.com/leonardo201800478/sega-emulator/issues/659)
 **Natureza:** instrumentação diagnóstica; não corrige nem declara resolvidos os sintomas.
 
 ## 1. Objetivo
