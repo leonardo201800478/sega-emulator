@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada). A PR #692 acrescentou validação externa de 32.000 vetores DD/FD ALU; a evidência está registrada na seção 22.
+**Baseline documental atual:** `main` = `ca8c04c05ba3eaf4d81f2c35a599cc9547818dd1` (2026-11-09; PRs #702 e #703 integradas). A PR #702 fechou a divergência Q/previous-Q DD/FD→SCF/CCF e elevou a validação externa para 34.000 vetores PASS; evidências nas seções 22–24.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
