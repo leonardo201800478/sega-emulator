@@ -336,7 +336,7 @@ A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos byt
 
 ## Reconciliação pós-PR #710 — 2026-11-09
 
-A baseline remota é `1142eb567746afe64356b60f2ce466581e1c0cef`. F-033 está CLOSED para o perfil Zilog NMOS clássico, com a cobertura dos 178 bytes reservados e os limites acima. F-034 está CLOSED para o perfil de compatibilidade NMOS clássico SMS/SG-1000, conforme PR #709 (CI #6034 no HEAD exato) e reconciliação documental #710 (CI #6036). Essas classificações não representam compatibilidade universal de variantes nem validação física. E7 permanece IN_PROGRESS por auditoria semântica global; E8 permanece BLOCKED.
+A baseline remota é `56d75cc79803494e9fd8a54e8930871c9101fc84`. F-033 está CLOSED para o perfil Zilog NMOS clássico, com a cobertura dos 178 bytes reservados e os limites acima. F-034 está CLOSED para o perfil de compatibilidade NMOS clássico SMS/SG-1000, conforme PR #709 (CI #6034 no HEAD exato) e reconciliação documental #710 (CI #6036). Essas classificações não representam compatibilidade universal de variantes nem validação física. E7 permanece IN_PROGRESS por auditoria semântica global; E8 permanece BLOCKED.
 
 
 ## 7. F-023 — RRD/RLD: expansão exaustiva de evidência integrada PR #714
@@ -357,3 +357,10 @@ PR #714 MERGED em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb1
 O primeiro ensaio da fixture exaustiva revelou apenas um defeito no próprio teste: o byte fonte não era restaurado entre as duas variantes de Carry. A fixture foi corrigida para restaurar a memória antes de cada vetor; a execução final passou. Nenhum defeito de runtime foi identificado nem corrigido nesta tarefa.
 
 F-023 permanece AUDIT_PARTIAL pelos limites já registrados; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 9. F-024 — fechamento auditado pela PR #716
+
+PR #716 MERGED em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062 e pós-merge #6063 PASS. O teste exaustivo `all_four_i_r_transfer_opcodes_cover_all_byte_values_iff2_and_carry` percorre 4.096 vetores nos dois executores; microsequenciador inclui WAIT em cada M1 e snapshot/restore por fronteira. A matriz do erratum foi ampliada para IFF2 e Carry 0/1 nos dois opcodes, com INT aceito imediatamente após a instrução, no microsequenciador e no executor atômico SMS.
+
+F-024 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 (pp. 94–97) especifica os quatro opcodes, 9T (4,5), flags normativas e erratum de P/V=0 quando INT ocorre durante LD A,I/R. X/Y não é explicitamente enumerado na descrição de flags do UM0080; a derivação do valor carregado é mantida como comportamento de referência MAME/ares, não como prova de silício. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 permanece IN_PROGRESS; E8 BLOCKED.
