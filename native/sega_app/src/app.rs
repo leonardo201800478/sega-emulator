@@ -201,7 +201,7 @@ impl FpsCounter {
         if elapsed < FPS_SAMPLE_INTERVAL {
             return false;
         }
-        let frames = u32::try_from(sequence.saturating_sub(self.last_sequence)).unwrap_or(u32::MAX);
+        let frames = u16::try_from(sequence.saturating_sub(self.last_sequence)).unwrap_or(u16::MAX);
         self.fps = f32::from(frames) / elapsed.as_secs_f32();
         self.last_sequence = sequence;
         self.last_sample = now;
