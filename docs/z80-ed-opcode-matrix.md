@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Main consultada:** Sega Emulator após merge da PR #706 (`2d15a2311cda9d087bbdd6c05f6c3851d52f4150`); reconciliação documental em PR #707.
+**Main consultada:** `1142eb567746afe64356b60f2ce466581e1c0cef` (após PRs #709/#710).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
@@ -332,3 +332,14 @@ A PR #702 altera somente o tratamento de Q/previous-Q em prefixos DD/FD e os tes
 - CI: documentação, Z80 focused (fmt/Clippy/testes Z80/SMS/SG-1000/vetores externos DD/FD) e agregador Rust quality/unit regression PASS. Workspace regression e jobs de outros subsistemas SKIPPED/NOT RUN pela política de impacto.
 
 **Estado:** F-034 CLOSED apenas para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000; sem validação física ou generalização para CMOS, R800, Z80N ou clones. E7 continua IN_PROGRESS por pendências globais independentes; E8 continua BLOCKED até E7 formalmente fechado.
+
+
+## Reconciliação após PRs #709/#710 — 2026-11-09
+
+- F-033 permanece CLOSED para o perfil de compatibilidade Zilog NMOS clássico, conforme PR #706 e CI #42635309051.
+- F-034 está CLOSED para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000, conforme PR #709, HEAD validado `b6e5db79047e7802620e76ad98f5cfd08deefd57`, CI #6034 SUCCESS; PR #710 reconciliou o scorecard/matriz e CI #6036 SUCCESS.
+- ED70: 256/256 valores cobertos nos executores atômico e retomável, com flags, Carry, descarte do dado, WZ, WAIT e snapshot/restore.
+- ED71: OUT(C),0 é comportamento observado de compatibilidade NMOS; não é encoding OUT documentado pelo UM0080.
+- NEG: oito aliases × 256 valores; oracle algébrico independente no executor atômico e comparação interna no microsequenciador.
+- RETI daisy-chain: NOT_APPLICABLE aos perfis SMS/SG-1000 atuais sem consumidor. Modos IM/aliases são delimitados ao perfil adotado.
+- Não há validação física nem generalização a CMOS/R800/Z80N/clones. E7 permanece IN_PROGRESS; E8 BLOCKED.
