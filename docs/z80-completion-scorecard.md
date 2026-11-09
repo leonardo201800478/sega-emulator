@@ -1,9 +1,9 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d` (2026-11-09).
-**Reconciliação:** PR #672 integrou exclusivamente a composição da GUI; PR #673 adicionou somente teste/documentação Z80 ED. Nenhuma das duas alterou a semântica de runtime do Z80, DD/FD ou microsequenciador.
-**Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.  
-**Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
+**Baseline documental atual:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
+**Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou teste dirigido de flags de repetição de I/O em bloco. Nenhuma alterou a semântica de runtime do Z80.
+**Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
+**Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
 Este scorecard mede o que é necessário para executar corretamente SG-1000 e Master System. Não define uma meta de simulação elétrica, cobertura integral de pinos ou microsequenciamento de cada instrução sem dependência de plataforma.
@@ -29,7 +29,7 @@ Este scorecard mede o que é necessário para executar corretamente SG-1000 e Ma
 - A entrega VBlank/Line IRQ do SMS convencional permanece coberta pelos testes integrados da PR #531. A ligação da IRQ de nível do VDP à INT do Z80 temporal foi integrada pela PR #595: combina a fonte do VDP com INT externa, preserva a fonte externa no snapshot e valida o vetor de acknowledge no restore. O CI #5178 passou nos testes VBlank/IM1/HALT e de preservação da fonte externa; isso não fecha a auditoria semântica global E7.7.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
 - A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
-- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria complementar de I/O em bloco caracteriza as flags para o perfil Zilog NMOS e não encontrou divergência de runtime; CMOS/clones, validação direta em hardware SMS e `OUT (C),0` variante-dependente permanecem sem comprovação conclusiva. A auditoria semântica integral continua aberta.
+- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria de I/O em bloco agora possui evidência física parcial para flags no ciclo de repetição NMOS e fixture independente no Rust; a execução do ROM no nosso core, flags de iteração simples em todo o espaço, CMOS/clones e validação direta em hardware SMS permanecem pendentes. `OUT (C),0` está resolvido para o perfil NMOS das placas SMS documentadas; não generalizar para todos os clones/variantes.
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
 Esta lista é uma fotografia histórica. Antes de alterar código ou declarar qualquer critério concluído, confirmar os arquivos, testes, PRs e workflows no SHA atual da `main`. PR aberta ou Draft não equivale a implementação integrada.
@@ -82,7 +82,7 @@ Baseline histórica: `main` = `0fb09e2cad46a92aefe6a98ca07549a5ba91d78c`. As evi
 - PR #562 integrou a correção do erratum NMOS de P/V em `LD A,I` / `LD A,R` no microsequenciador; INT imediato, instrução intermediária, NMI e snapshot/restore têm testes dedicados.
 - PR #563 integrou as matrizes de regressão de I/O em bloco e dos aliases DD/FD half-register (LD, ALU e INC/DEC), além das auditorias correspondentes.
 - A auditoria `docs/audits/z80-e7-block-io-flags-2026-11-05.md` caracteriza as fórmulas de flags de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR para o perfil Zilog NMOS.
-- CMOS/clones, validação direta em hardware SMS e `OUT (C),0` variante-dependente permanecem sem comprovação conclusiva.
+- CMOS/clones em geral e validação direta em hardware SMS permanecem NOT_VERIFIED; `OUT (C),0` está RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE, com variantes fora desse perfil ainda não verificadas.
 - E7.7 continua IN_PROGRESS e E8 continua BLOCKED.
 
 ## 8. Registro histórico após PR #595 — fotografia de 2026-11-06
@@ -116,7 +116,7 @@ Esta seção supersede as referências anteriores de baseline como fotografia co
 - PR #614 (`63eb154acedb993cdaf944746cb1f46cc8ccb3c6`) integrou áudio e controles na aplicação; não alterou o núcleo Z80.
 - PR #628 (`e77eff26d80fd77a64546373c3e92326a0cc4e7a`) alterou o workflow CI e documentação de validação; não alterou runtime Z80, decoder DD/FD, microsequenciador ou evidências semânticas.
 - As conclusões de E4C, E5 e E6 permanecem as registradas nas auditorias anteriores. Esta reconciliação não reexecuta nem promove seus testes.
-- **E7.7 permanece IN_PROGRESS.** A auditoria semântica global não está encerrada; continuam pendentes comprovação para variantes CMOS/clones, validação direta em hardware SMS e decisão variante-dependente para `OUT (C),0`.
+- **E7.7 permanece IN_PROGRESS.** A auditoria semântica global não está encerrada; continuam pendentes comprovação para variantes CMOS/clones e validação direta em hardware SMS; `OUT (C),0` está resolvido apenas para o perfil NMOS das placas SMS documentadas.
 - **E8 permanece BLOCKED.** Não iniciar ZEXDOC/ZEXALL antes do fechamento documentado de E7.
 - A integração de aplicação/runtime SMS não comprova por si só a precisão temporal sistêmica do Z80. Não declarar TEMPORAL_PASS global nem equivalência contínua/em blocos sem testes específicos.
 
@@ -151,3 +151,15 @@ Nenhuma alteração de código Z80 decorre desta reconciliação documental.
 - E4C, E5 e E6 não foram alteradas nem reabertas por estas PRs.
 
 Auditoria complementar: [E7.7 — evidência de hardware para flags de I/O em bloco](audits/z80-e7-block-io-hardware-evidence-2026-11-09.md).
+
+
+## 14. Reconciliação após PR #675 — 2026-11-09
+
+**Baseline atual:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+- PR #506 (merge SHA `54f881872ec9f5a9923ebdb17643b37a19954ec5`) integrou E7.2E; o estado histórico QUEUED da matriz foi supersedido. Os checks aplicáveis no merge SHA passaram: Rust quality/unit regression, Windows x64 D3D12 compile e Python lint/regression.
+- PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop`. O teste cobre B inicial de `0x10` a `0xD0` em passo 3 (65 valores), quatro posições PC que cobrem XY derivados de PC.13/PC.11 e seis casos INIR/INDR/OTIR/OTDR. O esperado é calculado pela álgebra publicada com o ROM Z80 Block Flags Test v5.0, incluindo L pós-atualização para OUTI/OUTD.
+- O teste compara executor atômico e microsequenciador com a fórmula independente e verifica flags, B, PC, WZ, 21 T-states e transações de I/O. CI #42568885363 passou no HEAD exato `33d3dcf8d41f2f18d0826a1401013e9e1582503e`; merge SHA `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+- O teste reproduz a fórmula/domínio do ROM; não executa o ROM v5.0 nem constitui uma nova execução em hardware. A evidência física publicada continua limitada ao escopo NMOS e aos casos descritos na auditoria complementar.
+- `OUT (C),0` permanece RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE. CMOS/clones fora do levantamento e SMS físico permanecem NOT_VERIFIED/NOT_RUN.
+- E7.7 permanece IN_PROGRESS por outras famílias e efeitos semânticos ainda não reconciliados. E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL.

@@ -1,7 +1,7 @@
 # E7.7 — Evidência independente de hardware para flags de I/O em bloco
 
 **Data:** 2026-11-09
-**Baseline do projeto:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`
+**Baseline do projeto:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`
 **Escopo:** INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR, com foco no efeito de flags quando uma instrução repetitiva é interrompida antes de B chegar a zero.
 
 ## 1. Frente documental — fontes primárias e secundárias
@@ -50,7 +50,7 @@ Testes já presentes na baseline:
 - `every_block_io_bus_phase_preserves_waits_and_snapshot_restore`;
 - `all_eight_block_io_opcodes_match_atomic_executor_across_counter_wraparound`.
 
-Limite importante: a comparação entre executor atômico e microsequenciador não é um oráculo independente quando ambos codificam a mesma fórmula. Os vetores existentes são dirigidos e não executam o ROM de teste v5.0 dentro do projeto.
+Limite importante: a comparação entre executor atômico e microsequenciador não é um oráculo independente quando ambos codificam a mesma fórmula. O novo fixture calcula o esperado pela álgebra do ROM v5.0, independentemente do runtime, mas não executa o ROM de teste dentro do projeto.
 
 ## 3. Frente de arquitetura — classificação de evidência
 
@@ -67,8 +67,8 @@ Limite importante: a comparação entre executor atômico e microsequenciador n�
 
 1. Obter os resultados legíveis do v5.0 para cada chip/variante listado e arquivar proveniência, revisão e configuração do sistema.
 2. Extrair do assembly vetores concretos de B, valor de transferência, low term, PC e F esperado, sem copiar a fórmula do runtime.
-3. Adicionar um fixture independente no Rust para os casos que podem ser representados no modelo de barramento do core; manter separado do teste de equivalência atomic↔sequencer.
-4. Executar uma versão adaptada do teste no core com IM2, interrompendo precisamente o ciclo de repetição e verificando F, PC, WZ e retomada.
+3. **CONCLUÍDO pela PR #675:** adicionar fixture independente no Rust para o B-loop do ROM, separado do teste de equivalência atomic↔sequencer.
+4. Executar uma versão adaptada do ROM no core com IM2, interrompendo precisamente o ciclo de repetição e verificando F, PC, WZ e retomada.
 5. Manter CMOS/clones como variantes separadas; não generalizar resultados NMOS para todos os chips.
 6. Não declarar E7.7 fechado até que as outras famílias/efeitos da auditoria semântica global também estejam reconciliados.
 
@@ -77,3 +77,12 @@ Limite importante: a comparação entre executor atômico e microsequenciador n�
 A evidência independente disponível é melhor do que a registrada na auditoria anterior: existe uma ROM pública de teste, com código, licença MIT e resultados documentados em múltiplos Z80 NMOS físicos, que examina especificamente as flags no ciclo de repetição interrompido. Isso sustenta a classificação parcial das flags de repetição de I/O em bloco para o perfil NMOS.
 
 Ainda não é PASS exaustivo, não substitui a execução do teste no núcleo deste projeto, não valida diretamente o SMS físico e não resolve comportamento de CMOS/clones. **E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.**
+
+
+## 6. Atualização após PR #675 — 2026-11-09
+
+O fixture independente foi integrado pela PR #675. A fórmula de referência usa o valor de L pós-atualização para OUTI/OUTD e C±1 para INI/IND. A cobertura executa 65 valores B em passo 3, quatro endereços PC e os casos INIR/INDR/OTIR/OTDR; compara o esperado algébrico com executor atômico e microsequenciador e verifica flags, B, PC, WZ, duração e transações de I/O.
+
+CI #42568885363 passou no HEAD exato `33d3dcf8d41f2f18d0826a1401013e9e1582503e`. Nenhum código de runtime foi alterado.
+
+O critério de fixture Rust está concluído. Continua pendente executar uma versão adaptada do ROM v5.0 no core com IM2 e validar a retomada após o interrupt. O teste não foi executado em hardware SMS; CMOS/clones seguem NOT_VERIFIED. E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.
