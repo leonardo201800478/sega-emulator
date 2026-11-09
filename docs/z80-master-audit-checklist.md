@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `f726755c87fcfb61bdf9ac5e2af031afe7712e21` (2026-11-09, após PR #727 de reconciliação documental F-004). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `ce51578511a0090afbba3ded6312c9a25c5d78c7` (2026-11-09, após squash da PR #728/F-015). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -90,7 +90,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-012 | ADC/SBC HL,rr | AUDIT_PARTIAL | Todos os pares, carry de entrada e fronteiras. |
 | F-013 | INC/DEC de pares de 16 bits | AUDIT_PARTIAL | Wraparound e flags preservadas. |
 | F-014 | DAA, CPL, NEG, CCF e SCF | AUDIT_PARTIAL | Fórmulas e flags X/Y/Q; NEG inclui aliases ED. |
-| F-015 | RLCA/RRCA/RLA/RRA | IMPLEMENTED_PENDING_VALIDATION (gates focados PASS; merge pendente) | PR #728, HEAD `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`; CI #6129 / run `42678520765` PASS. 262.144 vetores A×F, 1.024 snapshot/restore, quatro PC-wrap e 192 casos SMS/MachineScheduler. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED. Nenhuma alteração de runtime. X/Y comparativo; sem prova física. CLOSED somente após squash merge. |
+| F-015 | RLCA/RRCA/RLA/RRA | CLOSED (NMOS delimitado) | PR #728 integrada por squash em `ce51578511a0090afbba3ded6312c9a25c5d78c7`; HEAD validado `c198cff1629270378a3bdd22a1126ca3d98a44b8`; CI #6131 / run `42678804879` PASS. 262.144 vetores A×F, 1.024 snapshot/restore, quatro PC-wrap e 192 casos SMS/MachineScheduler. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED. Runtime não alterado. X/Y comparativo; sem prova física. CI pós-merge NOT VERIFIED. |
 | F-016 | RLC/RRC/RL/RR/SLA/SRA/SLL/SRL | AUDIT_PARTIAL | Matriz CB para todos os destinos aplicáveis. |
 | F-017 | BIT/RES/SET para registradores e (HL) | AUDIT_PARTIAL | Flags BIT, ausência de write-back e endereços. |
 | F-018 | JP/JR/DJNZ, condicional e incondicional | AUDIT_PARTIAL | PC, offsets assinados, wrap e tempos tomados/não tomados. |
@@ -479,7 +479,7 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 | F-031 — prefixos repetidos/alternados | Matriz parcial. | Consumo, last-prefix-wins, PC/R, M1 e semântica terminal. |
 | F-032 — prefixos ignorados | Matriz parcial. | Sem refetch, sem substituição indevida e custo temporal do prefixo. |
 
-**Decisão de prioridade:** F-015 foi escolhida antes de F-005 porque permanece NOT_AUDITED e é uma unidade funcional isolada; F-005 já tem evidência parcial e depende de fechar a cadeia de pares. F-023 permanece um gate de evidência transversal, não uma licença para alegar equivalência física. Após F-015, reavaliar F-005, F-022 e F-026 conforme dependências reais; manter F-027–F-032 em auditoria contínua.
+**Decisão de prioridade:** F-015 foi escolhida antes de F-005 porque permanece NOT_AUDITED e é uma unidade funcional isolada; F-005 já tem evidência parcial e depende de fechar a cadeia de pares. F-023 permanece um gate de evidência transversal, não uma licença para alegar equivalência física. Após F-015, F-005 foi selecionada como próxima família por sequência direta de 16 bits e dependência já parcialmente coberta; F-022 e F-026 permanecem as próximas frentes de maior risco. F-023 continua gate transversal de evidência. Manter F-027–F-032 em auditoria contínua.
 
 ### PRs abertas preservadas — sem integração automática
 
@@ -495,7 +495,7 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 Todas permanecem abertas e fora do escopo da F-015; qualquer integração exige auditoria independente de dependências, conflitos, CI e supersessão.
 
 
-## 37. F-015 — RLCA/RRCA/RLA/RRA — gates focados aprovados — 2026-11-09
+## 37. F-015 — candidata validada, registro histórico pré-merge — 2026-11-09 (supersedido pela seção 38)
 
 - **Baseline main pré-PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
 - **PR #728 HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
@@ -507,4 +507,18 @@ Todas permanecem abertas e fora do escopo da F-015; qualquer integração exige 
 - **Histórico de correção:** #6126 rustfmt FAIL (formatação corrigida); #6128 Clippy FAIL (`too_many_arguments` localizado e justificado); #6129 PASS nos gates aplicáveis.
 - **Escopo NOT RUN/SKIPPED:** `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados. Não são PASS.
 - **Runtime:** nenhuma alteração.
-- **Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da main. X/Y permanece comparação MAME/ares, sem prova física. E7 IN_PROGRESS; E8 BLOCKED.
+- **Estado à época do registro:** gates focados aprovados; integração pendente. **Atualização posterior:** PR #728 integrada por squash e F-015 CLOSED na seção 38. CI pós-merge permanece NOT VERIFIED.
+
+
+## 38. Fechamento F-015 — PR #728 integrada — 2026-11-09
+
+- **Main pré-PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+- **PR:** #728 — squash merge `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+- **HEAD validado:** `c198cff1629270378a3bdd22a1126ca3d98a44b8`.
+- **CI pré-merge:** #6131 / run `42678804879` PASS. Change classification, rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD (34.000/34.000), documentation hygiene e agregador PASS.
+- **Escopo NOT RUN/SKIPPED:** regressão integral `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados.
+- **Auditoria do diff:** somente testes e documentação; nenhum runtime Z80 alterado.
+- **CI pós-merge:** NOT VERIFIED; status/check run associado ao SHA de merge não retornado nesta consulta.
+- **F-015:** CLOSED somente para semântica de software do perfil Zilog NMOS delimitado. X/Y segue comparação MAME/ares; sem validação física SMS nem compatibilidade universal CMOS/clones.
+- **Próxima candidata:** F-005 — `LD SP,HL/IX/IY` e transferências SP; reconciliar com E3A1/E3A2 e F-034 para evitar duplicação.
+- **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
