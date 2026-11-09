@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota após PR #702:** `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09). PR #692 integrou o harness externo SingleStepTests para 32.000 vetores F-037; o histórico anterior permanece preservado.
+**Baseline remota após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09). PR #692 integrou 32.000 vetores F-037; PR #702 corrigiu Q/previous-Q e validou 34.000 vetores no HEAD da PR. O histórico anterior permanece preservado.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | F-037: 32.000 vetores externos PASS. A divergência Q/previous-Q em DD/FD antes de SCF/CCF foi reproduzida: PR #695, run #42624833386, DD 37 0001 esperado F=65 e obtido F=45. O teste falhou antes de alcançar FD 3F. PR de correção Q/previous-Q contém correção em validação; preservar E4A/E4B e exceções 66/6E/74/75. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | Q/previous-Q corrigido pela PR #702; 34.000/34.000 vetores SingleStepTests PASS no HEAD validado da PR. Restam auditoria de exceções/variantes e efeitos temporais; preservar E4A/E4B e exceções 66/6E/74/75. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
