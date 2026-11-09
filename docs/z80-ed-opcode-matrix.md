@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Baseline:** Sega Emulator main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada).
+**Main consultada:** Sega Emulator `9d5d83d0df16a1c6fa9fb82bdd953af54369c613` (2026-11-09).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
@@ -8,7 +8,7 @@
 
 A matriz enumera todos os 256 segundos bytes após o prefixo ED. O código atual possui 78 codificações explicitamente tratadas e 178 bytes de fallback no executor atômico. A classificação de comportamento reservado usa UM0080, a tabela MAME fixada abaixo e referências secundárias; MAME é evidência de implementação, não prova de silício.
 
-A coluna “Microsequenciador” descreve o estado atual em main: os 78 casos explícitos possuem despachante; o braço residual de `execute_ed_register_control` retorna `UnsupportedOpcode`. Logo, as 178 linhas reservadas são gaps no caminho retomável, mesmo que o executor atômico as trate como NOP de 8T.
+Na main consultada, os 78 casos explícitos possuem despachante e o braço residual de `execute_ed_register_control` ainda retorna `UnsupportedOpcode`. A PR #706 propõe aposentadoria de 8T para os 178 bytes no microsequenciador; essa alteração está em branch e não integra a main.
 
 - **UM0080:** documenta as instruções ED oficiais. A tabela IN r,(C) marca r=110 como encoding indefinido que atualiza flags; a tabela OUT (C),r não inclui r=110; IM 0/1/2 são ED46/ED56/ED5E; NEG/RETN/RETI são ED44/ED45/ED4D.
 - **MAME:** `z80.lst`, commit `c7541016a35d83a3eb5db5db5d20a5cb79a17a43`, usa `illegal_2()` nos 178 bytes reservados e documenta aliases.
@@ -303,3 +303,17 @@ A PR #702 altera somente o tratamento de Q/previous-Q em prefixos DD/FD e os tes
 - Microsequenciador: os 178 bytes reservados continuam retornando `UnsupportedOpcode`; F-033 permanece GAP_CONFIRMED.
 - F-034 permanece AUDIT_PARTIAL até classificação e validação por variante dos aliases, bytes indefinidos e reservados.
 - E8 permanece BLOCKED. O fechamento Q/previous-Q não autoriza iniciar ZEXDOC/ZEXALL.
+
+
+## Candidata F-033 — PR #706 — 2026-11-09
+
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`.
+
+- Executor atômico: 78 codificações explícitas e 178 bytes no fallback de 8T.
+- Microsequenciador na main: ainda retorna `UnsupportedOpcode` para os 178 bytes.
+- Microsequenciador na PR #706: braço residual chama `retire(opcode)`, aposentando após os dois M1 existentes; não adiciona transação nem ciclo interno.
+- Teste no branch: `all_178_reserved_ed_encodings_retire_after_two_m1_fetches`, com estado arquitetural discriminante, PC/R/F/Q/previous-Q/WZ/P/IFF/IM, fase Ready e request pendente; teste separado cobre WAIT e snapshot/restore.
+- CI #42631919433: Z80 focused PASS, Rust quality PASS e Windows D3D12 PASS; jobs não aplicáveis SKIPPED segundo a política impact-based.
+- A expectativa de 8T/no-effect é compatibilidade para Zilog NMOS clássico, não comportamento universal especificado por UM0080. MAME/referências secundárias não são prova de silício.
+
+**Estado da matriz:** 178 bytes são IMPLEMENTED_PENDING_VALIDATION no branch candidato, mas continuam GAP na main até o merge. F-033 não está CLOSED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
