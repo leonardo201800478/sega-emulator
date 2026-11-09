@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `fa069162306fb330864b6d77633ceba0f976e3ca` (2026-11-09, após PR #711). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `5e4a703daefdebe62fb7f8d220752359df59f8e3` (2026-11-09, após PRs #711 e #712). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -397,3 +397,19 @@ A candidata adiciona `ed_block_transfer_repeat_interrupt_tests::block_transfer_a
 **Oráculo e limites:** os valores esperados de F no handler derivam do comportamento descrito pelo teste v5.0 e das flags documentadas no UM0080. A comparação atômico↔microsequenciador é somente diferencial interna. O WZ=PC+1 é confrontado com MAME/ares, não alegado como observação física independente. O teste cobre um vetor dirigido por opcode, não uma varredura combinatória. F-022 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED. Hardware SMS, CMOS e clones não foram validados.
 
 **Validação:** aguardando CI da PR #712 no HEAD exato. Nenhum resultado PASS é atribuído antes da execução.
+
+
+## 31. Integração da evidência F-022 — PR #712
+
+**Main:** `5e4a703daefdebe62fb7f8d220752359df59f8e3` (squash merge da PR #712; merge SHA idêntico ao HEAD).
+**HEAD da PR validado:** `7390744d9d6dc61ef2db3786f75fc9073dabdc12`.
+**CI:** #6045 / run `42649308679` PASS no HEAD exato; CI pós-merge #6046 / run `42649608469` PASS no HEAD da main.
+
+- `ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume` executa LDIR, LDDR, CPIR e CPDR.
+- INT é afirmada no último T-state do ciclo interno de repetição; IM2 atende o vetor, `PUSH AF` expõe F e `POP AF; EI; RETI` retorna à instrução ED.
+- O teste confirma BC, PC, WZ, SP, IFF1/IFF2, flags e retomada da iteração seguinte.
+- Snapshot encode/decode + restore é aplicado em cada fronteira do microsequenciador.
+- Z80 focused validation: fmt PASS, Clippy PASS, testes Z80/SMS/SG-1000 PASS e SingleStepTests DD/FD PASS. Documentation patch hygiene PASS; agregador Rust quality/unit PASS.
+- Workspace regression e jobs não relacionados ficaram SKIPPED/NOT RUN pela política de impacto; não são promovidos a PASS.
+
+**Limite:** o novo teste é um vetor dirigido por opcode e não fecha F-022. Flags das iterações simples, matriz combinatória completa, WZ/MEMPTR independente, execução integral do ROM v5.0 no core e validação direta em hardware SMS continuam pendentes. CMOS/clones permanecem NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
