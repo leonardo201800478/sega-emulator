@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline de código desta abertura:** `b41fa66e01e329d45f7704a229479c8ac3c2c9ea` (2026-11-09).
+**Baseline remota de entrada desta etapa:** `43772d5cd5395de273bd3898895cf1deed81aa53` (2026-11-09, após PR #683).
 **Baseline documental encontrada:** scorecard e matriz DD/FD ainda apontavam para `043ecb61d8d1cc77245fa72639d7f210d88cab26`; a divergência deve ser reconciliada nesta trilha.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | Executor atômico contém handlers para half-register LD/INC/DEC/ALU; microsequenciador está em expansão. PR #680 cobre 24,25,26,2C,2D,2E; faltam LD r,r' e ALU no caminho retomável. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #680 integrou INC/DEC e LD imediato; PR #684 contém candidato F-036 para LD r,r' register-only; F-037 ALU ainda é GAP_CONFIRMED. Não fechar a família até F-037 e auditoria residual. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
@@ -111,8 +111,8 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-033 | Encodings ED reservados e fallback ED-NOP | GAP_CONFIRMED | Auditoria estática reporta 78 bytes explícitos e 178 em fallback. Confirmar cada byte contra perfil e referência; não presumir que smoke test prova semântica. |
 | F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | NOT_AUDITED | Classificar explicitamente documentado, alias, não documentado, ignorado ou reservado. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
-| F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; `sequencer.rs` classifica como UsesIndex, mas o dispatch ainda rejeita os opcodes fora das famílias 16-bit, displacement e seis half-register INC/DEC/LD imediato. Próxima fatia após #680. |
-| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; o caminho retomável ainda não despacha os 16 opcodes ALU com fonte IXH/IXL/IYH/IYL. Próxima fatia após LD r,r'. |
+| F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | IMPLEMENTED_PENDING_VALIDATION | PR #684, commit de implementação `181be7aec287eaf66cda26d4bd0823446b435031`: dispatch usa os helpers indexados para as 24 formas por prefixo. Teste `indexed_half_register_ld_e7.rs` cobre 48 combinações, oracle de registradores, executor atômico, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. Aguardando CI e merge; memória indexada permanece no caminho E4A. |
+| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; o caminho retomável ainda não despacha os 16 opcodes ALU com fonte IXH/IXL/IYH/IYL. Próxima PR separada após integração de F-036. |
 
 ## 4. Checklist de estado arquitetural e flags
 
@@ -152,7 +152,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | D-001 | Codec versionado e compatibilidade de schema | AUDIT_PARTIAL | Conferir evolução, rejeição e migração. |
 | D-002 | Snapshot em cada fase do sequenciador | AUDIT_PARTIAL | Matriz por fase e payload. |
 | D-003 | Request pendente e identidade | AUDIT_PARTIAL | Preservar request ID, operação, endereço e dados. |
-| D-004 | WAIT pendente e retomada | IMPLEMENTED_PENDING_VALIDATION | Causa da rejeição de snapshot em DD/FD 26/2E corrigida no candidato #680 (`48aad1f...`); teste focado e workspace passam em #5929, aguardando validações restantes e merge. |
+| D-004 | WAIT pendente e retomada | CLOSED | PR #680 integrada: testes focados e regressão completa passaram no HEAD `e20ec4b6c858bcaca265114ba543c19301dbb2e0`, run #42609912469; merge SHA `04527a59e0695a800d4fd048d2da85c51126de68`. WAIT e snapshot/restore das operações DD/FD cobertas pela PR foram validados no SHA integrado. |
 | D-005 | Estados inválidos/inconsistentes | AUDIT_PARTIAL | Validar todos os campos e combinações por fase. |
 | D-006 | Execução contínua vs. step/resume | AUDIT_PARTIAL | Comparar estado completo e sequência de transações. |
 | D-007 | Execução em blocos de tamanhos diferentes | NOT_AUDITED | Testar equivalência determinística global aplicável. |
@@ -186,7 +186,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | C-007 | Contadores temporais e overflow | NOT_AUDITED | Conferir aritmética checked e invariantes. |
 | C-008 | Duplicidade de CPU por plataforma | AUDIT_PARTIAL | Confirmar uso do crate canônico e evitar divergência SMS/SG-1000. |
 | C-009 | Testes tautológicos/hipóteses compartilhadas | AUDIT_PARTIAL | Identificar comparações que não são independentes. |
-| C-010 | Warnings, lint e testes de workspace | AUDIT_PARTIAL | No candidato #680 HEAD `268ece8...`, fmt, Clippy workspace, testes workspace, Clippy/test observability e suíte focada Z80/SMS/SG-1000 passaram em #5929; D3D12/WASAPI ainda estavam em execução nesta fotografia. Revalidar no SHA final e após merge. |
+| C-010 | Warnings, lint e testes de workspace | CLOSED | PR #680 e PR #683 passaram nos HEADs exatos. #683 executou regressão ampla após alteração do workflow: workspace, D3D12/DXGI, WASAPI/XAudio2, SDL3, Linux audio, PowerShell, documentação e agregador PASS; merge SHA `43772d5cd5395de273bd3898895cf1deed81aa53`. A validação focada Z80 será comprovada em PR #684. |
 | C-011 | Documentação/scorecard/matrizes | GAP_CONFIRMED | Baselines documentais estavam atrás da main; reconciliar por PR. |
 
 ## 9. Estado inicial e bloqueios confirmados
@@ -243,7 +243,10 @@ A inspeção cruzada de `native/z80_cpu/src/prefix.rs`, `cpu.rs` e `sequencer.rs
 | Data | SHA da main | Etapa | Resultado | Evidência / PR |
 |---|---|---|---|---|
 | 2026-11-09 | `b41fa66e01e329d45f7704a229479c8ac3c2c9ea` | Abertura do checklist e auditoria documental inicial | IN_PROGRESS | Scorecard, matriz DD/FD, auditoria ED e PR #680 examinados; detalhes na seção 9. |
-| 2026-11-09 | `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` | Publicação do checklist mestre pela PR #681 e varredura estática inicial DD/FD | AUDIT_PARTIAL | PR #681 CI PASS e merge; lacunas F-036/F-037 registradas; PR #680 continua pendente de CI completo. |
+| 2026-11-09 | `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` | Publicação do checklist mestre pela PR #681 e varredura estática inicial DD/FD | AUDIT_PARTIAL | Fotografia histórica; supersedida pelas integrações #680 e #683 registradas abaixo. |
+| 2026-11-09 | `04527a59e0695a800d4fd048d2da85c51126de68` | PR #680 integrada: INC/DEC IXH/IXL/IYH/IYL e LD imediato; run #42609912469 PASS no HEAD `e20ec4b6c858bcaca265114ba543c19301dbb2e0` | CLOSED | D-004 fechado; E7 segue em auditoria global. |
+| 2026-11-09 | `43772d5cd5395de273bd3898895cf1deed81aa53` | PR #683 integrou seleção inteligente de CI, jobs focados PSG/VDP/input e agregador; run #42613123290 PASS no HEAD `eaa88a249989b2ca6aee931e2a963df75a396008` | CLOSED | PR #637 encerrada como supersedida; CI otimizado integrado. |
+| 2026-11-09 | `181be7aec287eaf66cda26d4bd0823446b435031` | PR #684 candidata F-036: DD/FD LD r,r' register-only no microsequenciador | IMPLEMENTED_PENDING_VALIDATION | CI/merge ainda não concluídos. |
 
 ### Modelo obrigatório para cada atualização
 
@@ -255,3 +258,15 @@ Adicionar uma linha no histórico e atualizar os IDs afetados:
 - Testes executados com classificação individual e SHA.
 - PR, HEAD candidato, resultado CI e SHA de merge.
 - Pendências remanescentes e próxima tarefa.
+
+
+## 18. Reconciliação após PR #680/#683 e candidato F-036 — 2026-11-09
+
+**Main remota confirmada:** `43772d5cd5395de273bd3898895cf1deed81aa53`.
+
+- PR #680 foi integrada por squash. HEAD validado `e20ec4b6c858bcaca265114ba543c19301dbb2e0`; execução #42609912469 PASS; merge SHA `04527a59e0695a800d4fd048d2da85c51126de68`. INC/DEC e LD imediato das metades IX/IY estão integrados. As exceções DD/FD 66, 6E, 74 e 75 continuam no caminho de memória indexada e usam H/L reais.
+- PR #683 foi integrada por squash. HEAD validado `eaa88a249989b2ca6aee931e2a963df75a396008`; execução #42613123290 PASS; merge SHA `43772d5cd5395de273bd3898895cf1deed81aa53`. O CI agora seleciona Z80, PSG, VDP, input, Scheduler, hosts e tooling por dependências; o agregador diferencia jobs aplicáveis de jobs SKIPPED. A PR #637 foi encerrada como supersedida.
+- F-036 tem implementação candidata na PR #684, commit de código `181be7aec287eaf66cda26d4bd0823446b435031`. A nova suíte exercita 48 combinações register-only, oracle explícito, comparação com executor atômico, dois M1/8T, WAIT, snapshot/restore, prefixos repetidos e HALT. O resultado CI ainda é NOT RUN nesta fotografia.
+- A validação de F-036 não deve ser promovida a PASS ou CLOSED antes do CI no HEAD final da PR e do merge confirmado. A PR #684 deve demonstrar que os jobs Windows D3D12, áudio e SDL3 ficam SKIPPED, sem que o check obrigatório bloqueie o merge.
+- F-037 permanece GAP_CONFIRMED e será implementada em PR separada após F-036.
+- E7.7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED. Não iniciar E8.

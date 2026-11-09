@@ -199,3 +199,27 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - Não declarar F-028/F-036/F-037 fechados nem liberar E8. O fechamento exige merge e atualização do ledger no SHA resultante.
 
 **Estado:** E7.7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 18. Reconciliação após PR #680/#683 e candidato F-036 — 2026-11-09
+
+**Main remota confirmada:** `43772d5cd5395de273bd3898895cf1deed81aa53`.
+
+### Integrações concluídas
+
+- **PR #680:** squash merge confirmado em `04527a59e0695a800d4fd048d2da85c51126de68`. HEAD validado `e20ec4b6c858bcaca265114ba543c19301dbb2e0`; CI #42609912469 PASS. INC/DEC IXH/IXL/IYH/IYL e LD imediato das metades indexadas estão no microsequenciador. WAIT/snapshot dos safe points cobertos pela PR foram validados.
+- **PR #683:** squash merge confirmado em `43772d5cd5395de273bd3898895cf1deed81aa53`. HEAD validado `eaa88a249989b2ca6aee931e2a963df75a396008`; CI #42613123290 PASS. A seleção por dependências, jobs focados Z80/PSG/VDP/input, validações de hosts e agregador foram integrados. A PR #637 foi encerrada como supersedida.
+
+### Estado atual do fechamento E7
+
+| Família | Estado | Evidência / pendência |
+|---|---|---|
+| F-028 — IXH/IXL/IYH/IYL | AUDIT_PARTIAL | INC/DEC e LD imediato integrados por #680; LD r,r' está em #684; ALU half-register permanece pendente em F-037. |
+| F-036 — LD r,r' register-only | IMPLEMENTED_PENDING_VALIDATION | PR #684, commit de código `181be7aec287eaf66cda26d4bd0823446b435031`. Teste de 48 combinações DD/FD, oracle de registradores, comparação atômica, 8T/2 M1, WAIT, snapshot/restore, prefixos repetidos e HALT. CI ainda NOT RUN nesta fotografia. |
+| F-037 — ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | Próxima implementação, em PR separada após F-036. Exige vetores fixos independentes, carry de entrada, flags completas, Q e caminho retomável. |
+| E7.7 — auditoria semântica integral | IN_PROGRESS | Outras famílias, efeitos observáveis, proveniência independente e auditoria temporal ainda pendentes. |
+| E8 — ZEXDOC/ZEXALL | BLOCKED | Não iniciar antes do fechamento formal de E7. |
+
+**Regra de promoção:** F-036 só pode passar a CLOSED depois do CI verde no HEAD final da PR #684, merge confirmado e validação dos checks aplicáveis. O resultado SKIPPED de D3D12/áudio/SDL3 em uma PR exclusivamente Z80 deve permanecer NOT RUN na classificação interna e ser aceito pelo GitHub como check satisfeito; a execução real da PR #684 comprovará esse comportamento.
+
+**Próxima tarefa objetiva:** concluir CI/merge de F-036; em seguida implementar F-037 em PR pequena e separada. Não avançar para E8.
