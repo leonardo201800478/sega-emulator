@@ -16,7 +16,7 @@ use crate::{
 };
 use sega_sn76489::Sn76489Core;
 use sega_temporal_core::{
-    BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
+    BoundedTrace, BreakpointSet, BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_video::sms::SmsVdpProfile;
@@ -278,7 +278,9 @@ pub struct SmsTemporalMachine {
     m1: Option<SmsTemporalM1>,
     m1_fixture_wait_tstates: Option<u32>,
     trace_enabled: bool,
-    trace_events: Vec<SmsTemporalTraceEvent>,
+    trace_events: BoundedTrace<SmsTemporalTraceEvent>,
+    breakpoints: BreakpointSet,
+    breakpoint_skip_once: Option<u16>,
 }
 
 impl SmsTemporalMachine {
@@ -298,7 +300,9 @@ impl SmsTemporalMachine {
             m1: None,
             m1_fixture_wait_tstates: None,
             trace_enabled: false,
-            trace_events: Vec::new(),
+            trace_events: BoundedTrace::new(2_048),
+            breakpoints: BreakpointSet::default(),
+            breakpoint_skip_once: None,
         })
     }
 
@@ -863,7 +867,105 @@ impl SmsTemporalMachine {
 
     /// Drain trace events captured from actual scheduler dispatches.
     pub fn take_trace(&mut self) -> Vec<SmsTemporalTraceEvent> {
-        core::mem::take(&mut self.trace_events)
+        self.trace_events.drain()
+    }
+
+    /// Set a CPU program-counter breakpoint. Returns whether it was newly added.
+    pub fn set_breakpoint(&mut self, address: u16) -> bool {
+        self.breakpoints.insert(u32::from(address))
+    }
+
+    /// Remove a CPU program-counter breakpoint.
+    pub fn remove_breakpoint(&mut self, address: u16) -> bool {
+        self.breakpoints.remove(u32::from(address))
+    }
+
+    /// Remove all CPU program-counter breakpoints.
+    pub fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+        self.breakpoint_skip_once = None;
+    }
+
+    /// List configured CPU program-counter breakpoints.
+    pub fn breakpoints(&self) -> impl Iterator<Item = u16> + '_ {
+        self.breakpoints.iter().filter_map(|address| u16::try_from(address).ok())
+    }
+
+    /// Check whether execution is currently positioned at a configured breakpoint.
+    pub fn breakpoint_at_pc(&self) -> bool {
+        self.breakpoints.contains(u32::from(self.cpu.registers.pc))
+    }
+
+    /// Number of trace events discarded by the bounded diagnostic history.
+    pub fn trace_dropped_events(&self) -> u64 {
+        self.trace_events.dropped()
+    }
+
+    /// Run until one frame completes or a PC breakpoint is reached.
+    ///
+    /// A hit is reported before the instruction at that address executes. On
+    /// the next call, that same breakpoint is skipped once so execution can
+    /// continue without requiring the caller to remove it.
+    pub fn step_frame_until_breakpoint(
+        &mut self,
+        max_instructions: usize,
+    ) -> Result<(usize, Option<u16>), SmsTemporalMachineError> {
+        if max_instructions == 0 {
+            return Err(SmsTemporalMachineError::FrameStepLimitReached);
+        }
+        let initial_frame = self.frame_number();
+        for instructions in 1..=max_instructions {
+            let pc = self.cpu.registers.pc;
+            if self.breakpoints.contains(u32::from(pc)) {
+                if self.breakpoint_skip_once == Some(pc) {
+                    self.breakpoint_skip_once = None;
+                } else {
+                    self.breakpoint_skip_once = Some(pc);
+                    return Ok((instructions - 1, Some(pc)));
+                }
+            } else {
+                self.breakpoint_skip_once = None;
+            }
+
+            let step = self.step_instruction(0)?;
+            if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+                let _ = self.resume_instruction(0)?;
+            }
+            if self.frame_number() != initial_frame {
+                return Ok((instructions, None));
+            }
+        }
+        Err(SmsTemporalMachineError::FrameStepLimitReached)
+    }
+
+    /// Read a byte through the SMS cartridge/RAM memory map without advancing time.
+    pub fn debug_read_memory(&self, address: u16) -> u8 {
+        self.bus.memory().read(address)
+    }
+
+    /// Selected cartridge banks for the SMS mapper.
+    pub fn debug_mapper_banks(&self) -> [u8; 3] {
+        self.bus.memory().selected_banks()
+    }
+
+    /// SMS mapper control register.
+    pub fn debug_mapper_control(&self) -> u8 {
+        self.bus.memory().mapper_control()
+    }
+
+    /// SMS memory-control latch (port $3E).
+    pub fn debug_memory_control(&self) -> u8 {
+        self.bus.memory().control_port()
+    }
+
+    /// Current SMS VDP register file.
+    pub fn debug_vdp_registers(&self) -> [u8; 16] {
+        *self.bus.vdp().registers()
+    }
+
+    /// Current scheduler timestamp in master ticks.
+    pub fn debug_machine_time(&self) -> u128 {
+        self.bus.now().ticks()
     }
 
     /// Current CPU state (read-only).
