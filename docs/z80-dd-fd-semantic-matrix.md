@@ -333,3 +333,17 @@ Esta seção supersede as baselines históricas acima como referência da `main`
 A subquestão `ED 71 / OUT (C),0` está resolvida para o perfil NMOS das placas Master System documentadas no levantamento: SMS Power lista Zilog Z0840004PSC em várias revisões e Zilog Z0840004PSC ou NEC D780C-1 em uma revisão inicial PAL. O produto Zilog distingue Z08400 NMOS de Z84C00 CMOS. As referências comparativas descrevem ED 71 como saída 00h no Zilog NMOS e FFh no Zilog CMOS, com exceções em clones; o teste de runtime integrado verifica a saída 00h. Consulte [auditoria E7.7 ED 71](audits/z80-e7-77-out-c-zero-variant-2026-11-07.md).
 
 **Classificação:** `OUT (C),0` = `RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE`; outros clones/variantes = `NOT_VERIFIED`. Não adicionar uma configuração de variante CMOS ao runtime sem um console/placa suportado que a exija. E7.7 global permanece `IN_PROGRESS`; E8 permanece `BLOCKED`.
+
+
+---
+
+## Reconciliação de baseline — main 2026-11-09
+
+**Baseline atual:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+
+PR #672 alterou apenas GUI/D3D12. PR #673 adicionou teste/documentação de transferências absolutas ED no limite `0xFFFF`; nenhuma das duas alterou as famílias DD/FD, o decoder de prefixos ou os resultados E4C/E5/E6.
+
+- E4C, E5 e E6 permanecem integradas conforme as evidências registradas nas seções históricas; não houve reexecução ou promoção de status nesta reconciliação.
+- O scorecard Z80 e a auditoria ED foram reconciliados com a mesma baseline.
+- E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED até o fechamento formal de E7.
+- As classificações `TEMPORAL_UNVERIFIED` e `FUNCTIONAL_UNVERIFIED` da matriz continuam com seu significado original; nenhuma evidência de ED altera a matriz DD/FD.

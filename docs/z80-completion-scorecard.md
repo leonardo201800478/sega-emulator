@@ -1,6 +1,7 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).
+**Baseline documental atual:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d` (2026-11-09).
+**Reconciliação:** PR #672 integrou exclusivamente a composição da GUI; PR #673 adicionou somente teste/documentação Z80 ED. Nenhuma das duas alterou a semântica de runtime do Z80, DD/FD ou microsequenciador.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
@@ -134,3 +135,19 @@ Nenhuma alteração de código Z80 decorre desta reconciliação documental.
 - O runtime integrado escreve `0x00` para ED 71 e tem teste de I/O que confirma a transação `(BC, 0x00)`. Esse comportamento corresponde ao perfil NMOS das placas SMS documentadas. Não foi necessária alteração de runtime.
 - **Limite:** o levantamento de placas não é um censo de todas as unidades/revisões produzidas. Não inferir que todos os clones CMOS ou todas as variantes Z80 tenham comportamento idêntico. A exceção Sharp LH5080A demonstra que uma regra binária “CMOS = FF” não é universal.
 - **Estado E7.7:** a subquestão ED 71 fica RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE, com evidência documental de componentes e regressão de runtime. A auditoria semântica integral E7.7 continua IN_PROGRESS; CMOS/clones em geral e outras famílias/efeitos ainda exigem reconciliação. **E8 permanece BLOCKED.**
+
+
+## 13. Reconciliação da main — 2026-11-09
+
+**Baseline auditada:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+
+- PR #672 integrou a composição dos menus egui sobre o viewport D3D12; sem alterações no Z80.
+- PR #673 integrou `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff`, cobrindo ED 43/53/63/73 e ED 4B/5B/6B/7B no limite `nn=0xFFFF`: wrap FFFF→0000, ordem little-endian, WZ=0000, PC, F preservada e 20 T-states. CI #42568163213 passou no HEAD exato `b6f94ff010782a5dd18e6c684e625c2eec9d7a6e`; merge SHA `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+- A auditoria de I/O em bloco agora referencia o teste independente `Z80 Block Flags Test v5.0`, de Peter Helcmanovsky. O projeto de teste documenta validação em hardware Z80 NMOS e o wiki registra resultados em diversos chips. Seu escopo é específico: flags de instruções de bloco quando a repetição é interrompida por IM2, incluindo PF/HF para INxR/OTxR. O próprio autor ressalta que o teste é limitado e não exaustivo.
+- Essa evidência reduz a lacuna de proveniência para a subquestão de flags da repetição em hardware NMOS; não constitui validação direta no Master System, nem prova exaustiva das flags de uma iteração simples, de todos os valores/estados ou de clones CMOS.
+- Os testes atuais `block_io_repeat_flags_cover_half_carry_and_parity_edges` e `block_io_normal_flags_ports_and_wz_match_documented_edge_vectors` são regressões dirigidas. A comparação atomic↔microsequencer não é um oráculo independente, pois os caminhos podem compartilhar a mesma hipótese semântica.
+- **E7.7 permanece IN_PROGRESS.** A auditoria semântica global ainda exige reconciliação de todas as famílias e efeitos observáveis, além de execução independente dos testes ROM/hardware pertinentes.
+- **E8 permanece BLOCKED.** Não iniciar ZEXDOC/ZEXALL antes do fechamento formal de E7.
+- E4C, E5 e E6 não foram alteradas nem reabertas por estas PRs.
+
+Auditoria complementar: [E7.7 — evidência de hardware para flags de I/O em bloco](audits/z80-e7-block-io-hardware-evidence-2026-11-09.md).
