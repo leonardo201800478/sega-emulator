@@ -108,6 +108,7 @@ fn base_f9_copies_hl_to_sp_in_one_mcycle_and_preserves_architectural_state() {
 
     let mut expected_registers = before;
     expected_registers.sp = 0xA55A;
+    expected_registers.pc = 1;
     assert_eq!(cpu.registers, expected_registers);
     assert_eq!(cpu.alternate, alternate_before);
     assert_eq!((cpu.ix, cpu.iy, cpu.i), (0x1357, 0x2468, 0xA4));
