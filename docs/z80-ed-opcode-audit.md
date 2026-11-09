@@ -1,6 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Escopo:** auditoria estática do despachante Rust ativo em `native/sms_core/src/cpu.rs`, método `execute_ed()`, e dos testes presentes no mesmo arquivo.
+**Escopo:** auditoria do executor atômico ED em `native/z80_cpu/src/cpu.rs`, do microsequenciador retomável em `native/z80_cpu/src/sequencer.rs` e das suítes de teste associadas.
+**Baseline atualizada:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
