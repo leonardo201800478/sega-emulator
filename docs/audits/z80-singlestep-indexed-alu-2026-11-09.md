@@ -1,7 +1,7 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
 **Status:** integrada pela PR #692; validação externa PASS.
-**Sega Emulator main após merge:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
+**Sega Emulator main após PR #703:** `ca8c04c05ba3eaf4d81f2c35a599cc9547818dd1`.
 **Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).
 **Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).
 **Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.

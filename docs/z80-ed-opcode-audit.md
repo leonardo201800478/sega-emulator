@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
 **Baseline atualizada:** `main` = `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada; sem alteração no subsistema ED).
-**Baseline atualizada:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09; PR #692 integrada).
+**Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
