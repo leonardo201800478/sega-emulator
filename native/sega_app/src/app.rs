@@ -506,7 +506,10 @@ impl SegaApp {
                                     || *header_state.browse_requested
                                     || header_state.recent_rom_requested.is_some()
                                     || *header_state.exit_requested;
-                                if close_requested || action_selected || header_state.diagnostics_command.is_some() {
+                                if close_requested
+                                    || action_selected
+                                    || header_state.diagnostics_command.is_some()
+                                {
                                     record_ui_diagnostic("menu.popup.close_requested", "");
                                 }
                                 (
