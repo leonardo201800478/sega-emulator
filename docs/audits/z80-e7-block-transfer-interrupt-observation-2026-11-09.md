@@ -80,6 +80,15 @@ A comparação entre executor atômico e microsequenciador é diferencial intern
 - CMOS/clones: NOT_VERIFIED.
 - Hardware SMS: NOT_RUN.
 - Execução integral do ROM v5.0 dentro deste projeto: NOT_RUN.
-- CI da candidata: aguardando execução no HEAD exato; nenhum PASS é declarado antecipadamente.
+- CI da PR #712: #6045 / run `42649308679` PASS no HEAD exato `7390744d9d6dc61ef2db3786f75fc9073dabdc12`; CI pós-merge #6046 / run `42649608469` PASS no HEAD da main `5e4a703daefdebe62fb7f8d220752359df59f8e3`.
 
 **Classificação:** a subquestão de observação de X/Y em LDxR/CPxR interrompido recebe evidência externa NMOS parcial e fixture de regressão candidato. F-022 continua AUDIT_PARTIAL; E7 continua IN_PROGRESS; E8 continua BLOCKED.
+
+
+## 6. Integração e validação final
+
+PR #712 foi squash-merged. Merge SHA e HEAD da main: `5e4a703daefdebe62fb7f8d220752359df59f8e3`. O HEAD validado da PR foi `7390744d9d6dc61ef2db3786f75fc9073dabdc12`.
+
+CI #6045 / run `42649308679`: PASS no HEAD exato da PR. A execução focada reportou fmt, Clippy, testes Z80/SMS/SG-1000 e SingleStepTests DD/FD PASS; documentação PASS; agregador Rust quality/unit PASS. CI pós-merge #6046 / run `42649608469`: SUCCESS no HEAD exato da main, com Z80 focused e documentation patch hygiene PASS. Workspace regression e jobs não relacionados ficaram SKIPPED/NOT RUN.
+
+A subquestão de flags X/Y no ciclo de repetição interrompido para LDIR/LDDR/CPIR/CPDR recebe fixture integrada e evidência externa NMOS delimitada. F-022 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
