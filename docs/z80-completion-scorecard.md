@@ -343,3 +343,12 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - O fallback do executor atômico permanece distinto e não é usado como substituto da evidência temporal do microsequenciador.
 
 **Classificação atualizada:** F-033 CLOSED com limite de evidência; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED. E8 não pode começar antes do fechamento formal de E7.
+
+
+## 27. F-034 — fechamento da auditoria ED para o perfil SMS/SG-1000 NMOS — 2026-11-09
+
+**PR #708:** merged; squash SHA `d364b901e2547f44d53faf7ca107151e551d2c2e`. CI #6025 SUCCESS no HEAD exato `42284d251d21645ba73a28ef4923cf934c068f59`. NEG: todos os oito aliases × 256 valores de A com fórmula independente de resultado/flags no executor atômico; microsequenciador diferencial para todos os valores e ambos os estados de IFF2.
+
+**Cobertura complementar implementada, pendente do CI desta PR:** ED70 tem vetores para todos os 256 bytes de entrada no executor atômico e no microsequenciador; verificam leitura em BC, flags S/Z/H/PV/N, preservação de Carry, descarte do dado, WZ, snapshot/restore da requisição e WAIT aditivo. ED71 tem asserção explícita de escrita zero no endereço BC e comparação dos traces nos dois executores. RETN/RETI: semântica de retorno/restore IFF é testada; notificação RETI daisy-chain é NOT_APPLICABLE aos perfis SMS/SG-1000 sem dispositivo daisy-chain. Modos IM: os oito encodings/aliases (IM0: ED46/4E/66/6E; IM1: ED56/76; IM2: ED5E/7E) agora têm asserções independentes do modo esperado nos dois executores.
+
+**Limites:** nenhum teste em hardware físico foi executado; não se reivindica equivalência de silício, CMOS, R800, Z80N ou clones. MAME é comparador de implementação, não autoridade de silício. A classificação só pode ser CLOSED para o perfil de compatibilidade NMOS clássico adotado pelo projeto e para os sistemas-alvo declarados.
