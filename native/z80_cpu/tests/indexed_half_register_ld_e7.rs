@@ -198,8 +198,8 @@ fn read_register_image(
         1 => registers.c,
         2 => registers.d,
         3 => registers.e,
-        4 => (selected_index(prefix, ix, iy) >> 8) as u8,
-        5 => selected_index(prefix, ix, iy) as u8,
+        4 => selected_index(prefix, ix, iy).to_be_bytes()[0],
+        5 => selected_index(prefix, ix, iy).to_be_bytes()[1],
         7 => registers.a,
         6 => panic!("memory operand is excluded from F-036 register-only matrix"),
         other => panic!("invalid 8-bit register code {other}"),
@@ -252,13 +252,13 @@ fn expected_ld_state(prefixes: &[u8], opcode: u8) -> (Z80Registers, u16, u16) {
     let source = opcode & 0x07;
     let value = read_register_image(source, prefix, &registers, ix, iy);
     write_register_image(destination, value, prefix, &mut registers, &mut ix, &mut iy);
-    registers.pc = START_PC.wrapping_add(prefixes.len() as u16 + 1);
+    registers.pc = START_PC.wrapping_add(u16::try_from(prefixes.len()).unwrap() + 1);
     (registers, ix, iy)
 }
 
 fn expected_refresh(m1_count: usize) -> u8 {
-    (INITIAL_REFRESH & 0x80)
-        | (INITIAL_REFRESH.wrapping_add(m1_count as u8) & 0x7F)
+    let m1_count = u8::try_from(m1_count).unwrap();
+    (INITIAL_REFRESH & 0x80) | (INITIAL_REFRESH.wrapping_add(m1_count) & 0x7F)
 }
 
 fn assert_architecture(
