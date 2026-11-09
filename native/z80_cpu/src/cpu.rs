@@ -3979,7 +3979,6 @@ mod architectural_state_tests {
         assert_eq!(cpu.wz, 0x9ABC);
         assert_eq!(cpu.registers.pc, 4);
     }
-
 }
 
 #[cfg(test)]
