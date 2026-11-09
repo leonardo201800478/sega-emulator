@@ -574,6 +574,7 @@ impl Drop for SmsTemporalWorker {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_frame(
     machine: &mut SmsTemporalMachine,
     breakpoints: &BreakpointSet,
