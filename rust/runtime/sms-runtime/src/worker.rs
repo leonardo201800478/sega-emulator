@@ -11,8 +11,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
-use sega_debugger_core::BreakpointSet;
 use sega_audio_runtime::AudioOutputMetrics;
+use sega_debugger_core::BreakpointSet;
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
