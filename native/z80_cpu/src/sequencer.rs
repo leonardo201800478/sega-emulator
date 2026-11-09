@@ -9578,8 +9578,7 @@ mod ed_absolute_register_pair_differential_tests {
 #[cfg(test)]
 mod ed_return_nibble_rotate_differential_tests {
     use super::{
-        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
-        Z80MicroStep,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer, Z80MicroStep,
     };
     use crate::bus::CpuBus;
     use crate::{
