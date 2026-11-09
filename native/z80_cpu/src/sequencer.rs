@@ -6280,7 +6280,7 @@ impl Z80MicroSequencer {
 #[cfg(test)]
 mod tests {
     use super::{
-        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, Z80MicroSequencer,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
         Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
@@ -9578,7 +9578,8 @@ mod ed_absolute_register_pair_differential_tests {
 #[cfg(test)]
 mod ed_return_nibble_rotate_differential_tests {
     use super::{
-        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, Z80MicroSequencer, Z80MicroStep,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
+        Z80MicroStep,
     };
     use crate::bus::CpuBus;
     use crate::{
@@ -9784,7 +9785,7 @@ mod ed_return_nibble_rotate_differential_tests {
         );
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
         assert_eq!(sequenced.registers.pc, 0x1002);
-        assert_eq!(sequenced.r, 0x80);
+        assert_eq!(sequenced.refresh, 0x80);
         assert_eq!(sequenced.wz, address.wrapping_add(1));
         assert_eq!(sequenced.pending_request(), None);
     }
