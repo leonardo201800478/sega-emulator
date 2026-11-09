@@ -1,8 +1,8 @@
 # Pesquisa técnica: núcleo Z80 do MAME
 
-**Data da pesquisa:** 22/10/2026  
-**Projeto analisado:** [mamedev/mame](https://github.com/mamedev/mame)  
-**Revisão consultada:** [`1ee501dbef32ba9a4597d9f5c27bed4a0164e499`](https://github.com/mamedev/mame/commit/1ee501dbef32ba9a4597d9f5c27bed4a0164e499)  
+**Data da pesquisa:** 22/10/2026
+**Projeto analisado:** [mamedev/mame](https://github.com/mamedev/mame)
+**Revisão consultada:** [`1ee501dbef32ba9a4597d9f5c27bed4a0164e499`](https://github.com/mamedev/mame/commit/1ee501dbef32ba9a4597d9f5c27bed4a0164e499)
 **Objetivo:** extrair padrões de arquitetura, pontos de compatibilidade e tarefas úteis para a CPU Z80 deste projeto. Esta pesquisa não afirma equivalência entre os dois núcleos e não importa código do MAME.
 
 ## Resumo executivo
