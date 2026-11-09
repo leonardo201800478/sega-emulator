@@ -5,8 +5,8 @@
 //! indexed_memory_e4a.rs and indexed_semantic_baseline.rs.
 
 use sega_z80_cpu::{
-    bus::CpuBus, Z80, Z80AlternateRegisters, Z80BusOperation, Z80BusRequest,
-    Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep, Z80Registers,
+    Z80, Z80AlternateRegisters, Z80BusOperation, Z80BusRequest, Z80MicroSequencer,
+    Z80MicroSequencerState, Z80MicroStep, Z80Registers, bus::CpuBus,
 };
 
 const START_PC: u16 = 0x4000;
@@ -133,11 +133,7 @@ fn execute_atomic(prefixes: &[u8], opcode: u8) -> (Z80, FlatBus, u32) {
     (cpu, bus, tstates)
 }
 
-fn execute_microsequencer(
-    prefixes: &[u8],
-    opcode: u8,
-    waits: &[u32],
-) -> (Z80MicroSequencer, u32) {
+fn execute_microsequencer(prefixes: &[u8], opcode: u8, waits: &[u32]) -> (Z80MicroSequencer, u32) {
     assert!(!prefixes.is_empty());
     assert_eq!(waits.len(), prefixes.len() + 1);
 
@@ -186,13 +182,7 @@ fn selected_index(prefix: u8, ix: u16, iy: u16) -> u16 {
     }
 }
 
-fn read_register_image(
-    code: u8,
-    prefix: u8,
-    registers: &Z80Registers,
-    ix: u16,
-    iy: u16,
-) -> u8 {
+fn read_register_image(code: u8, prefix: u8, registers: &Z80Registers, ix: u16, iy: u16) -> u8 {
     match code {
         0 => registers.b,
         1 => registers.c,
@@ -291,7 +281,10 @@ fn assert_architecture(
     assert!(micro.iff2 && atomic.iff2);
     assert_eq!(micro.interrupt_mode, 2);
     assert_eq!(atomic.interrupt_mode, 2);
-    assert!(!micro.p && !atomic.p, "normal opcode fetch consumes the LD A,I/R P latch");
+    assert!(
+        !micro.p && !atomic.p,
+        "normal opcode fetch consumes the LD A,I/R P latch"
+    );
     assert_eq!(micro.halted, expected_halted);
     assert_eq!(atomic.halted, expected_halted);
 }
@@ -322,7 +315,10 @@ fn all_register_only_ld_forms_use_index_halves_in_resumable_execution() {
 
             assert_eq!(atomic_tstates, 8, "atomic {prefix:#04X} {opcode:#04X}");
             assert_eq!(micro_tstates, 8, "micro {prefix:#04X} {opcode:#04X}");
-            assert!(bus.writes.is_empty(), "register-only LD must not write memory");
+            assert!(
+                bus.writes.is_empty(),
+                "register-only LD must not write memory"
+            );
             assert_architecture(
                 &micro,
                 &atomic,
@@ -346,8 +342,7 @@ fn register_only_ld_preserves_waits_and_prefix_safe_point_snapshots() {
         let prefixes = [prefix];
         let (atomic, bus, atomic_tstates) = execute_atomic(&prefixes, opcode);
         let (micro, micro_tstates) = execute_microsequencer(&prefixes, opcode, &[1, 2]);
-        let (expected_registers, expected_ix, expected_iy) =
-            expected_ld_state(&prefixes, opcode);
+        let (expected_registers, expected_ix, expected_iy) = expected_ld_state(&prefixes, opcode);
 
         assert_eq!(atomic_tstates, 8);
         assert_eq!(micro_tstates, 11, "two M1 cycles plus three WAIT T-states");
@@ -370,8 +365,7 @@ fn repeated_dd_fd_prefixes_select_the_last_index_for_register_only_ld() {
         let (atomic, bus, atomic_tstates) = execute_atomic(prefixes, opcode);
         let waits = vec![0; prefixes.len() + 1];
         let (micro, micro_tstates) = execute_microsequencer(prefixes, opcode, &waits);
-        let (expected_registers, expected_ix, expected_iy) =
-            expected_ld_state(prefixes, opcode);
+        let (expected_registers, expected_ix, expected_iy) = expected_ld_state(prefixes, opcode);
 
         assert_eq!(atomic_tstates, 12);
         assert_eq!(micro_tstates, 12);
