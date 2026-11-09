@@ -1,11 +1,11 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
-**Data:** 2026-11-04  
-**Baseline auditada:** `main` — `43323df653497a98c7afae52a6f3ea198f46cdb0` (2026-11-07).
-**E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
-**Schema do microsequenciador:** 28 (E5 integrada)  
-**Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
-**Natureza:** inventário do código ativo e das evidências disponíveis; E5 e E6 estão integradas com QUICK_PASS/SHORT_PASS nos escopos registrados, sem declarar conclusão funcional integral nem temporal do Z80.  
+**Data:** 2026-11-09
+**Baseline auditada:** `main` — `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
+**E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
+**Schema do microsequenciador:** 28 (E5 integrada)
+**Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
+**Natureza:** inventário do código ativo e das evidências disponíveis; E5 e E6 estão integradas com QUICK_PASS/SHORT_PASS nos escopos registrados, sem declarar conclusão funcional integral nem temporal do Z80.
 **Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para critérios de cobertura, níveis de evidência e critérios de conclusão.
 
 ## 1. Legenda e regra de leitura
@@ -211,11 +211,11 @@ Links:
 
 ## Atualização E7 — baseline main 644b2c22879d63447f63b730ed9415db11e81fab (2026-11-04)
 
-A matriz DD/FD continua sendo inventário semântico por família e não uma declaração de conclusão global. E5 e E6 estão integradas; E7.1 e E7.2A–E7.2D estão integradas nas PRs #490, #495, #496, #498 e #500. E7.2E permanece IN_PROGRESS na PR #506.
+A matriz DD/FD continua sendo inventário semântico por família e não uma declaração de conclusão global. E5 e E6 estão integradas; E7.1 e E7.2A–E7.2D estão integradas nas PRs #490, #495, #496, #498 e #500. E7.2E foi integrada pela PR #506 (merge SHA `54f881872ec9f5a9923ebdb17643b37a19954ec5`); o estado IN_PROGRESS é histórico e está supersedido.
 
-A PR #506 acrescenta matriz de estados inválidos e cenários WAIT=0/1/3 em M1, memória, I/O, ciclos internos e IM0/IM1/IM2. O HEAD `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` tinha CI #41861829094 QUEUED na última consulta. Portanto, esses novos testes ainda não são PASS comprovado.
+A PR #506 acrescentou matriz de estados inválidos e cenários WAIT=0/1/3 em M1, memória, I/O, ciclos internos e IM0/IM1/IM2. Ela foi integrada; no merge SHA, os checks aplicáveis Rust quality/unit regression, Windows x64 D3D12 compile e Python lint/regression concluíram SUCCESS. O registro QUEUED acima é uma fotografia histórica, não o estado atual.
 
-As famílias BASE/CB/ED/DD/FD/DDCB/FDCB devem continuar classificadas individualmente por implementação, validação funcional, diferencial e temporal. Não extrapolar testes internos para oráculo independente. E7.3 HALT T4, E7.4 BUSREQ, E7.5 RETI/daisy-chain, E7.6 IRQ real VDP e E7.7 auditoria integral permanecem pendentes. E8 bloqueada até fechar E7; E9 continua dependente de integração temporal sistêmica.
+As famílias BASE/CB/ED/DD/FD/DDCB/FDCB devem continuar classificadas individualmente por implementação, validação funcional, diferencial e temporal. Não extrapolar testes internos para oráculo independente. E7.3 HALT T4 e E7.6 IRQ real VDP estão integradas; E7.4 BUSREQ e notificação externa RETI/daisy-chain permanecem diferidas até existir consumidor concreto; E7.7 auditoria integral segue IN_PROGRESS. E8 bloqueada até fechar E7; E9 continua dependente de integração temporal sistêmica.
 
 
 ---
@@ -347,3 +347,18 @@ PR #672 alterou apenas GUI/D3D12. PR #673 adicionou teste/documentação de tran
 - O scorecard Z80 e a auditoria ED foram reconciliados com a mesma baseline.
 - E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED até o fechamento formal de E7.
 - As classificações `TEMPORAL_UNVERIFIED` e `FUNCTIONAL_UNVERIFIED` da matriz continuam com seu significado original; nenhuma evidência de ED altera a matriz DD/FD.
+
+
+---
+
+## Reconciliação atual — main 2026-11-09
+
+**Baseline:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+- E7.2E está integrada pela PR #506; a antiga anotação QUEUED foi supersedida.
+- E7.3/HALT T4 e E7.6/IRQ VDP SMS estão integradas.
+- E7.4/BUSREQ permanece diferida até a integração Mega Drive apresentar consumidor concreto; E7.5/RETI mantém a semântica interna e difere apenas a notificação externa de daisy-chain até existir periférico suportado.
+- A PR #675 adicionou somente teste de flags de repetição ED para I/O em bloco; não alterou famílias DD/FD, decoder de prefixos ou runtime.
+- A evidência de hardware para PF/HF/XY no ciclo de repetição de I/O em bloco é parcial e restrita ao perfil NMOS/testes publicados. A execução do ROM no core e no SMS físico não foi realizada.
+- `OUT (C),0` está resolvido para o perfil NMOS das placas SMS documentadas; não extrapolar para todos os clones/CMOS.
+- E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED; E9 não possui TEMPORAL_PASS global.
