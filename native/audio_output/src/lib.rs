@@ -3,6 +3,7 @@
 mod pcm_convert;
 mod pcm_fifo;
 
+#[cfg(windows)]
 fn record_audio_underrun(
     underruns: &AtomicU64,
     backend: &'static str,
