@@ -32,10 +32,7 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
         let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
         assert_eq!(
             restored.resume_instruction(1).unwrap(),
-            Z80MicroStep::InstructionRetired {
-                opcode,
-                tstates: 9,
-            }
+            Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
         );
 
         assert_eq!(restored.now(), MachineTime::from_ticks(27));
