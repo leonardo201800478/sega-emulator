@@ -77,7 +77,7 @@ O novo evento TRACE `XAudio2 buffer completions observed` registra:
 | `in_flight_frames` | frames estéreo estimados | `BuffersQueued × frames_per_buffer` |
 | `fifo_queued_frames` | frames estéreo | Ocupação FIFO observada no mesmo ponto |
 
-**Limite de precisão:** `completion_observation_interval_ns` não é timestamp do callback nem intervalo exato entre conclusões físicas. O worker observa o contador durante seu loop de polling (atualmente 2 ms). O callback permanece restrito a incrementar um contador atômico.
+**Limite de precisão:** `completion_observation_interval_ns` não é timestamp do callback nem intervalo exato entre conclusões físicas. O worker observa o contador durante seu loop de polling (atualmente 2 ms). O primeiro intervalo inclui o tempo desde a inicialização do worker até a primeira conclusão observada; os seguintes medem intervalos entre observações. O callback permanece restrito a incrementar um contador atômico.
 
 A estimativa `in_flight_frames` assume buffers de tamanho fixo `frames_per_buffer`, coerente com o caminho atual de submissão XAudio2. Não deve ser rotulada como frames efetivamente reproduzidos pelo DAC.
 
