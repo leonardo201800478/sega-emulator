@@ -11,16 +11,23 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
         (0x0A, 0x0000, false),
         (0x1A, 0x0000, false),
     ] {
+        let mut continuous = SmsTemporalMachine::new(vec![opcode], 3).unwrap();
+        continuous.set_trace_enabled(true);
+        continuous.cpu_mut().registers.a = 0x5A;
+        continuous.cpu_mut().registers.f = 0xA5;
         let mut machine = SmsTemporalMachine::new(vec![opcode], 3).unwrap();
         machine.set_trace_enabled(true);
         machine.cpu_mut().registers.a = 0x5A;
         machine.cpu_mut().registers.f = 0xA5;
         if matches!(opcode, 0x02 | 0x0A) {
+            continuous.cpu_mut().registers.set_bc(address);
             machine.cpu_mut().registers.set_bc(address);
         } else {
+            continuous.cpu_mut().registers.set_de(address);
             machine.cpu_mut().registers.set_de(address);
         }
 
+        let continuous_step = continuous.step_instruction(1).unwrap();
         assert!(matches!(
             machine.begin_instruction().unwrap(),
             Z80MicroStep::BusRequest(_)
@@ -30,10 +37,14 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
         // Snapshot while the opcode M1's first scheduler continuation is pending.
         let snapshot = machine.export_state();
         let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        // Trace capture is host-side diagnostic state and is re-enabled after restore.
+        restored.set_trace_enabled(true);
         assert_eq!(
             restored.resume_instruction(1).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
+            continuous_step
         );
+        assert_eq!(continuous_step, Z80MicroStep::InstructionRetired { opcode, tstates: 9 });
+        assert_eq!(restored.export_state(), continuous.export_state());
 
         assert_eq!(restored.now(), MachineTime::from_ticks(27));
         assert_eq!(restored.cpu().registers.pc, 1);
