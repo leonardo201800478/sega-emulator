@@ -3857,7 +3857,20 @@ mod tests {
 #[cfg(test)]
 mod architectural_state_tests {
     use super::{Z80, Z80AlternateRegisters, Z80Registers};
+    use crate::bus::CpuBus;
     use crate::{Z80ArchitecturalState, Z80ArchitecturalStateError};
+
+    struct AtomicTestBus([u8; 0x10000]);
+
+    impl CpuBus for AtomicTestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.0[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.0[usize::from(address)] = value;
+        }
+    }
 
     #[test]
     fn atomic_executor_architectural_state_round_trips_all_cpu_fields() {
@@ -3951,7 +3964,7 @@ mod architectural_state_tests {
 
     #[test]
     fn indexed_ld_sp_ix_iy_transfer_index_pair_without_changing_flags_or_hl() {
-        let mut bus = TestBus([0; 0x10000]);
+        let mut bus = AtomicTestBus([0; 0x10000]);
         bus.0[..4].copy_from_slice(&[
             0xDD, 0xF9, // LD SP,IX
             0xFD, 0xF9, // LD SP,IY
