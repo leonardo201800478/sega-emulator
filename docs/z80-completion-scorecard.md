@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `f726755c87fcfb61bdf9ac5e2af031afe7712e21` (2026-11-09, após PR #727 de reconciliação documental F-004). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `ce51578511a0090afbba3ded6312c9a25c5d78c7` (2026-11-09, após squash da PR #728/F-015). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -550,16 +550,18 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 IN_PROGRESS; E8 BLOCKED.
 
 
-## 40. F-015 — RLCA/RRCA/RLA/RRA — candidata validada, merge pendente
+## 40. F-015 — RLCA/RRCA/RLA/RRA — CLOSED no perfil NMOS delimitado
 
 **Baseline main pré-PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
-**HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
-**CI:** #6129 / run `42678520765` PASS no HEAD exato.
+**PR:** #728, integrada por squash em `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**HEAD validado da PR:** `c198cff1629270378a3bdd22a1126ca3d98a44b8`.
+**CI pré-merge:** #6131 / run `42678804879` PASS no HEAD exato.
 **Escopo:** BASE `07/0F/17/1F`; 1 M1 / 4T por opcode.
 **Implementação:** `native/z80_cpu/tests/base_accumulator_rotates_f015.rs`; integração SMS em `native/sms_core/tests/z80_f015_temporal.rs`; relatório em `docs/audits/z80-f015-accumulator-rotates-2026-11-09.md`.
 **Matriz:** 262.144 vetores (4 × 256 A × 256 F), mais 1.024 casos snapshot/restore e quatro PC-wrap. SMS: 192 casos com WAIT M1, snapshot/restore e comparação de trace.
 **Semântica documentada:** S/Z/PV preservadas; H/N resetadas; C do bit deslocado; RLA/RRA consomem carry anterior; 4T. UM0080 pp. 205/207/209/211 não documenta X/Y.
 **Comparação:** MAME/ares calculam X/Y a partir do novo A. Q não deve ser comparado em representação bruta entre projetos: este runtime guarda o último F escrito em `q`; após rotate, `q=F` e previous-Q preserva o latch anterior.
-**Gates:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED.
+**Gates pré-merge:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. Workspace integral e jobs não relacionados NOT RUN/SKIPPED.
+**CI pós-merge:** NOT VERIFIED; não foram retornados checks ou workflow push associados ao SHA de merge.
 **Runtime:** nenhuma alteração.
-**Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Gates focados aprovados no HEAD indicado. Sem validação física; X/Y permanece comparativo. E7 IN_PROGRESS; E8 BLOCKED.
+**Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. X/Y permanece evidência comparativa MAME/ares, sem validação física SMS nem compatibilidade universal CMOS/clones. E7 IN_PROGRESS; E8 BLOCKED.
