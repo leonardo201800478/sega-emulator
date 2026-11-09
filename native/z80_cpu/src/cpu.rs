@@ -2237,7 +2237,7 @@ mod tests {
 
     #[test]
     fn accumulator_rotate_and_flag_control_opcodes_are_supported() {
-        let mut bus = TestBus([0; 0x10000]);
+        let mut bus = AtomicTestBus([0; 0x10000]);
         bus.0[..6].copy_from_slice(&[0x3E, 0x81, 0x07, 0x2F, 0x37, 0x3F]);
         let mut cpu = Z80::default();
         assert_eq!(cpu.step(&mut bus), Ok(7));
@@ -3984,6 +3984,19 @@ mod architectural_state_tests {
 #[cfg(test)]
 mod architectural_state_diagnostics_tests {
     use super::Z80;
+    use crate::bus::CpuBus;
+
+    struct AtomicTestBus([u8; 0x10000]);
+
+    impl CpuBus for AtomicTestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.0[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.0[usize::from(address)] = value;
+        }
+    }
 
     #[test]
     fn architectural_import_preserves_host_counters_and_trace_buffers() {
