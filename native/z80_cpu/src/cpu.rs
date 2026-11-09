@@ -3969,13 +3969,19 @@ mod architectural_state_tests {
             0xDD, 0xF9, // LD SP,IX
             0xFD, 0xF9, // LD SP,IY
         ]);
-        let mut cpu = Z80::default();
-        cpu.ix = 0x1234;
-        cpu.iy = 0xABCD;
-        cpu.registers.sp = 0xC000;
-        cpu.registers.set_hl(0x5678);
-        cpu.registers.f = 0xD7;
-        cpu.wz = 0x9ABC;
+        let mut cpu = Z80 {
+            ix: 0x1234,
+            iy: 0xABCD,
+            registers: Z80Registers {
+                sp: 0xC000,
+                f: 0xD7,
+                h: 0x56,
+                l: 0x78,
+                ..Z80Registers::default()
+            },
+            wz: 0x9ABC,
+            ..Z80::default()
+        };
 
         assert_eq!(cpu.step(&mut bus), Ok(10));
         assert_eq!(cpu.registers.sp, 0x1234);
