@@ -274,7 +274,7 @@ fn assert_shared_state(micro: &Z80MicroSequencer, atomic: &Z80, expected: Expect
     assert_eq!(micro.refresh, expected_refresh(prefixes.len() + 1));
     assert_eq!(atomic.r, expected_refresh(prefixes.len() + 1));
     assert_eq!(micro.q_previous, 0);
-    assert_eq!(atomic.q_previous, 0);
+    assert_eq!(atomic.export_architectural_state().q_previous, 0);
     assert_eq!(
         micro.q, expected_f,
         "Q follows the flags written by the ALU"
