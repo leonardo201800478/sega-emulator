@@ -10639,7 +10639,11 @@ mod ed_block_io_differential_tests {
                     sequenced.import_architectural_state(state).unwrap();
                     let mut sequenced_bus = atomic_bus.clone();
 
-                    assert_eq!(atomic.step(&mut atomic_bus), Ok(21), "ED {opcode:02X}, B={b:02X}, PC={pc:04X}");
+                    assert_eq!(
+                        atomic.step(&mut atomic_bus),
+                        Ok(21),
+                        "ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
                     assert_eq!(
                         run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
                         21,
@@ -10684,8 +10688,16 @@ mod ed_block_io_differential_tests {
 
                     assert_eq!(atomic.registers.b, b_after);
                     assert_eq!(sequenced.registers.b, b_after);
-                    assert_eq!(atomic.registers.f, expected_flags, "atomic ED {opcode:02X}, B={b:02X}, PC={pc:04X}");
-                    assert_eq!(sequenced.registers.f, expected_flags, "sequenced ED {opcode:02X}, B={b:02X}, PC={pc:04X}");
+                    assert_eq!(
+                        atomic.registers.f,
+                        expected_flags,
+                        "atomic ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
+                    assert_eq!(
+                        sequenced.registers.f,
+                        expected_flags,
+                        "sequenced ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
                     assert_eq!(atomic.registers.pc, pc);
                     assert_eq!(sequenced.registers.pc, pc);
                     assert_eq!(atomic.wz, pc.wrapping_add(1));
