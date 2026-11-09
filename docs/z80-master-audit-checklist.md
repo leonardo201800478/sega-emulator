@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `6ce8399aa96937547e72c24e75f1521dc5a9d550` (2026-11-09, após squash da PR #726/F-004). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `f726755c87fcfb61bdf9ac5e2af031afe7712e21` (2026-11-09, após PR #727 de reconciliação documental F-004). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -90,7 +90,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-012 | ADC/SBC HL,rr | AUDIT_PARTIAL | Todos os pares, carry de entrada e fronteiras. |
 | F-013 | INC/DEC de pares de 16 bits | AUDIT_PARTIAL | Wraparound e flags preservadas. |
 | F-014 | DAA, CPL, NEG, CCF e SCF | AUDIT_PARTIAL | Fórmulas e flags X/Y/Q; NEG inclui aliases ED. |
-| F-015 | RLCA/RRCA/RLA/RRA | NOT_AUDITED | Conferir flags e Q. |
+| F-015 | RLCA/RRCA/RLA/RRA | IMPLEMENTED_PENDING_VALIDATION | PR de testes em preparação: 262.144 vetores A×F, 1.024 snapshot/restore, quatro PC-wrap e 192 casos SMS/MachineScheduler. Verifica S/Z/PV, H/N, C, X/Y comparativo, Q=F, previous-Q, WZ, R e 4T+WAIT. Nenhuma alteração de runtime. Aguardar gates no HEAD exato. |
 | F-016 | RLC/RRC/RL/RR/SLA/SRA/SLL/SRL | AUDIT_PARTIAL | Matriz CB para todos os destinos aplicáveis. |
 | F-017 | BIT/RES/SET para registradores e (HL) | AUDIT_PARTIAL | Flags BIT, ausência de write-back e endereços. |
 | F-018 | JP/JR/DJNZ, condicional e incondicional | AUDIT_PARTIAL | PC, offsets assinados, wrap e tempos tomados/não tomados. |
@@ -461,3 +461,35 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 - **F-004:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones.
 - **Próxima auditoria:** reavaliar dependências globais E7, especialmente F-023 (evidência independente X/Y/WZ), F-026 (HALT/NOP/refresh/interrupções) e F-027–F-032 (DD/FD/prefixos), antes de fixar a próxima implementação. F-005 continua na sequência de famílias.
 - **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 36. Triagem global de famílias E7 após F-004 — 2026-11-09
+
+| Família | Evidência atual | Lacuna residual / prioridade |
+|---|---|---|
+| F-005 — LD SP,HL/IX/IY e SP absoluto | Cobertura parcial em `indexed_16bit_e3a1.rs`; transferências ED SP absolutas relacionadas estão na F-034. | Confirmar tempos, estado SP e fronteiras de prefixo; não duplicar F-034. Continua na sequência de pares de 16 bits. |
+| F-015 — RLCA/RRCA/RLA/RRA | NOT_AUDITED; ALU tinha somente dois vetores direcionados e integração temporal curta. | **Selecionada como próxima implementação** por ser uma lacuna isolada e sem matriz semântica completa. PR de testes em andamento. |
+| F-022 — LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | PR #712 integrada; fixture IM2 cobre LDIR/LDDR/CPIR/CPDR, flags via PUSH AF, RETI, retomada e snapshot/restore. | Ampliar matriz independente, flags dos caminhos simples, WZ/MEMPTR e fronteiras restantes. |
+| F-023 — RRD/RLD | PR #714 integrada; 262.144 vetores atômicos e 16 microsequenciados com WAIT/snapshot. | Evidência independente X/Y e WZ=`HL+1` permanece comparativa MAME/ares; sem prova física. É uma lacuna transversal antes do fechamento global E7. |
+| F-026 — HALT/NOP/estado após HALT | Há auditorias separadas de HALT M1, refresh, interrupção e snapshots. | Reconciliar NOP, M1 repetido, R, saída por INT/NMI e restore sob Scheduler; não considerar os testes isolados como fechamento integrado. |
+| F-027 — DD/FD substituição HL→IX/IY | Matriz parcial e prefix resolver E6. | Auditoria por opcode e exceções de substituição/ignorados. |
+| F-028 — IXH/IXL/IYH/IYL | 34.000 SingleStepTests DD/FD PASS; PR #702 integrada. | Restam exceções, prefixos, HALT e estado arquitetural fora do corpus validado. |
+| F-029 — (IX+d)/(IY+d) | Matriz parcial. | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
+| F-030 — DDCB/FDCB | Matriz parcial. | Fechar subopcode × prefixo × destino, incluindo BIT e destinos de registrador. |
+| F-031 — prefixos repetidos/alternados | Matriz parcial. | Consumo, last-prefix-wins, PC/R, M1 e semântica terminal. |
+| F-032 — prefixos ignorados | Matriz parcial. | Sem refetch, sem substituição indevida e custo temporal do prefixo. |
+
+**Decisão de prioridade:** F-015 foi escolhida antes de F-005 porque permanece NOT_AUDITED e é uma unidade funcional isolada; F-005 já tem evidência parcial e depende de fechar a cadeia de pares. F-023 permanece um gate de evidência transversal, não uma licença para alegar equivalência física. Após F-015, reavaliar F-005, F-022 e F-026 conforme dependências reais; manter F-027–F-032 em auditoria contínua.
+
+### PRs abertas preservadas — sem integração automática
+
+| PR | Estado | Escopo |
+|---|---|---|
+| #645 | OPEN | Scheduler/SRAM |
+| #644 | OPEN | Diretórios configuráveis da interface |
+| #643 | OPEN | Mapper SRAM |
+| #639 | OPEN | Otimização Scheduler |
+| #619 | OPEN | Documentação SMS |
+| #533 | OPEN | Contrato de conclusão |
+
+Todas permanecem abertas e fora do escopo da F-015; qualquer integração exige auditoria independente de dependências, conflitos, CI e supersessão.
