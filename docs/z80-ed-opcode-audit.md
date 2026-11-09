@@ -368,7 +368,7 @@ F-024 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM00
 
 ## 10. F-025 — RETN/RETI e aliases, fechamento no perfil NMOS — PR #718
 
-PR #718 MERGED em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS no HEAD exato da PR. CI pós-merge #6072 / run `42658844499` pendente de confirmação.
+PR #718 MERGED em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS no HEAD exato da PR. CI pós-merge #6072 / run `42658844499` PASS no HEAD exato da main `f0cfc7b9df1834ae8ad418c6241702e9003f072e`.
 
 A matriz cobre ED45, ED4D, ED55, ED5D, ED65, ED6D, ED75 e ED7D. Para cada encoding: IFF2 false/true; IFF1 inicial inversa; SP normal, 0xFFFF e 0x0000; PC restaurado; SP incrementado com wrap; IFF1 recebe IFF2; IFF2 preservada; R incrementado pelos dois M1. O executor atômico e o microsequenciador são comparados; o microsequenciador verifica a ordem de barramento (fetch ED, fetch terminal, stack low, stack high), WAIT em cada pedido nos dois casos de wrap e snapshot encode/decode + restore após cada transação. Tempos: 14T nominal e 18T com quatro WAITs.
 
