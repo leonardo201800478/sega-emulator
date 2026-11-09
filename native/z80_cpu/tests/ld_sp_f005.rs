@@ -193,19 +193,27 @@ fn repeated_and_alternating_dd_fd_prefixes_use_the_last_index_prefix() {
 fn run_waited_indexed_f9(with_snapshots: bool) -> (Z80MicroStep, Z80MicroSequencerState) {
     let mut cpu = Z80MicroSequencer::default();
     cpu.ix = 0xCAFE;
+    cpu.iy = 0xBEEF;
     cpu.registers.sp = 0x1234;
     cpu.registers.f = 0xD7;
     cpu.wz = 0xBEEF;
 
-    let fetch = start(&mut cpu);
+    let first_fetch = start(&mut cpu);
     cpu.insert_wait_tstates(1)
-        .expect("WAIT extends the prefix M1");
+        .expect("WAIT extends the first prefix M1");
     if with_snapshots {
         cpu = snapshot_restore(&cpu);
     }
 
-    let opcode_fetch = feed_prefix(&mut cpu, fetch, 0xDD);
+    let second_fetch = feed_prefix(&mut cpu, first_fetch, 0xDD);
     cpu.insert_wait_tstates(2)
+        .expect("WAIT extends the second prefix M1");
+    if with_snapshots {
+        cpu = snapshot_restore(&cpu);
+    }
+
+    let opcode_fetch = feed_prefix(&mut cpu, second_fetch, 0xFD);
+    cpu.insert_wait_tstates(3)
         .expect("WAIT extends the terminal-opcode M1");
     if with_snapshots {
         cpu = snapshot_restore(&cpu);
