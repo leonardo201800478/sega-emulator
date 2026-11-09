@@ -176,3 +176,14 @@ Auditoria complementar: [E7.7 — evidência de hardware para flags de I/O em bl
 - O teste respeita a semântica level-sensitive de `set_int_line`: o dispositivo desasserta INT após o serviço. A API one-shot `request_int` do executor atômico é limpa após o acknowledge para comparação.
 - Isso conclui o fixture CPU-only de observação e retomada. O ROM v5.0 completo ainda não foi executado no core, e não houve validação física no Master System.
 - E7.7 permanece IN_PROGRESS por outras famílias/efeitos e validações pendentes. E8 permanece BLOCKED.
+
+
+## 16. Checklist mestre de auditoria integral — 2026-11-09
+
+**Baseline de código reconciliada:** `main` = `b41fa66e01e329d45f7704a229479c8ac3c2c9ea`.
+
+Foi criado o [Checklist mestre de auditoria e fechamento do Z80](z80-master-audit-checklist.md). Ele passa a ser o ledger operacional da auditoria: inventário de instruções e prefixos, estado arquitetural/flags, barramento/temporização, interrupções, snapshots/determinismo, referências, testes e estrutura do código. Cada fechamento deve ser registrado com IDs, evidências, testes classificados e SHA integrado na main.
+
+As baselines antigas mantidas nas seções anteriores são fotografias históricas e não devem ser reescritas como se tivessem sido auditadas no SHA atual. A partir desta seção, novas atualizações devem referenciar o SHA efetivamente consultado.
+
+**Estado:** auditoria global IN_PROGRESS; PR #680 permanece aberta e bloqueada por CI FAIL; E8/ZEXDOC/ZEXALL permanece BLOCKED.
