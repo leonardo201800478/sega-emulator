@@ -1,7 +1,7 @@
 # E7.7 — Evidência independente de hardware para flags de I/O em bloco
 
-**Data:** 2026-11-09  
-**Baseline do projeto:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`  
+**Data:** 2026-11-09
+**Baseline do projeto:** `main` = `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`
 **Escopo:** INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR, com foco no efeito de flags quando uma instrução repetitiva é interrompida antes de B chegar a zero.
 
 ## 1. Frente documental — fontes primárias e secundárias
