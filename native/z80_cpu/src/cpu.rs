@@ -3400,7 +3400,10 @@ mod tests {
                             Ok(18),
                             "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}"
                         );
-                        assert_eq!(cpu.registers.a, expected_a);
+                        assert_eq!(
+                            cpu.registers.a, expected_a,
+                            "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}, C={carry:02X}"
+                        );
                         assert_eq!(bus.0[usize::from(address)], expected_memory);
                         assert_eq!(cpu.registers.f, expected_flags);
                         assert_eq!(cpu.registers.hl(), address);
