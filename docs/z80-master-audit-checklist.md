@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | IMPLEMENTED_PENDING_VALIDATION | PR #680 inicia INC/DEC e LD imediato; ainda não integrada. Cobrir também LD r,r' e ALU. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | Executor atômico contém handlers para half-register LD/INC/DEC/ALU; microsequenciador está em expansão. PR #680 cobre 24,25,26,2C,2D,2E; faltam LD r,r' e ALU no caminho retomável. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
@@ -111,6 +111,8 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-033 | Encodings ED reservados e fallback ED-NOP | GAP_CONFIRMED | Auditoria estática reporta 78 bytes explícitos e 178 em fallback. Confirmar cada byte contra perfil e referência; não presumir que smoke test prova semântica. |
 | F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | NOT_AUDITED | Classificar explicitamente documentado, alias, não documentado, ignorado ou reservado. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
+| F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; `sequencer.rs` classifica como UsesIndex, mas o dispatch ainda rejeita os opcodes fora das famílias 16-bit, displacement e seis half-register INC/DEC/LD imediato. Próxima fatia após #680. |
+| F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; o caminho retomável ainda não despacha os 16 opcodes ALU com fonte IXH/IXL/IYH/IYL. Próxima fatia após LD r,r'. |
 
 ## 4. Checklist de estado arquitetural e flags
 
@@ -191,22 +193,23 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 
 ### 9.1 Baseline
 
-- `main` consultada: `b41fa66e01e329d45f7704a229479c8ac3c2c9ea`.
+- `main` atual após a PR documental #681: `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`.
+- Baseline de código usada na abertura do checklist: `b41fa66e01e329d45f7704a229479c8ac3c2c9ea`; a PR #681 foi documental e não alterou runtime.
 - Núcleo canônico: `native/z80_cpu`.
 - E4C, E5 e E6 aparecem como integradas nos documentos consultados.
 - E7.7 continua em andamento; E8 continua bloqueada.
-- Scorecard e matriz DD/FD consultados nesta abertura ainda citavam a baseline `043ecb61...`; a atualização documental precisa registrar o SHA real e reconciliar as diferenças sem reescrever evidência histórica.
+- Scorecard e matriz DD/FD preservam fotografias históricas anteriores; esta auditoria passa a usar `db6b4ec...` como baseline documental atual sem reescrever os resultados antigos.
 
 ### 9.2 PR #680 — bloqueio atual
 
 - PR: https://github.com/leonardo201800478/sega-emulator/pull/680
 - Branch: `feat/z80-e7-index-half-incdec-load-sequencer-20261109`.
-- HEAD consultado: `a01ff76fb55f409f071ce975f885b3fb3d6c7fe3`.
-- CI #5921 / run `42572152572`: `FAIL`.
-- Jobs `Z80 focused validation` e `Rust quality and unit regression`: `FAIL`.
-- Outros jobs aparecem `SKIPPED`; não contar como PASS.
-- A descrição da PR cobre DD/FD 24,25,26,2C,2D,2E (INC/DEC e LD imediato IXH/IXL/IYH/IYL), incluindo testes diferenciais internos, WAIT e snapshot.
-- O histórico de trabalho reporta falha em restore de snapshot durante WAIT no teste `dd_fd_index_half_inc_dec_and_immediate_load_match_atomic_with_waits`. Os logs detalhados do job não estavam recuperáveis nesta consulta; a causa exata ainda precisa ser reproduzida/isolada. Não integrar a PR enquanto isso não for resolvido e todos os gates obrigatórios passarem.
+- HEAD candidato atual: `ed1130410742fb4540502a8d42ab3e969fda8216`.
+- A falha inicial #5921 (`42572152572`) foi reproduzida: 241 testes passaram e `dd_fd_index_half_inc_dec_and_immediate_load_match_atomic_with_waits` falhou com `InvalidState`.
+- Causa isolada: `ImmediateReadRegister` permitia DD/FD 26/2E no validador de fase, mas `indices_valid` aceitava somente prefixos ignorados.
+- Correção no commit `48aad1f67b6eb4f03a87f3581249c8a51f6602bb`: aceitar precisamente 26/2E `UsesIndex` na validação de índices, sem relaxar outras invariantes. CI #5924 (`42575151294`) passou no HEAD desse commit: fmt, Clippy Z80/SMS/SG-1000 e testes focados; `sega-z80-cpu` reportou 242/242 testes.
+- Commit adicional `ed113041...` ajusta o workflow para executar regressão integral em mudanças Z80. CI #5925 (`42575339923`) está em andamento: fmt, Clippy workspace e `cargo test --workspace --locked` já passaram; jobs Windows D3D12 ainda estão em execução nesta fotografia.
+- A PR #680 cobre DD/FD 24,25,26,2C,2D,2E (INC/DEC e LD imediato IXH/IXL/IYH/IYL). Não integrar até o workflow #5925 concluir com sucesso no HEAD exato.
 
 ### 9.3 Prioridade imediata
 
@@ -216,11 +219,25 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 4. Prosseguir em ordem de prioridade até todas as famílias e efeitos aplicáveis estarem fechados.
 5. Somente então desbloquear E8.
 
+### 9.4 Varredura estática DD/FD — lacunas seguintes confirmadas
+
+A inspeção cruzada de `native/z80_cpu/src/prefix.rs`, `cpu.rs` e `sequencer.rs` identificou duas lacunas no caminho retomável:
+
+1. **LD r,r' register-only com metades IX/IY:** o classificador reconhece os opcodes DD/FD 40–7F que usam H/L como `UsesIndex`. O executor atômico possui o caminho correspondente. O microsequenciador, porém, só aceita famílias 16-bit, displacement e os seis opcodes cobertos por #680; os demais `UsesIndex` são rejeitados explicitamente.
+2. **ALU com IXH/IXL/IYH/IYL:** os 16 opcodes 80–BF cuja fonte é código 4 ou 5 são classificados como `UsesIndex` e executados pelo caminho atômico, mas ainda não possuem dispatch específico no microsequenciador.
+
+**Exceções obrigatórias:** DD/FD 66, 6E, 74 e 75 com (IX+d)/(IY+d) usam H/L reais, não metades IXH/IXL/IYH/IYL. HALT 76 também não deve ser tratado como LD indexado. O caminho de memória indexada permanece separado.
+
+**Modelo temporal esperado:** são operações register-only. Após os dois M1 (prefixo + opcode), podem atualizar estado e aposentar a instrução sem ciclos de barramento adicionais; o total nominal é 8 T-states com um prefixo, antes de WAIT. Não inventar ciclos internos para elas.
+
+**Próxima implementação após #680:** adicionar dispatch direto de LD r,r' e ALU half-register, com cobertura por DD/FD, destino/fonte, flags, Q, IX/IY não selecionado, H/L e PC/R, WAIT nos dois M1 e snapshot/restore nos safe points. Comparar com o executor atômico como diferencial interno e complementar com vetores externos independentes.
+
 ## 10. Histórico de preenchimento
 
 | Data | SHA da main | Etapa | Resultado | Evidência / PR |
 |---|---|---|---|---|
 | 2026-11-09 | `b41fa66e01e329d45f7704a229479c8ac3c2c9ea` | Abertura do checklist e auditoria documental inicial | IN_PROGRESS | Scorecard, matriz DD/FD, auditoria ED e PR #680 examinados; detalhes na seção 9. |
+| 2026-11-09 | `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` | Publicação do checklist mestre pela PR #681 e varredura estática inicial DD/FD | AUDIT_PARTIAL | PR #681 CI PASS e merge; lacunas F-036/F-037 registradas; PR #680 continua pendente de CI completo. |
 
 ### Modelo obrigatório para cada atualização
 
