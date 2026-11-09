@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09, após PRs #709/#710). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `fa069162306fb330864b6d77633ceba0f976e3ca` (2026-11-09, após PR #711). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -97,7 +97,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-019 | CALL/RET/RST e variantes condicionais | AUDIT_PARTIAL | Pilha, PC, tempos e condições. |
 | F-020 | IN A,(n), OUT (n),A e ED IN/OUT (C) | AUDIT_PARTIAL | Portas, valor, flags, WZ e efeitos colaterais. |
 | F-021 | INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR | AUDIT_PARTIAL | Flags, B, HL, WZ, L pós-atualização, repetição e evidência NMOS. |
-| F-022 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | AUDIT_PARTIAL | Flags, contadores, repetição, PC/WZ e fronteiras. |
+| F-022 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | AUDIT_PARTIAL | PR candidata #712 adiciona observação IM2 das flags XY de repetição para as quatro formas repetitivas, com retorno RETI e retomada. Restam matriz independente mais ampla, flags simples, WZ/MEMPTR nos caminhos não repetitivos e demais fronteiras. Não fechar a família com este teste isolado. |
 | F-023 | RRD/RLD | AUDIT_PARTIAL | Nibbles, memória, flags, WZ e WAIT/snapshot se caminho temporal aplicável. |
 | F-024 | LD I,A; LD R,A; LD A,I; LD A,R | AUDIT_PARTIAL | Flags, refresh, PV/IFF2 e erratum após interrupção. |
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
@@ -351,3 +351,12 @@ A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
 - F-001..F-032 permanecem nos estados individuais registrados na tabela; não promover famílias com base apenas em igualdade entre executores internos.
 - E7 permanece IN_PROGRESS; E8 permanece BLOCKED. A execução do ROM Z80 Block Flags Test v5.0 completo no core e validação direta em hardware SMS continuam NOT RUN; CMOS/clones continuam NOT VERIFIED.
 - CI #6037 no HEAD atual executou classificação de impacto e higiene documental (PASS); jobs Z80 focused, workspace, Scheduler stress e hosts foram SKIPPED/NOT RUN. Não há nova execução semântica do Z80 no HEAD atual.
+
+
+## 26. F-022 — observação de flags no ciclo de repetição interrompido (candidata PR #712)
+
+**Baseline main:** `fa069162306fb330864b6d77633ceba0f976e3ca`.
+
+A branch `test/z80-f022-repeat-im2-observation-20261109` acrescenta o teste `ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_repeat_flags_are_observable_through_im2_and_resume` em `native/z80_cpu/src/sequencer.rs`. O cenário cobre LDIR, LDDR, CPIR e CPDR: INT é afirmada no último T-state do M-cycle interno de repetição; IM2 desvia para handler `PUSH AF; POP AF; EI; RETI`; o teste inspeciona F empilhado e confirma retomada do ED com BC/PC/WZ/flags coerentes. Snapshot encode/decode é aplicado em cada fronteira do microsequenciador.
+
+A expectativa de X/Y no ponto interrompido é derivada do teste público Z80 Block Flags Test v5.0 (PC.13→YF, PC.11→XF), confrontada com MAME e ares. A comparação entre executor atômico e microsequenciador permanece evidência diferencial interna, não oracle independente. A alteração não fecha F-022: flags de iteração simples, fronteiras combinatórias, WZ independente e demais efeitos permanecem AUDIT_PARTIAL. Não há validação em hardware SMS nem generalização a CMOS/clones.
