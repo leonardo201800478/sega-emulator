@@ -5846,7 +5846,7 @@ impl Z80MicroSequencer {
                 (Z80PrefixState::Index(Z80IndexRegister::Ix), 5) => self.ix as u8,
                 (Z80PrefixState::Index(Z80IndexRegister::Iy), 4) => (self.iy >> 8) as u8,
                 (Z80PrefixState::Index(Z80IndexRegister::Iy), 5) => self.iy as u8,
-                _ => return self.read_register(code),
+                _ => self.read_register(code),
             }
         } else {
             self.read_register(code)
