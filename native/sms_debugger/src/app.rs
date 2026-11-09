@@ -336,7 +336,24 @@ impl DebuggerApp {
 impl eframe::App for DebuggerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
-        self.run_slice();
+        if self.running {
+            let result = self
+                .session
+                .as_mut()
+                .map(|session| session.run_for(RUN_BUDGET));
+            match result {
+                Some(Ok(RunStopReason::Breakpoint(pc))) => {
+                    self.running = false;
+                    self.status = format!("Breakpoint atingido em 0x{pc:04X}");
+                }
+                Some(Ok(RunStopReason::InstructionBudget)) => {}
+                Some(Err(error)) => {
+                    self.running = false;
+                    self.status = format!("Erro de execução: {error}");
+                }
+                None => self.running = false,
+            }
+        }
 
         ui.vertical(|ui| {
             ui.horizontal_wrapped(|ui| {
