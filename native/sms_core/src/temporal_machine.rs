@@ -870,6 +870,18 @@ impl SmsTemporalMachine {
         self.trace_events.drain()
     }
 
+    /// Execute one complete instruction and service an interrupt acknowledge boundary.
+    ///
+    /// This is intended for host debugger stepping. It advances hardware only
+    /// through the normal scheduler/bus path.
+    pub fn debug_step_instruction(&mut self) -> Result<(), SmsTemporalMachineError> {
+        let step = self.step_instruction(0)?;
+        if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+            let _ = self.resume_instruction(0)?;
+        }
+        Ok(())
+    }
+
     /// Set a CPU program-counter breakpoint. Returns whether it was newly added.
     pub fn set_breakpoint(&mut self, address: u16) -> bool {
         self.breakpoints.insert(u32::from(address))
