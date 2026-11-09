@@ -8591,7 +8591,9 @@ mod ed_port_io_differential_tests {
             sequenced = roundtrip(sequenced);
             let input = sequenced_bus.read_port(io_request.address);
             assert_eq!(input, value);
-            let retired = sequenced.complete_bus_cycle(io_request.id, Some(input)).unwrap();
+            let retired = sequenced
+                .complete_bus_cycle(io_request.id, Some(input))
+                .unwrap();
             assert_eq!(
                 retired,
                 Z80MicroStep::InstructionRetired {
@@ -8608,8 +8610,14 @@ mod ed_port_io_differential_tests {
             assert!(sequenced_bus.port_writes.is_empty());
             assert_eq!(sequenced.pending_request(), None);
             assert_eq!(sequenced.export_architectural_state().registers.a, 0xA5);
-            assert_eq!(sequenced.export_architectural_state().registers.b, architectural.registers.b);
-            assert_eq!(sequenced.export_architectural_state().registers.c, architectural.registers.c);
+            assert_eq!(
+                sequenced.export_architectural_state().registers.b,
+                architectural.registers.b
+            );
+            assert_eq!(
+                sequenced.export_architectural_state().registers.c,
+                architectural.registers.c
+            );
         }
     }
 
