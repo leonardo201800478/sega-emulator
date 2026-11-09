@@ -565,3 +565,23 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Runtime:** nenhuma alteração.
 **CI pós-merge:** NOT VERIFIED; a consulta ao SHA `ce51578511a0090afbba3ded6312c9a25c5d78c7` não retornou status checks associados. Não atribuir PASS.
 **Limites:** CLOSED somente para semântica de software do perfil Zilog NMOS delimitado. Sem validação física SMS, evidência independente para X/Y ou compatibilidade universal CMOS/clones. F-023 permanece gate transversal. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 41. F-005 — LD SP,HL/IX/IY — CLOSED no perfil NMOS delimitado — 2026-11-09
+
+**Baseline main pré-PR:** `43a721b2a293831601ac02dc68b853b11beb363b`.
+**PR:** [#731](https://github.com/leonardo201800478/sega-emulator/pull/731), squash merge `0ea60a450c3d58a6231df73c3d1ff98fa118b4b6`.
+**HEAD validado:** `e9ab17ebbea042a5396a5cd017c70982c6d2f2cc`.
+**CI:** run [42696796388](https://github.com/leonardo201800478/sega-emulator/actions/runs/42696796388), PASS nos gates aplicáveis ao HEAD exato.
+
+- BASE F9 (`LD SP,HL`): 1 M-cycle / 6 T-states.
+- DD F9 (`LD SP,IX`) e FD F9 (`LD SP,IY`): 2 M-cycles / 10 T-states.
+- Testes cobrem flags preservadas, registradores não-alvo, PC/R, WZ, Q/previous-Q, prefixos repetidos/alternados, WAIT e snapshot/restore nos limites M1/ciclo interno.
+- A integração SMS executa BASE F9 através de `SmsTemporalMachine`/`MachineScheduler`, com WAIT M1, snapshot/restore e comparação entre execução retomada e contínua.
+- ED 73/7B (`LD (nn),SP` / `LD SP,(nn)`) reutilizam a evidência já registrada em F-034; não houve duplicação.
+- Evidência primária: ZiLOG UM008011-0816. Comparação independente de implementação: MAME `src/devices/cpu/z80/z80.lst`.
+- Nenhuma divergência de runtime foi reproduzida; a PR alterou somente testes e documentação.
+
+**Gates no HEAD validado:** Z80 focused (fmt, Clippy, Z80/SMS/SG-1000, SingleStepTests DD/FD) PASS; Rust workspace (fmt, Clippy, testes e observability) PASS; Linux audio-output PASS; Windows WASAPI/XAudio2 PASS; Windows egui PASS; agregador PASS. D3D12/DXGI runtime e suítes não relacionadas ficaram NOT RUN/SKIPPED por classificação de impacto. Gates locais Cargo NOT RUN neste ambiente.
+
+**Limites:** CLOSED para semântica de software do perfil Zilog NMOS delimitado. Sem validação física SMS e sem afirmação universal para CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
