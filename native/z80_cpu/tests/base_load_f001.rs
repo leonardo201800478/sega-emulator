@@ -167,6 +167,7 @@ fn assert_differential_case(
     atomic.registers = initial_registers;
     atomic.wz = INITIAL_WZ;
     atomic.q = INITIAL_Q;
+    atomic.r = 0x80;
     let atomic_tstates = atomic
         .step(&mut FlatBus { memory })
         .expect("atomic F-001 instruction executes");
@@ -180,6 +181,7 @@ fn assert_differential_case(
     micro.registers = initial_registers;
     micro.wz = INITIAL_WZ;
     micro.q = INITIAL_Q;
+    micro.refresh = 0x80;
     let (micro, micro_tstates, accesses) = run_microsequenced(micro, memory);
 
     let context = format!("opcode={opcode:02X}, pc={program_counter:04X}");
@@ -211,8 +213,8 @@ fn assert_differential_case(
         INITIAL_Q,
         "{context}: micro previous Q retained"
     );
-    assert_eq!(atomic.r & 0x7F, 1, "{context}: one M1 refresh");
-    assert_eq!(micro.refresh & 0x7F, 1, "{context}: one micro M1 refresh");
+    assert_eq!(atomic.r, 0x81, "{context}: one M1 refresh preserves R7");
+    assert_eq!(micro.refresh, 0x81, "{context}: micro M1 refresh preserves R7");
 
     if let Some((address, expected)) = memory_result {
         assert_eq!(atomic_memory, Some(expected), "{context}: atomic memory");
