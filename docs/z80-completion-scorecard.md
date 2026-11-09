@@ -454,7 +454,7 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 
 ## 35. F-025 — RETN/RETI e aliases; modos IM — CLOSED no perfil NMOS SMS/SG-1000
 
-**Main:** `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (PR #718 integrada). **HEAD validado da PR:** `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`. **CI da PR:** #6071 / run `42658617730` PASS no HEAD exato. **CI pós-merge:** #6072 / run `42658844499` — consultar estado final antes de promover a PASS.
+**Main:** `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (PR #718 integrada). **HEAD validado da PR:** `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`. **CI da PR:** #6071 / run `42658617730` PASS no HEAD exato. **CI pós-merge:** #6072 / run `42658844499` — PASS no HEAD pós-merge `f0cfc7b9df1834ae8ad418c6241702e9003f072e`.
 
 - Oito encodings RETN/RETI: ED45, ED4D, ED55, ED5D, ED65, ED6D, ED75, ED7D.
 - 48 combinações por executor: oito aliases × IFF2=0/1 × SP normal/FFFF/0000; IFF1 inicial invertida para comprovar `IFF1 <- IFF2`.
