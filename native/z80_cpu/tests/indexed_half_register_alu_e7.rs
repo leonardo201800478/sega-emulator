@@ -572,7 +572,7 @@ fn dd_fd_before_scf_ccf_clears_previous_q_and_survives_prefix_snapshot() {
         assert!(bus.writes.is_empty());
         assert_eq!(atomic.registers.f, expected_f);
         assert_eq!(micro.registers.f, expected_f);
-        assert_eq!(atomic.q_previous, 0);
+        assert_eq!(atomic.export_architectural_state().q_previous, 0);
         assert_eq!(micro.q_previous, 0);
         assert_shared_state(
             &micro,
