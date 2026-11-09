@@ -299,3 +299,12 @@ A coluna “Microsequenciador” descreve o estado atual em main: os 78 casos ex
 - PR #702 integrou a correção Q/previous-Q; não altera a classificação dos encodings ED.
 - F-033: o teste microsequenciado de 178 bytes e os vetores externos ED77/ED7F foram adicionados, mas o resultado permanece pendente até CI no HEAD da PR desta etapa.
 - A revisão SingleStepTests consultada contém fixtures ED77 e ED7F (1.000 casos cada); não assumir que há arquivo externo para todos os 178 encodings reservados.
+
+## Referências e classificação da evidência
+
+- **Zilog UM0080 / UM008011-0816:** fonte primária para os opcodes ED documentados; não especifica todos os bytes reservados.
+- **MAME `z80.lst`, commit `c7541016a35d83a3eb5db5db5d20a5cb79a17a43`:** [fonte fixada](https://github.com/mamedev/mame/blob/c7541016a35d83a3eb5db5db5d20a5cb79a17a43/src/devices/cpu/z80/z80.lst); implementação de referência que encaminha 178 bytes a `illegal_2`, não prova de silício.
+- **Fuse:** [núcleo Z80](https://sourceforge.net/p/fuse-emulator/fuse/ci/master/tree/z80/z80_ops.c/) mantém Q/last_Q; [manual](https://manpages.debian.org/unstable/fuse-emulator/fuse.1.en.html) documenta opções de variante e diferença CMOS/NMOS em `OUT (C),0`. Implementação comparativa, não prova de silício.
+- **Klive IDE:** [instruções não documentadas](https://kliveide.net/en/library/cambridge-z88/developers-notes/the-zilog-z80-cpu-instruction-set/the-zilog-z80-undocumented-instructions/), referência secundária.
+- **CPCWiki:** [opcodes Z80 não documentados](https://www.cpcwiki.eu/index.php/Z80_-_undocumented_opcodes), referência comunitária secundária.
+- **Z80Decoder:** [Undocumented Flags](https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags), evidência comunitária com validação declarada em hardware Zilog NMOS; não substitui documentação oficial.
