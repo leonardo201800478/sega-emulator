@@ -1010,13 +1010,7 @@ fn handle_command(
             if *running {
                 let _ = reply.send(Err("step_instruction está disponível somente com a máquina pausada".to_owned()));
             } else {
-                let result = machine.step_instruction(0)
-                    .and_then(|step| {
-                        if matches!(step, sega_z80_cpu::Z80MicroStep::InterruptAcknowledge { .. }) {
-                            machine.resume_instruction(0)?;
-                        }
-                        Ok(())
-                    })
+                let result = machine.debug_step_instruction()
                     .map_err(|error| error.to_string());
                 match result {
                     Ok(()) => {
