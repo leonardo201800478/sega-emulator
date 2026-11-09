@@ -239,12 +239,60 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Checkout pinned SingleStepTests Z80 fixtures (MIT)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: SingleStepTests/z80
+          ref: ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
+          path: vendor/SingleStepTests-z80
+          filter: blob:none
+          sparse-checkout: |
+            README.MD
+            LICENSE
+            v1/dd 84.json
+            v1/dd 85.json
+            v1/dd 8c.json
+            v1/dd 8d.json
+            v1/dd 94.json
+            v1/dd 95.json
+            v1/dd 9c.json
+            v1/dd 9d.json
+            v1/dd a4.json
+            v1/dd a5.json
+            v1/dd ac.json
+            v1/dd ad.json
+            v1/dd b4.json
+            v1/dd b5.json
+            v1/dd bc.json
+            v1/dd bd.json
+            v1/fd 84.json
+            v1/fd 85.json
+            v1/fd 8c.json
+            v1/fd 8d.json
+            v1/fd 94.json
+            v1/fd 95.json
+            v1/fd 9c.json
+            v1/fd 9d.json
+            v1/fd a4.json
+            v1/fd a5.json
+            v1/fd ac.json
+            v1/fd ad.json
+            v1/fd b4.json
+            v1/fd b5.json
+            v1/fd bc.json
+            v1/fd bd.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Format Z80 and console integration packages
         run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy Z80 and console integration packages
         run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80, SMS and SG-1000 integration packages
         run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
+      - name: Run all pinned SingleStepTests DD/FD indexed ALU vectors
+        env:
+          SINGLESTEP_Z80_DIR: vendor/SingleStepTests-z80/v1
+        run: cargo test --locked -p sega-z80-cpu --test singlestep_indexed_alu -- --ignored
 
   psg-focused:
     name: PSG core and console integration validation
