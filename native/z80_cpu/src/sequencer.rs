@@ -8587,6 +8587,8 @@ mod ed_port_io_differential_tests {
             let io_request = request(read_opcode(&mut sequenced, &mut sequenced_bus, second));
             assert_eq!(io_request.operation, Z80BusOperation::PortRead);
             assert_eq!(io_request.address, architectural.registers.bc());
+            sequenced.insert_wait_tstates(1).unwrap();
+            sequenced = roundtrip(sequenced);
             let input = sequenced_bus.read_port(io_request.address);
             assert_eq!(input, value);
             let retired = sequenced.complete_bus_cycle(io_request.id, Some(input)).unwrap();
@@ -8594,7 +8596,7 @@ mod ed_port_io_differential_tests {
                 retired,
                 Z80MicroStep::InstructionRetired {
                     opcode: 0x70,
-                    tstates: 12
+                    tstates: 13
                 }
             );
             assert_eq!(
