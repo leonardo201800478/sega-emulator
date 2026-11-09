@@ -10671,8 +10671,7 @@ mod ed_block_io_differential_tests {
                         b_after
                     };
                     let parity_arg = (sum as u8 & 0x07) ^ b_after ^ (b_alu & 0x07);
-                    let mut expected_flags = (b_after & FLAG_S)
-                        | (((pc >> 8) as u8) & FLAG_XY);
+                    let mut expected_flags = (b_after & FLAG_S) | (((pc >> 8) as u8) & FLAG_XY);
                     if negative {
                         expected_flags |= FLAG_N;
                     }
@@ -10689,13 +10688,11 @@ mod ed_block_io_differential_tests {
                     assert_eq!(atomic.registers.b, b_after);
                     assert_eq!(sequenced.registers.b, b_after);
                     assert_eq!(
-                        atomic.registers.f,
-                        expected_flags,
+                        atomic.registers.f, expected_flags,
                         "atomic ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
                     );
                     assert_eq!(
-                        sequenced.registers.f,
-                        expected_flags,
+                        sequenced.registers.f, expected_flags,
                         "sequenced ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
                     );
                     assert_eq!(atomic.registers.pc, pc);
