@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota de entrada desta etapa:** `43772d5cd5395de273bd3898895cf1deed81aa53` (2026-11-09, após PR #683).
+**Baseline remota atual:** `0b9b298f0f9791a6fa6db17580ad741db5c0515d` (2026-11-09, após PR #684).
 **Baseline documental encontrada:** scorecard e matriz DD/FD ainda apontavam para `043ecb61d8d1cc77245fa72639d7f210d88cab26`; a divergência deve ser reconciliada nesta trilha.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -111,7 +111,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-033 | Encodings ED reservados e fallback ED-NOP | GAP_CONFIRMED | Auditoria estática reporta 78 bytes explícitos e 178 em fallback. Confirmar cada byte contra perfil e referência; não presumir que smoke test prova semântica. |
 | F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | NOT_AUDITED | Classificar explicitamente documentado, alias, não documentado, ignorado ou reservado. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
-| F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | IMPLEMENTED_PENDING_VALIDATION | PR #684, commit de implementação `181be7aec287eaf66cda26d4bd0823446b435031`: dispatch usa os helpers indexados para as 24 formas por prefixo. Teste `indexed_half_register_ld_e7.rs` cobre 48 combinações, oracle de registradores, executor atômico, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. Aguardando CI e merge; memória indexada permanece no caminho E4A. |
+| F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`. CI #42614755935 PASS no HEAD exato `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`: Z80 focused, docs hygiene e agregador PASS; D3D12/áudio/SDL3/workspace SKIPPED. 48 combinações, oracle de registradores, comparação atômica, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. As exceções 66/6E/74/75 permanecem no caminho E4A. |
 | F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | `cpu.rs` tem execução atômica; o caminho retomável ainda não despacha os 16 opcodes ALU com fonte IXH/IXL/IYH/IYL. Próxima PR separada após integração de F-036. |
 
 ## 4. Checklist de estado arquitetural e flags
@@ -246,7 +246,7 @@ A inspeção cruzada de `native/z80_cpu/src/prefix.rs`, `cpu.rs` e `sequencer.rs
 | 2026-11-09 | `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` | Publicação do checklist mestre pela PR #681 e varredura estática inicial DD/FD | AUDIT_PARTIAL | Fotografia histórica; supersedida pelas integrações #680 e #683 registradas abaixo. |
 | 2026-11-09 | `04527a59e0695a800d4fd048d2da85c51126de68` | PR #680 integrada: INC/DEC IXH/IXL/IYH/IYL e LD imediato; run #42609912469 PASS no HEAD `e20ec4b6c858bcaca265114ba543c19301dbb2e0` | CLOSED | D-004 fechado; E7 segue em auditoria global. |
 | 2026-11-09 | `43772d5cd5395de273bd3898895cf1deed81aa53` | PR #683 integrou seleção inteligente de CI, jobs focados PSG/VDP/input e agregador; run #42613123290 PASS no HEAD `eaa88a249989b2ca6aee931e2a963df75a396008` | CLOSED | PR #637 encerrada como supersedida; CI otimizado integrado. |
-| 2026-11-09 | `181be7aec287eaf66cda26d4bd0823446b435031` | PR #684 candidata F-036: DD/FD LD r,r' register-only no microsequenciador | IMPLEMENTED_PENDING_VALIDATION | CI/merge ainda não concluídos. |
+| 2026-11-09 | `0b9b298f0f9791a6fa6db17580ad741db5c0515d` | PR #684 integrada: F-036 LD r,r' register-only no microsequenciador; CI #42614755935 PASS no HEAD `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3` | CLOSED | Merge squash confirmado; D3D12/áudio/SDL3 SKIPPED e merge aceito pelo GitHub. |
 
 ### Modelo obrigatório para cada atualização
 
@@ -266,7 +266,20 @@ Adicionar uma linha no histórico e atualizar os IDs afetados:
 
 - PR #680 foi integrada por squash. HEAD validado `e20ec4b6c858bcaca265114ba543c19301dbb2e0`; execução #42609912469 PASS; merge SHA `04527a59e0695a800d4fd048d2da85c51126de68`. INC/DEC e LD imediato das metades IX/IY estão integrados. As exceções DD/FD 66, 6E, 74 e 75 continuam no caminho de memória indexada e usam H/L reais.
 - PR #683 foi integrada por squash. HEAD validado `eaa88a249989b2ca6aee931e2a963df75a396008`; execução #42613123290 PASS; merge SHA `43772d5cd5395de273bd3898895cf1deed81aa53`. O CI agora seleciona Z80, PSG, VDP, input, Scheduler, hosts e tooling por dependências; o agregador diferencia jobs aplicáveis de jobs SKIPPED. A PR #637 foi encerrada como supersedida.
-- F-036 tem implementação candidata na PR #684, commit de código `181be7aec287eaf66cda26d4bd0823446b435031`. A nova suíte exercita 48 combinações register-only, oracle explícito, comparação com executor atômico, dois M1/8T, WAIT, snapshot/restore, prefixos repetidos e HALT. O resultado CI ainda é NOT RUN nesta fotografia.
-- A validação de F-036 não deve ser promovida a PASS ou CLOSED antes do CI no HEAD final da PR e do merge confirmado. A PR #684 deve demonstrar que os jobs Windows D3D12, áudio e SDL3 ficam SKIPPED, sem que o check obrigatório bloqueie o merge.
+- F-036 foi integrada pela PR #684. HEAD validado `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`; execução #42614755935 PASS; merge SHA `0b9b298f0f9791a6fa6db17580ad741db5c0515d`.
+- A PR #684 comprovou a seleção Z80-only: D3D12, áudio, SDL3, VDP, PSG, Scheduler stress e workspace foram SKIPPED; Z80 focused, documentação e agregador passaram. O merge foi aceito pelo GitHub apesar do job D3D12 ignorado, confirmando o comportamento do check condicional.
 - F-037 permanece GAP_CONFIRMED e será implementada em PR separada após F-036.
 - E7.7 permanece IN_PROGRESS; E8/ZEXDOC/ZEXALL permanece BLOCKED. Não iniciar E8.
+
+
+## 19. Fechamento F-036 — 2026-11-09
+
+- **PR:** #684 — `feat/z80-e7-indexed-register-ld-20261109`.
+- **HEAD validado:** `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`.
+- **Execução final:** #42614755935 — PASS. Z80 focused PASS; Documentation patch hygiene PASS; Rust quality and unit regression PASS. Jobs não aplicáveis foram SKIPPED.
+- **Falhas intermediárias:** #42614347670 FAIL apenas em rustfmt; #42614617507 FAIL em Clippy por `field_reassign_with_default` no teste. Ambas corrigidas; não foram promovidas a PASS. A execução final no HEAD exato passou.
+- **Merge SHA / main atual:** `0b9b298f0f9791a6fa6db17580ad741db5c0515d`.
+- **Prova do CI seletivo:** D3D12, WASAPI/XAudio2, Linux audio, SDL3, VDP, PSG, Scheduler stress e workspace ficaram SKIPPED em uma PR exclusivamente Z80. O merge squash foi aceito pelo GitHub; o check condicional D3D12 não bloqueou.
+- **F-036:** CLOSED. **F-037:** GAP_CONFIRMED. **F-028:** AUDIT_PARTIAL. **E7.7:** IN_PROGRESS. **E8:** BLOCKED.
+
+A próxima tarefa é F-037 — ALU A,IXH/IXL/IYH/IYL — em PR independente. Não iniciar ZEXDOC/ZEXALL.
