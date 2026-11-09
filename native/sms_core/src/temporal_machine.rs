@@ -1260,6 +1260,41 @@ mod tests {
         Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep, Z80Registers,
     };
 
+    #[test]
+    fn breakpoint_stops_before_instruction_and_can_continue_once() {
+        let mut machine = SmsTemporalMachine::new(vec![0xC3, 0x00, 0x00], 3).unwrap();
+        assert!(machine.set_breakpoint(0x0000));
+        assert!(machine.breakpoint_at_pc());
+
+        assert_eq!(
+            machine.step_frame_until_breakpoint(8).unwrap(),
+            (0, Some(0x0000))
+        );
+        assert_eq!(machine.cpu().registers.pc, 0x0000);
+
+        // Continue skips the current hit once, executes JP $0000, then hits
+        // the same address again at the next instruction boundary.
+        assert_eq!(
+            machine.step_frame_until_breakpoint(8).unwrap(),
+            (1, Some(0x0000))
+        );
+        assert!(machine.remove_breakpoint(0x0000));
+        assert!(!machine.breakpoint_at_pc());
+    }
+
+    #[test]
+    fn temporal_trace_history_is_bounded_and_reports_discarded_events() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x1_0000], 3).unwrap();
+        machine.set_trace_enabled(true);
+        for _ in 0..2_100 {
+            machine.step_instruction(0).unwrap();
+        }
+        assert!(machine.trace_dropped_events() > 0);
+        let retained = machine.take_trace();
+        assert_eq!(retained.len(), 2_048);
+        assert!(machine.take_trace().is_empty());
+    }
+
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
     }
