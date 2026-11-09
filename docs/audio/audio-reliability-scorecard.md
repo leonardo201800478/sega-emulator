@@ -97,7 +97,7 @@ A trilha só pode ser considerada concluída após fechar AUDIO-00 a AUDIO-10, d
 - PASS: Windows WASAPI/XAudio2 (fmt, Clippy e testes automatizados dos backends).
 - PASS: formatação e Clippy da aplicação Windows; documentação e classificação de impacto.
 - SKIPPED/NOT RUN: stress do Scheduler, validação Z80, SDL3 e PowerShell; não houve alterações nessas áreas.
-- Não houve captura loopback nem reprodução em endpoint físico. A PR permanece aberta e não está integrada na main.
+- Não houve captura loopback nem reprodução em endpoint físico. A PR #666 está integrada na `main`; sua integração não representa aprovação acústica nem encerra as issues #640/#659.
 
 A CI confirma compilação e comportamento automatizado, não qualidade audível. A issue #659 e a causa dos underruns #640 permanecem abertas. O próximo gate é AUDIO-08/AUDIO-09: comparar a mesma sequência PCM e validar WASAPI/XAudio2 fisicamente.
 
