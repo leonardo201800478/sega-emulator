@@ -3238,3 +3238,58 @@ mod temporal_frame_tests {
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
     }
 }
+
+
+#[cfg(test)]
+mod base_indirect_accumulator_f002_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn bc_de_indirect_accumulator_transfers_follow_scheduler_wait_deadlines() {
+        for (opcode, address, store) in [
+            (0x02, 0xC000, true),
+            (0x12, 0xC001, true),
+            (0x0A, 0x0000, false),
+            (0x1A, 0x0000, false),
+        ] {
+            let mut machine = SmsTemporalMachine::new(vec![opcode], 3).unwrap();
+            machine.cpu_mut().registers.a = 0x5A;
+            machine.cpu_mut().registers.f = 0xA5;
+            if matches!(opcode, 0x02 | 0x0A) {
+                machine.cpu_mut().registers.set_bc(address);
+            } else {
+                machine.cpu_mut().registers.set_de(address);
+            }
+
+            assert_eq!(
+                machine.step_instruction(1).unwrap(),
+                Z80MicroStep::InstructionRetired {
+                    opcode,
+                    tstates: 9,
+                }
+            );
+            assert_eq!(machine.now(), MachineTime::from_ticks(27));
+            assert_eq!(machine.cpu().registers.pc, 1);
+            assert_eq!(machine.cpu().refresh & 0x7F, 1);
+            assert_eq!(machine.cpu().registers.f, 0xA5);
+
+            if store {
+                assert_eq!(
+                    machine.export_state().bus.memory.read(address),
+                    0x5A,
+                    "opcode {opcode:02X} stores A through the scheduled memory transaction"
+                );
+                let expected_wz =
+                    (0x5Au16 << 8) | (address.wrapping_add(1) & 0x00FF);
+                assert_eq!(machine.cpu().wz, expected_wz);
+            } else {
+                // The fixture ROM begins with the opcode itself, so reading
+                // address zero provides a deterministic non-RAM source byte.
+                assert_eq!(machine.cpu().registers.a, opcode);
+                assert_eq!(machine.cpu().wz, 1);
+            }
+        }
+    }
+}
