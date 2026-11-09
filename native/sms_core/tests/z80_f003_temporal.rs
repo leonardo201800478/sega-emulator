@@ -90,7 +90,11 @@ fn assert_scheduler_case(
             _ => None,
         })
         .collect();
-    assert_eq!(bus_completions, expected_bus, "opcode {:02X} bus trace", program[0]);
+    assert_eq!(
+        bus_completions, expected_bus,
+        "opcode {:02X} bus trace",
+        program[0]
+    );
 }
 
 #[test]
