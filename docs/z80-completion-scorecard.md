@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada). A PR #702 corrigiu q_previous na fronteira DD/FD e validou 34.000 vetores externos; a evidência será reconciliada nesta etapa.
+**Baseline documental atual:** `main` = `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09; PR #702 integrada). A PR #702 corrigiu q_previous na fronteira DD/FD; 34.000 vetores externos passaram no HEAD validado da PR (run #42626811588).
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -283,14 +283,14 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 **Estado após integração:** F-036 CLOSED; F-037 CLOSED com validação externa complementar; F-028 AUDIT_PARTIAL; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
 
-## 23. F-028 — reprodução da divergência Q/previous-Q — 2026-11-09
+## 23. F-028 — fechamento da divergência Q/previous-Q — 2026-11-09
 
-- Reprodução: PR #695, workflow run #42624833386.
-- Fixture DD 37 0001: esperado F=0x65; obtido F=0x45. **FAIL reproduzido** no microsequenciador retomável.
-- A execução interrompeu no primeiro mismatch; FD 3F está presente no corpus, mas não foi alcançado.
-- O problema decorre da preservação de q_previous através de DD/FD antes de SCF/CCF no perfil Zilog NMOS.
-- PR de correção Q/previous-Q limpa q_previous nos caminhos atômico e retomável, atualiza o teste interno e valida snapshot/restore após o prefixo. CI ainda pendente nesta baseline documental.
-- F-028 permanece AUDIT_PARTIAL até CI PASS e auditoria das demais exceções/variantes. E7 IN_PROGRESS; E8 BLOCKED.
+- Reprodução histórica: PR #695, run #42624833386; DD 37 0001 esperado F=0x65, obtido F=0x45.
+- Correção integrada: PR #702, merge SHA `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`.
+- HEAD validado da PR: `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`; run #42626811588.
+- SingleStepTests: 32.000/32.000 F-037 + 2.000/2.000 Q SCF/CCF = **34.000/34.000 PASS**.
+- Testes diferenciais atômico/retomável, snapshot/restore após prefixo, F-036 LD/HALT, Z80/SMS/SG-1000, fmt, Clippy e workspace regression: PASS.
+- F-028 permanece AUDIT_PARTIAL apenas para auditoria residual das demais exceções DD/FD, variantes e efeitos arquiteturais/temporais. E7 IN_PROGRESS; E8 BLOCKED.
 
 ## 24. F-033 — cobertura do microsequenciador ED reservados
 
