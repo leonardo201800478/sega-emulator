@@ -8,7 +8,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 
 | Change area | Required automated validation |
 | --- | --- |
-| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Root workspace formatting, Clippy, unit and integration tests, plus focused Clippy/tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. A Z80 change must not leave the workspace regression NOT RUN. |
+| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. Do not run unrelated workspace or host-platform builds for Z80-only changes. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
 | Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
 | Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
@@ -25,7 +25,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 2. A change spanning multiple components runs the union of those components' required suites.
 3. Changes to global Cargo configuration, the root workspace manifest/lockfile, Rust toolchain configuration, or CI workflows trigger broad regression.
 4. A component-local manifest or lockfile change triggers that component's validation, not a full Windows matrix by default.
-5. Any Z80-focused change runs both the full root-workspace regression and the focused Z80/SMS/SG-1000 package suite, including when the same patch changes CI/workflow files. Both required status checks must conclude success on the exact final HEAD; neither suite substitutes for the other.
+5. A Z80-only change runs the focused Z80/SMS/SG-1000 package suite (format, Clippy, unit and integration tests). It does not trigger root-workspace regression, D3D12, audio, SDL3, or tooling jobs unless the changed paths independently require them. If the patch also changes shared root-workspace code, manifests, lockfiles, toolchain/configuration, or CI workflows, run the broader validations selected by those paths.
 6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
 
 ## Determinism and hardware validation
@@ -42,4 +42,4 @@ The standalone `native/audio_output` and `native/sega_app` workspaces retain the
 
 Every applicable suite is classified as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A skipped suite is never reported as a pass.
 
-The aggregate `Rust quality and unit regression` check explicitly verifies expected applicability: required jobs must conclude `success`, while non-applicable jobs must conclude `skipped`. Unexpected executions and missing required executions both fail the aggregate gate. Manual dispatch runs the classifier job successfully with the path-filter step omitted, so dependent manual jobs are not blocked by a skipped prerequisite. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
+The aggregate `Rust quality and unit regression` check explicitly verifies expected applicability: required jobs must conclude `success`, while non-applicable jobs must conclude `skipped`. Unexpected executions and missing required executions both fail the aggregate gate. For Z80-only changes, the focused package job is required and the root workspace job is explicitly not applicable. Manual dispatch runs the classifier job successfully with the path-filter step omitted, so dependent manual jobs are not blocked by a skipped prerequisite. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
