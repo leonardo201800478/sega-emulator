@@ -79,7 +79,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-001 | LD r,r', LD r,n, LD r,(HL), LD (HL),r/n | CLOSED (NMOS delimitado) | Integrada pela PR #721 no squash commit `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`; 28.161 vetores, oracle independente, flags/Q/WZ/R/PC, WAIT, snapshot/restore e equivalência scheduler contínua/retomada. CI #6091 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. |
 | F-002 | LD A,(BC)/(DE), LD (BC)/(DE),A | CLOSED (NMOS delimitado) | Integrada pela PR #722 no squash commit `29462cf0a788d5905de7a5e9e0499a1f1361fec1`; 5.120 vetores, WZ/MEMPTR, wrap, flags/Q/R, WAIT, snapshot/restore e integração temporal. CI #6097 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. PR #720 foi encerrada como supersedida, sem merge. |
 | F-003 | LD A,(nn), LD (nn),A | CLOSED (NMOS delimitado) | PR #724 integrada por squash em `7fde212aabc07e8c4b7df56938f8845f99d29499`; HEAD validado `455ae4ea5ce68fdba53de1958fe0123afd39dc6d`; CI #6111 / run `42675073118` PASS. 2.560 vetores, WZ, PC wrap, 13T/4 M-cycles, WAITs diferenciados, snapshot/restore e integração SMS. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e hosts não relacionados NOT RUN/SKIPPED. Nenhuma alteração de runtime. CI pós-merge não confirmado; hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. PR #723 encerrada sem merge. |
-| F-004 | LD rr,nn e transferências entre pares | IMPLEMENTED_PENDING_VALIDATION | Escopo delimitado: BASE `01/11/21/31` (BC/DE/HL/SP) e BASE `22/2A` (HL absoluto). Testes candidatos: 1.052 + 2.560 vetores, seis casos PC-wrap, WAIT diferenciados, snapshot/restore, diferencial atômico/micro e integração SMS. PR de testes em preparação; runtime não alterado. DD/FD E3A1/E3A2, ED F-034 e SP F-005 não duplicados. Aguardar gates no HEAD exato. |
+| F-004 | LD rr,nn e transferências entre pares | IMPLEMENTED_PENDING_VALIDATION (gates focados PASS; merge pendente) | PR #726, HEAD `ee085aeb00290a470c2018c3399e3943fe96e006`; CI #6119 / run `42676687551` PASS. 1.052 vetores imediatos + 2.560 absolutos, seis casos PC-wrap, WAITs, snapshot/restore, diferencial atômico/micro e integração SMS. Rustfmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD 34.000/34.000, docs hygiene e agregador PASS. Workspace integral e hosts não relacionados NOT RUN/SKIPPED. Runtime não alterado. DD/FD E3A1/E3A2, ED F-034 e SP F-005 não duplicados. CLOSED somente após squash merge. |
 | F-005 | LD SP,HL/IX/IY; LD (nn),SP; LD SP,(nn) quando aplicável | AUDIT_PARTIAL | Confirmar semântica e tempos nominais. |
 | F-006 | EX DE,HL; EX AF,AF'; EXX; EX (SP),HL/IX/IY | AUDIT_PARTIAL | Conferir bancos alternativos, ordem de barramento e WZ. |
 | F-007 | PUSH/POP de todos os pares, inclusive AF e IX/IY | AUDIT_PARTIAL | Conferir ordem da pilha, wrap e flags. |
@@ -432,14 +432,18 @@ Os oito encodings de IM0/1/2 já têm testes independentes com seleção explíc
 - **Próxima candidata:** F-004 — LD rr,nn e transferências entre pares; auditar código, testes, escopo e dependências antes de implementar. Não iniciar E8.
 
 
-## 34. F-004 — LD rr,nn e transferências absolutas HL — candidata em validação — 2026-11-09
+## 34. F-004 — LD rr,nn e transferências absolutas HL — gates focados aprovados — 2026-11-09
 
-- **Baseline main:** `355a35662643ca357ca9360031e002964e5a5aef`.
-- **Escopo desta fatia:** BASE `01/11/21/31` (`LD BC/DE/HL/SP,nn`), BASE `22` (`LD (nn),HL`) e BASE `2A` (`LD HL,(nn)`).
+- **Baseline main pré-PR:** `355a35662643ca357ca9360031e002964e5a5aef`.
+- **PR #726 HEAD validado:** `ee085aeb00290a470c2018c3399e3943fe96e006`.
+- **CI #6119 / run `42676687551`: PASS** no HEAD exato.
+- **Escopo:** BASE `01/11/21/31` (`LD BC/DE/HL/SP,nn`), BASE `22` (`LD (nn),HL`) e BASE `2A` (`LD HL,(nn)`).
 - **Não duplicar:** DD/FD E3A1/E3A2; ED `43/53/63/73` e `4B/5B/6B/7B` já tratados na família ED/F-034; `LD SP,HL/IX/IY` e variações específicas do SP pertencem a F-005; EX/EXX pertence a F-006.
 - **Referência documental:** ZiLOG UM008011-0816 p. 99 (2 M/10T para `LD dd,nn`), p. 102 (5 M/16T para `LD HL,(nn)`) e p. 107 (5 M/16T para `LD (nn),HL`); sem flags afetadas.
 - **Evidência comparativa WZ:** MAME `z80.lst` e ares `instructions.cpp` indicam WZ preservado em `LD dd,nn` e WZ=`nn+1` nas transferências absolutas HL. UM0080 não especifica WZ.
-- **Testes candidatos:** 1.052 vetores imediatos + 2.560 vetores absolutos, seis casos de wrap de PC; 1/2/3T WAITs, snapshot encode/decode + restore em cada fronteira, diferencial atômico/micro e retomada SMS com trace.
-- **Runtime:** nenhuma alteração. Se ocorrer falha, separar divergência do executor/oracle antes de modificar o Z80.
-- **Estado:** IMPLEMENTED_PENDING_VALIDATION. Classificar rustfmt, Clippy, testes Z80/SMS/SG-1000 e documentation hygiene no HEAD exato. Workspace integral/hosts não relacionados NOT RUN não são PASS.
+- **Matriz:** 1.052 vetores imediatos + 2.560 vetores absolutos, seis casos de wrap de PC; WAITs diferenciados, snapshot encode/decode + restore em cada fronteira, diferencial atômico/micro e retomada SMS com trace.
+- **Gates:** rustfmt PASS; Clippy `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/VDP/PSG não relacionados ficaram SKIPPED/NOT RUN.
+- **Histórico de correção:** #6115 rustfmt FAIL (formatação corrigida); #6117 Clippy FAIL (tipo do vetor temporal explicitado); #6118 Clippy FAIL (`too_many_arguments` tratado localmente); #6119 PASS integral dos gates aplicáveis.
+- **Runtime:** nenhuma alteração. Nenhuma falha funcional exigiu modificação do Z80.
+- **Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Sem validação física SMS.
 - **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
