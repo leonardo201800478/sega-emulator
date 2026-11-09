@@ -1,7 +1,7 @@
 # E7.7 — ED absolute word transfers at address wrap
 
-**Date:** 2026-11-09  
-**Baseline:** `main` = `0011eb41cee2352d2aaea71cae568e2c4d3a21e1`  
+**Date:** 2026-11-09
+**Baseline:** `main` = `0011eb41cee2352d2aaea71cae568e2c4d3a21e1`
 **Scope:** ED 43/53/63/73 (`LD (nn),rr`) and ED 4B/5B/6B/7B (`LD rr,(nn)`), especially `nn = 0xFFFF`.
 
 ## 1. Gap identified
