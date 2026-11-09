@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
+**Baseline documental atual:** `main` = `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09; PRs #686 e #687 integradas). A PR #687 atualizou o ledger após o fechamento F-037; esta baseline não reexecuta as suítes antigas.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
