@@ -123,12 +123,6 @@ fn bc_de_indirect_accumulator_transfers_match_atomic_and_microsequenced_paths() 
 
     for opcode in [0x02, 0x0A, 0x12, 0x1A] {
         let store = matches!(opcode, 0x02 | 0x12);
-        let expected_memory_operation = if store {
-            Z80BusOperation::MemoryWrite { value: 0 }
-        } else {
-            Z80BusOperation::MemoryRead
-        };
-
         for address in ADDRESS_VECTORS {
             for value in u8::MIN..=u8::MAX {
                 memory[0] = opcode;
@@ -156,11 +150,10 @@ fn bc_de_indirect_accumulator_transfers_match_atomic_and_microsequenced_paths() 
                 micro.wz = INITIAL_WZ;
                 let (micro, micro_tstates, accesses) = run_microsequenced(micro, &mut memory);
 
-                let expected_operation = match expected_memory_operation {
-                    Z80BusOperation::MemoryWrite { .. } => {
-                        Z80BusOperation::MemoryWrite { value }
-                    }
-                    operation => operation,
+                let expected_operation = if store {
+                    Z80BusOperation::MemoryWrite { value }
+                } else {
+                    Z80BusOperation::MemoryRead
                 };
                 let expected_accesses = [
                     Access {
@@ -174,7 +167,7 @@ fn bc_de_indirect_accumulator_transfers_match_atomic_and_microsequenced_paths() 
                         base_tstates: 3,
                     },
                 ];
-                let expected_accumulator = if store { value } else { value };
+                let expected_accumulator = value;
                 let expected_final_memory = if store { value } else { initial_memory };
                 let context = format!("opcode={opcode:02X}, address={address:04X}, value={value:02X}");
 
