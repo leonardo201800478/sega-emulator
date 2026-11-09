@@ -43,9 +43,8 @@ fn expected_rotate(accumulator: u8, flags: u8, operation: u8) -> (u8, u8) {
         ),
         _ => unreachable!("two-bit accumulator rotate operation"),
     };
-    let expected_flags = (flags & (FLAG_S | FLAG_Z | FLAG_PV))
-        | (result & FLAG_XY)
-        | if carry { FLAG_C } else { 0 };
+    let expected_flags =
+        (flags & (FLAG_S | FLAG_Z | FLAG_PV)) | (result & FLAG_XY) | if carry { FLAG_C } else { 0 };
     (result, expected_flags)
 }
 
@@ -84,10 +83,7 @@ fn assert_scheduler_case(opcode: u8, operation: u8, accumulator: u8, flags: u8) 
     assert_eq!(continuous_step, resumed_step);
     assert_eq!(
         resumed_step,
-        Z80MicroStep::InstructionRetired {
-            opcode,
-            tstates: 5,
-        }
+        Z80MicroStep::InstructionRetired { opcode, tstates: 5 }
     );
     assert_eq!(restored.export_state(), continuous.export_state());
     assert_eq!(restored.now(), MachineTime::from_ticks(15));
