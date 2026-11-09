@@ -315,9 +315,9 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 ## 25. Candidata F-033 — aposentadoria ED reservada no microsequenciador — 2026-11-09
 
-**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`  
-**PR:** #706 — `fix/z80-f033-ed-reserved-resume-20261109`  
-**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`  
+**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
+**PR:** #706 — `fix/z80-f033-ed-reserved-resume-20261109`
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
 **Estado:** IMPLEMENTED_PENDING_VALIDATION — ainda não integrada.
 
 - O fallback residual de `execute_ed_register_control()` agora aposenta a instrução após os dois fetches M1 já consumidos, sem ciclos internos artificiais nem transações extras de memória/I/O.
