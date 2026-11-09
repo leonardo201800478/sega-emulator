@@ -98,6 +98,9 @@ pub trait DebugTarget {
     }
 
     /// Execute exactly one architectural instruction, including its temporal bus work.
+    ///
+    /// # Errors
+    /// Returns an error when the target cannot complete the instruction.
     fn execute_instruction(&mut self) -> Result<(), String>;
 
     /// Read a range through the target's active memory map.
@@ -187,6 +190,9 @@ impl<T: DebugTarget> DebugSession<T> {
     }
 
     /// Execute exactly one instruction and collect newly emitted bus events.
+    ///
+    /// # Errors
+    /// Returns an error propagated by the console-specific target.
     pub fn step_instruction(&mut self) -> Result<(), String> {
         self.target.execute_instruction()?;
         self.collect_trace();
@@ -195,6 +201,9 @@ impl<T: DebugTarget> DebugSession<T> {
 
     /// Execute up to the requested instruction budget, stopping before a
     /// breakpoint address is executed. Hardware time advances only in target.
+    ///
+    /// # Errors
+    /// Returns an error propagated by the console-specific target.
     pub fn run_for(&mut self, instruction_budget: usize) -> Result<RunStopReason, String> {
         for _ in 0..instruction_budget {
             let pc = self.target.program_counter().unwrap_or_default();

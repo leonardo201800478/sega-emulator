@@ -22,4 +22,3 @@ unused_must_use = "deny"
 
 [lints.clippy]
 all = "warn"
-pedantic = "warn"
