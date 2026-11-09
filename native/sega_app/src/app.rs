@@ -376,7 +376,10 @@ impl SegaApp {
         let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
-        record_ui_diagnostic("menu.popup.requested", format!("menu={menu:?} position={position:?} size={popup_size:?}"),);
+        record_ui_diagnostic(
+            "menu.popup.requested",
+            format!("menu={menu:?} position={position:?} size={popup_size:?}"),
+        );
         let mut actions = MenuPopupActions {
             root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
             ..MenuPopupActions::default()
@@ -394,7 +397,10 @@ impl SegaApp {
                     egui::ViewportClass::Immediate => "immediate",
                     egui::ViewportClass::EmbeddedWindow => "embedded_window",
                 };
-                record_ui_diagnostic("menu.viewport.render", format!("menu={menu:?} class={class_name}"),);
+                record_ui_diagnostic(
+            "menu.viewport.render",
+            format!("menu={menu:?} class={class_name}"),
+        );
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
@@ -402,10 +408,16 @@ impl SegaApp {
         );
 
         if self.menu_last_focused != Some(popup_focused) {
-            record_ui_diagnostic("menu.viewport.focus_changed", format!("menu={menu:?} focused={popup_focused}"),);
+            record_ui_diagnostic(
+            "menu.viewport.focus_changed",
+            format!("menu={menu:?} focused={popup_focused}"),
+        );
             self.menu_last_focused = Some(popup_focused);
         }
-        record_ui_diagnostic("menu.popup.measured", format!("menu={menu:?} measured={measured_size:?}"),);
+        record_ui_diagnostic(
+            "menu.popup.measured",
+            format!("menu={menu:?} measured={measured_size:?}"),
+        );
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -433,7 +445,10 @@ impl SegaApp {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
-            record_ui_diagnostic("menu.popup.closed", format!("menu={menu:?} reason=rom_dialog"),);
+            record_ui_diagnostic(
+            "menu.popup.closed",
+            format!("menu={menu:?} reason=rom_dialog"),
+        );
             self.active_menu = None;
         }
         actions.input_updated
@@ -459,7 +474,9 @@ impl SegaApp {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
                                 if menu_ui.small_button("×").clicked() {
-                                    record_ui_diagnostic("menu.popup.closed", format!("menu={menu:?} reason=close_button"));
+                                    record_ui_diagnostic(
+            "menu.popup.closed",
+            format!("menu={menu:?} reason=close_button"));
                                     self.active_menu = None;
                                 }
                             });
@@ -891,7 +908,8 @@ impl SegaApp {
                 record_ui_diagnostic("native.d3d12_child.created", format!(
                         "parent_hwnd=0x{parent_hwnd:X} child_hwnd=0x{:X}",
                         child.handle()
-                    ),);
+                    ),
+        );
                 child
             }
             Err(error) => {
@@ -935,10 +953,13 @@ impl SegaApp {
             match child.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
                 Ok(()) => {
                     self.native_viewport.last_bounds = Some(bounds);
-                    record_ui_diagnostic("native.d3d12_child.bounds", format!(
+                    record_ui_diagnostic(
+            "native.d3d12_child.bounds",
+            format!(
                             "x={} y={} width={} height={}",
                             bounds.0, bounds.1, bounds.2, bounds.3
-                        ),);
+                        ),
+        );
                 }
                 Err(error) => {
                     record_ui_diagnostic("native.d3d12_child.bounds_error", error.to_string());
@@ -1078,7 +1099,10 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-            record_ui_diagnostic("menu.popup.closed", format!("menu={:?} reason=root_escape", self.active_menu),);
+            record_ui_diagnostic(
+            "menu.popup.closed",
+            format!("menu={:?} reason=root_escape", self.active_menu),
+        );
             self.active_menu = None;
             self.menu_last_focused = None;
         }
@@ -1332,10 +1356,16 @@ fn top_level_menu_button(
         state.active_menu.is_some() && *state.active_menu != Some(menu) && response.hovered();
     if response.clicked() || switch_by_hover {
         let previous = *state.active_menu;
-        record_ui_diagnostic("menu.button.activated", format!("label={label} menu={menu:?} previous={previous:?} by_hover={switch_by_hover}"),);
+        record_ui_diagnostic(
+            "menu.button.activated",
+            format!("label={label} menu={menu:?} previous={previous:?} by_hover={switch_by_hover}"),
+        );
         if response.clicked() && previous == Some(menu) {
             *state.active_menu = None;
-            record_ui_diagnostic("menu.state.changed", format!("active=None toggled={menu:?}"),);
+            record_ui_diagnostic(
+            "menu.state.changed",
+            format!("active=None toggled={menu:?}"),
+        );
         } else {
             *state.active_menu = Some(menu);
             record_ui_diagnostic("menu.state.changed", format!("active=Some({menu:?})"));
@@ -1351,7 +1381,13 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
         TopLevelMenu::Options => render_options_menu(ui, state),
-        TopLevelMenu::Diagnostics => render_runtime_status(ui, state.viewport, state.diagnostics_enabled, state.diagnostics_command, state.diagnostics_error),
+        TopLevelMenu::Diagnostics => render_runtime_status(
+            ui,
+            state.viewport,
+            state.diagnostics_enabled,
+            state.diagnostics_command,
+            state.diagnostics_error,
+        ),
     }
 }
 
@@ -1461,7 +1497,11 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     let mut audio_enabled = state.audio_state.is_enabled();
     if ui.checkbox(&mut audio_enabled, "Áudio ativo").changed() {
-        *state.audio_state = if audio_enabled { AudioState::Enabled } else { AudioState::Disabled };
+        *state.audio_state = if audio_enabled {
+            AudioState::Enabled
+        } else {
+            AudioState::Disabled
+        };
         *state.audio_command = Some(if audio_enabled {
             AudioCommand::Configure
         } else {
@@ -1638,7 +1678,8 @@ fn render_runtime_status(
     diagnostics_error: Option<&str>,
 ) {
     let mut enabled = diagnostics_enabled;
-    if ui.checkbox(&mut enabled, "Ativar coleta de diagnóstico")
+    if ui
+        .checkbox(&mut enabled, "Ativar coleta de diagnóstico")
         .on_hover_text("Desligado por padrão. A coleta usa o writer assíncrono compartilhado.")
         .changed()
     {
