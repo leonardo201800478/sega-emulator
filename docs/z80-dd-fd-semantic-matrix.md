@@ -432,7 +432,7 @@ A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A no
 
 **Prefixos:** prefix_fsm.rs cobre repetição/alternância e last-prefix-wins; prefix_fallback_e6.rs cobre prefixos ignorados e retomada. A classificação de 76 como prefixo ignorado preserva HALT como opcode terminal.
 
-**Pendência identificada por inspeção semântica:** para Zilog NMOS, DD/FD imediatamente antes de SCF/CCF devem ser tratados como a instrução precedente não modificadora de flags. A referência de hardware Z80Decoder informa que o prefixo faz perder o estado de modificação de flags anterior. O código atual mantém q_previous ao atravessar DD/FD.
+**Divergência reproduzida e corrigida:** para Zilog NMOS, DD/FD imediatamente antes de SCF/CCF são tratados como a instrução precedente não modificadora de flags. A referência Z80Decoder informa que o prefixo faz perder o estado de modificação de flags anterior. Antes da PR #702, os dois executores preservavam q_previous ao atravessar DD/FD; a PR #702 passou a limpar o latch na entrada do caminho atômico e na transição Index do microsequenciador.
 
 Vetores externos discriminantes fixados na mesma revisão SingleStepTests:
 
