@@ -155,7 +155,7 @@ impl TopLevelMenu {
 
     fn minimum_size(self) -> egui::Vec2 {
         match self {
-            Self::System => egui::vec2(300.0, 260.0),
+            Self::System => egui::vec2(340.0, 500.0),
             Self::File => egui::vec2(420.0, 280.0),
             Self::Video => egui::vec2(320.0, 220.0),
             Self::Audio => egui::vec2(340.0, 280.0),
@@ -1509,7 +1509,7 @@ fn top_level_menu_button(
 
 fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut HeaderState<'_>) {
     match menu {
-        TopLevelMenu::System => render_system_menu(ui),
+        TopLevelMenu::System => render_system_menu(ui, state),
         TopLevelMenu::File => render_file_menu(ui, state),
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
@@ -1619,11 +1619,18 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 }
 
 /// Render display aspect-ratio selection.
-fn render_system_menu(ui: &mut egui::Ui) {
+fn render_system_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.horizontal(|ui| {
         ui.strong("Sega Master System");
         ui.colored_label(egui::Color32::LIGHT_GREEN, "ATIVO");
     });
+    ui.separator();
+    ui.label("Região / padrão de vídeo");
+    ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
+    ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
+    ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
+    ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
+    ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
     ui.separator();
     ui.label("Outros sistemas");
     for system in [
@@ -1738,13 +1745,6 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     if ui.checkbox(&mut fullscreen, "Tela cheia (F11)").changed() {
         *state.fullscreen_requested = Some(fullscreen);
     }
-    ui.separator();
-    ui.label("Região do Master System");
-    ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
-    ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
-    ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
-    ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
-    ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
     ui.separator();
     ui.menu_button("Controles de execução", |ui| {
         render_machine_controls(ui, state.viewport, state.machine_command);

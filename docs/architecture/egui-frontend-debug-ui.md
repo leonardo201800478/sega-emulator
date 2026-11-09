@@ -6,12 +6,12 @@ Status: initial UI consolidation for the SMS host.
 
 The native frontend exposes one consistent menu bar:
 
-- **Sistema** — identifies the active machine. Systems not wired to this frontend remain visible but disabled; they must not appear selectable until a real host/runtime integration exists.
+- **Sistema** — identifies the active machine, exposes SMS territory/video standard, and lists systems not wired to this frontend as disabled.
 - **Arquivo** — ROM selection, recent ROMs, close machine and exit.
 - **Vídeo** — aspect ratio and FPS overlay visibility.
 - **Áudio** — audio enablement, WASAPI/XAudio2 backend and volume.
 - **Controles** — SDL3 device selection and the currently implemented keyboard bindings.
-- **Opções** — fullscreen, footer visibility, SMS territory/video standard and machine lifecycle controls.
+- **Opções** — fullscreen, footer visibility and machine lifecycle controls.
 - **DEBUG** — opt-in diagnostic logging and optional runtime telemetry.
 
 Settings applied only when constructing the machine (currently SMS region/video standard) are labelled as taking effect on the next ROM load.
