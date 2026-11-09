@@ -3,7 +3,7 @@
 **Atualização de baseline (2026-11-09):** o conteúdo histórico desta matriz foi originalmente auditado na baseline `043ecb61d8d1cc77245fa72639d7f210d88cab26`. A main documental consultada imediatamente após PR #681 era `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`; isso não significa que toda a matriz tenha sido revalidada nesse SHA. A auditoria incremental atual está registrada em [Checklist mestre de auditoria Z80](z80-master-audit-checklist.md). Não atribuir à matriz histórica evidência posterior sem atualizar a linha correspondente e registrar o SHA.
 
 **Data:** 2026-11-09
-**Baseline remota auditada:** `main` — `e7e37290e1baa9119326e9e7213f77cadcc37f5e` (2026-11-09, após PR #686).
+**Baseline remota auditada:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09, após PR #687 documental). A mudança #687 não alterou runtime Z80 nem a matriz de opcodes.
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
 **Schema do microsequenciador:** 32 (baseline após PR #680)
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
