@@ -3239,7 +3239,10 @@ mod tests {
 
                 assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}, A={value:02X}");
                 assert_eq!(cpu.registers.a, result, "ED {opcode:02X}, A={value:02X}");
-                assert_eq!(cpu.registers.f, expected_flags, "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(
+                    cpu.registers.f, expected_flags,
+                    "ED {opcode:02X}, A={value:02X}"
+                );
                 assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X}, A={value:02X}");
             }
         }
