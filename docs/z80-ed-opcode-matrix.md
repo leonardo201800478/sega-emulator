@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Main consultada:** `1142eb567746afe64356b60f2ce466581e1c0cef` (após PRs #709/#710).
+**Main consultada:** `397b01e32af41746d00b016858c4cc316147ba6b` (após PRs #709/#710).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
@@ -343,3 +343,8 @@ A PR #702 altera somente o tratamento de Q/previous-Q em prefixos DD/FD e os tes
 - NEG: oito aliases × 256 valores; oracle algébrico independente no executor atômico e comparação interna no microsequenciador.
 - RETI daisy-chain: NOT_APPLICABLE aos perfis SMS/SG-1000 atuais sem consumidor. Modos IM/aliases são delimitados ao perfil adotado.
 - Não há validação física nem generalização a CMOS/R800/Z80N/clones. E7 permanece IN_PROGRESS; E8 BLOCKED.
+
+
+## 7. RRD/RLD — evidência ampliada candidata PR #714
+
+ED 67 (RRD) e ED 6F (RLD) continuam classificados como `DOCUMENTED / TEST DEPTH PARTIAL`. A candidata adiciona cobertura exaustiva de 262.144 combinações no executor atômico e 16 vetores dirigidos no microsequenciador com WAIT/snapshot. O oracle independente cobre transformação de nibbles e flags S/Z/PV/H/N/C especificadas no UM0080. X/Y e WZ=HL+1 são comparações com MAME/ares, não requisitos universalmente especificados nem evidência física. Não promover a matriz a CLOSED por esta única expansão.
