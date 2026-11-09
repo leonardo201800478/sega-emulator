@@ -1,8 +1,8 @@
 # F-022 — flags observáveis no ciclo de repetição interrompido
 
-**Data:** 2026-11-09  
-**Baseline main:** `fa069162306fb330864b6d77633ceba0f976e3ca`  
-**Branch candidata:** `test/z80-f022-repeat-im2-observation-20261109`  
+**Data:** 2026-11-09
+**Baseline main:** `fa069162306fb330864b6d77633ceba0f976e3ca`
+**Branch candidata:** `test/z80-f022-repeat-im2-observation-20261109`
 **Escopo:** LDIR/LDDR/CPIR/CPDR; visibilidade de F quando INT é aceita durante o ciclo interno de repetição.
 
 ## 1. Frente documental
