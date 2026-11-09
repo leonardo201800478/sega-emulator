@@ -1,7 +1,7 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental atual:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
-**Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou teste dirigido de flags de repetição de I/O em bloco. Nenhuma alterou a semântica de runtime do Z80.
+**Baseline documental atual:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
+**Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
@@ -29,7 +29,7 @@ Este scorecard mede o que é necessário para executar corretamente SG-1000 e Ma
 - A entrega VBlank/Line IRQ do SMS convencional permanece coberta pelos testes integrados da PR #531. A ligação da IRQ de nível do VDP à INT do Z80 temporal foi integrada pela PR #595: combina a fonte do VDP com INT externa, preserva a fonte externa no snapshot e valida o vetor de acknowledge no restore. O CI #5178 passou nos testes VBlank/IM1/HALT e de preservação da fonte externa; isso não fecha a auditoria semântica global E7.7.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
 - A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
-- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria de I/O em bloco agora possui evidência física parcial para flags no ciclo de repetição NMOS e fixture independente no Rust; a execução do ROM no nosso core, flags de iteração simples em todo o espaço, CMOS/clones e validação direta em hardware SMS permanecem pendentes. `OUT (C),0` está resolvido para o perfil NMOS das placas SMS documentadas; não generalizar para todos os clones/variantes.
+- O fechamento semântico global E7.7 ainda não foi comprovado como concluído. A auditoria de I/O em bloco agora possui evidência física parcial para flags no ciclo de repetição NMOS e fixture independente no Rust; a execução do ROM v5.0 completo, flags de iteração simples em todo o espaço, CMOS/clones e validação direta em hardware SMS permanecem pendentes; a observação IM2/RETI adaptada já está coberta por testes do core. `OUT (C),0` está resolvido para o perfil NMOS das placas SMS documentadas; não generalizar para todos os clones/variantes.
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
 Esta lista é uma fotografia histórica. Antes de alterar código ou declarar qualquer critério concluído, confirmar os arquivos, testes, PRs e workflows no SHA atual da `main`. PR aberta ou Draft não equivale a implementação integrada.
@@ -163,3 +163,16 @@ Auditoria complementar: [E7.7 — evidência de hardware para flags de I/O em bl
 - O teste reproduz a fórmula/domínio do ROM; não executa o ROM v5.0 nem constitui uma nova execução em hardware. A evidência física publicada continua limitada ao escopo NMOS e aos casos descritos na auditoria complementar.
 - `OUT (C),0` permanece RESOLVED_FOR_DOCUMENTED_SMS_NMOS_PROFILE. CMOS/clones fora do levantamento e SMS físico permanecem NOT_VERIFIED/NOT_RUN.
 - E7.7 permanece IN_PROGRESS por outras famílias e efeitos semânticos ainda não reconciliados. E8 permanece BLOCKED; não iniciar ZEXDOC/ZEXALL.
+
+
+## 15. Reconciliação IM2/RETI — 2026-11-09
+
+**Baseline atual:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+
+- PR #677 integrou o cenário IM2 que assertiva INT no último T-state de `EdBlockIoRepeatInternal`, atende o vetor `I:FF`, executa `PUSH AF` e confirma F observável no handler.
+- PR #678 estendeu o handler para `PUSH AF; POP AF; EI; RETI` e executou a iteração de bloco seguinte, confirmando retorno ao PC ED, restauração de SP, IFF1/IFF2, EI delay, B, PC e WZ.
+- A cobertura contempla INIR, INDR, OTIR e OTDR e compara executor atômico e microsequenciador. Tempos verificados: 21 T da iteração repetitiva, 19 T da entrada IM2, 11 T PUSH AF, 10 T POP AF, 4 T EI, 14 T RETI e 21 T da iteração retomada.
+- CI #42569668886 (PR #677) e #42569931640 (PR #678) passaram nos HEADs exatos; merge SHA atual `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+- O teste respeita a semântica level-sensitive de `set_int_line`: o dispositivo desasserta INT após o serviço. A API one-shot `request_int` do executor atômico é limpa após o acknowledge para comparação.
+- Isso conclui o fixture CPU-only de observação e retomada. O ROM v5.0 completo ainda não foi executado no core, e não houve validação física no Master System.
+- E7.7 permanece IN_PROGRESS por outras famílias/efeitos e validações pendentes. E8 permanece BLOCKED.

@@ -1,7 +1,7 @@
 # E7.7 — Evidência independente de hardware para flags de I/O em bloco
 
 **Data:** 2026-11-09
-**Baseline do projeto:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`
+**Baseline do projeto:** `main` = `043ecb61d8d1cc77245fa72639d7f210d88cab26`
 **Escopo:** INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR, com foco no efeito de flags quando uma instrução repetitiva é interrompida antes de B chegar a zero.
 
 ## 1. Frente documental — fontes primárias e secundárias
@@ -68,7 +68,7 @@ Limite importante: a comparação entre executor atômico e microsequenciador n�
 1. Obter os resultados legíveis do v5.0 para cada chip/variante listado e arquivar proveniência, revisão e configuração do sistema.
 2. Extrair do assembly vetores concretos de B, valor de transferência, low term, PC e F esperado, sem copiar a fórmula do runtime.
 3. **CONCLUÍDO pela PR #675:** adicionar fixture independente no Rust para o B-loop do ROM, separado do teste de equivalência atomic↔sequencer.
-4. Executar uma versão adaptada do ROM no core com IM2, interrompendo precisamente o ciclo de repetição e verificando F, PC, WZ e retomada.
+4. **CONCLUÍDO pelas PRs #677/#678:** fixture CPU-only adaptado com IM2, INT no último T-state do ciclo de repetição, observação F via PUSH AF, retorno PUSH/POP AF + EI/RETI e retomada do ED. A execução do ROM v5.0 completo permanece NOT_RUN.
 5. Manter CMOS/clones como variantes separadas; não generalizar resultados NMOS para todos os chips.
 6. Não declarar E7.7 fechado até que as outras famílias/efeitos da auditoria semântica global também estejam reconciliados.
 
@@ -86,3 +86,22 @@ O fixture independente foi integrado pela PR #675. A fórmula de referência usa
 CI #42568885363 passou no HEAD exato `33d3dcf8d41f2f18d0826a1401013e9e1582503e`. Nenhum código de runtime foi alterado.
 
 O critério de fixture Rust está concluído. Continua pendente executar uma versão adaptada do ROM v5.0 no core com IM2 e validar a retomada após o interrupt. O teste não foi executado em hardware SMS; CMOS/clones seguem NOT_VERIFIED. E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+## 7. IM2/RETI e retomada — PRs #677/#678
+
+**Baseline:** `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+
+O teste `block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_tstate` agora reproduz a sequência de observação e retorno:
+
+1. Executa uma iteração repetitiva de INIR/INDR/OTIR/OTDR.
+2. Assertiva INT no último T-state de `EdBlockIoRepeatInternal`, com round-trip de snapshot no ponto da amostragem.
+3. Atende IM2 com I=0xC0 e vetor 0xFF; o vetor aponta para o handler 0x9000.
+4. O handler executa `PUSH AF; POP AF; EI; RETI`. F é inspecionado na pilha antes de POP AF.
+5. RETI retorna ao endereço ED original, restaura SP e IFF1/IFF2; a próxima iteração é executada e confirma B, PC e WZ.
+
+Tempos confirmados no CI: 21 T da iteração repetitiva, 19 T da entrada IM2, 11 T PUSH AF, 10 T POP AF, 4 T EI, 14 T RETI e 21 T da iteração retomada. A linha INT level-sensitive é desassertada pelo dispositivo após o serviço; o caminho atômico limpa a solicitação one-shot correspondente.
+
+CI #42569668886 (PR #677) e #42569931640 (PR #678) passaram. Nenhuma alteração de runtime foi necessária.
+
+**Status:** o fixture adaptado de IM2/RETI/retomada está PASS. O ROM v5.0 completo não foi executado no core e o SMS físico não foi testado. CMOS/clones seguem NOT_VERIFIED. E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.
