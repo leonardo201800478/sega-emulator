@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `6945a5845be1233eda2681d8092e5d5d5feadc0c` (2026-11-09, após PR #719). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b` (2026-11-09, após squash da PR #721/F-001). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -469,8 +469,8 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 ## 36. F-001 — BASE LD register/(HL)/immediate — fechamento proposto pela PR #721
 
 **Baseline main pré-PR:** `6945a5845be1233eda2681d8092e5d5d5feadc0c`.
-**PR:** #721, HEAD validado `ca1c513c860b2fa54fee49342fa11c1d5daa1b61`.
-**CI focado:** #6088 / run `42668618599` PASS no HEAD exato; agregador Rust quality/unit PASS.
+**PR:** #721, HEAD final validado `f22daad35219c9df3e12be7f9df4f0810076947f`, integrada no squash commit `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`.
+**CI focado:** #6091 / run `42669044781` PASS no HEAD final da PR; agregador Rust quality/unit PASS.
 
 - 25.344 vetores cobrem as 63 codificações válidas `LD r,r'`; HALT `0x76` permanece em F-026.
 - 2.816 vetores cobrem os sete destinos de `LD r,n` e `LD (HL),n`, todos os bytes e quatro endereços de HL para o destino memória.
@@ -485,4 +485,25 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 
 **Referências:** ZiLOG UM008011-0816, 8-bit Load Group, pp. 71, 72, 74, 79 e 85; MAME `src/devices/cpu/z80/z80.lst`; ares `ares/component/processor/z80/instructions.cpp`. MAME/ares sustentam comportamento comparativo de WZ/Q, não substituem a especificação ZiLOG.
 
-**Estado proposto:** CLOSED somente para semântica de software do perfil Zilog NMOS delimitado, efetivo após squash merge da PR #721. Não há validação física SMS; CMOS/clones permanecem NOT_VERIFIED. O workflow seletivo validou os pacotes Z80/SMS/SG-1000; regressão integral do workspace ficou SKIPPED/NOT RUN. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+**Estado:** CLOSED para semântica de software do perfil Zilog NMOS delimitado; integrada pela PR #721 no squash commit `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`. Não há validação física SMS; CMOS/clones permanecem NOT_VERIFIED. O workflow seletivo validou os pacotes Z80/SMS/SG-1000; regressão integral do workspace ficou SKIPPED/NOT RUN. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+## 37. F-002 — LD A,(BC)/(DE) e LD (BC)/(DE),A — fechamento proposto pela PR #722
+
+**Baseline main pré-PR:** `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`.
+**PR:** #722, código validado no HEAD `2eb200be183797f60721ce7db7327ec4469a4e9e`.
+**CI focado:** #6093 PASS no HEAD de código; documentação e CI final da branch em atualização.
+
+- 5.120 vetores: quatro opcodes × cinco endereços `00FE`, `00FF`, `1234`, `FFFE`, `FFFF` × 256 valores.
+- Todos os 256 padrões de F; flags preservadas; Q zerado e previous-Q retido.
+- Loads: `WZ=(BC/DE+1) mod 65536`.
+- Stores: `WZ=(A<<8) | ((BC/DE+1) & 0xFF)`.
+- Endereço `FFFF` valida wrap de WZ para a parte baixa; A permanece a fonte do byte alto no store.
+- M1 + ciclo de dados: 7T/2 M-cycles (4,3), com WAIT 1T no M1 e 2T no ciclo de dados.
+- Snapshot encode/decode + restore antes/depois de cada resposta; comparação atômica/microsequenciada e oracle WZ independente.
+- Integração SMS com as quatro formas, WAIT, snapshot durante M1 pendente, retomada e igualdade de estado/trace com execução contínua.
+- Nenhuma alteração de runtime necessária.
+
+**Referências:** ZiLOG UM008011-0816 pp. 88, 89, 91 e 92; MAME `z80.lst`; ares `instructions.cpp`; superzazu/z80. O manual não especifica WZ; as fórmulas são comportamento de compatibilidade NMOS corroborado pelas três implementações.
+
+**Estado proposto:** CLOSED para semântica de software do perfil NMOS delimitado, efetivo após squash merge da PR #722. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
