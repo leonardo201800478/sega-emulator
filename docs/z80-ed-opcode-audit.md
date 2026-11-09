@@ -1,6 +1,6 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Baseline remota reconciliada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09; PRs #709/#710 integradas).
+**Baseline remota reconciliada:** `main` = `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (2026-11-09; PRs #709–#718 integradas).
 **Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
@@ -364,3 +364,16 @@ F-023 permanece AUDIT_PARTIAL pelos limites já registrados; E7 IN_PROGRESS; E8 
 PR #716 MERGED em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062 e pós-merge #6063 PASS. O teste exaustivo `all_four_i_r_transfer_opcodes_cover_all_byte_values_iff2_and_carry` percorre 4.096 vetores nos dois executores; microsequenciador inclui WAIT em cada M1 e snapshot/restore por fronteira. A matriz do erratum foi ampliada para IFF2 e Carry 0/1 nos dois opcodes, com INT aceito imediatamente após a instrução, no microsequenciador e no executor atômico SMS.
 
 F-024 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 (pp. 94–97) especifica os quatro opcodes, 9T (4,5), flags normativas e erratum de P/V=0 quando INT ocorre durante LD A,I/R. X/Y não é explicitamente enumerado na descrição de flags do UM0080; a derivação do valor carregado é mantida como comportamento de referência MAME/ares, não como prova de silício. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 permanece IN_PROGRESS; E8 BLOCKED.
+
+
+## 10. F-025 — RETN/RETI e aliases, fechamento no perfil NMOS — PR #718
+
+PR #718 MERGED em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS no HEAD exato da PR. CI pós-merge #6072 / run `42658844499` pendente de confirmação.
+
+A matriz cobre ED45, ED4D, ED55, ED5D, ED65, ED6D, ED75 e ED7D. Para cada encoding: IFF2 false/true; IFF1 inicial inversa; SP normal, 0xFFFF e 0x0000; PC restaurado; SP incrementado com wrap; IFF1 recebe IFF2; IFF2 preservada; R incrementado pelos dois M1. O executor atômico e o microsequenciador são comparados; o microsequenciador verifica a ordem de barramento (fetch ED, fetch terminal, stack low, stack high), WAIT em cada pedido nos dois casos de wrap e snapshot encode/decode + restore após cada transação. Tempos: 14T nominal e 18T com quatro WAITs.
+
+WZ é atualizado para o endereço restaurado em PC. Essa expectativa foi corrigida após a primeira execução de teste, que incorretamente esperava preservar o WZ inicial; MAME (`macro retn`/`macro reti`) e ares (`instructionRETN`/`instructionRETI`) confirmam WZ=PC. Nenhum código de runtime foi alterado.
+
+UM0080 documenta RETN e RETI e sua semântica interna; MAME distingue a notificação `daisy_call_reti_device()` do retorno RETI. Os perfis SMS/SG-1000 atuais não possuem consumidor daisy-chain, portanto essa notificação é NOT_APPLICABLE neste escopo. Os oito encodings de IM0/1/2 permanecem cobertos pela auditoria ED anterior.
+
+**Classificação:** F-025 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000. Hardware SMS NOT RUN; CMOS/R800/Z80N/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
