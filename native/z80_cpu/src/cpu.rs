@@ -3351,7 +3351,7 @@ mod tests {
     }
 
     #[test]
-    fn ed_rrd_rld_exhaustive_nibble_transform_and_documented_flags() {
+    fn ed_rrd_rld_exhaustive_nibble_transform_and_flag_contract() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[0x1000] = 0xED;
 
