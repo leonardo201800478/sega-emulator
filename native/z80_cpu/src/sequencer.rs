@@ -10591,6 +10591,12 @@ mod ed_block_io_differential_tests {
     /// https://github.com/MrKWatkins/ZXSpectrumNextTests/blob/develop/Tests/ZX48_ZX128/Z80BlockInstructionFlags/z80_block_flags_test.asm
     #[test]
     fn block_io_repeat_flags_match_hardware_banks_formula_across_b_loop() {
+        const FLAG_S: u8 = 0x80;
+        const FLAG_XY: u8 = 0x28;
+        const FLAG_H: u8 = 0x10;
+        const FLAG_PV: u8 = 0x04;
+        const FLAG_N: u8 = 0x02;
+        const FLAG_C: u8 = 0x01;
         let pc_sites = [0x8002_u16, 0x8802, 0xA002, 0xA802];
         let cases = [
             (0xB3, false, 0xFF, 0x4010), // OTIR: carry, M.7=1
