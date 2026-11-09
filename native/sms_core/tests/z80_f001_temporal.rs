@@ -29,6 +29,7 @@ fn assert_scheduler_case(
     continuous.cpu_mut().registers.set_hl(hl);
     continuous.cpu_mut().wz = INITIAL_WZ;
     continuous.cpu_mut().q = INITIAL_Q;
+    continuous.cpu_mut().refresh = 0x80;
 
     let mut machine = SmsTemporalMachine::new(program.to_vec(), 3).unwrap();
     machine.set_trace_enabled(true);
@@ -39,6 +40,7 @@ fn assert_scheduler_case(
     machine.cpu_mut().registers.set_hl(hl);
     machine.cpu_mut().wz = INITIAL_WZ;
     machine.cpu_mut().q = INITIAL_Q;
+    machine.cpu_mut().refresh = 0x80;
 
     let continuous_step = continuous.step_instruction(1).unwrap();
     assert!(matches!(
@@ -66,7 +68,7 @@ fn assert_scheduler_case(
     assert_eq!(restored.cpu().wz, INITIAL_WZ);
     assert_eq!(restored.cpu().q, 0);
     assert_eq!(restored.cpu().q_previous, INITIAL_Q);
-    assert_eq!(restored.cpu().refresh & 0x7F, 1);
+    assert_eq!(restored.cpu().refresh, 0x81);
 
     if let Some(value) = expected_a {
         assert_eq!(restored.cpu().registers.a, value);
