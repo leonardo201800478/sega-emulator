@@ -167,16 +167,28 @@ fn execute_atomic(
     (cpu, bus, tstates)
 }
 
-fn execute_microsequencer(
-    prefixes: &[u8],
+struct MicroAluCase<'a> {
+    prefixes: &'a [u8],
     opcode: u8,
     accumulator: u8,
     flags: u8,
     ix: u16,
     iy: u16,
-    waits: &[u32],
+    waits: &'a [u32],
     snapshot_after_prefix: bool,
-) -> (Z80MicroSequencer, u32) {
+}
+
+fn execute_microsequencer(case: MicroAluCase<'_>) -> (Z80MicroSequencer, u32) {
+    let MicroAluCase {
+        prefixes,
+        opcode,
+        accumulator,
+        flags,
+        ix,
+        iy,
+        waits,
+        snapshot_after_prefix,
+    } = case;
     assert!(!prefixes.is_empty());
     assert_eq!(waits.len(), prefixes.len() + 1);
 
@@ -224,16 +236,28 @@ fn expected_refresh(m1_count: usize) -> u8 {
     (INITIAL_REFRESH & 0x80) | (INITIAL_REFRESH.wrapping_add(m1_count) & 0x7F)
 }
 
-fn assert_shared_state(
-    micro: &Z80MicroSequencer,
-    atomic: &Z80,
+struct ExpectedAluState<'a> {
     expected_a: u8,
     expected_f: u8,
-    prefixes: &[u8],
+    prefixes: &'a [u8],
     ix: u16,
     iy: u16,
     atomic_tstates: u32,
+}
+
+fn assert_shared_state(
+    micro: &Z80MicroSequencer,
+    atomic: &Z80,
+    expected: ExpectedAluState<'_>,
 ) {
+    let ExpectedAluState {
+        expected_a,
+        expected_f,
+        prefixes,
+        ix,
+        iy,
+        atomic_tstates,
+    } = expected;
     let mut expected_registers = initial_registers(expected_a, expected_f);
     expected_registers.pc = START_PC.wrapping_add(u16::try_from(prefixes.len()).unwrap() + 1);
 
@@ -285,16 +309,16 @@ fn all_16_dd_fd_half_register_alu_forms_match_atomic_boundary_matrix() {
                                 ix,
                                 iy,
                             );
-                            let (micro, micro_tstates) = execute_microsequencer(
-                                &[prefix],
+                            let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
+                                prefixes: &[prefix],
                                 opcode,
                                 accumulator,
-                                initial_flags,
+                                flags: initial_flags,
                                 ix,
                                 iy,
-                                &[0, 0],
-                                false,
-                            );
+                                waits: &[0, 0],
+                                snapshot_after_prefix: false,
+                            });
 
                             assert_eq!(atomic_tstates, 8);
                             assert_eq!(micro_tstates, 8);
@@ -308,12 +332,14 @@ fn all_16_dd_fd_half_register_alu_forms_match_atomic_boundary_matrix() {
                             assert_shared_state(
                                 &micro,
                                 &atomic,
-                                atomic.registers.a,
-                                atomic.registers.f,
-                                &[prefix],
-                                ix,
-                                iy,
-                                atomic_tstates,
+                                ExpectedAluState {
+                                    expected_a: atomic.registers.a,
+                                    expected_f: atomic.registers.f,
+                                    prefixes: &[prefix],
+                                    ix,
+                                    iy,
+                                    atomic_tstates,
+                                },
                             );
                             tested += 1;
                         }
@@ -372,16 +398,16 @@ fn fixed_vectors_pin_all_alu_flags_and_cp_operand_xy_behavior() {
                 let (ix, iy) = index_with_half(prefix, source, operand);
                 let (atomic, bus, atomic_tstates) =
                     execute_atomic(&[prefix], opcode, accumulator, flags, ix, iy);
-                let (micro, micro_tstates) = execute_microsequencer(
-                    &[prefix],
+                let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
+                    prefixes: &[prefix],
                     opcode,
                     accumulator,
                     flags,
                     ix,
                     iy,
-                    &[0, 0],
-                    false,
-                );
+                    waits: &[0, 0],
+                    snapshot_after_prefix: false,
+                });
 
                 assert_eq!(atomic_tstates, 8);
                 assert_eq!(micro_tstates, 8);
@@ -393,12 +419,14 @@ fn fixed_vectors_pin_all_alu_flags_and_cp_operand_xy_behavior() {
                 assert_shared_state(
                     &micro,
                     &atomic,
-                    expected_a,
-                    expected_f,
-                    &[prefix],
-                    ix,
-                    iy,
-                    atomic_tstates,
+                    ExpectedAluState {
+                        expected_a,
+                        expected_f,
+                        prefixes: &[prefix],
+                        ix,
+                        iy,
+                        atomic_tstates,
+                    },
                 );
             }
         }
@@ -417,16 +445,16 @@ fn all_half_register_alu_forms_resume_waits_and_snapshot_both_m1_safe_points() {
                 let (ix, iy) = index_with_half(prefix, source, operand);
                 let (atomic, bus, atomic_tstates) =
                     execute_atomic(&[prefix], opcode, accumulator, flags, ix, iy);
-                let (micro, micro_tstates) = execute_microsequencer(
-                    &[prefix],
+                let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
+                    prefixes: &[prefix],
                     opcode,
                     accumulator,
                     flags,
                     ix,
                     iy,
-                    &[1, 2],
-                    true,
-                );
+                    waits: &[1, 2],
+                    snapshot_after_prefix: true,
+                });
 
                 assert_eq!(atomic_tstates, 8);
                 assert_eq!(micro_tstates, 11);
@@ -434,12 +462,14 @@ fn all_half_register_alu_forms_resume_waits_and_snapshot_both_m1_safe_points() {
                 assert_shared_state(
                     &micro,
                     &atomic,
-                    atomic.registers.a,
-                    atomic.registers.f,
-                    &[prefix],
-                    ix,
-                    iy,
-                    atomic_tstates,
+                    ExpectedAluState {
+                        expected_a: atomic.registers.a,
+                        expected_f: atomic.registers.f,
+                        prefixes: &[prefix],
+                        ix,
+                        iy,
+                        atomic_tstates,
+                    },
                 );
             }
         }
@@ -456,17 +486,17 @@ fn repeated_dd_fd_prefixes_select_the_last_index_half_for_alu() {
         let (ix, iy) = index_with_half(effective_prefix, source, operand);
         let (atomic, bus, atomic_tstates) =
             execute_atomic(prefixes, opcode, accumulator, flags, ix, iy);
-        let waits = vec![0; prefixes.len() + 1];
-        let (micro, micro_tstates) = execute_microsequencer(
+        let waits = [0; 3];
+        let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
             prefixes,
             opcode,
             accumulator,
             flags,
             ix,
             iy,
-            &waits,
-            true,
-        );
+            waits: &waits,
+            snapshot_after_prefix: true,
+        });
 
         assert_eq!(atomic_tstates, 12);
         assert_eq!(micro_tstates, 12);
@@ -474,12 +504,14 @@ fn repeated_dd_fd_prefixes_select_the_last_index_half_for_alu() {
         assert_shared_state(
             &micro,
             &atomic,
-            atomic.registers.a,
-            atomic.registers.f,
-            prefixes,
-            ix,
-            iy,
-            atomic_tstates,
+            ExpectedAluState {
+                expected_a: atomic.registers.a,
+                expected_f: atomic.registers.f,
+                prefixes,
+                ix,
+                iy,
+                atomic_tstates,
+            },
         );
     }
 }
