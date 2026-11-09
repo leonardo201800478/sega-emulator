@@ -3351,6 +3351,70 @@ mod tests {
     }
 
     #[test]
+    fn ed_rrd_rld_exhaustive_nibble_transform_and_documented_flags() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[0x1000] = 0xED;
+
+        for opcode in [0x67, 0x6F] {
+            bus.0[0x1001] = opcode;
+            for accumulator in u8::MIN..=u8::MAX {
+                for memory_value in u8::MIN..=u8::MAX {
+                    let address = if accumulator == u8::MAX && memory_value == u8::MAX {
+                        0xFFFF
+                    } else {
+                        0xC000
+                    };
+                    bus.0[usize::from(address)] = memory_value;
+
+                    for carry in [0, FLAG_C] {
+                        let (expected_a, expected_memory) = if opcode == 0x67 {
+                            (
+                                (accumulator & 0xF0) | (memory_value & 0x0F),
+                                ((accumulator & 0x0F) << 4) | (memory_value >> 4),
+                            )
+                        } else {
+                            (
+                                (accumulator & 0xF0) | (memory_value >> 4),
+                                (memory_value << 4) | (accumulator & 0x0F),
+                            )
+                        };
+                        let mut expected_flags = carry | (expected_a & (FLAG_S | FLAG_XY));
+                        if expected_a == 0 {
+                            expected_flags |= FLAG_Z;
+                        }
+                        if expected_a.count_ones().is_multiple_of(2) {
+                            expected_flags |= FLAG_PV;
+                        }
+
+                        let mut cpu = Z80::default();
+                        cpu.registers.pc = 0x1000;
+                        cpu.registers.a = accumulator;
+                        cpu.registers.set_hl(address);
+                        cpu.registers.f =
+                            FLAG_S | FLAG_Z | FLAG_H | FLAG_PV | FLAG_N | FLAG_XY | carry;
+                        cpu.r = 0xFE;
+                        cpu.wz = 0xABCD;
+
+                        assert_eq!(
+                            cpu.step(&mut bus),
+                            Ok(18),
+                            "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}"
+                        );
+                        assert_eq!(cpu.registers.a, expected_a);
+                        assert_eq!(bus.0[usize::from(address)], expected_memory);
+                        assert_eq!(cpu.registers.f, expected_flags);
+                        assert_eq!(cpu.q, expected_flags);
+                        assert_eq!(cpu.registers.hl(), address);
+                        assert_eq!(cpu.registers.pc, 0x1002);
+                        assert_eq!(cpu.r, 0x80);
+                        assert_eq!(cpu.wz, address.wrapping_add(1));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ed_block_transfer_vectors_check_copy_direction_counter_flags_and_repeat() {
         let mut ldi_bus = TestBus([0; 0x10000]);
         ldi_bus.0[..2].copy_from_slice(&[0xED, 0xA0]);
