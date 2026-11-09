@@ -71,7 +71,7 @@ impl Default for SegaApp {
     fn default() -> Self {
         Self {
             rom_path: String::new(),
-            region: String::new(),
+            region: "usa".to_owned(),
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
             recent_roms: load_recent_roms(),
@@ -2128,6 +2128,8 @@ mod tests {
         let app = SegaApp::default();
         assert!(!app.diagnostics_enabled);
         assert!(app.diagnostics_error.is_none());
+        assert_eq!(app.region, "usa");
+        assert!(app.fps_overlay_enabled);
     }
 
     #[test]
