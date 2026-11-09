@@ -3239,7 +3239,6 @@ mod temporal_frame_tests {
     }
 }
 
-
 #[cfg(test)]
 mod f005_sp_temporal_tests {
     use super::SmsTemporalMachine;
