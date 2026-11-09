@@ -9577,7 +9577,9 @@ mod ed_absolute_register_pair_differential_tests {
 
 #[cfg(test)]
 mod ed_return_nibble_rotate_differential_tests {
-    use super::{Z80MicroSequencer, Z80MicroStep};
+    use super::{
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer, Z80MicroStep,
+    };
     use crate::bus::CpuBus;
     use crate::{
         Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
@@ -9748,6 +9750,63 @@ mod ed_return_nibble_rotate_differential_tests {
     fn rrd_and_rld_match_atomic_nibble_rotation_and_flags() {
         run_case(0x67, false);
         run_case(0x6F, false);
+    }
+
+    fn run_nibble_case(opcode: u8, accumulator: u8, memory_value: u8, carry: u8, address: u16) {
+        let mut initial = initial_state();
+        initial.registers.a = accumulator;
+        initial.registers.f = FLAG_S | FLAG_Z | FLAG_H | FLAG_PV | FLAG_N | FLAG_XY | carry;
+        initial.registers.set_hl(address);
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0xED;
+        atomic_bus.memory[0x1001] = opcode;
+        atomic_bus.memory[usize::from(address)] = memory_value;
+        let sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(18));
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(initial).unwrap();
+        let (sequenced, sequenced_bus, tstates) = run_sequenced(sequenced, sequenced_bus, true);
+
+        assert_eq!(tstates, 22);
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}, HL={address:04X}"
+        );
+        assert_eq!(sequenced_bus.reads, vec![0x1000, 0x1001, address]);
+        assert_eq!(
+            sequenced_bus.writes,
+            vec![(address, atomic_bus.memory[usize::from(address)])]
+        );
+        assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.registers.pc, 0x1002);
+        assert_eq!(sequenced.refresh, 0x80);
+        assert_eq!(sequenced.wz, address.wrapping_add(1));
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn rrd_rld_boundary_vectors_preserve_wait_snapshot_and_bus_order() {
+        let vectors = [
+            (0x00, 0x00, 0xC000, 0),
+            (0x00, 0xFF, 0xC000, FLAG_C),
+            (0x0F, 0xF0, 0xC000, 0),
+            (0xFF, 0xFF, 0xFFFF, FLAG_C),
+            (0x80, 0x01, 0xC000, FLAG_C),
+            (0x01, 0x80, 0xC000, 0),
+            (0xA5, 0x5A, 0xC000, FLAG_C),
+            (0x12, 0x34, 0xC000, 0),
+        ];
+
+        for opcode in [0x67, 0x6F] {
+            for (accumulator, memory_value, address, carry) in vectors {
+                run_nibble_case(opcode, accumulator, memory_value, carry, address);
+            }
+        }
     }
 
     #[test]
