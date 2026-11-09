@@ -2,7 +2,7 @@
 
 **Scope:** all project phases and platforms (P0–P9).
 
-The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository. The path classifier uses `predicate-quantifier: some-with-excludes` whenever a filter combines positive and negated patterns; without that mode, negated patterns can match unrelated files and cause false-positive jobs.
+The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository. The path classifier uses `predicate-quantifier: some-with-excludes` whenever a filter combines positive and negated patterns; without that mode, negated patterns can match unrelated files and cause false-positive jobs. PSG, VDP, and SDL3 input paths have dedicated package-level jobs; these jobs replace root-workspace regression for isolated changes in those components.
 
 ## Validation matrix
 
@@ -10,10 +10,10 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 | --- | --- |
 | Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU/ALU/bus integration sources in both console cores and Z80-specific SMS tests are classified into this focused path. Do not run unrelated workspace or host-platform builds for Z80-only changes. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
-| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
-| Video core / VDP and video runtime | Root workspace validation. Windows D3D12/DXGI validation runs for `native/video_core`, `native/video_runtime`, and the shared observability dependency. |
-| Audio chips / DSP / audio runtime | Root workspace validation. Windows WASAPI/XAudio2 and Linux audio-output validation run for `native/sn76489`, `native/audio_runtime`, `native/audio_output`, Scheduler/temporal dependencies used by audio runtime, and shared observability. |
-| SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation. Shared observability changes also validate this consumer. |
+| PSG / audio integration | Package-scoped rustfmt, Clippy, and tests for `sega-sn76489`, `sega-audio-runtime`, `sega-sms-core`, and `sega-sg1000-core`; Windows WASAPI/XAudio2 and Linux audio-output validation for the host/dependency fan-out. |
+| VDP / video integration | Package-scoped rustfmt, Clippy, and tests for `sega-video`, `sega-sms-core`, and `sega-sg1000-core`; Windows D3D12/DXGI validation for video-core/runtime changes. |
+| SDL3 input integration | Package-scoped rustfmt, Clippy, and tests for `sega-input-runtime`, `sega-sms-core`, and `sega-sg1000-core`; Windows SDL3 input validation for input-runtime changes. |
+| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes; audio and application consumers are validated when their dependency graph is affected. |
 | Native egui application and SMS worker integration | Windows-targeted application format, Clippy, and tests run for the application and its non-Z80 runtime dependencies: SMS runtime/core, video, audio, input, Scheduler/temporal core, and observability. Z80-only CPU/ALU/bus integration sources and Z80-specific tests in SMS core are excluded from this app fan-out so a CPU-only correction does not start the Windows host build. |
 | PowerShell tooling | Parse only the changed `.ps1` scripts |
 | Documentation text (Markdown, MDX, RST, TXT) | `git diff --check` for whitespace and patch hygiene only; no Rust build, Clippy, or tests |
@@ -21,7 +21,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 
 ## Dependency fan-out
 
-1. Shared contracts and libraries must trigger validation for their actual consumers. In particular, `native/observability` fans out to video, audio, input, and application consumers; `native/machine_scheduler` and `native/temporal_core` fan out to audio runtime and application consumers.
+1. Shared contracts and libraries must trigger validation for their actual consumers. In particular, `native/observability` fans out to video, audio, input, and application consumers; `native/machine_scheduler` and `native/temporal_core` fan out to scheduler stress, audio runtime, and application consumers. PSG, VDP, and input console-integration source files are excluded from the generic workspace classifier only when their dedicated focused job covers them.
 2. A change spanning multiple components runs the union of those components' required suites.
 3. Changes to global Cargo configuration, the root workspace manifest/lockfile, root `build.rs`, Rust toolchain configuration, common build scripts, or CI workflows trigger broad regression.
 4. A component-local manifest or lockfile change triggers that component and its real dependents, not every unrelated Windows host validation by default.
