@@ -187,3 +187,15 @@ Foi criado o [Checklist mestre de auditoria e fechamento do Z80](z80-master-audi
 As baselines antigas mantidas nas seções anteriores são fotografias históricas e não devem ser reescritas como se tivessem sido auditadas no SHA atual. A partir desta seção, novas atualizações devem referenciar o SHA efetivamente consultado.
 
 **Estado:** auditoria global IN_PROGRESS; PR #680 permanece aberta e bloqueada por CI FAIL; E8/ZEXDOC/ZEXALL permanece BLOCKED.
+
+
+## 17. Reabertura do inventário operacional — snapshot documental após PR #681
+
+**Baseline da main consultada para esta varredura:** `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320` (PR #681, checklist mestre, merge concluído).
+
+- O checklist `docs/z80-master-audit-checklist.md` passa a ser o registro de cobertura e evidências por ID.
+- A primeira varredura estática DD/FD confirmou que o executor atômico cobre famílias IXH/IXL/IYH/IYL que ainda não têm dispatch equivalente no microsequenciador: LD r,r' register-only e ALU A,IXH/IXL/IYH/IYL.
+- A PR #680 permanece em andamento para INC/DEC e LD imediato das metades indexadas. A falha de snapshot foi corrigida no HEAD `48aad1f...`; CI #5924 passou nos gates focados. O HEAD atual da PR é `ed113041...`, com CI #5925 executando regressão integral; fmt, Clippy workspace e testes workspace já passaram, mas validações Windows ainda estão em execução.
+- Não declarar F-028/F-036/F-037 fechados nem liberar E8. O fechamento exige merge e atualização do ledger no SHA resultante.
+
+**Estado:** E7.7 IN_PROGRESS; E8 BLOCKED.
