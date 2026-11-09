@@ -1,6 +1,6 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
-**Status:** integração proposta; resultados de execução ainda pendentes.
+**Status:** PR #691; validação externa pendente no HEAD desta branch.
 **Sega Emulator baseline:** `95dacafb083847991b7fbc59bcfa099e8f297685`.
 **Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).
 **Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).
