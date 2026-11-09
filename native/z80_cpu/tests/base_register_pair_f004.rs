@@ -35,12 +35,7 @@ struct Access {
     wait_tstates: u32,
 }
 
-fn access(
-    operation: Z80BusOperation,
-    address: u16,
-    base_tstates: u8,
-    wait_tstates: u32,
-) -> Access {
+fn access(operation: Z80BusOperation, address: u16, base_tstates: u8, wait_tstates: u32) -> Access {
     Access {
         operation,
         address,
@@ -136,11 +131,20 @@ fn assert_common_state(
     expected_q_previous: u8,
 ) {
     let context = format!("opcode={opcode:02X}");
-    assert_eq!(atomic.registers, expected_registers, "{context}: atomic registers");
-    assert_eq!(micro.registers, expected_registers, "{context}: micro registers");
+    assert_eq!(
+        atomic.registers, expected_registers,
+        "{context}: atomic registers"
+    );
+    assert_eq!(
+        micro.registers, expected_registers,
+        "{context}: micro registers"
+    );
     assert_eq!(atomic.wz, expected_wz, "{context}: atomic WZ");
     assert_eq!(micro.wz, expected_wz, "{context}: micro WZ");
-    assert_eq!(atomic.registers.f, expected_registers.f, "{context}: F preserved");
+    assert_eq!(
+        atomic.registers.f, expected_registers.f,
+        "{context}: F preserved"
+    );
     assert_eq!(atomic.q, 0, "{context}: atomic Q cleared");
     assert_eq!(micro.q, 0, "{context}: micro Q cleared");
     assert_eq!(
@@ -153,8 +157,14 @@ fn assert_common_state(
         expected_q_previous,
         "{context}: micro previous-Q"
     );
-    assert_eq!(atomic.r, 0x80, "{context}: atomic refresh wraps low seven bits");
-    assert_eq!(micro.refresh, 0x80, "{context}: micro refresh wraps low seven bits");
+    assert_eq!(
+        atomic.r, 0x80,
+        "{context}: atomic refresh wraps low seven bits"
+    );
+    assert_eq!(
+        micro.refresh, 0x80,
+        "{context}: micro refresh wraps low seven bits"
+    );
     assert_eq!(
         atomic.export_architectural_state(),
         micro.export_architectural_state(),
@@ -194,8 +204,7 @@ fn assert_pair_immediate_case(
     micro.wz = INITIAL_WZ;
     micro.q = INITIAL_Q;
     micro.refresh = 0xFF;
-    let (micro, micro_tstates, accesses) =
-        run_microsequenced(micro, memory, &IMMEDIATE_WAITS);
+    let (micro, micro_tstates, accesses) = run_microsequenced(micro, memory, &IMMEDIATE_WAITS);
 
     let expected_accesses = vec![
         access(
@@ -220,7 +229,14 @@ fn assert_pair_immediate_case(
     assert_eq!(atomic_tstates, 10, "LD rr,nn nominal timing");
     assert_eq!(micro_tstates, 16, "10 nominal T-states plus six WAITs");
     assert_eq!(accesses, expected_accesses, "LD rr,nn bus order");
-    assert_common_state(opcode, &atomic, &micro, expected_registers, INITIAL_WZ, INITIAL_Q);
+    assert_common_state(
+        opcode,
+        &atomic,
+        &micro,
+        expected_registers,
+        INITIAL_WZ,
+        INITIAL_Q,
+    );
 }
 
 fn assert_absolute_word_case(
@@ -281,8 +297,7 @@ fn assert_absolute_word_case(
     micro.wz = INITIAL_WZ;
     micro.q = INITIAL_Q;
     micro.refresh = 0xFF;
-    let (micro, micro_tstates, accesses) =
-        run_microsequenced(micro, memory, &ABSOLUTE_WAITS);
+    let (micro, micro_tstates, accesses) = run_microsequenced(micro, memory, &ABSOLUTE_WAITS);
 
     let low_operation = if is_load {
         Z80BusOperation::MemoryRead
@@ -319,9 +334,22 @@ fn assert_absolute_word_case(
     let expected_memory = (value_low, value_high);
     assert_eq!(atomic_tstates, 16, "LD (nn),HL / LD HL,(nn) nominal timing");
     assert_eq!(micro_tstates, 25, "16 nominal T-states plus nine WAITs");
-    assert_eq!(accesses, expected_accesses, "absolute HL transfer bus order");
-    assert_common_state(opcode, &atomic, &micro, expected_registers, expected_wz, INITIAL_Q);
-    assert_eq!(atomic_memory, expected_memory, "atomic low/high memory result");
+    assert_eq!(
+        accesses, expected_accesses,
+        "absolute HL transfer bus order"
+    );
+    assert_common_state(
+        opcode,
+        &atomic,
+        &micro,
+        expected_registers,
+        expected_wz,
+        INITIAL_Q,
+    );
+    assert_eq!(
+        atomic_memory, expected_memory,
+        "atomic low/high memory result"
+    );
     assert_eq!(
         (
             memory[usize::from(address)],
@@ -366,7 +394,10 @@ fn ld_register_pair_immediate_covers_all_pairs_data_bytes_and_flag_patterns() {
         }
     }
 
-    assert_eq!(tested, 1_052, "four pairs × (256 patterns + seven boundaries)");
+    assert_eq!(
+        tested, 1_052,
+        "four pairs × (256 patterns + seven boundaries)"
+    );
 }
 
 #[test]
