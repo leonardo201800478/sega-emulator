@@ -11,6 +11,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
+use sega_debugger_core::BreakpointSet;
 use sega_audio_runtime::AudioOutputMetrics;
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
@@ -182,6 +183,7 @@ enum WorkerCommand {
     Reset(SyncSender<Result<(), String>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
+    SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
@@ -280,6 +282,11 @@ impl SmsTemporalWorker {
 
     pub fn stop(&self) -> Result<(), String> {
         self.request_unit(WorkerCommand::Stop)
+    }
+
+    /// Add or remove an instruction-boundary program-counter breakpoint.
+    pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
     }
 
     pub fn step_frame(&self, max_instructions: usize) -> Result<usize, String> {
@@ -569,18 +576,19 @@ impl Drop for SmsTemporalWorker {
 
 fn execute_frame(
     machine: &mut SmsTemporalMachine,
+    breakpoints: &BreakpointSet,
     max_instructions: usize,
     publish_audio: bool,
     audio_session: &mut Option<Box<dyn AudioSession>>,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
-) -> Result<(usize, Duration), String> {
+) -> Result<(usize, Duration, bool), String> {
     let frame_started = Instant::now();
     let machine_time_start = machine.now().ticks();
     let step_started = Instant::now();
-    let instructions = machine
-        .step_frame(max_instructions)
+    let (instructions, breakpoint_hit) = machine
+        .step_frame_until(max_instructions, |pc| breakpoints.contains(u32::from(pc)))
         .map_err(|error| error.to_string())?;
     let step_frame_elapsed = step_started.elapsed();
     let machine_time_end = machine.now().ticks();
@@ -681,7 +689,7 @@ fn execute_frame(
         "SMS frame pacing diagnostic"
     );
 
-    Ok((instructions, frame_wait))
+    Ok((instructions, frame_wait, breakpoint_hit))
 }
 
 fn worker_loop(
@@ -692,6 +700,7 @@ fn worker_loop(
     telemetry: Arc<WorkerTelemetry>,
 ) {
     let mut running = false;
+    let mut breakpoints = BreakpointSet::default();
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
@@ -714,6 +723,7 @@ fn worker_loop(
             if !handle_command(
                 command,
                 &mut machine,
+                &mut breakpoints,
                 &mut rom,
                 &region,
                 &mut running,
@@ -729,6 +739,7 @@ fn worker_loop(
 
         match execute_frame(
             &mut machine,
+            &breakpoints,
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
             true,
             &mut audio_session,
@@ -736,8 +747,18 @@ fn worker_loop(
             &mut video_sequence,
             &telemetry,
         ) {
-            Ok((_, frame_wait)) => {
-                if !frame_wait.is_zero() {
+            Ok((_, frame_wait, breakpoint_hit)) => {
+                if breakpoint_hit {
+                    running = false;
+                    telemetry.running.store(false, Ordering::Release);
+                    if let Some(session) = audio_session.as_mut() {
+                        if let Err(error) = session.suspend_and_flush() {
+                            telemetry.set_audio_error(Some(error));
+                        }
+                        telemetry.set_audio_metrics(session.metrics());
+                    }
+                }
+                if running && !frame_wait.is_zero() {
                     match commands.recv_timeout(frame_wait) {
                         Ok(command) => {
                             if !handle_command(
@@ -788,6 +809,7 @@ fn worker_loop(
 fn handle_command(
     command: WorkerCommand,
     machine: &mut SmsTemporalMachine,
+    breakpoints: &mut BreakpointSet,
     rom: &mut Vec<u8>,
     region: &str,
     running: &mut bool,
@@ -900,6 +922,7 @@ fn handle_command(
             } else {
                 match execute_frame(
                     machine,
+                    breakpoints,
                     max_instructions,
                     false,
                     audio_session,
@@ -907,7 +930,7 @@ fn handle_command(
                     video_sequence,
                     telemetry,
                 ) {
-                    Ok((instructions, _)) => {
+                    Ok((instructions, _, _)) => {
                         let _ = reply.send(Ok(instructions));
                     }
                     Err(error) => {
@@ -916,6 +939,20 @@ fn handle_command(
                     }
                 }
             }
+        }
+        WorkerCommand::SetBreakpoint(address, enabled, reply) => {
+            let result = if enabled {
+                if breakpoints.insert(u32::from(address)) {
+                    Ok(())
+                } else {
+                    Err("breakpoint already exists or the 64-address limit was reached".to_owned())
+                }
+            } else if breakpoints.remove(u32::from(address)) {
+                Ok(())
+            } else {
+                Err("breakpoint address was not configured".to_owned())
+            };
+            let _ = reply.send(result);
         }
         WorkerCommand::SetController(player, buttons, reply) => {
             let result = machine
