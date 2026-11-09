@@ -17,11 +17,7 @@ fn round_trip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
     Z80MicroSequencer::restore_state(decoded).expect("snapshot restores")
 }
 
-fn complete_fetch(
-    cpu: &mut Z80MicroSequencer,
-    fetch: Z80BusRequest,
-    value: u8,
-) -> Z80MicroStep {
+fn complete_fetch(cpu: &mut Z80MicroSequencer, fetch: Z80BusRequest, value: u8) -> Z80MicroStep {
     *cpu = round_trip(cpu.clone());
     cpu.complete_bus_cycle(fetch.id, Some(value))
         .expect("opcode fetch completes")
@@ -38,13 +34,35 @@ fn is_explicit_ed_encoding(opcode: u8) -> bool {
         || opcode & 0xCF == 0x4B
         || matches!(
             opcode,
-            0x46 | 0x4E | 0x56 | 0x5E | 0x66 | 0x6E | 0x76 | 0x7E
-                | 0x47 | 0x4F | 0x57 | 0x5F
-                | 0x67 | 0x6F
-                | 0xA0 | 0xA1 | 0xA2 | 0xA3
-                | 0xA8 | 0xA9 | 0xAA | 0xAB
-                | 0xB0 | 0xB1 | 0xB2 | 0xB3
-                | 0xB8 | 0xB9 | 0xBA | 0xBB
+            0x46 | 0x4E
+                | 0x56
+                | 0x5E
+                | 0x66
+                | 0x6E
+                | 0x76
+                | 0x7E
+                | 0x47
+                | 0x4F
+                | 0x57
+                | 0x5F
+                | 0x67
+                | 0x6F
+                | 0xA0
+                | 0xA1
+                | 0xA2
+                | 0xA3
+                | 0xA8
+                | 0xA9
+                | 0xAA
+                | 0xAB
+                | 0xB0
+                | 0xB1
+                | 0xB2
+                | 0xB3
+                | 0xB8
+                | 0xB9
+                | 0xBA
+                | 0xBB
         )
 }
 
@@ -85,10 +103,7 @@ fn all_178_reserved_ed_encodings_retire_after_two_m1_fetches() {
         let retired = complete_fetch(&mut cpu, terminal_fetch, opcode);
         assert_eq!(
             retired,
-            Z80MicroStep::InstructionRetired {
-                opcode,
-                tstates: 8,
-            },
+            Z80MicroStep::InstructionRetired { opcode, tstates: 8 },
             "ED {opcode:02X}"
         );
 
@@ -99,7 +114,10 @@ fn all_178_reserved_ed_encodings_retire_after_two_m1_fetches() {
         assert_eq!(state.q, 0x00, "ED {opcode:02X}: no F write");
         assert_eq!(state.q_previous, 0xA5, "ED {opcode:02X}: previous Q");
         assert_eq!(state.wz, 0xBEEF, "ED {opcode:02X}: WZ preserved");
-        assert!(!state.p, "ED {opcode:02X}: P latch consumed at instruction boundary");
+        assert!(
+            !state.p,
+            "ED {opcode:02X}: P latch consumed at instruction boundary"
+        );
         assert!(state.iff1 && state.iff2, "ED {opcode:02X}: IFF preserved");
         assert_eq!(state.interrupt_mode, 2, "ED {opcode:02X}: IM preserved");
         assert_eq!(state.phase, sega_z80_cpu::Z80MicroSequencerPhase::Ready);
