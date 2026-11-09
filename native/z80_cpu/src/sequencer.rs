@@ -10300,7 +10300,6 @@ mod ed_block_compare_differential_tests {
         };
         assert_eq!(atomic.wz, expected_wz, "atomic ED {opcode:02X} WZ");
 
-
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
         let (sequenced, sequenced_bus, tstates, cycles) =
