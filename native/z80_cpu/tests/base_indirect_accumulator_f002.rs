@@ -7,8 +7,7 @@
 
 use sega_z80_cpu::bus::CpuBus;
 use sega_z80_cpu::{
-    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState,
-    Z80MicroStep, Z80Registers,
+    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep, Z80Registers,
 };
 
 const ADDRESS_VECTORS: [u16; 5] = [0x00FE, 0x00FF, 0x1234, 0xFFFE, 0xFFFF];
@@ -93,7 +92,11 @@ fn run_microsequenced(
 
 fn initial_registers(opcode: u8, address: u16, value: u8, flags: u8) -> Z80Registers {
     let mut registers = Z80Registers {
-        a: if matches!(opcode, 0x02 | 0x12) { value } else { 0xC3 },
+        a: if matches!(opcode, 0x02 | 0x12) {
+            value
+        } else {
+            0xC3
+        },
         f: flags,
         pc: 0,
         ..Z80Registers::default()
@@ -169,24 +172,36 @@ fn bc_de_indirect_accumulator_transfers_match_atomic_and_microsequenced_paths() 
                 ];
                 let expected_accumulator = value;
                 let expected_final_memory = if store { value } else { initial_memory };
-                let context = format!("opcode={opcode:02X}, address={address:04X}, value={value:02X}");
+                let context =
+                    format!("opcode={opcode:02X}, address={address:04X}, value={value:02X}");
 
                 assert_eq!(atomic_tstates, 7, "{context}: atomic nominal timing");
                 assert_eq!(micro_tstates, 10, "{context}: 7T plus 3 WAIT T-states");
-                assert_eq!(accesses.as_slice(), expected_accesses, "{context}: bus order");
+                assert_eq!(
+                    accesses.as_slice(),
+                    expected_accesses,
+                    "{context}: bus order"
+                );
                 assert_eq!(micro.registers, atomic.registers, "{context}: registers");
                 assert_eq!(micro.wz, atomic.wz, "{context}: WZ differential");
                 assert_eq!(micro.refresh, atomic.r, "{context}: refresh");
                 assert_eq!(atomic.registers.f, flags, "{context}: flags preserved");
                 assert_eq!(micro.registers.f, flags, "{context}: micro flags preserved");
                 assert_eq!(atomic.registers.a, expected_accumulator, "{context}: A");
-                assert_eq!(atomic.wz, expected_wz(opcode, address, value), "{context}: WZ oracle");
+                assert_eq!(
+                    atomic.wz,
+                    expected_wz(opcode, address, value),
+                    "{context}: WZ oracle"
+                );
                 assert_eq!(
                     memory[usize::from(address)],
                     expected_final_memory,
                     "{context}: memory result"
                 );
-                assert_eq!(atomic_memory, expected_final_memory, "{context}: atomic memory");
+                assert_eq!(
+                    atomic_memory, expected_final_memory,
+                    "{context}: atomic memory"
+                );
                 assert_eq!(micro.registers.pc, 1, "{context}: PC");
                 assert_eq!(micro.refresh & 0x7F, 1, "{context}: one M1 refresh");
             }
