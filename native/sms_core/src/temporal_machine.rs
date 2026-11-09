@@ -3283,4 +3283,18 @@ mod temporal_frame_tests {
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
     }
+
+    #[test]
+    fn breakpoint_stops_before_instruction_at_safe_boundary() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x8000], 1).unwrap();
+
+        let (instructions, breakpoint_hit) = machine
+            .step_frame_until(4, |pc| pc == 0x0001)
+            .unwrap();
+
+        assert_eq!(instructions, 1);
+        assert!(breakpoint_hit);
+        assert_eq!(machine.cpu().export_architectural_state().registers.pc, 0x0001);
+        assert_eq!(machine.now().ticks(), 4);
+    }
 }
