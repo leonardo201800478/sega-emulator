@@ -119,6 +119,7 @@ fn initial_registers(
     value: u8,
     address: u16,
     flags: u8,
+    program_counter: u16,
 ) -> Z80Registers {
     let mut registers = Z80Registers {
         a: 0x77,
