@@ -2,10 +2,10 @@
 
 **Baseline main pré-PR:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1`.
 **PR:** #724 — `test(z80): audit absolute accumulator transfers (F-003)`.
-**HEAD auditado pelo run #6107:** `8b4899b341b1986ed560a4e67d8e12541ddbcbd2`.
-**CI #6107 / run `42672954884`:** FAILURE no agregador, sem execução dos gates Z80 ou documentação. A classificação concluiu SUCCESS e marcou `EXPECT_Z80=true` e `EXPECT_DOCS=true`, mas os resultados recebidos foram `Z80=abandoned` e `DOCS=abandoned`. O agregador falhou corretamente ao recusar validar jobs obrigatórios ausentes. Não classificar isso como falha funcional, nem como PASS.
-**Estado dos gates neste HEAD:** rustfmt NOT RUN; Clippy focado NOT RUN; testes Z80/SMS/SG-1000 NOT RUN; SingleStepTests DD/FD NOT RUN; documentação `git diff --check` NOT RUN; regressão integral do workspace NOT RUN.
-**Ação corretiva:** esta atualização documental gera evento `synchronize` na PR para reexecutar o workflow no HEAD atualizado. Exigir jobs Z80 focused e Documentation concluídos, além do agregador SUCCESS. Se os jobs continuarem ausentes, investigar a orquestração antes de qualquer fechamento.
+**HEAD validado:** `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
+**CI final disponível nesta etapa:** #6108 / run `42674749663` PASS no HEAD exato `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
+**Histórico de CI:** #6107 / run `42672954884` falhou no agregador por orquestração: classificação SUCCESS, `EXPECT_Z80=true` e `EXPECT_DOCS=true`, mas jobs Z80 e docs retornaram `abandoned`. Esse run não executou gates de código e não representa falha funcional. O evento `synchronize` subsequente disparou corretamente os jobs.
+**Gates no HEAD validado:** rustfmt PASS; Clippy focado PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation patch hygiene PASS; agregador PASS. Regressão integral do workspace e jobs não relacionados NOT RUN/SKIPPED por política de impacto.
 
 ## 1. Escopo e referência primária
 
@@ -49,13 +49,14 @@ Arquivo: `native/sms_core/tests/z80_f003_temporal.rs`.
 
 | Suíte | Estado | Evidência |
 |---|---|---|
-| Rustfmt no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
-| Clippy Z80/SMS/SG-1000 no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
-| Testes Z80/SMS/SG-1000 no HEAD `8b4899b3` | NOT RUN | Job Z80 focused `abandoned` no run #6107 |
-| SingleStepTests DD/FD | NOT RUN | Job Z80 focused não executado |
-| Documentation patch hygiene | NOT RUN | Job docs `abandoned` no run #6107 |
-| Agregador Rust quality/unit | FAIL (orquestração) | Exigiu Z80/docs SUCCESS, recebeu `abandoned` |
-| Regressão integral do workspace | NOT RUN | Não aplicável ao escopo; não foi disparada |
+| Rustfmt Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
+| Clippy Z80/SMS/SG-1000 com `-D warnings` | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
+| Testes Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c`; testes F-003 atômicos e integração SMS temporal executados |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores (2.000 + 32.000), CI #6108 |
+| Documentation patch hygiene | PASS | CI #6108 / run `42674749663` |
+| Agregador Rust quality/unit | PASS | CI #6108 / run `42674749663` |
+| Regressão integral do workspace | NOT RUN | Não disparada pela política de impacto |
+| Scheduler stress e hosts/subsistemas não relacionados | NOT RUN | Jobs SKIPPED por política de impacto; não são PASS |
 | Validação física SMS | NOT RUN | Sem alegação de hardware |
 
-A candidata não altera runtime. F-003 permanece AUDIT_PARTIAL até a CI focada passar no HEAD exato e qualquer divergência ser corrigida. Sem validação física SMS; sem alegação de compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS e E8/ZEXDOC/ZEXALL BLOCKED.
+A candidata não altera runtime. A matriz e a integração temporal F-003 passaram nos gates focados no HEAD indicado. F-003 permanece AUDIT_PARTIAL até o squash merge e a confirmação do CI pós-merge na main. Sem validação física SMS; sem alegação de compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS e E8/ZEXDOC/ZEXALL BLOCKED.
