@@ -214,15 +214,15 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 | Família | Estado | Evidência / pendência |
 |---|---|---|
-| F-028 — IXH/IXL/IYH/IYL | AUDIT_PARTIAL | INC/DEC e LD imediato integrados por #680; LD r,r' está em #684; ALU half-register permanece pendente em F-037. |
+| F-028 — IXH/IXL/IYH/IYL | AUDIT_PARTIAL | INC/DEC e LD imediato #680; F-036 LD r,r' #684 CLOSED; F-037 ALU #686 CLOSED. Auditoria residual de precedência, exceções e efeitos temporais ainda pendente. |
 | F-036 — LD r,r' register-only | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`; HEAD `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`, run #42614755935 PASS. 48 combinações DD/FD, oracle, comparação atômica, 8T/2 M1, WAIT, snapshot/restore, prefixos repetidos e HALT. D3D12/áudio/SDL3/workspace SKIPPED e agregador PASS. |
-| F-037 — ALU A,IXH/IXL/IYH/IYL | GAP_CONFIRMED | Próxima implementação, em PR separada após F-036. Exige vetores fixos independentes, carry de entrada, flags completas, Q e caminho retomável. |
+| F-037 — ALU A,IXH/IXL/IYH/IYL | CLOSED | PR #686 merge SHA `e7e37290e1baa9119326e9e7213f77cadcc37f5e`; HEAD validado `a0937e8fa1bb4547d1ee53a9e3431392a2fa443a`; run #42619522899 PASS. 10.816 casos diferenciais, vetores fixos, carry-in, flags/X/Y/CP, Q, WAIT, snapshot/restore, prefixos repetidos. Corpus externo SingleStepTests ainda pendente como evidência complementar E7. |
 | E7.7 — auditoria semântica integral | IN_PROGRESS | Outras famílias, efeitos observáveis, proveniência independente e auditoria temporal ainda pendentes. |
 | E8 — ZEXDOC/ZEXALL | BLOCKED | Não iniciar antes do fechamento formal de E7. |
 
 **Regra de promoção:** F-036 foi promovida a CLOSED somente após CI verde no HEAD final da PR #684 e merge confirmado. Os jobs D3D12/áudio/SDL3/workspace foram SKIPPED, classificados internamente como NOT RUN, e o GitHub aceitou o merge; comportamento comprovado em PR real.
 
-**Próxima tarefa objetiva:** implementar F-037 em PR pequena e separada. Não avançar para E8.
+**Próxima tarefa objetiva:** auditoria residual do Z80 com vetores externos, revisão de flags/Q/WZ, prefix FSM, interrupções e microtiming. Não avançar para E8.
 
 
 ## 19. Fechamento F-036 — evidência final
@@ -251,3 +251,14 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - F-036 permanece CLOSED. F-037 aguarda CI/merge. F-028 permanece AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED.
 
 **Próximo gate:** validar o HEAD final da PR #686 com a suíte focada Z80 e os consumidores SMS/SG-1000; comprovar novamente que hosts não relacionados são SKIPPED. Só depois integrar F-037 e prosseguir à auditoria mestre residual.
+
+
+## 21. Fechamento F-037 — evidência final
+
+- PR #686 squash-merged em `e7e37290e1baa9119326e9e7213f77cadcc37f5e`.
+- HEAD validado: `a0937e8fa1bb4547d1ee53a9e3431392a2fa443a`; run #42619522899 PASS.
+- Rust fmt focado, Clippy focado, testes Z80 + SMS + SG-1000, documentation hygiene e agregador: PASS.
+- D3D12, WASAPI/XAudio2, Linux audio, SDL3, VDP, PSG, Scheduler stress, PowerShell, input e workspace: SKIPPED / NOT RUN por não aplicabilidade.
+- Run intermediário #42615731297 FAIL em rustfmt foi corrigido antes do HEAD final.
+- F-036 CLOSED; F-037 CLOSED; F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+- Pendência de evidência: integrar vetores externos (SingleStepTests Z80, variante NMOS e licença MIT) à suíte diferencial, sem tratar o executor atômico como oracle independente.
