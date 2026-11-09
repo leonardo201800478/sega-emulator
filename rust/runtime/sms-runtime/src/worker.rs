@@ -183,6 +183,12 @@ impl WorkerTelemetry {
             .store(metrics.submission_failed_frames, Ordering::Release);
     }
 
+    fn record_audio_session_metrics(&self, session: &dyn AudioSession) {
+        if self.diagnostics_enabled() {
+            self.set_audio_metrics(session.metrics());
+        }
+    }
+
     fn audio_output_metrics(&self) -> AudioOutputMetrics {
         AudioOutputMetrics {
             sample_rate_hz: self.audio_sample_rate_hz.load(Ordering::Acquire) as u32,
@@ -693,18 +699,14 @@ fn execute_frame(
     match audio_result {
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
-                if telemetry.diagnostics_enabled() {
-                    telemetry.set_audio_metrics(session.metrics());
-                }
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
         }
         Some(Err(error)) => {
             if let Some(mut failed_session) = audio_session.take() {
                 // Preserve the backend's terminal counters before close drops
                 // its producer endpoint and makes queue occupancy unavailable.
-                if telemetry.diagnostics_enabled() {
-                    telemetry.set_audio_metrics(failed_session.metrics());
-                }
+                telemetry.record_audio_session_metrics(failed_session.as_ref());
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
@@ -877,9 +879,7 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.resume());
             if let Some(session) = audio_session.as_ref() {
-                if telemetry.diagnostics_enabled() {
-                    telemetry.set_audio_metrics(session.metrics());
-                }
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
             match result {
                 Ok(()) => {
@@ -900,9 +900,7 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.suspend_and_flush());
             if let Some(session) = audio_session.as_ref() {
-                if telemetry.diagnostics_enabled() {
-                    telemetry.set_audio_metrics(session.metrics());
-                }
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
@@ -919,9 +917,7 @@ fn handle_command(
                     Ok(())
                 });
                 if let Some(session) = audio_session.as_ref() {
-                    if telemetry.diagnostics_enabled() {
-                        telemetry.set_audio_metrics(session.metrics());
-                    }
+                    telemetry.record_audio_session_metrics(session.as_ref());
                 }
                 match result {
                     Ok(()) => {
@@ -951,9 +947,7 @@ fn handle_command(
                             Ok(())
                         });
                     if let Some(session) = audio_session.as_ref() {
-                        if telemetry.diagnostics_enabled() {
-                            telemetry.set_audio_metrics(session.metrics());
-                        }
+                        telemetry.record_audio_session_metrics(session.as_ref());
                     }
                     match result {
                         Ok(()) => {
@@ -1046,9 +1040,7 @@ fn handle_command(
                     };
                     match result {
                         Ok(()) => {
-                            if telemetry.diagnostics_enabled() {
-                                telemetry.set_audio_metrics(session.metrics());
-                            }
+                            telemetry.record_audio_session_metrics(session.as_ref());
                             *audio_session = Some(session);
                             telemetry.set_audio_error(None);
                             let _ = reply.send(Ok(()));
