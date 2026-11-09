@@ -13713,6 +13713,9 @@ mod ed_block_transfer_repeat_interrupt_tests {
                         Z80MicroSequencerPhase::EdBlockRepeatInternal {
                             remaining_tstates: 1,
                             ..
+                        } | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                            remaining_tstates: 1,
+                            ..
                         }
                     ) {
                         assert!(!asserted, "INT must be asserted only once");
