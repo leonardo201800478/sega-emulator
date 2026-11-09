@@ -1,7 +1,7 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
-**Status:** integrada pela PR #692; validação externa PASS.
-**Sega Emulator main após merge:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`.
+**Status:** PR #692 integrada (F-037); extensão Q integrada pela PR #702; validação externa PASS.
+**Sega Emulator main após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`.
 **Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).
 **Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).
 **Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.
@@ -97,4 +97,8 @@ Fixtures adicionais no mesmo commit upstream:
 | DD 37 (SCF) | `c68369350b5a47ebb481d35a7b9e4dd86e292716` | 1.000 |
 | FD 3F (CCF) | `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345` | 1.000 |
 
-A execução de reprodução na PR #695, run #42624833386, falhou no primeiro vetor DD 37: F esperado 0x65, obtido 0x45. O teste foi fail-fast e não alcançou FD 3F. A PR de correção Q/previous-Q adiciona a correção nos dois executores e a validação de snapshot/restore; resultado CI ainda pendente.
+A execução de reprodução na PR #695, run #42624833386, falhou no primeiro vetor DD 37: F esperado 0x65, obtido 0x45. A correção foi integrada pela PR #702, merge SHA `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`. No HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, run #42626811588, os 2.000 vetores DD37/FD3F passaram, assim como os 32.000 vetores F-037 e o teste interno com snapshot/restore.
+
+## Extensão F-033 — ED reservados
+
+Fixtures confirmados na revisão fixada: ED77 (`ed18dc5f3216eb620e401ab6675bded6d758eb80`) e ED7F (`542123e1e3cb77ea26150c4f65919025839b3d81`), 1.000 vetores cada. O harness externo ED77/ED7F e o teste sintético de 178 encodings foram adicionados na etapa F-033; resultado pendente de CI.
