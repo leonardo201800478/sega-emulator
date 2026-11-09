@@ -9578,7 +9578,7 @@ mod ed_absolute_register_pair_differential_tests {
 #[cfg(test)]
 mod ed_return_nibble_rotate_differential_tests {
     use super::{
-        Z80MicroSequencer, Z80MicroStep, FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, Z80MicroSequencer, Z80MicroStep,
     };
     use crate::bus::CpuBus;
     use crate::{
@@ -9752,13 +9752,7 @@ mod ed_return_nibble_rotate_differential_tests {
         run_case(0x6F, false);
     }
 
-    fn run_nibble_case(
-        opcode: u8,
-        accumulator: u8,
-        memory_value: u8,
-        carry: u8,
-        address: u16,
-    ) {
+    fn run_nibble_case(opcode: u8, accumulator: u8, memory_value: u8, carry: u8, address: u16) {
         let mut initial = initial_state();
         initial.registers.a = accumulator;
         initial.registers.f = FLAG_S | FLAG_Z | FLAG_H | FLAG_PV | FLAG_N | FLAG_XY | carry;
@@ -9775,8 +9769,7 @@ mod ed_return_nibble_rotate_differential_tests {
         assert_eq!(atomic.step(&mut atomic_bus), Ok(18));
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
-        let (sequenced, sequenced_bus, tstates) =
-            run_sequenced(sequenced, sequenced_bus, true);
+        let (sequenced, sequenced_bus, tstates) = run_sequenced(sequenced, sequenced_bus, true);
 
         assert_eq!(tstates, 22);
         assert_eq!(
@@ -9785,7 +9778,10 @@ mod ed_return_nibble_rotate_differential_tests {
             "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}, HL={address:04X}"
         );
         assert_eq!(sequenced_bus.reads, vec![0x1000, 0x1001, address]);
-        assert_eq!(sequenced_bus.writes, vec![(address, atomic_bus.memory[usize::from(address)])]);
+        assert_eq!(
+            sequenced_bus.writes,
+            vec![(address, atomic_bus.memory[usize::from(address)])]
+        );
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
         assert_eq!(sequenced.registers.pc, 0x1002);
         assert_eq!(sequenced.r, 0x80);
