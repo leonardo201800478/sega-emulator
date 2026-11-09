@@ -3213,21 +3213,34 @@ mod tests {
     }
 
     #[test]
-    fn ed_neg_aliases_produce_identical_results_and_flags() {
-        let mut reference: Option<(u8, u8)> = None;
+    fn ed_neg_aliases_match_independent_results_and_flags_for_all_inputs() {
         for opcode in [0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C] {
-            let mut bus = TestBus([0; 0x10000]);
-            bus.0[..2].copy_from_slice(&[0xED, opcode]);
-            let mut cpu = Z80::default();
-            cpu.registers.a = 0x80;
-            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
-            assert_eq!(cpu.registers.a, 0x80, "ED {opcode:02X}");
-            assert_eq!(cpu.registers.f, 0x87, "ED {opcode:02X}");
-            let result = (cpu.registers.a, cpu.registers.f);
-            if let Some(expected) = reference {
-                assert_eq!(result, expected, "NEG alias ED {opcode:02X}");
-            } else {
-                reference = Some(result);
+            for value in 0_u8..=u8::MAX {
+                let mut bus = TestBus([0; 0x10000]);
+                bus.0[..2].copy_from_slice(&[0xED, opcode]);
+                let mut cpu = Z80::default();
+                cpu.registers.a = value;
+
+                let result = 0_u8.wrapping_sub(value);
+                let mut expected_flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 {
+                    expected_flags |= FLAG_Z;
+                }
+                if value & 0x0F != 0 {
+                    expected_flags |= FLAG_H;
+                }
+                if value == 0x80 {
+                    expected_flags |= FLAG_PV;
+                }
+                expected_flags |= FLAG_N;
+                if value != 0 {
+                    expected_flags |= FLAG_C;
+                }
+
+                assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(cpu.registers.a, result, "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(cpu.registers.f, expected_flags, "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X}, A={value:02X}");
             }
         }
     }
