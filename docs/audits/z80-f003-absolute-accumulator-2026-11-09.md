@@ -50,12 +50,12 @@ Arquivo: `native/sms_core/tests/z80_f003_temporal.rs`.
 
 | Suíte | Estado | Evidência |
 |---|---|---|
-| Rustfmt Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
-| Clippy Z80/SMS/SG-1000 com `-D warnings` | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
-| Testes Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c`; testes F-003 atômicos e integração SMS temporal executados |
-| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores (2.000 + 32.000), CI #6108 |
-| Documentation patch hygiene | PASS | CI #6108 / run `42674749663` |
-| Agregador Rust quality/unit | PASS | CI #6108 / run `42674749663` |
+| Rustfmt Z80/SMS/SG-1000 | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea` |
+| Clippy Z80/SMS/SG-1000 com `-D warnings` | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea` |
+| Testes Z80/SMS/SG-1000 | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea`; testes F-003 atômicos e integração SMS temporal executados |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores (2.000 + 32.000), CI #6111 |
+| Documentation patch hygiene | PASS | CI #6111 / run `42675073118` |
+| Agregador Rust quality/unit | PASS | CI #6111 / run `42675073118` |
 | Regressão integral do workspace | NOT RUN | Não disparada pela política de impacto |
 | Scheduler stress e hosts/subsistemas não relacionados | NOT RUN | Jobs SKIPPED por política de impacto; não são PASS |
 | Validação física SMS | NOT RUN | Sem alegação de hardware |
