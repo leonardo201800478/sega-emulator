@@ -121,7 +121,6 @@ fn nmi_after_ld_a_i_or_r_does_not_apply_maskable_interrupt_pv_erratum() {
     }
 }
 
-
 #[test]
 fn int_erratum_matrix_covers_both_iff2_and_carry_states() {
     for opcode in [0x57, 0x5F] {
@@ -133,8 +132,7 @@ fn int_erratum_matrix_covers_both_iff2_and_carry_states() {
 
                 let prefix = request(cpu.begin_instruction().unwrap());
                 assert_eq!(prefix.operation, Z80BusOperation::OpcodeFetch);
-                let terminal =
-                    request(cpu.complete_bus_cycle(prefix.id, Some(0xED)).unwrap());
+                let terminal = request(cpu.complete_bus_cycle(prefix.id, Some(0xED)).unwrap());
                 assert_eq!(terminal.operation, Z80BusOperation::OpcodeFetch);
                 cpu.set_int_line(Some(0xFF));
                 assert_eq!(
@@ -143,10 +141,7 @@ fn int_erratum_matrix_covers_both_iff2_and_carry_states() {
                 );
                 assert_eq!(
                     cpu.complete_internal_cycle().unwrap(),
-                    Z80MicroStep::InstructionRetired {
-                        opcode,
-                        tstates: 9,
-                    }
+                    Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
                 );
                 assert_eq!(cpu.registers.f & FLAG_PV != 0, iff2);
                 assert_eq!(cpu.registers.f & FLAG_C, carry);
@@ -157,10 +152,7 @@ fn int_erratum_matrix_covers_both_iff2_and_carry_states() {
                 cpu = Z80MicroSequencer::restore_state(decoded).unwrap();
 
                 let acknowledge = request(cpu.begin_instruction().unwrap());
-                assert_eq!(
-                    acknowledge.operation,
-                    Z80BusOperation::InterruptAcknowledge
-                );
+                assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
                 assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}, IFF2={iff2}");
                 assert_eq!(cpu.registers.f & FLAG_C, carry, "ED {opcode:02X}");
                 assert!(!cpu.export_state().p);
