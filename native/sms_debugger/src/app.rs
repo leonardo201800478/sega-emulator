@@ -334,26 +334,11 @@ impl DebuggerApp {
 }
 
 impl eframe::App for DebuggerApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.running {
-            if let Some(session) = self.session.as_mut() {
-                match session.run_for(RUN_BUDGET) {
-                    Ok(RunStopReason::Breakpoint(pc)) => {
-                        self.running = false;
-                        self.status = format!("Breakpoint atingido em 0x{pc:04X}");
-                    }
-                    Ok(RunStopReason::InstructionBudget) => {}
-                    Err(e) => {
-                        self.running = false;
-                        self.status = format!("Erro de execução: {e}");
-                    }
-                }
-            } else {
-                self.running = false;
-            }
-        }
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let context = ui.ctx().clone();
+        self.run_slice();
 
-        egui::TopBottomPanel::top("controls").show(ctx, |ui| {
+        ui.vertical(|ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui.button("Abrir ROM").clicked() {
                     self.open_rom();
@@ -380,7 +365,10 @@ impl eframe::App for DebuggerApp {
                     self.step();
                 }
                 if ui
-                    .add_enabled(self.session.is_some(), egui::Button::new("Exportar"))
+                    .add_enabled(
+                        self.session.is_some(),
+                        egui::Button::new("Exportar diagnóstico"),
+                    )
                     .clicked()
                 {
                     self.export();
@@ -396,86 +384,96 @@ impl eframe::App for DebuggerApp {
                 }
             });
             ui.label(&self.status);
-        });
-
-        egui::SidePanel::left("cpu")
-            .default_width(230.0)
-            .show(ctx, |ui| {
-                ui.heading("Z80");
-                if let Some(session) = self.session.as_ref() {
-                    let s = session.snapshot();
-                    ui.monospace(format!("PC  {:04X}", s.cpu.pc.unwrap_or_default()));
-                    ui.monospace(format!("SP  {:04X}", s.cpu.sp.unwrap_or_default()));
-                    for r in &s.cpu.registers {
-                        ui.monospace(format!("{:>5}  {:04X}", r.name, r.value));
-                    }
-                    ui.separator();
-                    ui.label(format!("HALT {:?}", s.cpu.halted));
-                    ui.label(format!("IM {:?}", s.cpu.interrupt_mode));
-                    ui.label(format!("Machine ticks {}", s.machine_ticks));
-                    ui.separator();
-                    ui.heading("Hardware");
-                    for h in &s.hardware {
-                        ui.label(format!("{} / {}", h.component, h.name));
-                        ui.monospace(&h.value);
-                    }
-                    ui.separator();
-                    ui.heading("Breakpoints");
-                    for bp in session.breakpoints() {
-                        ui.monospace(format!("{bp:04X}"));
-                    }
-                }
-            });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Vídeo");
-            self.render_video(ui);
             ui.separator();
-            ui.horizontal(|ui| {
-                ui.heading("RAM / memória");
-                ui.label("Endereço hex");
-                ui.text_edit_singleline(&mut self.memory_address);
-            });
-            if let Some(session) = self.session.as_ref() {
-                let address =
-                    u32::from_str_radix(self.memory_address.trim().trim_start_matches("0x"), 16)
+
+            ui.columns(2, |columns| {
+                columns[0].vertical(|ui| {
+                    ui.heading("CPU / Z80");
+                    if let Some(session) = self.session.as_ref() {
+                        let snapshot = session.snapshot();
+                        ui.monospace(format!("PC  0x{:04X}", snapshot.cpu.pc.unwrap_or_default()));
+                        ui.monospace(format!("SP  0x{:04X}", snapshot.cpu.sp.unwrap_or_default()));
+                        for register in &snapshot.cpu.registers {
+                            ui.monospace(format!("{:>5}  0x{:04X}", register.name, register.value));
+                        }
+                        ui.separator();
+                        ui.label(format!("HALT: {:?}", snapshot.cpu.halted));
+                        ui.label(format!("IM: {:?}", snapshot.cpu.interrupt_mode));
+                        ui.label(format!("Machine ticks: {}", snapshot.machine_ticks));
+                        ui.separator();
+                        ui.heading("Hardware");
+                        for item in &snapshot.hardware {
+                            ui.label(format!("{} / {}", item.component, item.name));
+                            ui.monospace(&item.value);
+                        }
+                        ui.separator();
+                        ui.heading("Breakpoints");
+                        for address in session.breakpoints() {
+                            ui.monospace(format!("0x{address:04X}"));
+                        }
+                    } else {
+                        ui.label("Aguardando ROM");
+                    }
+                });
+
+                columns[1].vertical(|ui| {
+                    ui.heading("Vídeo");
+                    self.render_video(ui);
+                    ui.separator();
+                    ui.heading("Memória");
+                    ui.horizontal(|ui| {
+                        ui.label("Endereço hexadecimal");
+                        ui.text_edit_singleline(&mut self.memory_address);
+                    });
+                    if let Some(session) = self.session.as_ref() {
+                        let address = u32::from_str_radix(
+                            self.memory_address.trim().trim_start_matches("0x"),
+                            16,
+                        )
                         .unwrap_or(0)
                         .min(0xFFFF);
-                let bytes = session.read_memory(address, 64);
-                egui::Grid::new("memory")
-                    .striped(true)
-                    .num_columns(9)
-                    .show(ui, |ui| {
-                        for (i, b) in bytes.iter().enumerate() {
-                            if i % 8 == 0 {
-                                if i > 0 {
-                                    ui.end_row();
+                        let bytes = session.read_memory(address, 64);
+                        egui::Grid::new("memory")
+                            .striped(true)
+                            .num_columns(9)
+                            .show(ui, |ui| {
+                                for (index, byte) in bytes.iter().enumerate() {
+                                    if index % 8 == 0 {
+                                        if index > 0 {
+                                            ui.end_row();
+                                        }
+                                        ui.monospace(format!("{:04X}", address + index as u32));
+                                    }
+                                    ui.monospace(format!("{byte:02X}"));
                                 }
-                                ui.monospace(format!("{:04X}", address + i as u32));
-                            }
-                            ui.monospace(format!("{b:02X}"));
-                        }
-                    });
-                ui.separator();
-                ui.heading("Trace do barramento");
-                egui::ScrollArea::vertical()
-                    .max_height(180.0)
-                    .show(ui, |ui| {
-                        for e in session.trace().iter().rev().take(24).rev() {
-                            let a = e
-                                .address
-                                .map_or_else(|| "----".into(), |v| format!("{v:04X}"));
-                            let d = e.data.map_or_else(|| "--".into(), |v| format!("{v:02X}"));
-                            ui.monospace(format!(
-                                "{:>12} {:<12} {a} {d} {}",
-                                e.timestamp_ticks, e.operation, e.detail
-                            ));
-                        }
-                    });
-            }
+                            });
+                        ui.separator();
+                        ui.heading("Trace do barramento");
+                        egui::ScrollArea::vertical()
+                            .max_height(180.0)
+                            .show(ui, |ui| {
+                                for event in session.trace().iter().rev().take(24).rev() {
+                                    let address = event.address.map_or_else(
+                                        || "----".to_owned(),
+                                        |value| format!("{value:04X}"),
+                                    );
+                                    let data = event.data.map_or_else(
+                                        || "--".to_owned(),
+                                        |value| format!("{value:02X}"),
+                                    );
+                                    ui.monospace(format!(
+                                        "{:>12} {:<12} {address} {data} {}",
+                                        event.timestamp_ticks, event.operation, event.detail
+                                    ));
+                                }
+                            });
+                    }
+                });
+            });
         });
+
         if self.running {
-            ctx.request_repaint();
+            context.request_repaint();
         }
     }
 }
