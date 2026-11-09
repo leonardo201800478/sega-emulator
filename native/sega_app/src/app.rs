@@ -36,7 +36,7 @@ pub struct SegaApp {
     recent_rom_requested: Option<PathBuf>,
     footer_mode: FooterMode,
     aspect_ratio: AspectRatioMode,
-    audio_enabled: bool,
+    audio_state: AudioState,
     audio_backend: AudioBackend,
     audio_volume: u8,
     last_controller: Option<ControllerButtons>,
@@ -61,7 +61,7 @@ impl Default for SegaApp {
             recent_rom_requested: None,
             footer_mode: FooterMode::Visible,
             aspect_ratio: AspectRatioMode::FourThree,
-            audio_enabled: true,
+            audio_state: AudioState::Enabled,
             audio_backend: AudioBackend::Wasapi,
             audio_volume: 100,
             last_controller: None,
@@ -91,6 +91,18 @@ impl AspectRatioMode {
             Self::FourThree => 4.0 / 3.0,
             Self::SixteenNine => 16.0 / 9.0,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioState {
+    Enabled,
+    Disabled,
+}
+
+impl AudioState {
+    const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
     }
 }
 
@@ -229,7 +241,7 @@ impl SegaApp {
                 footer_mode: &mut self.footer_mode,
                 region: &mut self.region,
                 aspect_ratio: &mut self.aspect_ratio,
-                audio_enabled: &mut self.audio_enabled,
+                audio_state: &mut self.audio_state,
                 audio_backend: &mut self.audio_backend,
                 audio_volume: &mut self.audio_volume,
                 audio_command: &mut audio_command,
@@ -332,7 +344,7 @@ impl SegaApp {
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
-                if self.audio_enabled {
+                if self.audio_state.is_enabled() {
                     self.apply_audio_command(AudioCommand::Configure);
                 }
             }
@@ -354,7 +366,7 @@ impl SegaApp {
             } else {
                 let mut config = LogConfig::default();
                 if std::env::var_os("SEGA_LOG_FILTER").is_none() {
-                    config.filter = "info,sega::audio::pacing=trace".to_owned();
+                    "info,sega::audio::pacing=trace".clone_into(&mut config.filter);
                 }
                 let session = SessionMetadata::current(
                     env!("CARGO_PKG_VERSION"),
@@ -754,22 +766,36 @@ impl SegaApp {
 
 impl Drop for SegaApp {
     fn drop(&mut self) {
+        // Stop producers before shutting down the observability worker. The
+        // viewport owns the SMS and D3D12 workers; they may emit final events
+        // while being stopped and joined.
+        self.native_viewport.shutdown();
+
+        // SDL3 is also an owned native resource. Shut it down explicitly while
+        // diagnostics are still available instead of relying on field-drop
+        // order, which runs only after this Drop implementation returns.
+        if let Some(Ok(backend)) = self.input_backend.as_mut() {
+            backend.shutdown();
+        }
+        self.input_backend = None;
+
         if let Some(logging) = current_logging() {
-            if logging.is_enabled() {
+            let diagnostics_were_enabled = logging.is_enabled();
+
+            if diagnostics_were_enabled {
                 sega_observability::tracing::info!(
                     target: "sega::app",
                     event = "application_shutdown",
                     session_id = %logging.session().session_id,
                 );
-            }
-            // Drop the non-blocking worker guard first so all queued records,
-            // including application_shutdown, reach the recent-event buffer
-            // and rotating log before the final snapshot is serialized.
-            logging.shutdown();
-            if logging.is_enabled() {
+
+                // Drain queued records before serializing the final snapshot.
+                logging.shutdown();
                 if let Err(error) = logging.write_diagnostics_json() {
                     eprintln!("Unable to write diagnostics snapshot: {error}");
                 }
+            } else {
+                logging.shutdown();
             }
         }
     }
@@ -971,7 +997,7 @@ struct HeaderState<'a> {
     footer_mode: &'a mut FooterMode,
     region: &'a mut String,
     aspect_ratio: &'a mut AspectRatioMode,
-    audio_enabled: &'a mut bool,
+    audio_state: &'a mut AudioState,
     audio_backend: &'a mut AudioBackend,
     audio_volume: &'a mut u8,
     audio_command: &'a mut Option<AudioCommand>,
@@ -1051,8 +1077,14 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 
 /// Render audio output configuration without consuming permanent viewport space.
 fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
-    if ui.checkbox(state.audio_enabled, "Áudio ativo").changed() {
-        *state.audio_command = Some(if *state.audio_enabled {
+    let mut audio_enabled = state.audio_state.is_enabled();
+    if ui.checkbox(&mut audio_enabled, "Áudio ativo").changed() {
+        *state.audio_state = if audio_enabled {
+            AudioState::Enabled
+        } else {
+            AudioState::Disabled
+        };
+        *state.audio_command = Some(if audio_enabled {
             AudioCommand::Configure
         } else {
             AudioCommand::Disable
@@ -1067,13 +1099,13 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
             .radio_value(state.audio_backend, AudioBackend::XAudio2, "XAudio2")
             .changed()
     {
-        *state.audio_enabled = true;
+        *state.audio_state = AudioState::Enabled;
         *state.audio_command = Some(AudioCommand::Configure);
     }
     if ui
         .add(egui::Slider::new(state.audio_volume, 0..=100).text("Volume"))
         .changed()
-        && *state.audio_enabled
+        && state.audio_state.is_enabled()
     {
         *state.audio_command = Some(AudioCommand::SetVolume(*state.audio_volume));
     }

@@ -1,3 +1,5 @@
+//! Embeds build-time metadata into the Sega Emulator application.
+
 use std::process::Command;
 
 fn main() {

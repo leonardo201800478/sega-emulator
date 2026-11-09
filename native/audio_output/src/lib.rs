@@ -526,7 +526,7 @@ impl NativeWasapiOutput {
                         dropped_blocks,
                         queued_frames = metrics.queued_frames,
                         capacity_frames = metrics.capacity_frames,
-                        high_water_mark_frames = metrics.high_water_mark_frames,
+                        high_water_mark_frames = metrics.high_water_frames,
                         "WASAPI producer queue saturated; oldest frames discarded"
                     );
                 }
@@ -1034,7 +1034,7 @@ fn run_wasapi_worker(
                 target: "sega::audio::backend",
                 backend = "WASAPI",
                 submitted_frames = frames,
-                consumed_frames = report.consumed_frames,
+                consumed_frames = report.queued_frames,
                 silence_frames = report.silence_frames,
                 queued_frames = consumer.metrics().queued_frames,
                 "WASAPI render buffer submitted"
@@ -1265,7 +1265,7 @@ impl NativeXAudio2Output {
                         dropped_blocks,
                         queued_frames = metrics.queued_frames,
                         capacity_frames = metrics.capacity_frames,
-                        high_water_mark_frames = metrics.high_water_mark_frames,
+                        high_water_mark_frames = metrics.high_water_frames,
                         "XAudio2 producer queue saturated; oldest frames discarded"
                     );
                 }

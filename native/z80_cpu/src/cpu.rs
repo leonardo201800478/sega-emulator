@@ -397,7 +397,7 @@ impl Z80 {
                 target: "sega::z80",
                 pc = self.registers.pc,
                 total_tstates = self.total_tstates,
-                error = %error,
+                error = ?error,
                 "Z80 instruction execution failed"
             );
         }

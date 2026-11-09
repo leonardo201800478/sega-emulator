@@ -50,10 +50,7 @@ impl FanoutWriter {
             return;
         }
 
-        let mut recent = self
-            .recent
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut recent = self.recent.lock().unwrap_or_else(PoisonError::into_inner);
         while recent.len() >= self.recent_capacity {
             recent.pop_front();
         }
@@ -152,7 +149,10 @@ impl SizeRotatingWriter {
             Ok::<(), io::Error>(())
         })();
 
-        let reopened = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let reopened = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         self.current_size = reopened.metadata()?.len();
         self.file = Some(reopened);
         flush_result.and(rotation_result)
