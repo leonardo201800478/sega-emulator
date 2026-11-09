@@ -144,12 +144,13 @@ fn initial_registers(
     };
     registers.set_hl(hl);
 
-    if !matches!(source, 4 | 5 | 6) {
+    if !matches!(source, 4..=6) {
         write_register(&mut registers, source, value);
     }
     registers
 }
 
+#[allow(clippy::too_many_arguments)]
 fn assert_differential_case(
     opcode: u8,
     program_counter: u16,
