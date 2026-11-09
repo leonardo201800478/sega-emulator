@@ -138,7 +138,6 @@ fn initial_registers(
         4 => (u16::from(value) << 8) | 0x005A,
         5 => 0x5A00 | u16::from(value),
         // Memory forms use the pre-instruction HL address.
-        6 if destination != 6 => address,
         6 => address,
         _ if destination == 6 => address,
         _ => 0xC100,
