@@ -83,6 +83,9 @@ fn retire_micro(
     };
     assert_eq!(request.operation, Z80BusOperation::OpcodeFetch);
     assert_eq!(request.base_tstates, 4);
+    let operation = request.operation;
+    let address = request.address;
+    let base_tstates = request.base_tstates;
     cpu.insert_wait_tstates(wait_tstates)
         .expect("WAIT extends M1");
     if snapshot {
@@ -101,9 +104,9 @@ fn retire_micro(
     (
         cpu,
         tstates,
-        request.operation,
-        request.address,
-        request.base_tstates,
+        operation,
+        address,
+        base_tstates,
     )
 }
 
@@ -209,7 +212,17 @@ fn accumulator_rotate_m1_snapshot_restore_preserves_every_accumulator_value() {
     for (opcode, operation) in ROTATES {
         for accumulator in u8::MIN..=u8::MAX {
             let flags = accumulator.rotate_left(3) ^ 0xA5;
-            let (_, _, resumed_tstates) = assert_rotate_case(
+            let (_, continuous, continuous_tstates) = assert_rotate_case(
+                opcode,
+                operation,
+                accumulator,
+                flags,
+                PROGRAM_COUNTER,
+                &mut memory,
+                2,
+                false,
+            );
+            let (_, resumed, resumed_tstates) = assert_rotate_case(
                 opcode,
                 operation,
                 accumulator,
@@ -219,7 +232,13 @@ fn accumulator_rotate_m1_snapshot_restore_preserves_every_accumulator_value() {
                 2,
                 true,
             );
-            assert_eq!(resumed_tstates, 6, "4T M1 plus two WAITs");
+            assert_eq!(continuous_tstates, 6, "4T M1 plus two WAITs");
+            assert_eq!(resumed_tstates, continuous_tstates);
+            assert_eq!(
+                resumed.export_architectural_state(),
+                continuous.export_architectural_state(),
+                "snapshot restore preserves opcode {opcode:02X}, A={accumulator:02X}"
+            );
         }
     }
 }
