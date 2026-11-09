@@ -1,10 +1,10 @@
 # SingleStepTests/Z80 — vetores externos DD/FD ALU
 
-**Status:** integração proposta; resultados de execução ainda pendentes.  
-**Sega Emulator baseline:** `95dacafb083847991b7fbc59bcfa099e8f297685`.  
-**Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).  
-**Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).  
-**Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.  
+**Status:** integração proposta; resultados de execução ainda pendentes.
+**Sega Emulator baseline:** `95dacafb083847991b7fbc59bcfa099e8f297685`.
+**Upstream:** [SingleStepTests/z80](https://github.com/SingleStepTests/z80).
+**Revisão fixada:** `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (10/04/2026).
+**Licença:** MIT — Copyright (c) 2024 SingleStepTests. O workflow faz checkout do `LICENSE` original junto aos fixtures.
 **Proveniência:** o README upstream declara que os vetores foram produzidos por tradução do núcleo Z80 do Ares e correção de bugs. São uma referência externa útil, mas não um oráculo independente do Ares nem evidência de execução em silício.
 
 ## Configuração e formato
