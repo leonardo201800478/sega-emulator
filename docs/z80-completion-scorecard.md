@@ -295,9 +295,9 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 ## 24. F-028 — fechamento da divergência Q/previous-Q em DD/FD — 2026-11-09
 
-**Main após merge:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`  
-**PR:** #702 — MERGED (squash)  
-**HEAD exato validado:** `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`  
+**Main após merge:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`
+**PR:** #702 — MERGED (squash)
+**HEAD exato validado:** `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`
 **Workflow runs:** #42626811588 e #42626765522 — CI SUCCESS.
 
 - Executor atômico: limpa `q_previous` ao entrar em `execute_indexed`.
