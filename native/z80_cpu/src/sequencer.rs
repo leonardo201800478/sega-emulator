@@ -9785,7 +9785,7 @@ mod ed_return_nibble_rotate_differential_tests {
         assert_eq!(sequenced.iff1, iff2);
         assert_eq!(sequenced.iff2, iff2);
         assert_eq!(sequenced.refresh, 0x80);
-        assert_eq!(sequenced.wz, 0xABCD);
+        assert_eq!(sequenced.wz, return_address);
         assert_eq!(sequenced.pending_request(), None);
     }
 
