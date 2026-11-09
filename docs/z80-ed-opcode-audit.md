@@ -1,7 +1,7 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Escopo:** auditoria estática do despachante Rust ativo em `native/sms_core/src/cpu.rs`, método `execute_ed()`, e dos testes presentes no mesmo arquivo.  
-**Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.  
+**Escopo:** auditoria estática do despachante Rust ativo em `native/sms_core/src/cpu.rs`, método `execute_ed()`, e dos testes presentes no mesmo arquivo.
+**Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
 ## 1. Resumo executivo
@@ -43,8 +43,8 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 | `6F` | RLD | Troca nibbles entre A e (HL) segundo a operação RLD | 18 | Vetor dirigido verifica A, memória, flags e WZ |
 | `A0,A8,B0,B8` | LDI/LDD/LDIR/LDDR | Transfere byte (HL)→(DE), ajusta HL/DE/BC e flags; formas repetitivas recuam PC e retornam 21 T quando continuam | 16 / 21 | Vetores dirigidos cobrem as quatro formas, direção, contador, flags selecionadas, repetição e término; limites e todas as flags ainda pendentes |
 | `A1,A9,B1,B9` | CPI/CPD/CPIR/CPDR | Compara A com (HL), ajusta HL/BC e flags; formas repetitivas continuam enquanto BC≠0 e A≠valor | 16 / 21 | Vetores dirigidos cobrem as quatro formas, decremento, match e continuação; flags X/Y/WZ e fronteiras de BC ainda pendentes |
-| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço de porta, memória, decremento/incremento e repetição; flags não documentadas exigem validação de hardware |
-| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço/valor de saída, direção e repetição; flags não documentadas exigem validação de hardware |
+| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas; para INIR/INDR, `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` cobre o B-loop e a fórmula de repetição derivada de teste em hardware NMOS. A iteração simples ainda requer diferencial mais amplo |
+| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas; para OTIR/OTDR, `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` cobre o B-loop, incluindo L pós-atualização e a fórmula de repetição derivada de teste em hardware NMOS. A iteração simples ainda requer diferencial mais amplo |
 
 **Nota sobre aliases:** os padrões de NEG e RETN/RETI reconhecem oito bytes cada e executam um mesmo corpo. Para RETI, o núcleo não distingue a semântica externa de sinalização de fim de interrupção usada por controladores com daisy chain. A equivalência interna de retorno não prova equivalência do comportamento externo.
 
@@ -104,7 +104,7 @@ IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa f
 
 ### 4.4 Flags, WZ e estado de interrupção
 
-- `LD A,I`/`LD A,R`: PV usa IFF2; o manual ZiLOG determina P/V=0 quando INT é aceito durante a instrução. Executor atômico e microsequenciador devem aplicar o latch somente na fronteira imediatamente seguinte; NMI não aplica a exceção de INT. Ver `docs/audits/z80-e7-ld-a-i-r-nmos-interrupt-erratum-2026-11-05.md`. 
+- `LD A,I`/`LD A,R`: PV usa IFF2; o manual ZiLOG determina P/V=0 quando INT é aceito durante a instrução. Executor atômico e microsequenciador devem aplicar o latch somente na fronteira imediatamente seguinte; NMI não aplica a exceção de INT. Ver `docs/audits/z80-e7-ld-a-i-r-nmos-interrupt-erratum-2026-11-05.md`.
 - `ADC/SBC HL,rr`: conferir exaustivamente carry/borrow, H, overflow, S/Z e bits X/Y do byte alto.
 - `RRD/RLD`: validar os dois nibbles, memória, A, S/Z/PV, preservação de C, WZ e ciclos.
 - `NEG`: testar A=00, 01, 7F, 80, FF e todos os aliases.
@@ -118,7 +118,7 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 
 ## 5. Matriz de testes e evidência no SHA candidato
 
-**SHA de código validado:** `e9776e705d0ff55bfc701a933ff7bea2d70c1974` (branch `test/exhaustive-z80-ed-opcodes`, PR #183).  
+**SHA de código validado:** `e9776e705d0ff55bfc701a933ff7bea2d70c1974` (branch `test/exhaustive-z80-ed-opcodes`, PR #183).
 **Escopo do resultado:** regressão determinística em CI; sem hardware físico, ROM de teste externa executada, nem comparação automatizada diferencial.
 
 | Área | Teste/evidência | Resultado |
@@ -259,3 +259,21 @@ A execução focada e os gates Rust devem passar no HEAD exato desta PR. Diferen
 - A subquestão de flags de repetição em I/O de bloco recebeu uma fonte adicional de hardware: `Z80 Block Flags Test v5.0`, documentada por Peter Helcmanovsky e testada em hardware Z80 NMOS. A auditoria específica separa o escopo confirmado do que ainda não foi executado ou provado: [auditoria de evidência de hardware](audits/z80-e7-block-io-hardware-evidence-2026-11-09.md).
 - O teste de hardware citado é limitado à interrupção IM2 durante repetição de instruções de bloco; não substitui uma validação exaustiva nem comprova diretamente o Master System.
 - E7.7 global permanece IN_PROGRESS. E8 permanece BLOCKED.
+
+
+---
+
+## Atualização E7.7 — fixture de B-loop derivado de hardware (PR #675)
+
+**Baseline:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+A PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` no módulo de testes do microsequenciador.
+
+- B inicial: `0x10..=0xD0`, passo 3 (65 valores).
+- Endereços de instrução: `0x8002`, `0x8802`, `0xA002`, `0xA802`, cobrindo as combinações de XY vindas de PC.13/PC.11.
+- Casos: INIR, INDR, OTIR e OTDR, com valores e condições de carry documentados pelo ROM v5.0.
+- Fórmula independente: `Balu = Bo + (NF ? -CF : CF)`, `H=(Balu XOR Bo).4`, `PV=parity((T&7) XOR Bo XOR (Balu&7))`. Para OUTI/OUTD, `L` é o valor pós-incremento/decremento; para INI/IND, usa-se `C±1`.
+- Verificações: flags, B, PC, WZ, 21 T-states e transações de porta; executor atômico e microsequenciador são comparados ao resultado algébrico independente.
+- CI #42568885363: SUCCESS no HEAD `33d3dcf8d41f2f18d0826a1401013e9e1582503e`; merge SHA `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+Este fixture não executa o ROM v5.0 no core e não é uma nova medição em hardware. A evidência física segue parcial e limitada ao perfil NMOS. E7.7 continua IN_PROGRESS; E8 continua BLOCKED.
