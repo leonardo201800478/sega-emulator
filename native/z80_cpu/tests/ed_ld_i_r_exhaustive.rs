@@ -196,7 +196,7 @@ fn all_four_i_r_transfer_opcodes_cover_all_byte_values_iff2_and_carry() {
                     assert_eq!(atomic.registers.f, expected_flags);
                     assert_eq!(atomic.registers.pc, 0x1002);
                     assert_eq!(atomic.wz, 0xA55A);
-                    assert_eq!(atomic.iff1, false);
+                    assert!(!atomic.iff1);
                     assert_eq!(atomic.iff2, iff2);
                     assert_eq!(atomic.export_architectural_state().p, expected_p);
                     assert_eq!(atomic_bus.reads, vec![0x1000, 0x1001]);
