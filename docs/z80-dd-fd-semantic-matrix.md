@@ -466,3 +466,19 @@ A main atual é `1142eb567746afe64356b60f2ce466581e1c0cef`. As PRs #709/#710 tra
 ## 26. Baseline reconciliada após PR #718 — 2026-11-09
 
 Main `f0cfc7b9df1834ae8ad418c6241702e9003f072e`. A PR #718 fechou F-025 (RETN/RETI/IM) sem modificar o runtime DD/FD, os decoders de prefixo ou as regras de substituição IX/IY. As conclusões da matriz DD/FD permanecem inalteradas; F-028 continua AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 27. F-005 — LD SP,IX/IY — reconciliação após PR #731 — 2026-11-09
+
+**Main integrada:** `0ea60a450c3d58a6231df73c3d1ff98fa118b4b6`.
+**HEAD de testes validado:** `e9ab17ebbea042a5396a5cd017c70982c6d2f2cc`; CI run [42696796388](https://github.com/leonardo201800478/sega-emulator/actions/runs/42696796388).
+
+- DD F9 e FD F9 estão cobertos no executor atômico e no microsequenciador retomável.
+- Temporização nominal: 10 T-states / 2 M-cycles, além de WAITs efetivamente solicitados; BASE F9 é 6 T-states / 1 M-cycle.
+- Cobertura inclui prefixos repetidos/alternados, R/refresh, flags, Q/previous-Q, WZ, PC, preservação de registradores não-alvo e snapshot/restore em fronteiras pendentes.
+- A integração temporal SMS cobre BASE F9 com WAIT no M1 e snapshot/restore do Scheduler.
+- ED 73/7B permanece coberto pela auditoria F-034; não pertence ao escopo DD/FD desta matriz e não foi duplicado.
+- A comparação atômico↔microsequenciador é regressão interna, não oráculo independente de silício. A referência de ciclo/semântica é ZiLOG UM008011-0816; MAME é comparação secundária de implementação.
+- A PR #731 foi test-only: nenhum handler, decoder, sequenciador ou runtime SMS foi alterado.
+
+**Classificação:** F-005 CLOSED para semântica de software no perfil Zilog NMOS delimitado; sem validação física SMS ou compatibilidade universal CMOS/clones. E7 IN_PROGRESS; E8 BLOCKED.
