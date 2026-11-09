@@ -283,6 +283,8 @@ jobs:
             v1/fd bd.json
             v1/dd 37.json
             v1/fd 3f.json
+            v1/ed 77.json
+            v1/ed 7f.json
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Format Z80 and console integration packages
