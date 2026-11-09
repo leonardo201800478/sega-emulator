@@ -197,6 +197,20 @@ fn bc_de_indirect_accumulator_transfers_match_atomic_and_microsequenced_paths() 
                     expected_wz(opcode, address, value),
                     "{context}: WZ oracle"
                 );
+                assert_eq!(atomic.q, 0, "{context}: Q cleared");
+                assert_eq!(micro.q, 0, "{context}: micro Q cleared");
+                assert_eq!(
+                    atomic.export_architectural_state().q_previous,
+                    0x3C,
+                    "{context}: previous Q retained"
+                );
+                assert_eq!(
+                    micro.export_architectural_state().q_previous,
+                    0x3C,
+                    "{context}: micro previous Q retained"
+                );
+                assert_eq!(atomic.r, 0x81, "{context}: refresh preserves R7");
+                assert_eq!(micro.refresh, 0x81, "{context}: micro refresh preserves R7");
                 assert_eq!(
                     memory[usize::from(address)],
                     expected_final_memory,
