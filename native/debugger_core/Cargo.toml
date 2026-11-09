@@ -1,0 +1,17 @@
+[package]
+name = "sega-debugger-core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_debugger_core"
+path = "src/lib.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
