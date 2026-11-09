@@ -2533,7 +2533,10 @@ impl Z80MicroSequencer {
                 Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
                 Z80PrefixState::Index(_) => {
                     state.opcode.is_some_and(|opcode| {
-                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        let class = classify_index_opcode(opcode);
+                        class == Z80IndexOpcodeClass::Ignored
+                            || (class == Z80IndexOpcodeClass::UsesIndex
+                                && matches!(opcode, 0x26 | 0x2E))
                     }) && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
                         .and_then(|count| minimum_prefixed_tstates(count, 0))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
