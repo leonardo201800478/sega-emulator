@@ -40,7 +40,7 @@ Uma PR aberta, Draft, branch local, teste em branch ou documentação proposta n
 
 ## Z80
 
-- [Scorecard de conclusão](z80-completion-scorecard.md)
+- [Scorecard de conclusão](z80-completion-scorecard.md)\n- [Checklist mestre de auditoria integral](z80-master-audit-checklist.md) — ledger operacional preenchido a cada etapa concluída
 - [Matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md)
 - [Auditoria de opcodes ED](z80-ed-opcode-audit.md)
 - [Comportamentos não documentados](z80-undocumented-behavior-research.md)
