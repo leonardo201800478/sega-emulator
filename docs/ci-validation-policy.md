@@ -11,20 +11,20 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 | Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU/ALU/bus integration sources in both console cores and Z80-specific SMS tests are classified into this focused path. Do not run unrelated workspace or host-platform builds for Z80-only changes. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
 | Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
-| Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
-| Audio chips / DSP / audio runtime | Root workspace validation where applicable. Windows WASAPI/XAudio2 validation runs for `native/audio_output`, `native/audio_runtime`, or the shared SN76489 dependency. |
-| SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation |
-| Native egui application and SMS worker integration | Windows-targeted format and Clippy for all targets; changes to `rust/runtime/sms-runtime` also trigger this dependent application build. A separate `cargo test` is added when the application gains its own tests. |
+| Video core / VDP and video runtime | Root workspace validation. Windows D3D12/DXGI validation runs for `native/video_core`, `native/video_runtime`, and the shared observability dependency. |
+| Audio chips / DSP / audio runtime | Root workspace validation. Windows WASAPI/XAudio2 and Linux audio-output validation run for `native/sn76489`, `native/audio_runtime`, `native/audio_output`, Scheduler/temporal dependencies used by audio runtime, and shared observability. |
+| SDL3 input runtime | Root workspace validation plus Windows SDL3 input validation. Shared observability changes also validate this consumer. |
+| Native egui application and SMS worker integration | Windows-targeted application format, Clippy, and tests run for the application and its non-Z80 runtime dependencies: SMS runtime/core, video, audio, input, Scheduler/temporal core, and observability. Z80-only CPU/ALU/bus integration sources and Z80-specific tests in SMS core are excluded from this app fan-out so a CPU-only correction does not start the Windows host build. |
 | PowerShell tooling | Parse only the changed `.ps1` scripts |
 | Documentation text (Markdown, MDX, RST, TXT) | `git diff --check` for whitespace and patch hygiene only; no Rust build, Clippy, or tests |
 
 
 ## Dependency fan-out
 
-1. Shared contracts and libraries must trigger validation for their actual consumers.
+1. Shared contracts and libraries must trigger validation for their actual consumers. In particular, `native/observability` fans out to video, audio, input, and application consumers; `native/machine_scheduler` and `native/temporal_core` fan out to audio runtime and application consumers.
 2. A change spanning multiple components runs the union of those components' required suites.
-3. Changes to global Cargo configuration, the root workspace manifest/lockfile, Rust toolchain configuration, or CI workflows trigger broad regression.
-4. A component-local manifest or lockfile change triggers that component's validation, not a full Windows matrix by default.
+3. Changes to global Cargo configuration, the root workspace manifest/lockfile, root `build.rs`, Rust toolchain configuration, common build scripts, or CI workflows trigger broad regression.
+4. A component-local manifest or lockfile change triggers that component and its real dependents, not every unrelated Windows host validation by default.
 5. A Z80-only change runs the focused Z80/SMS/SG-1000 package suite (format, Clippy, unit and integration tests). It does not trigger root-workspace regression, D3D12, audio, SDL3, or tooling jobs unless the changed paths independently require them. If the patch also changes shared root-workspace code, manifests, lockfiles, toolchain/configuration, or CI workflows, run the broader validations selected by those paths.
 6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
 
