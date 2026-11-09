@@ -39,11 +39,11 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
         let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
         // Trace capture is host-side diagnostic state and is re-enabled after restore.
         restored.set_trace_enabled(true);
+        assert_eq!(restored.resume_instruction(1).unwrap(), continuous_step);
         assert_eq!(
-            restored.resume_instruction(1).unwrap(),
-            continuous_step
+            continuous_step,
+            Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
         );
-        assert_eq!(continuous_step, Z80MicroStep::InstructionRetired { opcode, tstates: 9 });
         assert_eq!(restored.export_state(), continuous.export_state());
 
         assert_eq!(restored.now(), MachineTime::from_ticks(27));
@@ -64,8 +64,9 @@ fn f002_bc_de_transfers_resume_from_scheduler_snapshot_with_wait() {
             (Z80BusOperation::MemoryRead, Some(opcode))
         };
 
-        let bus_completions: Vec<_> = restored
-            .take_trace()
+        let restored_trace = restored.take_trace();
+        assert_eq!(restored_trace, continuous.take_trace());
+        let bus_completions: Vec<_> = restored_trace
             .into_iter()
             .filter_map(|event| match event {
                 SmsTemporalTraceEvent::BusCompleted {
