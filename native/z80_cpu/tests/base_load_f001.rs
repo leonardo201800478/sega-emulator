@@ -5,8 +5,7 @@
 
 use sega_z80_cpu::bus::CpuBus;
 use sega_z80_cpu::{
-    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
-    Z80Registers,
+    Z80, Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep, Z80Registers,
 };
 
 const PROGRAM_COUNTER: u16 = 0x0100;
@@ -192,13 +191,19 @@ fn assert_differential_case(
         "{context}: nominal timing plus one WAIT per bus request"
     );
     assert_eq!(accesses, expected_accesses, "{context}: bus order");
-    assert_eq!(atomic.registers, expected_registers, "{context}: semantic oracle");
+    assert_eq!(
+        atomic.registers, expected_registers,
+        "{context}: semantic oracle"
+    );
     assert_eq!(
         atomic.export_architectural_state(),
         micro.export_architectural_state(),
         "{context}: atomic/micro architectural differential"
     );
-    assert_eq!(atomic.registers.f, initial_registers.f, "{context}: F preserved");
+    assert_eq!(
+        atomic.registers.f, initial_registers.f,
+        "{context}: F preserved"
+    );
     assert_eq!(atomic.wz, INITIAL_WZ, "{context}: WZ preserved");
     assert_eq!(micro.wz, INITIAL_WZ, "{context}: micro WZ preserved");
     assert_eq!(atomic.q, 0, "{context}: Q cleared by non-flag LD");
@@ -214,20 +219,22 @@ fn assert_differential_case(
         "{context}: micro previous Q retained"
     );
     assert_eq!(atomic.r, 0x81, "{context}: one M1 refresh preserves R7");
-    assert_eq!(micro.refresh, 0x81, "{context}: micro M1 refresh preserves R7");
+    assert_eq!(
+        micro.refresh, 0x81,
+        "{context}: micro M1 refresh preserves R7"
+    );
 
     if let Some((address, expected)) = memory_result {
         assert_eq!(atomic_memory, Some(expected), "{context}: atomic memory");
-        assert_eq!(memory[usize::from(address)], expected, "{context}: micro memory");
+        assert_eq!(
+            memory[usize::from(address)],
+            expected,
+            "{context}: micro memory"
+        );
     }
 }
 
-fn register_matrix_case(
-    opcode: u8,
-    value: u8,
-    address: u16,
-    memory: &mut [u8; 65_536],
-) {
+fn register_matrix_case(opcode: u8, value: u8, address: u16, memory: &mut [u8; 65_536]) {
     let destination = (opcode >> 3) & 0x07;
     let source = opcode & 0x07;
     let flags = value.rotate_left(1) ^ 0xA5;
@@ -394,7 +401,10 @@ fn all_base_register_and_hl_ld_encodings_match_independent_oracle_and_microseque
         }
     }
 
-    assert_eq!(tested, 25_344, "all F-001 LD r,r' forms and memory boundaries");
+    assert_eq!(
+        tested, 25_344,
+        "all F-001 LD r,r' forms and memory boundaries"
+    );
 }
 
 #[test]
@@ -416,7 +426,10 @@ fn all_base_immediate_ld_encodings_cover_every_byte_and_hl_boundary() {
         }
     }
 
-    assert_eq!(tested, 2_816, "all F-001 immediate LD values and (HL) boundaries");
+    assert_eq!(
+        tested, 2_816,
+        "all F-001 immediate LD values and (HL) boundaries"
+    );
 }
 
 #[test]
