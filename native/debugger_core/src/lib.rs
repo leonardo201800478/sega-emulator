@@ -175,10 +175,10 @@ mod tests {
     #[test]
     fn breakpoint_set_has_a_hard_limit() {
         let mut points = BreakpointSet::default();
-        for address in 0..MAX_BREAKPOINTS as u32 {
+        for address in 0_u32..64 {
             assert!(points.insert(address));
         }
-        assert!(!points.insert(MAX_BREAKPOINTS as u32));
+        assert!(!points.insert(64));
     }
 
     #[test]
