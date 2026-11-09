@@ -8713,7 +8713,15 @@ mod ed_register_control_differential_tests {
         ];
 
         for opcode in opcodes {
-            for accumulator in [0x00, 0x01, 0x7F, 0x80, 0xFF] {
+            let accumulators: Vec<u8> = if matches!(
+                opcode,
+                0x44 | 0x4C | 0x54 | 0x5C | 0x64 | 0x6C | 0x74 | 0x7C
+            ) {
+                (0_u8..=u8::MAX).collect()
+            } else {
+                vec![0x00, 0x01, 0x7F, 0x80, 0xFF]
+            };
+            for accumulator in accumulators {
                 for iff2 in [false, true] {
                     let architectural = state(accumulator, iff2);
                     let mut atomic = Z80::default();
