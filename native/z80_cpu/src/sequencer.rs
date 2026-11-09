@@ -9746,6 +9746,60 @@ mod ed_return_nibble_rotate_differential_tests {
         }
     }
 
+    fn run_retn_case(opcode: u8, iff2: bool, sp: u16, return_address: u16, add_waits: bool) {
+        let mut initial = initial_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = sp;
+        initial.iff1 = !iff2;
+        initial.iff2 = iff2;
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0xED;
+        atomic_bus.memory[0x1001] = opcode;
+        atomic_bus.memory[usize::from(sp)] = return_address as u8;
+        atomic_bus.memory[usize::from(sp.wrapping_add(1))] = (return_address >> 8) as u8;
+        let sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(14), "ED {opcode:02X}");
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(initial).unwrap();
+        let (sequenced, sequenced_bus, tstates) =
+            run_sequenced(sequenced, sequenced_bus, add_waits);
+
+        assert_eq!(tstates, 14 + if add_waits { 4 } else { 0 });
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "ED {opcode:02X}, IFF2={iff2}, SP={sp:04X}"
+        );
+        assert_eq!(
+            sequenced_bus.reads,
+            vec![0x1000, 0x1001, sp, sp.wrapping_add(1)]
+        );
+        assert!(sequenced_bus.writes.is_empty());
+        assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.registers.pc, return_address);
+        assert_eq!(sequenced.registers.sp, sp.wrapping_add(2));
+        assert_eq!(sequenced.iff1, iff2);
+        assert_eq!(sequenced.iff2, iff2);
+        assert_eq!(sequenced.refresh, 0x80);
+        assert_eq!(sequenced.wz, return_address);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn retn_reti_alias_matrix_covers_iff2_stack_wrap_wait_and_snapshot() {
+        for opcode in [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
+            for iff2 in [false, true] {
+                run_retn_case(opcode, iff2, 0xD000, 0x1234, false);
+                run_retn_case(opcode, iff2, 0xFFFF, 0x5678, true);
+                run_retn_case(opcode, iff2, 0x0000, 0x9ABC, true);
+            }
+        }
+    }
+
     #[test]
     fn rrd_and_rld_match_atomic_nibble_rotation_and_flags() {
         run_case(0x67, false);
