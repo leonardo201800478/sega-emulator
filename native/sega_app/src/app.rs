@@ -1031,7 +1031,8 @@ impl SegaApp {
             self.fps_shared_value
                 .store(0.0_f32.to_bits(), Ordering::Relaxed);
             self.fps_overlay_was_active = true;
-        } else if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL {
+        } else if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL
+        {
             let presented_sequence = self
                 .native_viewport
                 .worker
