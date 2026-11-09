@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09). Q/previous-Q DD/FD→SCF/CCF foi corrigido e validado com 2.000 vetores externos adicionais; total SingleStepTests integrado: 34.000 PASS.
+**Baseline de runtime Z80 após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09). PRs documentais #703 e #704 não alteraram o runtime. Q/previous-Q DD/FD→SCF/CCF foi corrigido e validado com 2.000 vetores externos adicionais; total SingleStepTests integrado: 34.000 PASS.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
