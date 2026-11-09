@@ -1,6 +1,6 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Baseline remota reconciliada:** `main` = `ce51578511a0090afbba3ded6312c9a25c5d78c7` (2026-11-09; squash das PRs #724/F-003, #726/F-004 e #728/F-015, sem alteração do runtime ED).
+**Baseline remota reconciliada:** `main` = `c2dae949d24b6a41899b0335ae2dd7f35b89ef26` (2026-11-09; inclui a reconciliação documental da PR #729; PRs #724/#726/#728 não alteraram runtime ED).
 **Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
