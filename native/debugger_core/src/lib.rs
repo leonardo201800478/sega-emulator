@@ -46,7 +46,11 @@ impl BreakpointSet {
 
     /// Remove an address, returning whether it was present.
     pub fn remove(&mut self, address: u32) -> bool {
-        let Some(index) = self.addresses.iter().position(|item| item.address() == address) else {
+        let Some(index) = self
+            .addresses
+            .iter()
+            .position(|item| item.address() == address)
+        else {
             return false;
         };
         self.addresses.remove(index);
@@ -184,7 +188,10 @@ mod tests {
         for value in 0..5 {
             history.push(value);
         }
-        assert_eq!(history.entries().iter().copied().collect::<Vec<_>>(), [2, 3, 4]);
+        assert_eq!(
+            history.entries().iter().copied().collect::<Vec<_>>(),
+            [2, 3, 4]
+        );
         assert_eq!(history.dropped(), 2);
         assert_eq!(history.drain().collect::<Vec<_>>(), [2, 3, 4]);
         assert!(history.is_empty());
