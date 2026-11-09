@@ -3,7 +3,7 @@
 **Atualização de baseline (2026-11-09):** o conteúdo histórico desta matriz foi originalmente auditado na baseline `043ecb61d8d1cc77245fa72639d7f210d88cab26`. A main documental consultada imediatamente após PR #681 era `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`; isso não significa que toda a matriz tenha sido revalidada nesse SHA. A auditoria incremental atual está registrada em [Checklist mestre de auditoria Z80](z80-master-audit-checklist.md). Não atribuir à matriz histórica evidência posterior sem atualizar a linha correspondente e registrar o SHA.
 
 **Data:** 2026-11-09
-**Baseline remota auditada:** `main` — `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4` (2026-11-09, após PR #685).
+**Baseline remota auditada:** `main` — `e7e37290e1baa9119326e9e7213f77cadcc37f5e` (2026-11-09, após PR #686).
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
 **Schema do microsequenciador:** 32 (baseline após PR #680)
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
@@ -402,4 +402,14 @@ A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A no
 - O microsequenciador aceita as 16 combinações DD/FD de ADD, ADC, SUB, SBC, AND, XOR, OR e CP com fonte IXH/IXL/IYH/IYL. A execução reutiliza `read_indexed_register()` e `execute_alu_operation()`.
 - A suíte contém matriz diferencial de 10.816 casos, vetores fixos para flags e CP X/Y, preservação de Q/previous-Q, WZ, PC/R, IFF, I, IX/IY/H/L, WAIT nos dois M1, snapshot/restore e prefixos repetidos.
 - O operando código 6 (`(IX+d)/(IY+d)`) permanece no caminho de memória indexada E4B; não é substituído por IXH/IXL/IYH/IYL.
-- Estado F-037: `IMPLEMENTED_PENDING_VALIDATION`. F-036: CLOSED. E7: IN_PROGRESS. E8: BLOCKED.
+- Estado F-037: `CLOSED` após PR #686, HEAD `a0937e8fa1bb4547d1ee53a9e3431392a2fa443a`, run #42619522899 PASS e merge SHA `e7e37290e1baa9119326e9e7213f77cadcc37f5e`. E7: IN_PROGRESS. E8: BLOCKED.
+
+
+### Fechamento F-037 — PR #686
+
+- Main integrada: `e7e37290e1baa9119326e9e7213f77cadcc37f5e`.
+- HEAD validado: `a0937e8fa1bb4547d1ee53a9e3431392a2fa443a`; run #42619522899 PASS.
+- Implementadas as 16 formas DD/FD ALU com IXH/IXL/IYH/IYL, reutilizando a ALU compartilhada e sem ciclos internos artificiais.
+- 10.816 casos diferenciais, vetores fixos para A/F e X/Y de CP, carry-in, Q/previous-Q, WAIT, snapshot/restore e prefixos repetidos.
+- F-037 CLOSED. F-028 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+- Evidência complementar pendente: importar vetores externos SingleStepTests Z80 NMOS com atribuição/licença MIT e testar a execução retomável contra esses estados finais.
