@@ -323,8 +323,8 @@ A PR #702 corrigiu Q/previous-Q para DD/FD→SCF/CCF e validou 34.000 vetores ex
 
 ## 13. Candidata F-033 — PR #706 — 2026-11-09
 
-**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`  
-**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`  
+**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
 **Estado:** implementação candidata; não integrada.
 
 O fallback residual em `execute_ed_register_control()` foi alterado para aposentadoria normal via `retire(opcode)`. Como o byte terminal já foi obtido pelo segundo M1, o caminho não adiciona M-cycles/T-states internos nem acesso extra de barramento. A duração agregada esperada é 8 T-states nominais, acrescida dos WAIT efetivamente inseridos nos dois fetches.
