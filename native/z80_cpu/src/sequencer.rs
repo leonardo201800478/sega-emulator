@@ -10721,10 +10721,7 @@ mod ed_block_io_differential_tests {
         }
     }
 
-    fn run_sequenced_block_io_with_int(
-        cpu: &mut Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> u32 {
+    fn run_sequenced_block_io_with_int(cpu: &mut Z80MicroSequencer, bus: &mut TestBus) -> u32 {
         let mut step = cpu.begin_instruction().unwrap();
         let mut injected_int = false;
         round_trip(cpu);
