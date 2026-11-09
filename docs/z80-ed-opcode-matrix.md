@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Baseline:** Sega Emulator main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
+**Baseline:** Sega Emulator main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
@@ -292,3 +292,10 @@ A coluna “Microsequenciador” descreve o estado atual em main: os 78 casos ex
 3. Adicionar amostras SingleStepTests ED em famílias representativas e registrar proveniência/hash.
 4. Auditar aliases ED, RETI/RETN, IM e efeitos de variante; não inventar semântica para bytes indefinidos.
 5. Não iniciar E8 antes do fechamento formal de E7.
+
+
+## Atualização de validação — 2026-11-09
+
+- PR #702 integrou a correção Q/previous-Q; não altera a classificação dos encodings ED.
+- F-033: o teste microsequenciado de 178 bytes e os vetores externos ED77/ED7F foram adicionados, mas o resultado permanece pendente até CI no HEAD da PR desta etapa.
+- A revisão SingleStepTests consultada contém fixtures ED77 e ED7F (1.000 casos cada); não assumir que há arquivo externo para todos os 178 encodings reservados.
