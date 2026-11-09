@@ -94,3 +94,10 @@ botões padronizados South/East para os dois botões SMS e Start para Pause/NMI.
 Teclado e gamepad são combinados por OR no snapshot do jogador 1. O backend
 preserva capacidades e estados brutos; gyro, touchpad, eixos de volante,
 perfis configuráveis e jogador 2 ainda não fazem parte desta fatia.
+
+
+## Menus nativos sobre o viewport D3D12
+
+A barra principal permanece na janela raiz. Os menus Arquivo, Vídeo, Som, Opções e Diagnostics são exibidos em viewports egui nativos opacos, limitados à área cliente e ancorados ao botão acionado. O HWND de vídeo D3D12 permanece no fim da ordem Z dos filhos, mantendo os painéis acima do jogo sem ocultar ou pausar a apresentação.
+
+Os eventos de menu usam a infraestrutura compartilhada de observabilidade (`sega::ui::menu`); a coleta continua desativada por padrão e é ativada pelo próprio menu Diagnostics. Não há writer ou mecanismo de captura paralelo.
