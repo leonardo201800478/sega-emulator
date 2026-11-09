@@ -641,8 +641,7 @@ fn execute_frame(
         .map_err(|error| error.to_string())?;
     let step_frame_elapsed =
         diagnostic_step_start.map_or(Duration::ZERO, |started| started.elapsed());
-    let diagnostic_machine_end =
-        diagnostic_machine_start.map(|_| machine.now().ticks());
+    let diagnostic_machine_end = diagnostic_machine_start.map(|_| machine.now().ticks());
     if diagnostics_enabled {
         telemetry
             .total_instructions
