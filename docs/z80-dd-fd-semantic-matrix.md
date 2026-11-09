@@ -3,7 +3,7 @@
 **Atualização de baseline (2026-11-09):** o conteúdo histórico desta matriz foi originalmente auditado na baseline `043ecb61d8d1cc77245fa72639d7f210d88cab26`. A main documental consultada imediatamente após PR #681 era `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`; isso não significa que toda a matriz tenha sido revalidada nesse SHA. A auditoria incremental atual está registrada em [Checklist mestre de auditoria Z80](z80-master-audit-checklist.md). Não atribuir à matriz histórica evidência posterior sem atualizar a linha correspondente e registrar o SHA.
 
 **Data:** 2026-11-09
-**Baseline remota auditada:** `main` — `0b9b298f0f9791a6fa6db17580ad741db5c0515d` (2026-11-09, após PR #684).
+**Baseline remota auditada:** `main` — `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4` (2026-11-09, após PR #685).
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
 **Schema do microsequenciador:** 32 (baseline após PR #680)
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
@@ -93,7 +93,7 @@ Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-state
 | `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | 3 | EA=index+sign_extend(d); memória lida/escrita; H/L do outro operando são H/L normais; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, 10 testes, IX/IY e matriz de registradores |
 | `34`, `35` | INC/DEC (IX/IY+d) | 3 | EA=index+sign_extend(d); read-modify-write; flags S/Z/H/PV/N atualizadas; C preservado | 23 (6 M-cycles: 4,4,3,5,4,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4C, 5 testes, WAIT/snapshot/prefixos |
 | `36` | LD (IX/IY+d),n | 4 | Lê displacement e imediato; escreve EA; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, WAIT e snapshots por fase |
-| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; half-register não documentado como operando independente no UM0080 | 8 (dois M1; sem ciclo interno artificial) | IMPLEMENTED_ATOMIC; matriz dirigida | NOT_IMPLEMENTED; F-037 GAP_CONFIRMED |
+| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; X/Y conforme resultado, exceto CP conforme operando; half-register não documentado como operando independente no UM0080 | 8 (dois M1; sem ciclo interno artificial) | IMPLEMENTED_ATOMIC; matriz dirigida | IMPLEMENTED_PENDING_VALIDATION; PR #686, 16 formas, 10.816 casos, vetores fixos, WAIT/snapshot |
 | `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | 3 | EA=index+sign_extend(d); memória lida; A/F atualizados; CP preserva A e copia X/Y do operando | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4B, 16 vetores x IX/IY, WAIT/snapshot/prefixos |
 | Demais opcodes | Prefixo ignorado, prefixo repetido, ED ou fallback da instrução base | Prefixos extras + comprimento BASE | Sem substituição IX/IY; PC/R e custo do prefixo precisam ser mantidos; ED cancela indexação | BASE + 4T por prefixo ignorado | Fallback implementado no executor atômico | NOT_IMPLEMENTED / gap de fallback |
 
@@ -393,3 +393,13 @@ A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A no
 - A execução exclusiva Z80 deixou D3D12, áudio, SDL3, VDP, PSG, Scheduler stress e workspace como SKIPPED; o agregador passou e o merge foi aceito.
 - Tentativas anteriores: #42614347670 FAIL em rustfmt; #42614617507 FAIL em Clippy (`field_reassign_with_default`). As correções foram aplicadas antes do HEAD final; nenhuma falha intermediária foi tratada como PASS.
 - F-036 CLOSED; F-037 GAP_CONFIRMED; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+### Candidato F-037 — PR #686
+
+- Main de entrada: `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4`.
+- Commit de implementação: `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; HEAD candidato documentado: `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- O microsequenciador aceita as 16 combinações DD/FD de ADD, ADC, SUB, SBC, AND, XOR, OR e CP com fonte IXH/IXL/IYH/IYL. A execução reutiliza `read_indexed_register()` e `execute_alu_operation()`.
+- A suíte contém matriz diferencial de 10.816 casos, vetores fixos para flags e CP X/Y, preservação de Q/previous-Q, WZ, PC/R, IFF, I, IX/IY/H/L, WAIT nos dois M1, snapshot/restore e prefixos repetidos.
+- O operando código 6 (`(IX+d)/(IY+d)`) permanece no caminho de memória indexada E4B; não é substituído por IXH/IXL/IYH/IYL.
+- Estado F-037: `IMPLEMENTED_PENDING_VALIDATION`. F-036: CLOSED. E7: IN_PROGRESS. E8: BLOCKED.
