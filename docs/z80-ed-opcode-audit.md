@@ -1,6 +1,6 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Baseline remota reconciliada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09; PRs #709/#710 integradas).
+**Baseline remota reconciliada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09; PRs #709/#710 integradas).
 **Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
 **Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
@@ -337,3 +337,23 @@ A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos byt
 ## Reconciliação pós-PR #710 — 2026-11-09
 
 A baseline remota é `1142eb567746afe64356b60f2ce466581e1c0cef`. F-033 está CLOSED para o perfil Zilog NMOS clássico, com a cobertura dos 178 bytes reservados e os limites acima. F-034 está CLOSED para o perfil de compatibilidade NMOS clássico SMS/SG-1000, conforme PR #709 (CI #6034 no HEAD exato) e reconciliação documental #710 (CI #6036). Essas classificações não representam compatibilidade universal de variantes nem validação física. E7 permanece IN_PROGRESS por auditoria semântica global; E8 permanece BLOCKED.
+
+
+## 7. F-023 — RRD/RLD: expansão exaustiva de evidência integrada PR #714
+
+A candidata amplia a validação de RRD/RLD sem alterar runtime. No executor atômico, 262.144 casos percorrem ambos os opcodes, todos os valores de A e (HL) e ambos os estados iniciais de Carry. O oracle calcula diretamente a rotação de nibbles e as flags documentadas: S/Z/PV derivados do novo A; H/N zerados; C preservado. Também verifica HL, PC, R, WZ e a escrita de memória.
+
+O teste microsequenciado acrescenta 16 casos dirigidos, com WAIT em cada pedido de barramento e snapshot encode/decode + restore após cada ciclo. Confere a sequência dos dois fetches M1, leitura e escrita de (HL), 18T nominais/22T com WAIT.
+
+**Distinção de evidência:** UM0080 documenta as transformações, 5 M-cycles, 18 T-states (4,4,3,4,3) e as flags S/Z/H/PV/N/C. Não documenta explicitamente X/Y nem WZ. MAME (`src/devices/cpu/z80/z80.lst`, macros `rrd`/`rld`, commit `df58101a63890084c249119566c97bd849ca28ac`) e ares (`ares/component/processor/z80/instructions.cpp`, `instructionRLD`/`instructionRRD`, commit `19d051721bb14c46be92a713216421447dec91b7`) concordam em X/Y derivados de A e WZ=HL+1. Essa concordância é referência comparativa, não evidência de silício.
+
+F-023 permanece AUDIT_PARTIAL até prova independente de X/Y/WZ e validação temporal/hardware adicional. Nenhuma afirmação de validação física SMS, CMOS ou clones.
+
+
+## 8. Integração e CI — PR #714
+
+PR #714 MERGED em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`; CI #6056 PASS e pós-merge #6057 PASS. A suíte Z80 focada executou fmt, Clippy, testes Z80/SMS/SG-1000 e vetores externos DD/FD. O teste exaustivo `ed_rrd_rld_exhaustive_nibble_transform_and_flag_contract` passou com 262.144 vetores em 2,88 s. A fixture microsequenciada `rrd_rld_boundary_vectors_preserve_wait_snapshot_and_bus_order` também passou.
+
+O primeiro ensaio da fixture exaustiva revelou apenas um defeito no próprio teste: o byte fonte não era restaurado entre as duas variantes de Carry. A fixture foi corrigida para restaurar a memória antes de cada vetor; a execução final passou. Nenhum defeito de runtime foi identificado nem corrigido nesta tarefa.
+
+F-023 permanece AUDIT_PARTIAL pelos limites já registrados; E7 IN_PROGRESS; E8 BLOCKED.

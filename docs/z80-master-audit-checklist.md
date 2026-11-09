@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `5e4a703daefdebe62fb7f8d220752359df59f8e3` (2026-11-09, após PRs #711/#712). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09, após PRs #711–#714). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -98,7 +98,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-020 | IN A,(n), OUT (n),A e ED IN/OUT (C) | AUDIT_PARTIAL | Portas, valor, flags, WZ e efeitos colaterais. |
 | F-021 | INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR | AUDIT_PARTIAL | Flags, B, HL, WZ, L pós-atualização, repetição e evidência NMOS. |
 | F-022 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | AUDIT_PARTIAL | PR #712 integrada em `5e4a703daefdebe62fb7f8d220752359df59f8e3`; HEAD validado `7390744d9d6dc61ef2db3786f75fc9073dabdc12`, CI #6045 e pós-merge #6046 PASS. Fixture IM2 cobre LDIR/LDDR/CPIR/CPDR, F via PUSH AF, RETI, retomada e snapshot/restore. Restam matriz independente mais ampla, flags simples, WZ/MEMPTR nos caminhos não repetitivos e demais fronteiras. Não fechar a família com este teste isolado. |
-| F-023 | RRD/RLD | AUDIT_PARTIAL | Nibbles, memória, flags, WZ e WAIT/snapshot se caminho temporal aplicável. |
+| F-023 | RRD/RLD | AUDIT_PARTIAL | PR #714 integrada em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`, CI #6056 e pós-merge #6057 PASS. Adiciona 262.144 vetores atômicos (2 opcodes × 256 A × 256 (HL) × 2 estados C) para permutação e flags documentadas, além de 16 vetores microsequenciados com WAIT/snapshot e ordem de barramento. X/Y e WZ=HL+1 são somente comparativos MAME/ares; não são evidência física. Restam prova independente de X/Y/WZ e validação física SMS/variantes. |
 | F-024 | LD I,A; LD R,A; LD A,I; LD A,R | AUDIT_PARTIAL | Flags, refresh, PV/IFF2 e erratum após interrupção. |
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
@@ -371,3 +371,17 @@ A fixture `ed_block_transfer_repeat_interrupt_tests::block_transfer_and_compare_
 **Gates no HEAD exato da PR:** fmt PASS; Clippy PASS; testes Z80/SMS/SG-1000 PASS; vetores SingleStepTests DD/FD PASS; documentation patch hygiene PASS; agregador Rust quality/unit PASS. Workspace regression, Scheduler stress, VDP/PSG, áudio, input e hosts não relacionados ficaram NOT RUN conforme política de impacto.
 
 F-022 permanece AUDIT_PARTIAL por flags das iterações simples, fronteiras combinatórias, WZ/MEMPTR independente e demais efeitos. Hardware SMS e ROM v5.0 integral no core permanecem NOT RUN; CMOS/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 28. F-023 — RRD/RLD, cobertura exaustiva integrada PR #714 — 2026-11-09
+
+A PR #714 MERGED em `3a81437362dad79577058852b5f469381d3bde2c` integra `ed_rrd_rld_exhaustive_nibble_transform_and_flag_contract` no executor atômico, com 262.144 vetores e oracle algébrico independente para os nibbles e flags S/Z/PV/H/N/C documentadas no UM0080. X/Y é verificado em trilha separada por concordância MAME/ares, não como especificação ou oracle físico. O endereço HL=FFFF é incluído para wrap de WZ.
+
+No microsequenciador, 16 vetores dirigidos abrangem RRD/RLD, zeros, nibbles alternados, extremos, ambos os estados de Carry e HL=FFFF; cada transação recebe WAIT e cada ciclo interno/barramento passa por snapshot encode/decode + restore. A ordem observada é opcode fetch ED, opcode fetch terminal, leitura (HL), escrita (HL), com 18T nominais e 22T com os quatro WAITs inseridos.
+
+A evidência de timing/flags documentadas é do UM0080. MAME e ares concordam em WZ=HL+1 e X/Y derivados de A, mas são referências de emulação, não validação de silício. F-023 permanece AUDIT_PARTIAL; ROM externo e hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 29. Fechamento documental da PR #714 — 2026-11-09
+
+PR #714 MERGED; HEAD de validação `bb15e672f30d8aae3777761f1545347fc3d520ea`; CI #6056 PASS no HEAD da PR e CI #6057 PASS no HEAD da main `3a81437362dad79577058852b5f469381d3bde2c`. A cobertura integrada é 262.144 vetores atômicos e 16 vetores microsequenciados com WAIT/snapshot. F-023 continua AUDIT_PARTIAL pelos limites de X/Y/WZ, ROM dedicado e hardware SMS. E7 IN_PROGRESS; E8 BLOCKED.

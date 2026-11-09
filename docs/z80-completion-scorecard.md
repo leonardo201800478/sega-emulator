@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `5e4a703daefdebe62fb7f8d220752359df59f8e3` (2026-11-09, após PRs #711 e #712). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09, após PRs #711–#714). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -413,3 +413,26 @@ A candidata adiciona `ed_block_transfer_repeat_interrupt_tests::block_transfer_a
 - Workspace regression e jobs não relacionados ficaram SKIPPED/NOT RUN pela política de impacto; não são promovidos a PASS.
 
 **Limite:** o novo teste é um vetor dirigido por opcode e não fecha F-022. Flags das iterações simples, matriz combinatória completa, WZ/MEMPTR independente, execução integral do ROM v5.0 no core e validação direta em hardware SMS continuam pendentes. CMOS/clones permanecem NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 32. F-023 — RRD/RLD: cobertura exaustiva integrada pela PR #714
+
+**Baseline main:** `3a81437362dad79577058852b5f469381d3bde2c`.
+
+A candidata acrescenta 262.144 vetores ao executor atômico: RRD e RLD × 256 valores de A × 256 valores de (HL) × Carry=0/1. O oracle independente calcula a permutação dos nibbles e as flags documentadas pelo UM0080: S/Z/PV a partir do novo A, H/N zerados e C preservado. O teste também verifica HL, PC, R e o wrap de WZ em HL=FFFF.
+
+A observação X/Y = bits 5/3 do novo A é testada como comportamento de referência concordante entre MAME e ares; não é apresentada como especificação UM0080 nem como evidência física independente. A candidata acrescenta ainda 16 vetores dirigidos no microsequenciador, com WAIT em cada transação de barramento, snapshot encode/decode + restore por ciclo e ordem de leitura/escrita.
+
+**Limites:** WZ=HL+1 e X/Y permanecem comportamento comparativo de emuladores, não prova de silício; execução do ROM específico e hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. F-023 permanece AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED. PR #714 MERGED em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`; CI #6056 / run `42651927378` PASS no HEAD exato da PR e CI pós-merge #6057 / run `42652163312` PASS no HEAD exato da main.
+
+
+## 33. Integração F-023 — PR #714 — 2026-11-09
+
+**Main:** `3a81437362dad79577058852b5f469381d3bde2c` (squash merge PR #714). **HEAD validado da PR:** `bb15e672f30d8aae3777761f1545347fc3d520ea`. **CI:** #6056 / run `42651927378` PASS no HEAD da PR; #6057 / run `42652163312` PASS no HEAD pós-merge.
+
+- 262.144 vetores atômicos passaram: RRD/RLD × 256 A × 256 (HL) × C=0/1.
+- Oracle independente para transformação dos nibbles e flags documentadas S/Z/PV/H/N/C; X/Y esperado de A permanece uma comparação de referência MAME/ares, não especificação do fabricante.
+- HL=FFFF e wrap WZ verificados; PC/R/HL e memória conferidos.
+- 16 vetores microsequenciados dirigidos passaram com WAIT por pedido de barramento, snapshot/restore em cada ciclo e ordem de barramento confirmada.
+- fmt PASS; Clippy PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD PASS; agregador Rust quality/unit PASS. Workspace regression e jobs não relacionados ficaram NOT RUN.
+- F-023 permanece AUDIT_PARTIAL: X/Y e WZ não têm prova física independente, ROM dedicado e hardware SMS NOT RUN, CMOS/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
