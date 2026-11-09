@@ -1,6 +1,6 @@
 # Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
-**Baseline documental reconciliada (2026-11-09):** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` após PR #692. O histórico anterior permanece preservado; a nova evidência externa F-037 e a pendência Q/previous-Q estão registradas na seção 23.
+**Baseline documental reconciliada (2026-11-09):** main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` após PR #702. A divergência Q/previous-Q DD/FD→SCF/CCF foi corrigida e validada; demais lacunas F-028 permanecem.
 
 **Data:** 2026-11-09
 **Baseline remota auditada:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c` (2026-11-09, após PR #687 documental). A mudança #687 não alterou runtime Z80 nem a matriz de opcodes.
@@ -444,3 +444,15 @@ Vetores externos discriminantes fixados na mesma revisão SingleStepTests:
 Reprodução obtida na PR #695, workflow run #42624833386: DD 37 0001 falhou com F obtido=45 e esperado=65. O teste interrompeu no primeiro mismatch; FD 3F ainda não foi alcançado. A fórmula atual, preservando q_previous=F, prevê F=45 no primeiro caso e F=D4 no segundo; com q_previous limpo, os resultados esperados são F=65 e F=FC. A correção dos dois executores e a validação de snapshot/restore estão na PR de correção Q/previous-Q, ainda pendente de CI.
 
 **Próxima tarefa objetiva:** adicionar DD 37 e FD 3F ao harness externo, reproduzir no microsequenciador e executor atômico, corrigir a fronteira de prefixo sem alterar E4A/E4B e validar snapshot/restore após o primeiro M1.
+
+
+## 24. Resultado da correção Q/previous-Q — PR #702
+
+- PR #702 MERGED; main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`.
+- HEAD validado `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`; CI runs #42626811588 e #42626765522 SUCCESS.
+- A limpeza de `q_previous` foi aplicada no executor atômico (`execute_indexed`) e na transição DD/FD do microsequenciador.
+- Vetores externos DD 37 (SCF) e FD 3F (CCF): 1.000 cada, **2.000/2.000 PASS**.
+- F-037 permanece validada com 32.000/32.000; total externo no HEAD: **34.000/34.000 PASS**.
+- Teste diferencial confirma 8T e snapshot/restore entre M1 do prefixo e opcode terminal.
+- As exceções DD/FD 66/6E/74/75 continuam preservando H/L reais; E4A/E4B não foram modificados nesta correção.
+- **Estado:** a divergência Q/previous-Q DD/FD→SCF/CCF está RESOLVED. F-028 permanece AUDIT_PARTIAL até auditoria completa de todas as formas, prefixos, HALT, PC/R, flags e efeitos arquiteturais. E7 IN_PROGRESS; E8 BLOCKED.
