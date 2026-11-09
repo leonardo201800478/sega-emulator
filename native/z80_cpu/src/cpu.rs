@@ -3526,6 +3526,95 @@ mod tests {
     }
 
     #[test]
+    fn ed_block_simple_forms_exhaustively_preserve_flags_and_track_wz() {
+        let mut bus = TestBus([0; 0x10000]);
+        for opcode in [0xA0_u8, 0xA8, 0xA1, 0xA9] {
+            let decrement = matches!(opcode, 0xA8 | 0xA9);
+            for accumulator in 0_u8..=u8::MAX {
+                for memory_value in 0_u8..=u8::MAX {
+                    for initial_count in [1_u16, 2] {
+                        bus.0[0xC200] = 0;
+                        bus.0[0x1000] = 0xED;
+                        bus.0[0x1001] = opcode;
+                        bus.0[0xC100] = memory_value;
+
+                        let initial_flags = accumulator.wrapping_add(memory_value);
+                        let initial_wz = 0xA55A_u16
+                            .wrapping_add(u16::from(accumulator) << 8)
+                            .wrapping_add(u16::from(memory_value));
+                        let direction = if decrement { -1_i16 } else { 1_i16 };
+                        let mut cpu = Z80::default();
+                        cpu.registers.pc = 0x1000;
+                        cpu.registers.a = accumulator;
+                        cpu.registers.f = initial_flags;
+                        cpu.registers.set_hl(0xC100);
+                        cpu.registers.set_de(0xC200);
+                        cpu.registers.set_bc(initial_count);
+                        cpu.wz = initial_wz;
+
+                        assert_eq!(
+                            cpu.step(&mut bus),
+                            Ok(16),
+                            "ED {opcode:02X}, A={accumulator:02X}, value={memory_value:02X}, BC={initial_count}"
+                        );
+
+                        let remaining = initial_count.wrapping_sub(1);
+                        assert_eq!(cpu.registers.bc(), remaining);
+                        assert_eq!(
+                            cpu.registers.hl(),
+                            0xC100_u16.wrapping_add_signed(direction)
+                        );
+                        assert_eq!(cpu.registers.pc, 0x1002);
+
+                        let expected_flags = if matches!(opcode, 0xA0 | 0xA8) {
+                            let sum = accumulator.wrapping_add(memory_value);
+                            (initial_flags & (FLAG_S | FLAG_Z | FLAG_C))
+                                | if remaining != 0 { FLAG_PV } else { 0 }
+                                | (sum & 0x08)
+                                | ((sum & 0x02) << 4)
+                        } else {
+                            let result = accumulator.wrapping_sub(memory_value);
+                            let half = (accumulator & 0x0F) < (memory_value & 0x0F);
+                            let adjusted = result.wrapping_sub(u8::from(half));
+                            (initial_flags & FLAG_C)
+                                | FLAG_N
+                                | (result & FLAG_S)
+                                | if result == 0 { FLAG_Z } else { 0 }
+                                | if half { FLAG_H } else { 0 }
+                                | if remaining != 0 { FLAG_PV } else { 0 }
+                                | (adjusted & 0x08)
+                                | ((adjusted & 0x02) << 4)
+                        };
+                        assert_eq!(
+                            cpu.registers.f, expected_flags,
+                            "ED {opcode:02X}, A={accumulator:02X}, value={memory_value:02X}, BC={initial_count}"
+                        );
+
+                        let expected_wz = if matches!(opcode, 0xA1 | 0xA9) {
+                            initial_wz.wrapping_add_signed(direction)
+                        } else {
+                            initial_wz
+                        };
+                        assert_eq!(
+                            cpu.wz, expected_wz,
+                            "ED {opcode:02X} WZ, A={accumulator:02X}, value={memory_value:02X}"
+                        );
+                        if matches!(opcode, 0xA0 | 0xA8) {
+                            assert_eq!(bus.0[0xC200], memory_value);
+                            assert_eq!(
+                                cpu.registers.de(),
+                                0xC200_u16.wrapping_add_signed(direction)
+                            );
+                        } else {
+                            assert_eq!(cpu.registers.a, accumulator);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ed_block_io_vectors_check_ports_memory_counter_and_repeat() {
         let mut ini_bus = TestIoBus::default();
         ini_bus.memory[..2].copy_from_slice(&[0xED, 0xA2]);

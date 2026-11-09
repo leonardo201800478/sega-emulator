@@ -10037,6 +10037,7 @@ mod ed_block_transfer_differential_tests {
         atomic_bus.memory[0xC001] = 0xA5;
         let sequenced_bus = atomic_bus.clone();
 
+        let initial_wz = initial.wz;
         let repeats = matches!(opcode, 0xB0 | 0xB8) && initial_count.wrapping_sub(1) != 0;
         let expected_tstates = if repeats { 21 } else { 16 };
         assert_eq!(
@@ -10044,6 +10045,8 @@ mod ed_block_transfer_differential_tests {
             Ok(expected_tstates),
             "ED {opcode:02X}, BC={initial_count:04X}"
         );
+        let expected_wz = if repeats { 0x1001 } else { initial_wz };
+        assert_eq!(atomic.wz, expected_wz, "atomic ED {opcode:02X} WZ");
 
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
@@ -10073,6 +10076,7 @@ mod ed_block_transfer_differential_tests {
         assert_eq!(sequenced_bus.reads, atomic_bus.reads);
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
         assert_eq!(sequenced.pending_request(), None);
     }
 
@@ -10275,6 +10279,12 @@ mod ed_block_compare_differential_tests {
         let sequenced_bus = atomic_bus.clone();
 
         let result = accumulator.wrapping_sub(memory_value);
+        let initial_wz = initial.wz;
+        let direction = if matches!(opcode, 0xA9 | 0xB9) {
+            -1_i16
+        } else {
+            1_i16
+        };
         let repeats =
             matches!(opcode, 0xB1 | 0xB9) && initial_count.wrapping_sub(1) != 0 && result != 0;
         let expected_tstates = if repeats { 21 } else { 16 };
@@ -10283,6 +10293,12 @@ mod ed_block_compare_differential_tests {
             Ok(expected_tstates),
             "ED {opcode:02X}, BC={initial_count:04X}, A={accumulator:02X}, value={memory_value:02X}"
         );
+        let expected_wz = if repeats {
+            0x1001
+        } else {
+            initial_wz.wrapping_add_signed(direction)
+        };
+        assert_eq!(atomic.wz, expected_wz, "atomic ED {opcode:02X} WZ");
 
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
@@ -10311,6 +10327,7 @@ mod ed_block_compare_differential_tests {
         assert_eq!(sequenced_bus.reads, atomic_bus.reads);
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
         assert_eq!(sequenced.pending_request(), None);
     }
 
