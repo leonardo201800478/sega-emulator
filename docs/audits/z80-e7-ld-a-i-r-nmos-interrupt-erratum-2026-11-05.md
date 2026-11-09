@@ -1,7 +1,8 @@
 # E7.7 — LD A,I / LD A,R: erratum P/V no aceite de INT
 
 **Data:** 2026-11-05  
-**Baseline:** `1da784f556b9524f5a6f43ce8a7c525e68354f9e`  
+**Baseline histórica de implementação:** `1da784f556b9524f5a6f43ce8a7c525e68354f9e`  
+**Main após PR #716:** `56d75cc79803494e9fd8a54e8930871c9101fc84`  
 **Escopo:** ED 57 (LD A,I) e ED 5F (LD A,R), latch P e aceite de INT/NMI.  
 **Referência normativa:** ZiLOG UM008011-0816, páginas impressas 94–95.
 
@@ -101,3 +102,26 @@ A correção fecha uma divergência entre o executor atômico e o microsequencia
 - Testes locais: NOT RUN nesta sessão (sem rustc/cargo no ambiente).
 - CI remoto: aguardando execução no HEAD exato da PR.
 - Nenhum resultado SKIPPED será classificado como PASS.
+
+
+## 8. Auditoria complementar exaustiva e fechamento F-024 — 2026-11-09
+
+### Cobertura de todos os quatro opcodes
+
+PR #716 adicionou `native/z80_cpu/tests/ed_ld_i_r_exhaustive.rs` com 4.096 vetores: ED 47 (LD I,A), ED 4F (LD R,A), ED 57 (LD A,I) e ED 5F (LD A,R), para todos os 256 valores de byte, IFF2=0/1 e Carry=0/1. O oracle calcula flags S/Z/PV/H/N/C; o comportamento X/Y derivado do valor carregado é testado conforme a concordância MAME/ares, sem alegar que o UM0080 o especifica.
+
+O teste considera os dois M1 de fetch antes da leitura de R em LD A,R e antes da sobrescrita de R em LD R,A. O microsequenciador recebe WAIT em cada fetch M1 e passa por snapshot encode/decode + restore após cada fronteira. Os tempos são 9T nominais e 11T com dois WAITs.
+
+### Erratum P/V — matriz ampliada
+
+- Microsequenciador: ED 57/5F × IFF2=0/1 × Carry=0/1; INT é afirmada durante a instrução e aceita na fronteira seguinte. PV é comparado com IFF2 antes do aceite e deve ser 0 após o acknowledge; C é preservado.
+- Executor atômico SMS: mesma matriz de opcode/IFF2/Carry.
+- NMI sem aplicação do erratum e consumo do latch por uma instrução normal intermediária continuam cobertos pelos testes dedicados anteriores.
+
+### CI e integração
+
+PR #716 MERGED por squash em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`. CI #6062 / run `42653692191` PASS no HEAD da PR; CI pós-merge #6063 / run `42653949243` PASS no HEAD da main. fmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD e agregador Rust quality/unit PASS. Workspace e subsistemas não relacionados ficaram NOT RUN.
+
+### Classificação e limites
+
+**F-024 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico.** UM0080, pp. 94–97, documenta os quatro opcodes, 9T (4,5), flags normativas e erratum P/V=0 quando INT ocorre durante LD A,I/R. X/Y não é explicitamente enumerado na descrição de flags do UM0080; a implementação segue a referência comparativa MAME/ares. Não há prova de silício para X/Y, validação física no SMS ou compatibilidade CMOS/clones. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
