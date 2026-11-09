@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `7fde212aabc07e8c4b7df56938f8845f99d29499` (2026-11-09, após squash da PR #724/F-003). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `355a35662643ca357ca9360031e002964e5a5aef` (2026-11-09, após PR #725 de reconciliação documental F-003). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -532,3 +532,17 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Referências:** ZiLOG UM008011-0816, LD A,(nn), p. 90, e LD (nn),A, p. 93; MAME `z80.lst`; ares `instructions.cpp`. O manual documenta operação/temporização, mas não WZ; as fórmulas WZ são comportamento comparativo NMOS de implementações, não prova física.
 
 **Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+## 39. F-004 — LD dd,nn / LD (nn),HL / LD HL,(nn) — candidata validada, merge pendente
+
+**Baseline main pré-PR:** `355a35662643ca357ca9360031e002964e5a5aef`.
+**HEAD validado:** `ee085aeb00290a470c2018c3399e3943fe96e006`.
+**CI:** #6119 / run `42676687551` PASS no HEAD exato.
+**Escopo:** BASE `01/11/21/31` para BC/DE/HL/SP e BASE `22/2A` para transferências absolutas HL. DD/FD E3A1/E3A2, ED F-034 e SP transfer F-005 permanecem em suas famílias, sem duplicação.
+**Implementação:** testes semânticos em `native/z80_cpu/tests/base_register_pair_f004.rs`; integração temporal SMS em `native/sms_core/tests/z80_f004_temporal.rs`; relatório em `docs/audits/z80-f004-register-pair-loads-2026-11-09.md`.
+**Matriz:** 1.052 vetores `LD dd,nn` + 2.560 vetores `LD (nn),HL`/`LD HL,(nn)` + seis casos de wrap de PC. WAITs diferenciados, snapshot/restore, diferencial atômico/microsequenciado, flags/Q/previous-Q/WZ/R, ordem low/high e scheduler SMS.
+**Gates:** rustfmt PASS; Clippy com `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. Workspace integral, Scheduler stress e hosts/VDP/PSG não relacionados NOT RUN/SKIPPED.
+**Referências:** ZiLOG UM008011-0816 pp. 99, 102 e 107; MAME `z80.lst`; ares `instructions.cpp`. O manual define tempos/ordem/flags, mas não WZ/Q. WZ=`nn+1` nas transferências HL é comparação MAME/ares, não prova física.
+**Runtime:** nenhuma alteração.
+**Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Gates focados aprovados no HEAD indicado. Sem validação física SMS. E7 IN_PROGRESS; E8 BLOCKED.
