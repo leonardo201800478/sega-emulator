@@ -524,3 +524,26 @@ Todas permanecem abertas e fora do escopo da F-015; qualquer integração exige 
 - **F-015:** CLOSED somente para semântica de software no perfil Zilog NMOS delimitado. X/Y é comparação MAME/ares, não evidência física; sem compatibilidade universal CMOS/clones.
 - **Próxima candidata:** F-005 — LD SP,HL/IX/IY e transferências absolutas de SP, após auditoria de dependências e separação dos opcodes já cobertos em ED F-034.
 - **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 39. F-005 — LD SP,HL/IX/IY — PR #731 integrada — 2026-11-09
+
+- **Main pré-PR:** `43a721b2a293831601ac02dc68b853b11beb363b`.
+- **PR:** #731, squash merge `0ea60a450c3d58a6231df73c3d1ff98fa118b4b6`.
+- **HEAD validado:** `e9ab17ebbea042a5396a5cd017c70982c6d2f2cc`.
+- **CI:** run #42696796388 PASS nos gates aplicáveis: Z80 focused, Rust workspace regression, Linux audio-output, Windows WASAPI/XAudio2, Windows egui e agregador.
+- **NOT RUN:** D3D12/DXGI runtime e suítes não relacionadas selecionadas como SKIPPED pela classificação de impacto; gates locais Cargo não executados neste ambiente.
+- **Cobertura:** BASE F9 = 6T/1 M-cycle; DD/FD F9 = 10T/2 M-cycles. Inclui estado arquitetural, flags, R/refresh, Q/previous-Q, WZ, prefixos repetidos/alternados, WAIT, snapshot/restore e comparação retomada/contínua.
+- **Integração:** BASE F9 exercitada em SmsTemporalMachine/MachineScheduler com WAIT M1 e snapshot/restore. ED 73/7B reutiliza F-034.
+- **Auditoria do diff:** somente testes/documentação; nenhuma alteração de runtime Z80/SMS.
+- **F-005:** CLOSED para semântica de software do perfil Zilog NMOS delimitado. Não equivale a validação física SMS nem a compatibilidade universal CMOS/clones.
+- **Estado global:** E7 IN_PROGRESS; E8 BLOCKED.
+
+### Próxima frente — auditoria residual E7.7
+
+F-005 encerra esta família de transferências. Não iniciar E8/ZEXDOC/ZEXALL: o gate global E7 ainda não está fechado. A próxima tarefa deve ser uma triagem de evidência independente para as lacunas residuais já catalogadas, priorizando:
+1. F-022: caminhos simples LDI/LDD/CPI/CPD e seus flags/WZ, sem repetir o cenário de repetição interrompida por IM2 já coberto.
+2. F-026: reconciliação integrada de NOP, M1 repetido, R/refresh, saída de HALT por INT/NMI e snapshot/restore sob Scheduler.
+3. F-023: evidência independente para X/Y e WZ de RRD/RLD, sem promover comparação MAME/ares a prova física.
+
+A escolha da próxima implementação depende de auditoria do código/testes atuais e de referência independente; esta lista não autoriza duplicar cobertura já integrada nem introduzir microsequenciamento sem consumidor observável.
