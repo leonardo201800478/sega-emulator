@@ -120,6 +120,8 @@ Nenhum desses padrões isolados prova a causa raiz. São critérios de triagem p
 
 A baseline `ce4d1476` tinha 15 checks: três PASS e doze SKIPPED. Workspace regression, PSG, Linux audio-output, Windows WASAPI/XAudio2 e Scheduler stress não foram executados nessa baseline.
 
+**Revalidação CI:** a primeira execução Windows identificou E0793 porque o macro de tracing tomava referência a `XAUDIO2_VOICE_STATE::BuffersQueued`, campo de uma estrutura FFI empacotada. A branch foi corrigida em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20`, copiando o campo para uma variável local alinhada antes do tracing e da comparação de starvation. A nova execução CI está em andamento; até sua conclusão, Windows WASAPI/XAudio2 permanece PENDING.
+
 ## 7. Próxima etapa após CI
 
 1. Executar a build candidata em Windows x64 com logging TRACE habilitado.
