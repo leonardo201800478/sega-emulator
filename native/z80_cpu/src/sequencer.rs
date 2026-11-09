@@ -13568,14 +13568,13 @@ mod e7_2d_ei_di_arbitration_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_block_transfer_repeat_interrupt_tests {
     use super::{Z80InterruptKind, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroStep};
     use crate::bus::CpuBus;
     use crate::{
-        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation,
-        Z80MicroSequencerState, Z80Registers,
+        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
+        Z80Registers,
     };
 
     #[derive(Clone)]
@@ -13692,10 +13691,7 @@ mod ed_block_transfer_repeat_interrupt_tests {
         }
     }
 
-    fn run_block_until_repeat_interrupt(
-        cpu: &mut Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> u32 {
+    fn run_block_until_repeat_interrupt(cpu: &mut Z80MicroSequencer, bus: &mut TestBus) -> u32 {
         let mut step = cpu.begin_instruction().unwrap();
         let mut asserted = false;
         loop {
@@ -13826,14 +13822,25 @@ mod ed_block_transfer_repeat_interrupt_tests {
             atomic.import_architectural_state(state).unwrap();
             let mut atomic_bus = initial_bus(opcode);
 
-            assert_eq!(atomic.step(&mut atomic_bus), Ok(21), "atomic ED {opcode:02X}");
-            assert_eq!(atomic.registers.f, expected_flags, "atomic repeat flags ED {opcode:02X}");
+            assert_eq!(
+                atomic.step(&mut atomic_bus),
+                Ok(21),
+                "atomic ED {opcode:02X}"
+            );
+            assert_eq!(
+                atomic.registers.f, expected_flags,
+                "atomic repeat flags ED {opcode:02X}"
+            );
             assert_eq!(atomic.registers.pc, 0xA002);
             assert_eq!(atomic.registers.bc(), 0x1001);
             assert_eq!(atomic.wz, 0xA003);
 
             atomic.request_int(0xFF);
-            assert_eq!(atomic.step(&mut atomic_bus), Ok(19), "atomic IM2 ED {opcode:02X}");
+            assert_eq!(
+                atomic.step(&mut atomic_bus),
+                Ok(19),
+                "atomic IM2 ED {opcode:02X}"
+            );
             atomic.clear_int_request();
             assert_eq!(atomic.registers.pc, 0x9000);
             assert_eq!(atomic.registers.sp, 0xCFFE);
@@ -13848,7 +13855,11 @@ mod ed_block_transfer_repeat_interrupt_tests {
             assert_eq!(atomic.registers.pc, 0xA002);
             assert_eq!(atomic.registers.sp, 0xD000);
             assert!(atomic.iff1 && atomic.iff2);
-            assert_eq!(atomic.step(&mut atomic_bus), Ok(21), "atomic resume ED {opcode:02X}");
+            assert_eq!(
+                atomic.step(&mut atomic_bus),
+                Ok(21),
+                "atomic resume ED {opcode:02X}"
+            );
             assert_eq!(atomic.registers.bc(), 0x1000);
             assert_eq!(atomic.registers.pc, 0xA002);
             assert_eq!(atomic.wz, 0xA003);
@@ -13870,17 +13881,32 @@ mod ed_block_transfer_repeat_interrupt_tests {
             assert_eq!(sequenced.registers.pc, 0x9000);
             assert_eq!(sequenced.registers.sp, 0xCFFE);
             assert_eq!(sequenced.registers.f, expected_flags);
-            assert_eq!(run_sequenced_instruction(&mut sequenced, &mut sequenced_bus), 11);
+            assert_eq!(
+                run_sequenced_instruction(&mut sequenced, &mut sequenced_bus),
+                11
+            );
             assert_eq!(sequenced_bus.memory[0xCFFC], expected_flags);
             assert_eq!(sequenced_bus.memory[0xCFFD], 0x10);
-            assert_eq!(run_sequenced_instruction(&mut sequenced, &mut sequenced_bus), 10);
+            assert_eq!(
+                run_sequenced_instruction(&mut sequenced, &mut sequenced_bus),
+                10
+            );
             assert_eq!(sequenced.registers.f, expected_flags);
-            assert_eq!(run_sequenced_instruction(&mut sequenced, &mut sequenced_bus), 4);
-            assert_eq!(run_sequenced_instruction(&mut sequenced, &mut sequenced_bus), 14);
+            assert_eq!(
+                run_sequenced_instruction(&mut sequenced, &mut sequenced_bus),
+                4
+            );
+            assert_eq!(
+                run_sequenced_instruction(&mut sequenced, &mut sequenced_bus),
+                14
+            );
             assert_eq!(sequenced.registers.pc, 0xA002);
             assert_eq!(sequenced.registers.sp, 0xD000);
             assert!(sequenced.iff1 && sequenced.iff2);
-            assert_eq!(run_sequenced_instruction(&mut sequenced, &mut sequenced_bus), 21);
+            assert_eq!(
+                run_sequenced_instruction(&mut sequenced, &mut sequenced_bus),
+                21
+            );
             assert_eq!(sequenced.registers.bc(), 0x1000);
             assert_eq!(sequenced.registers.pc, 0xA002);
             assert_eq!(sequenced.wz, 0xA003);
