@@ -756,17 +756,34 @@ impl SmsTemporalMachine {
         &mut self,
         max_instructions: usize,
     ) -> Result<usize, SmsTemporalMachineError> {
+        self.step_frame_until(max_instructions, |_| false)
+            .map(|(instructions, _)| instructions)
+    }
+
+    /// Advance until a frame completes or the supplied PC predicate requests a stop.
+    ///
+    /// The predicate is checked only at instruction boundaries. A breakpoint
+    /// therefore never suspends a partially completed M-cycle or bus transaction.
+    pub fn step_frame_until(
+        &mut self,
+        max_instructions: usize,
+        mut should_break: impl FnMut(u16) -> bool,
+    ) -> Result<(usize, bool), SmsTemporalMachineError> {
         if max_instructions == 0 {
             return Err(SmsTemporalMachineError::FrameStepLimitReached);
         }
         let initial_frame = self.frame_number();
-        for instructions in 1..=max_instructions {
+        for completed in 0..max_instructions {
+            let pc = self.cpu.export_architectural_state().registers.pc;
+            if should_break(pc) {
+                return Ok((completed, true));
+            }
             let step = self.step_instruction(0)?;
             if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
                 let _ = self.resume_instruction(0)?;
             }
             if self.frame_number() != initial_frame {
-                return Ok(instructions);
+                return Ok((completed + 1, false));
             }
         }
         Err(SmsTemporalMachineError::FrameStepLimitReached)
