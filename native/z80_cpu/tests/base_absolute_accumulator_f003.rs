@@ -194,9 +194,10 @@ fn absolute_accumulator_case(
         pc: program_counter,
     };
 
+    let [address_low, address_high] = address.to_le_bytes();
     memory[usize::from(program_counter)] = opcode;
-    memory[usize::from(program_counter.wrapping_add(1))] = address as u8;
-    memory[usize::from(program_counter.wrapping_add(2))] = (address >> 8) as u8;
+    memory[usize::from(program_counter.wrapping_add(1))] = address_low;
+    memory[usize::from(program_counter.wrapping_add(2))] = address_high;
     memory[usize::from(address)] = if is_load { value } else { 0x96 };
 
     let mut expected_registers = registers;
