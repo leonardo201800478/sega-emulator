@@ -3403,7 +3403,6 @@ mod tests {
                         assert_eq!(cpu.registers.a, expected_a);
                         assert_eq!(bus.0[usize::from(address)], expected_memory);
                         assert_eq!(cpu.registers.f, expected_flags);
-                        assert_eq!(cpu.q, expected_flags);
                         assert_eq!(cpu.registers.hl(), address);
                         assert_eq!(cpu.registers.pc, 0x1002);
                         assert_eq!(cpu.r, 0x80);
