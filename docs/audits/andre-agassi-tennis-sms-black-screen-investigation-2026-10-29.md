@@ -1,8 +1,8 @@
 # Andre Agassi Tennis (Europe, Brazil) (En) — tela preta e ruído de áudio
 
-Data: 2026-10-29  
-Estado: **INVESTIGATION_PENDING**  
-Runtime alterado: **não**  
+Data: 2026-10-29
+Estado: **INVESTIGATION_PENDING**
+Runtime alterado: **não**
 ROM no repositório: **não**
 
 ## Relato
@@ -59,7 +59,7 @@ Reproduzir o sintoma e coletar um checkpoint curto da CPU, do VDP e do PSG. O da
 
 ## Auditoria estática do boot direto e das portas — 2026-11-09
 
-**Main auditada:** `55585bf2425f1c4eaf61c4a3a3ad42f9499c4797`.  
+**Main auditada:** `55585bf2425f1c4eaf61c4a3a3ad42f9499c4797`.
 **Runtime alterado nesta auditoria:** não. Foi acrescentado apenas um teste sintético que demonstra a colisão de stack/mapper descrita abaixo.
 
 ### Fatos confirmados no código
