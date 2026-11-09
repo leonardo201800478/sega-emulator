@@ -8,7 +8,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 
 | Change area | Required automated validation |
 | --- | --- |
-| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. Do not run unrelated workspace or host-platform builds for Z80-only changes. |
+| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU/ALU/bus integration sources in both console cores and Z80-specific SMS tests are classified into this focused path. Do not run unrelated workspace or host-platform builds for Z80-only changes. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
 | Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
 | Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
