@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b` (2026-11-09, após squash da PR #721/F-001). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `29462cf0a788d5905de7a5e9e0499a1f1361fec1` (2026-11-09, após squash das PRs #721/F-001 e #722/F-002). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -77,8 +77,8 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | ID | Item a examinar | Estado inicial | Evidência / próxima ação |
 |---|---|---|---|
 | F-001 | LD r,r', LD r,n, LD r,(HL), LD (HL),r/n | CLOSED (NMOS delimitado) | Integrada pela PR #721 no squash commit `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b`; 28.161 vetores, oracle independente, flags/Q/WZ/R/PC, WAIT, snapshot/restore e equivalência scheduler contínua/retomada. CI #6091 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. |
-| F-002 | LD A,(BC)/(DE), LD (BC)/(DE),A | CLOSED (NMOS delimitado) | PR #722 propõe fechamento após 5.120 vetores, WZ/MEMPTR, wrap, flags/Q/R, WAIT, snapshot/restore e integração temporal. CI #6093 PASS no HEAD de código; efetivo após squash merge. Sem validação física SMS; CMOS/clones NOT_VERIFIED. PR #720 foi encerrada como supersedida, sem merge. |
-| F-003 | LD A,(nn), LD (nn),A | NOT_AUDITED | Conferir endereços, wrap 16-bit e ordem low/high. |
+| F-002 | LD A,(BC)/(DE), LD (BC)/(DE),A | CLOSED (NMOS delimitado) | Integrada pela PR #722 no squash commit `29462cf0a788d5905de7a5e9e0499a1f1361fec1`; 5.120 vetores, WZ/MEMPTR, wrap, flags/Q/R, WAIT, snapshot/restore e integração temporal. CI #6097 PASS no HEAD final da PR. Sem validação física SMS; CMOS/clones NOT_VERIFIED. PR #720 foi encerrada como supersedida, sem merge. |
+| F-003 | LD A,(nn), LD (nn),A | AUDIT_PARTIAL | PR #724 candidata: 2.560 vetores, WZ, PC wrap, 13T/4 M-cycles, WAITs diferenciados e snapshot/restore; CI focado do HEAD atual NOT RUN/BLOCKED por falha de classificação dos workflows. Não fechar até gates verdes. PR #723 foi encerrada sem merge. |
 | F-004 | LD rr,nn e transferências entre pares | AUDIT_PARTIAL | Conferir todos os pares e efeitos colaterais. |
 | F-005 | LD SP,HL/IX/IY; LD (nn),SP; LD SP,(nn) quando aplicável | AUDIT_PARTIAL | Confirmar semântica e tempos nominais. |
 | F-006 | EX DE,HL; EX AF,AF'; EXX; EX (SP),HL/IX/IY | AUDIT_PARTIAL | Conferir bancos alternativos, ordem de barramento e WZ. |
