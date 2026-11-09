@@ -171,3 +171,8 @@ Fonte consultada: [src/devices/cpu/z80/z80.lst](https://github.com/mamedev/mame/
 O UM0080 documenta RETI como observável por periféricos daisy-chain; a interface CpuBus atual não expõe evento RETI. SMS e SG-1000 não possuem periférico Z80 daisy-chain no perfil atual, portanto essa notificação é NOT_APPLICABLE para essas máquinas, sem declarar o núcleo genérico completo para sistemas que venham a usar tais periféricos.
 
 A diferença de cobertura ED entre executor atômico e microsequenciador está registrada em `docs/z80-ed-opcode-audit.md` e `docs/z80-ed-opcode-matrix.md`.
+
+
+## 8. Baseline após PR #702 — 2026-11-09
+
+Main: `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`. A PR #702 corrigiu exclusivamente Q/previous-Q nos prefixos DD/FD antes de SCF/CCF; não alterou o tratamento ED. A análise MAME fixada na seção 7 permanece referência de implementação, não prova de silício. F-033 continua GAP_CONFIRMED para os 178 bytes reservados no microsequenciador.
