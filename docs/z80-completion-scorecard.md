@@ -534,12 +534,15 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
 
 
-## 39. F-004 — LD dd,nn / LD (nn),HL / LD HL,(nn) — implementação de testes candidata
+## 39. F-004 — LD dd,nn / LD (nn),HL / LD HL,(nn) — candidata validada, merge pendente
 
 **Baseline main pré-PR:** `355a35662643ca357ca9360031e002964e5a5aef`.
+**HEAD validado:** `ee085aeb00290a470c2018c3399e3943fe96e006`.
+**CI:** #6119 / run `42676687551` PASS no HEAD exato.
 **Escopo:** BASE `01/11/21/31` para BC/DE/HL/SP e BASE `22/2A` para transferências absolutas HL. DD/FD E3A1/E3A2, ED F-034 e SP transfer F-005 permanecem em suas famílias, sem duplicação.
 **Implementação:** testes semânticos em `native/z80_cpu/tests/base_register_pair_f004.rs`; integração temporal SMS em `native/sms_core/tests/z80_f004_temporal.rs`; relatório em `docs/audits/z80-f004-register-pair-loads-2026-11-09.md`.
 **Matriz:** 1.052 vetores `LD dd,nn` + 2.560 vetores `LD (nn),HL`/`LD HL,(nn)` + seis casos de wrap de PC. WAITs diferenciados, snapshot/restore, diferencial atômico/microsequenciado, flags/Q/previous-Q/WZ/R, ordem low/high e scheduler SMS.
+**Gates:** rustfmt PASS; Clippy com `-D warnings` PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation hygiene PASS; agregador PASS. Workspace integral, Scheduler stress e hosts/VDP/PSG não relacionados NOT RUN/SKIPPED.
 **Referências:** ZiLOG UM008011-0816 pp. 99, 102 e 107; MAME `z80.lst`; ares `instructions.cpp`. O manual define tempos/ordem/flags, mas não WZ/Q. WZ=`nn+1` nas transferências HL é comparação MAME/ares, não prova física.
-**Runtime:** nenhuma alteração proposta.
-**Estado:** IMPLEMENTED_PENDING_VALIDATION. Aguardando rustfmt, Clippy, testes Z80/SMS/SG-1000 e documentation hygiene no HEAD exato da PR. Regressão integral do workspace deve ser classificada explicitamente; SKIPPED/NOT RUN não é PASS. E7 IN_PROGRESS; E8 BLOCKED.
+**Runtime:** nenhuma alteração.
+**Estado:** IMPLEMENTED_PENDING_VALIDATION até squash merge e confirmação da nova main. Gates focados aprovados no HEAD indicado. Sem validação física SMS. E7 IN_PROGRESS; E8 BLOCKED.
