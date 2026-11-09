@@ -225,3 +225,24 @@ O README do corpus SingleStepTests/Z80 no commit fixado `ebe1875d48f374bcfd4b505
 - A implementação atual segue essa fórmula secundária para flags de I/O em bloco. Os vetores SingleStepTests existentes passam, mas sua ancestralidade em Ares impede tratá-los como confirmação independente dessa mesma fórmula.
 
 **Conclusão de engenharia:** manter o comportamento atual para não introduzir uma regressão especulativa, mas rotular as fórmulas como hipótese de compatibilidade para a variante-alvo, não como comportamento universal demonstrado. Para resolver a questão, precisamos de um exercitador de hardware/ROM independente com procedência verificável, ou de um segundo oráculo sem ancestralidade comum conhecida, e vetores discriminantes para C/H/PV em INI/IND/OUTI/OUTD e suas variantes repetidas. Nenhum teste atual prova a resposta do silício físico.
+
+
+---
+
+## Atualização E7.7 — wrap de transferências absolutas (2026-11-09)
+
+Baseline de origem: `main` `0011eb41cee2352d2aaea71cae568e2c4d3a21e1`.
+
+A lacuna histórica de teste para `nn = 0xFFFF` nas famílias ED 43/53/63/73 e ED 4B/5B/6B/7B recebeu cobertura no teste `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff`, dentro do módulo de testes que contém o `TestBus`.
+
+A matriz cobre BC, DE, HL e SP:
+- store little-endian em FFFF/0000;
+- load little-endian de FFFF/0000;
+- WZ = 0000 após wrap;
+- PC = início + 4;
+- 20 T-states;
+- flags F preservadas.
+
+A implementação de runtime já usava aritmética de 16 bits com wrap; esta alteração adiciona evidência de borda e não altera código de produção. O teste compara resultados arquiteturais explícitos e não usa o executor como oráculo.
+
+A execução focada e os gates Rust devem passar no HEAD exato desta PR. Diferencial de hardware: NOT RUN. E7.7 global permanece IN_PROGRESS; E8 permanece BLOCKED.
