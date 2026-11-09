@@ -10586,6 +10586,141 @@ mod ed_block_io_differential_tests {
         }
     }
 
+    /// Cross-checks the repeated I/O flag fold-in against the independent
+    /// algebra published with Peter Helcmanovsky's hardware-tested v5.0 ROM:
+    /// https://github.com/MrKWatkins/ZXSpectrumNextTests/blob/develop/Tests/ZX48_ZX128/Z80BlockInstructionFlags/z80_block_flags_test.asm
+    #[test]
+    fn block_io_repeat_flags_match_hardware_banks_formula_across_b_loop() {
+        const FLAG_S: u8 = 0x80;
+        const FLAG_XY: u8 = 0x28;
+        const FLAG_H: u8 = 0x10;
+        const FLAG_PV: u8 = 0x04;
+        const FLAG_N: u8 = 0x02;
+        const FLAG_C: u8 = 0x01;
+        let pc_sites = [0x8002_u16, 0x8802, 0xA002, 0xA802];
+        let cases: [(u8, bool, u8, u16); 6] = [
+            (0xB3, false, 0xFF, 0x4010), // OTIR: carry, M.7=1
+            (0xBB, false, 0xFF, 0x4010), // OTDR: carry, M.7=1
+            (0xB3, false, 0x47, 0x40E0), // OTIR: carry, M.7=0
+            (0xBB, false, 0x47, 0x40E0), // OTDR: carry, M.7=0
+            (0xB2, true, 0xFF, 0x4000),  // INIR: carry, M.7=1
+            (0xBA, true, 0xFF, 0x4000),  // INDR: carry, M.7=1
+        ];
+
+        for (opcode, input, value, hl) in cases {
+            let direction = if matches!(opcode, 0xBA | 0xBB) {
+                -1_i16
+            } else {
+                1_i16
+            };
+            for initial_b in (0x10_u16..=0xD0).step_by(3) {
+                let b = initial_b as u8;
+                let b_after = b.wrapping_sub(1);
+                let c = 0xFE;
+                for pc in pc_sites {
+                    let state = state_with_registers(
+                        Z80Registers {
+                            b,
+                            c,
+                            h: (hl >> 8) as u8,
+                            l: hl as u8,
+                            pc,
+                            ..Z80Registers::default()
+                        },
+                        0,
+                    );
+                    let mut atomic = Z80::default();
+                    atomic.import_architectural_state(state).unwrap();
+                    let mut atomic_bus = TestBus::default();
+                    atomic_bus.memory[usize::from(pc)] = 0xED;
+                    atomic_bus.memory[usize::from(pc.wrapping_add(1))] = opcode;
+                    let port = (u16::from(b) << 8) | u16::from(c);
+                    if input {
+                        atomic_bus.ports[usize::from(port)] = value;
+                    } else {
+                        atomic_bus.memory[usize::from(hl)] = value;
+                    }
+
+                    let mut sequenced = Z80MicroSequencer::default();
+                    sequenced.import_architectural_state(state).unwrap();
+                    let mut sequenced_bus = atomic_bus.clone();
+
+                    assert_eq!(
+                        atomic.step(&mut atomic_bus),
+                        Ok(21),
+                        "ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
+                    assert_eq!(
+                        run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                        21,
+                        "ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
+
+                    // Banks' hardware-derived formula: T = M + low-term;
+                    // Balu = Bo + (NF ? -CF : CF); H = (Balu ^ Bo).4;
+                    // PV = parity((T & 7) ^ Bo ^ (Balu & 7)).
+                    // The hardware-test notation uses output register values:
+                    // C is unchanged, while L has already moved by the direction.
+                    let low_term = if input {
+                        c.wrapping_add_signed(direction as i8)
+                    } else {
+                        hl.wrapping_add_signed(direction) as u8
+                    };
+                    let sum = u16::from(value) + u16::from(low_term);
+                    let carry = sum > 0xFF;
+                    let negative = value & 0x80 != 0;
+                    let b_alu = if carry {
+                        if negative {
+                            b_after.wrapping_sub(1)
+                        } else {
+                            b_after.wrapping_add(1)
+                        }
+                    } else {
+                        b_after
+                    };
+                    let parity_arg = (sum as u8 & 0x07) ^ b_after ^ (b_alu & 0x07);
+                    let mut expected_flags = (b_after & FLAG_S) | (((pc >> 8) as u8) & FLAG_XY);
+                    if negative {
+                        expected_flags |= FLAG_N;
+                    }
+                    if carry {
+                        expected_flags |= FLAG_C;
+                    }
+                    if (b_alu ^ b_after) & 0x10 != 0 {
+                        expected_flags |= FLAG_H;
+                    }
+                    if parity_arg.count_ones().is_multiple_of(2) {
+                        expected_flags |= FLAG_PV;
+                    }
+
+                    assert_eq!(atomic.registers.b, b_after);
+                    assert_eq!(sequenced.registers.b, b_after);
+                    assert_eq!(
+                        atomic.registers.f, expected_flags,
+                        "atomic ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
+                    assert_eq!(
+                        sequenced.registers.f, expected_flags,
+                        "sequenced ED {opcode:02X}, B={b:02X}, PC={pc:04X}"
+                    );
+                    assert_eq!(atomic.registers.pc, pc);
+                    assert_eq!(sequenced.registers.pc, pc);
+                    assert_eq!(atomic.wz, pc.wrapping_add(1));
+                    assert_eq!(sequenced.wz, pc.wrapping_add(1));
+                    if input {
+                        assert_eq!(atomic_bus.port_reads, vec![port]);
+                        assert_eq!(sequenced_bus.port_reads, vec![port]);
+                        assert_eq!(sequenced_bus.memory[usize::from(hl)], value);
+                    } else {
+                        let output_port = (u16::from(b_after) << 8) | u16::from(c);
+                        assert_eq!(atomic_bus.port_writes, vec![(output_port, value)]);
+                        assert_eq!(sequenced_bus.port_writes, vec![(output_port, value)]);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn block_io_repeat_uses_pc_plus_one_memptr_and_five_extra_tstates() {
         let state = state_with_registers(
