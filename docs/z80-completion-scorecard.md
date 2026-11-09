@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09, após PRs #711–#714). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (2026-11-09, após PRs #711–#718). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -450,3 +450,17 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 - fmt, Clippy, testes Z80/SMS/SG-1000, SingleStepTests DD/FD e agregador Rust quality/unit PASS. Workspace regression e outros subsistemas NOT RUN por política de impacto.
 
 **Limites:** CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 documenta o erratum e as flags normativas; X/Y e sua fonte são tratados como comportamento de referência MAME/ares, sem prova física. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 permanece IN_PROGRESS por outras famílias; E8 permanece BLOCKED.
+
+
+## 35. F-025 — RETN/RETI e aliases; modos IM — CLOSED no perfil NMOS SMS/SG-1000
+
+**Main:** `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (PR #718 integrada). **HEAD validado da PR:** `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`. **CI da PR:** #6071 / run `42658617730` PASS no HEAD exato. **CI pós-merge:** #6072 / run `42658844499` — PASS no HEAD pós-merge `f0cfc7b9df1834ae8ad418c6241702e9003f072e`.
+
+- Oito encodings RETN/RETI: ED45, ED4D, ED55, ED5D, ED65, ED6D, ED75, ED7D.
+- 48 combinações por executor: oito aliases × IFF2=0/1 × SP normal/FFFF/0000; IFF1 inicial invertida para comprovar `IFF1 <- IFF2`.
+- Executor atômico: PC, SP com wrap, IFF1/IFF2 e refresh R verificados.
+- Microsequenciador: comparação diferencial com o executor atômico, leitura de stack low/high em ordem, PC/WZ/SP/IFF/R, WAIT em cada pedido nas fronteiras SP=FFFF/0000 e snapshot encode/decode + restore após cada transação.
+- 14T nominais; 18T com quatro WAITs. WZ recebe o PC retornado; MAME e ares confirmam `WZ = PC` para RETN/RETI.
+- Os oito aliases de IM0/1/2 permanecem cobertos pelos testes ED anteriores; RETI daisy-chain é NOT_APPLICABLE aos perfis SMS/SG-1000 atuais sem consumidor.
+
+**Limites:** F-025 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico usado nos alvos SMS/SG-1000. Sem validação física no SMS; CMOS/R800/Z80N/clones NOT_VERIFIED. O fechamento de F-025 não fecha E7 global; E7 IN_PROGRESS e E8 BLOCKED.
