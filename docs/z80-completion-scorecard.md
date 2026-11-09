@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `5e4a703daefdebe62fb7f8d220752359df59f8e3` (2026-11-09, após PRs #711 e #712). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `397b01e32af41746d00b016858c4cc316147ba6b` (2026-11-09, após PRs #711–#713). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -413,3 +413,14 @@ A candidata adiciona `ed_block_transfer_repeat_interrupt_tests::block_transfer_a
 - Workspace regression e jobs não relacionados ficaram SKIPPED/NOT RUN pela política de impacto; não são promovidos a PASS.
 
 **Limite:** o novo teste é um vetor dirigido por opcode e não fecha F-022. Flags das iterações simples, matriz combinatória completa, WZ/MEMPTR independente, execução integral do ROM v5.0 no core e validação direta em hardware SMS continuam pendentes. CMOS/clones permanecem NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 32. F-023 — RRD/RLD: cobertura exaustiva de transformação e flags documentadas (candidata PR #714)
+
+**Baseline main:** `397b01e32af41746d00b016858c4cc316147ba6b`.
+
+A candidata acrescenta 262.144 vetores ao executor atômico: RRD e RLD × 256 valores de A × 256 valores de (HL) × Carry=0/1. O oracle independente calcula a permutação dos nibbles e as flags documentadas pelo UM0080: S/Z/PV a partir do novo A, H/N zerados e C preservado. O teste também verifica HL, PC, R e o wrap de WZ em HL=FFFF.
+
+A observação X/Y = bits 5/3 do novo A é testada como comportamento de referência concordante entre MAME e ares; não é apresentada como especificação UM0080 nem como evidência física independente. A candidata acrescenta ainda 16 vetores dirigidos no microsequenciador, com WAIT em cada transação de barramento, snapshot encode/decode + restore por ciclo e ordem de leitura/escrita.
+
+**Limites:** WZ=HL+1 e X/Y permanecem comportamento comparativo de emuladores, não prova de silício; execução do ROM específico e hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. F-023 permanece AUDIT_PARTIAL. E7 IN_PROGRESS; E8 BLOCKED. CI da candidata aguardando execução no HEAD exato.
