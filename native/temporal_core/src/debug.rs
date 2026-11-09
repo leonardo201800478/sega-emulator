@@ -1,0 +1,1 @@
+//! Console-neutral breakpoint and bounded trace primitives.
