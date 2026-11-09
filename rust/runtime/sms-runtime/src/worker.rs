@@ -182,6 +182,11 @@ enum WorkerCommand {
     Reset(SyncSender<Result<(), String>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
+    StepInstruction(SyncSender<Result<(), String>>),
+    SetBreakpoint(u16, SyncSender<Result<(), String>>),
+    RemoveBreakpoint(u16, SyncSender<Result<(), String>>),
+    ClearBreakpoints(SyncSender<Result<(), String>>),
+    DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
@@ -190,6 +195,56 @@ enum WorkerCommand {
     #[cfg(any(windows, test))]
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
+}
+
+/// Read-only SMS/Z80 state returned by the debugger without advancing emulated time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmsDebugSnapshot {
+    pub pc: u16,
+    pub sp: u16,
+    pub af: u16,
+    pub bc: u16,
+    pub de: u16,
+    pub hl: u16,
+    pub ix: u16,
+    pub iy: u16,
+    pub i: u8,
+    pub r: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub machine_time_ticks: u128,
+    pub mapper_banks: [u8; 3],
+    pub mapper_control: u8,
+    pub memory_control: u8,
+    pub vdp_registers: [u8; 16],
+    pub ram_start: [u8; 16],
+}
+
+fn capture_debug_snapshot(machine: &SmsTemporalMachine) -> SmsDebugSnapshot {
+    let cpu = machine.cpu().export_state();
+    let registers = cpu.registers;
+    SmsDebugSnapshot {
+        pc: registers.pc,
+        sp: registers.sp,
+        af: u16::from_be_bytes([registers.a, registers.f]),
+        bc: registers.bc(),
+        de: registers.de(),
+        hl: registers.hl(),
+        ix: cpu.ix,
+        iy: cpu.iy,
+        i: cpu.i,
+        r: cpu.refresh,
+        iff1: cpu.iff1,
+        iff2: cpu.iff2,
+        interrupt_mode: cpu.interrupt_mode,
+        machine_time_ticks: machine.debug_machine_time(),
+        mapper_banks: machine.debug_mapper_banks(),
+        mapper_control: machine.debug_mapper_control(),
+        memory_control: machine.debug_memory_control(),
+        vdp_registers: machine.debug_vdp_registers(),
+        ram_start: core::array::from_fn(|index| machine.debug_read_memory(0xC000 + index as u16)),
+    }
 }
 
 /// Handle to the thread that exclusively owns the temporal SMS machine.
@@ -290,6 +345,35 @@ impl SmsTemporalWorker {
         reply_receiver
             .recv()
             .map_err(|error| format!("SMS machine worker did not return a frame: {error}"))?
+    }
+
+    /// Execute exactly one Z80 instruction while the machine is paused.
+    pub fn debug_step_instruction(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::StepInstruction)
+    }
+
+    /// Add a PC breakpoint to the worker-owned SMS machine.
+    pub fn set_breakpoint(&self, address: u16) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, reply))
+    }
+
+    /// Remove a PC breakpoint from the worker-owned SMS machine.
+    pub fn remove_breakpoint(&self, address: u16) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::RemoveBreakpoint(address, reply))
+    }
+
+    /// Remove all configured PC breakpoints.
+    pub fn clear_breakpoints(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::ClearBreakpoints)
+    }
+
+    /// Read CPU, mapper, VDP and initial RAM state without advancing machine time.
+    pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands.send(WorkerCommand::DebugSnapshot(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver.recv()
+            .map_err(|error| format!("SMS machine worker did not return debug state: {error}"))?
     }
 
     pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
@@ -575,12 +659,12 @@ fn execute_frame(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
-) -> Result<(usize, Duration), String> {
+) -> Result<(usize, Duration, bool), String> {
     let frame_started = Instant::now();
     let machine_time_start = machine.now().ticks();
     let step_started = Instant::now();
-    let instructions = machine
-        .step_frame(max_instructions)
+    let (instructions, breakpoint_hit) = machine
+        .step_frame_until_breakpoint(max_instructions)
         .map_err(|error| error.to_string())?;
     let step_frame_elapsed = step_started.elapsed();
     let machine_time_end = machine.now().ticks();
@@ -681,7 +765,7 @@ fn execute_frame(
         "SMS frame pacing diagnostic"
     );
 
-    Ok((instructions, frame_wait))
+    Ok((instructions, frame_wait, breakpoint_hit.is_some()))
 }
 
 fn worker_loop(
@@ -736,8 +820,13 @@ fn worker_loop(
             &mut video_sequence,
             &telemetry,
         ) {
-            Ok((_, frame_wait)) => {
-                if !frame_wait.is_zero() {
+            Ok((_, frame_wait, breakpoint_hit)) => {
+                if breakpoint_hit {
+                    running = false;
+                    telemetry.running.store(false, Ordering::Release);
+                    telemetry.set_runtime_error(Some("Breakpoint atingido".to_owned()));
+                }
+                if !frame_wait.is_zero() && running {
                     match commands.recv_timeout(frame_wait) {
                         Ok(command) => {
                             if !handle_command(
@@ -907,7 +996,7 @@ fn handle_command(
                     video_sequence,
                     telemetry,
                 ) {
-                    Ok((instructions, _)) => {
+                    Ok((instructions, _, _)) => {
                         let _ = reply.send(Ok(instructions));
                     }
                     Err(error) => {
@@ -916,6 +1005,47 @@ fn handle_command(
                     }
                 }
             }
+        }
+        WorkerCommand::StepInstruction(reply) => {
+            if *running {
+                let _ = reply.send(Err("step_instruction está disponível somente com a máquina pausada".to_owned()));
+            } else {
+                let result = machine.step_instruction(0)
+                    .and_then(|step| {
+                        if matches!(step, sega_z80_cpu::Z80MicroStep::InterruptAcknowledge { .. }) {
+                            machine.resume_instruction(0)?;
+                        }
+                        Ok(())
+                    })
+                    .map_err(|error| error.to_string());
+                match result {
+                    Ok(()) => {
+                        let _ = machine.drain_audio_samples(None);
+                        telemetry.total_instructions.fetch_add(1, Ordering::AcqRel);
+                        telemetry.set_frame_number(machine.frame_number());
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        telemetry.set_runtime_error(Some(error.clone()));
+                        let _ = reply.send(Err(error));
+                    }
+                }
+            }
+        }
+        WorkerCommand::SetBreakpoint(address, reply) => {
+            machine.set_breakpoint(address);
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::RemoveBreakpoint(address, reply) => {
+            machine.remove_breakpoint(address);
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::ClearBreakpoints(reply) => {
+            machine.clear_breakpoints();
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::DebugSnapshot(reply) => {
+            let _ = reply.send(Ok(capture_debug_snapshot(machine)));
         }
         WorkerCommand::SetController(player, buttons, reply) => {
             let result = machine
