@@ -62,7 +62,10 @@ fn assert_scheduler_case(
         }
     );
     assert_eq!(restored.export_state(), continuous.export_state());
-    assert_eq!(restored.now(), MachineTime::from_ticks(u128::from(expected_tstates) * 3));
+    assert_eq!(
+        restored.now(),
+        MachineTime::from_ticks(u128::from(expected_tstates) * 3)
+    );
     assert_eq!(restored.cpu().registers.pc, program.len() as u16);
     assert_eq!(restored.cpu().registers.f, 0xA5);
     assert_eq!(restored.cpu().wz, INITIAL_WZ);
@@ -99,7 +102,11 @@ fn assert_scheduler_case(
             _ => None,
         })
         .collect();
-    assert_eq!(bus_completions, expected_bus, "opcode {:02X} bus trace", program[0]);
+    assert_eq!(
+        bus_completions, expected_bus,
+        "opcode {:02X} bus trace",
+        program[0]
+    );
 }
 
 #[test]
