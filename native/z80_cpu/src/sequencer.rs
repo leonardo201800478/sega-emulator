@@ -8765,6 +8765,44 @@ mod ed_register_control_differential_tests {
     }
 
     #[test]
+    fn ed_im_aliases_match_explicit_nm os_profile_mapping() {
+        for (opcode, expected_mode) in [
+            (0x46, 0), (0x4E, 0), (0x66, 0), (0x6E, 0),
+            (0x56, 1), (0x76, 1),
+            (0x5E, 2), (0x7E, 2),
+        ] {
+            let architectural = state(0xA5, true);
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(architectural).unwrap();
+            let mut atomic_bus = TestBus::default();
+            atomic_bus.memory[0xFFFE] = 0xED;
+            atomic_bus.memory[0xFFFF] = opcode;
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(8));
+            assert_eq!(atomic.interrupt_mode, expected_mode, "atomic ED {opcode:02X}");
+
+            let mut sequenced = Z80MicroSequencer::default();
+            sequenced.import_architectural_state(architectural).unwrap();
+            let mut sequenced_bus = atomic_bus.clone();
+            let first = request(sequenced.begin_instruction().unwrap());
+            let second = read_request(
+                &mut sequenced,
+                &mut sequenced_bus,
+                Z80MicroStep::BusRequest(first),
+            );
+            let retired = read_request(&mut sequenced, &mut sequenced_bus, second);
+            assert_eq!(
+                retired,
+                Z80MicroStep::InstructionRetired { opcode, tstates: 8 }
+            );
+            assert_eq!(sequenced.interrupt_mode, expected_mode, "sequenced ED {opcode:02X}");
+            assert_eq!(
+                sequenced.export_architectural_state(),
+                atomic.export_architectural_state()
+            );
+        }
+    }
+
+    #[test]
     fn ed_neg_im_and_i_r_register_operations_match_atomic_executor() {
         let opcodes = [
             0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C, // NEG aliases
