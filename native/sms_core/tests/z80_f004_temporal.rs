@@ -41,6 +41,7 @@ fn set_pair(registers: &mut Z80Registers, pair: u8, value: u16) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn assert_resume_case(
     program: &[u8],
     expected_opcode: u8,
