@@ -63,8 +63,6 @@ use std::thread;
 use std::thread::JoinHandle;
 #[cfg(any(windows, test))]
 use std::time::Duration;
-#[cfg(windows)]
-use std::time::Instant;
 
 #[cfg(any(windows, test))]
 use std::collections::VecDeque;
@@ -845,9 +843,6 @@ fn run_wasapi_worker(
         }
 
         let mut disconnected = false;
-        // Measure monotonic spacing between endpoint render events; this is
-        // host-service cadence, not emulated machine time.
-        let mut last_event_at: Option<Instant> = None;
         loop {
             if shutdown.load(Ordering::Acquire) {
                 break;
@@ -992,14 +987,6 @@ fn run_wasapi_worker(
             if frames == 0 {
                 continue;
             }
-            let event_at = Instant::now();
-            let event_interval_ns = last_event_at.replace(event_at).map_or(0, |previous| {
-                event_at
-                    .duration_since(previous)
-                    .as_nanos()
-                    .min(u64::MAX as u128) as u64
-            });
-            let endpoint_padding_frames = initial_buffer_frames.saturating_sub(frames);
             if frames > scratch_frames.len() {
                 sega_observability::tracing::error!(
                     target: "sega::audio::backend",
@@ -1050,11 +1037,7 @@ fn run_wasapi_worker(
                 submitted_frames = frames,
                 consumed_frames = report.queued_frames,
                 silence_frames = report.silence_frames,
-                fifo_queued_frames = consumer.metrics().queued_frames,
-                endpoint_buffer_frames = initial_buffer_frames,
-                endpoint_available_frames = frames,
-                endpoint_padding_frames,
-                event_interval_ns,
+                queued_frames = consumer.metrics().queued_frames,
                 "WASAPI render buffer submitted"
             );
             if report.producer_closed {
@@ -1532,10 +1515,6 @@ fn run_xaudio2_worker(
     let mut was_underrun = false;
     let mut voice_started = false;
     let mut voice_muted = false;
-    // The callback only increments an atomic. This worker-side timestamp is
-    // when a completion is observed, not the exact callback invocation time.
-    let mut last_completion_count = signals.completed_buffers.load(Ordering::Acquire);
-    let mut last_completion_observed_at = Instant::now();
     loop {
         if shutdown.load(Ordering::Acquire) {
             break;
@@ -1692,33 +1671,7 @@ fn run_xaudio2_worker(
         unsafe {
             source_voice.GetState(&mut current_state, 0);
         }
-        // XAUDIO2_VOICE_STATE is a packed FFI structure. Copy its field to
-        // an aligned local before passing it to tracing or arithmetic.
-        let buffers_queued = current_state.BuffersQueued;
-        let completed = signals.completed_buffers.load(Ordering::Acquire);
-        if completed != last_completion_count {
-            let observed_at = Instant::now();
-            let completion_observation_interval_ns = observed_at
-                .duration_since(last_completion_observed_at)
-                .as_nanos()
-                .min(u64::MAX as u128) as u64;
-            let completion_delta = completed.saturating_sub(last_completion_count);
-            last_completion_count = completed;
-            last_completion_observed_at = observed_at;
-            sega_observability::tracing::trace!(
-                target: "sega::audio::backend",
-                backend = "XAudio2",
-                callback_completed_buffers = completed,
-                callback_completion_delta = completion_delta,
-                completion_observation_interval_ns,
-                buffers_queued,
-                in_flight_frames = u64::from(buffers_queued)
-                    .saturating_mul(frames_per_buffer as u64),
-                fifo_queued_frames = consumer.metrics().queued_frames,
-                "XAudio2 buffer completions observed"
-            );
-        }
-        let is_underrun = voice_started && buffers_queued == 0 && !submitted_new;
+        let is_underrun = voice_started && current_state.BuffersQueued == 0 && !submitted_new;
         if is_underrun && !was_underrun {
             record_audio_underrun(&underruns, "XAudio2", 0);
         }
