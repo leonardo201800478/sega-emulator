@@ -3276,7 +3276,7 @@ mod tests {
     fn ed_retn_reti_aliases_restore_iff1_and_pop_return_address() {
         for opcode in [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
             for iff2 in [false, true] {
-                for (sp, return_address) in [(0xD000, 0x1234), (0xFFFF, 0x5678), (0x0000, 0x9ABC)] {
+                for (sp, return_address) in [(0xD000_u16, 0x1234_u16), (0xFFFF, 0x5678), (0x0000, 0x9ABC)] {
                     let mut bus = TestBus([0; 0x10000]);
                     bus.0[0x1000] = 0xED;
                     bus.0[0x1001] = opcode;
