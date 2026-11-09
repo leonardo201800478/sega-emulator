@@ -208,4 +208,10 @@ Na revisão SingleStepTests/Z80 `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`:
 - `DD 37 0001`, blob `c68369350b5a47ebb481d35a7b9e4dd86e292716`: A=50, F=75, Q=75; final esperado F=65, Q=65.
 - `FD 3F 0001`, blob `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345`: A=06, F=ED, Q=ED; final esperado F=FC, Q=FC.
 
-A reprodução no harness ocorreu na PR #695, run #42624833386: DD 37 0001 retornou F=45 em vez de F=65. O teste falhou no primeiro vetor e não alcançou os 1.000 casos FD 3F; a previsão estática para FD 3F permanece F=D4 em vez de F=FC. A PR de correção Q/previous-Q implementa a limpeza de q_previous nos dois executores e adiciona teste de snapshot/restore; validação CI pendente.
+A reprodução ocorreu na PR #695, run #42624833386: DD 37 0001 retornou F=45 em vez de F=65. A correção foi integrada pela PR #702 (merge SHA `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`). No HEAD validado da PR #702, os 2.000 vetores DD37/FD3F passaram, assim como os 32.000 vetores F-037; os testes diferenciais e snapshot/restore também passaram. A referência Z80Decoder permanece evidência comunitária com teste em hardware, não manual oficial Zilog.
+
+## 9. F-033 — ED reservados no microsequenciador
+
+O despachante atômico retorna 8T para os 178 bytes ED sem handler explícito; `execute_ed_register_control` no microsequenciador ainda retorna `UnsupportedOpcode`. O MAME `z80.lst` os classifica como `illegal_2` (referência de implementação, não prova de silício). A revisão SingleStepTests fixada possui fixtures ED77 e ED7F com 1.000 casos cada; outros bytes reservados amostrados não têm arquivos encontrados. A etapa atual adiciona teste retomável sintético para os 178 e vetores externos ED77/ED7F. Resultado pendente de CI. 
+
+Fuse mantém estado Q/last_Q no núcleo Z80 e documenta perfis CMOS/NMOS; seu manual descreve que `OUT (C),0` difere entre CMOS (0xFF) e NMOS (0x00). Isso reforça a necessidade de separar variantes e não generalizar o comportamento de ED71. A implementação Fuse é referência comparativa, não prova de silício.
