@@ -2,7 +2,7 @@
 
 **Baseline:** Sega Emulator main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
-**Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
+**Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`; além dos 34.000 vetores F-037/F-028, esta etapa adiciona amostras ED77 e ED7F (2.000 vetores). O corpus não fornece fixture conhecido para todos os 178 reservados.
 
 ## Escopo e interpretação
 
