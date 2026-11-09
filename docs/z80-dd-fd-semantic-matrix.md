@@ -398,7 +398,7 @@ A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A no
 ### Candidato F-037 — PR #686
 
 - Main de entrada: `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4`.
-- Commit de implementação: `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; HEAD candidato documentado: `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- Commit de implementação: `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; último commit de teste/otimização antes desta atualização documental: `2ef8d4c0c73cf5a339f8d258ba9e314bfeebcdd2`. O HEAD final da PR será consultado no GitHub antes do merge.
 - O microsequenciador aceita as 16 combinações DD/FD de ADD, ADC, SUB, SBC, AND, XOR, OR e CP com fonte IXH/IXL/IYH/IYL. A execução reutiliza `read_indexed_register()` e `execute_alu_operation()`.
 - A suíte contém matriz diferencial de 10.816 casos, vetores fixos para flags e CP X/Y, preservação de Q/previous-Q, WZ, PC/R, IFF, I, IX/IY/H/L, WAIT nos dois M1, snapshot/restore e prefixos repetidos.
 - O operando código 6 (`(IX+d)/(IY+d)`) permanece no caminho de memória indexada E4B; não é substituído por IXH/IXL/IYH/IYL.
