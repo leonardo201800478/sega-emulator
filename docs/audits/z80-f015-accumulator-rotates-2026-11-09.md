@@ -1,8 +1,12 @@
 # Auditoria E7.7 — F-015: RLCA / RRCA / RLA / RRA
 
 **Baseline main antes da PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+**PR:** #728, integrada por squash em `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**HEAD validado:** `c198cff1629270378a3bdd22a1126ca3d98a44b8`.
+**CI pré-merge:** #6131 / run `42678804879` PASS no HEAD exato.
+**Main pós-merge:** `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
 **Família:** F-015 — rotações do acumulador.
-**Estado nesta branch:** IMPLEMENTED_PENDING_VALIDATION.
+**Estado após squash:** CLOSED no perfil de compatibilidade NMOS delimitado.
 **Escopo de perfil:** Zilog Z80 NMOS; sem alegação de medição física ou compatibilidade universal.
 
 ## 1. Escopo
