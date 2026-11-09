@@ -1180,7 +1180,7 @@ mod tests {
         assert_eq!(telemetry.total_instructions.load(Ordering::Acquire), 0);
     }
 
-    #[derive(Clone, Default)
+    #[derive(Clone, Default)]
     struct RecordingSink(Arc<Mutex<Vec<Vec<u8>>>>);
 
     impl PcmSink for RecordingSink {

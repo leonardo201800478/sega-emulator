@@ -197,8 +197,7 @@ impl FpsCounter {
         if elapsed < FPS_SAMPLE_INTERVAL {
             return false;
         }
-        let frames = u32::try_from(sequence.saturating_sub(self.last_sequence))
-            .unwrap_or(u32::MAX);
+        let frames = u32::try_from(sequence.saturating_sub(self.last_sequence)).unwrap_or(u32::MAX);
         self.fps = f32::from(frames) / elapsed.as_secs_f32();
         self.last_sequence = sequence;
         self.last_sample = now;
@@ -670,7 +669,8 @@ impl SegaApp {
                     worker.set_diagnostics_enabled(true);
                 }
                 self.fps_counter.reset(0, Instant::now());
-                self.fps_shared_value.store(0.0_f32.to_bits(), Ordering::Relaxed);
+                self.fps_shared_value
+                    .store(0.0_f32.to_bits(), Ordering::Relaxed);
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
@@ -950,10 +950,8 @@ impl SegaApp {
                 .as_ref()
                 .map_or(0, SmsTemporalWorker::video_last_presented_sequence);
             if self.fps_counter.update(presented_sequence, now) {
-                self.fps_shared_value.store(
-                    self.fps_counter.fps.to_bits(),
-                    Ordering::Relaxed,
-                );
+                self.fps_shared_value
+                    .store(self.fps_counter.fps.to_bits(), Ordering::Relaxed);
             }
         }
 
@@ -961,8 +959,7 @@ impl SegaApp {
             return;
         };
         let overlay_size = egui::vec2(104.0, 30.0);
-        let position = root_bounds.min
-            + viewport_rect.right_bottom().to_vec2()
+        let position = root_bounds.min + viewport_rect.right_bottom().to_vec2()
             - overlay_size
             - egui::vec2(12.0, 12.0);
         let fps_value = Arc::clone(&self.fps_shared_value);
@@ -998,7 +995,9 @@ impl SegaApp {
                         },
                     );
                 });
-                overlay_ui.ctx().request_repaint_after(Duration::from_millis(250));
+                overlay_ui
+                    .ctx()
+                    .request_repaint_after(Duration::from_millis(250));
             },
         );
     }
@@ -1514,12 +1513,9 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::File => render_file_menu(ui, state),
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
-        TopLevelMenu::Controls => render_controls_menu(
-            ui,
-            state.devices,
-            state.selected_gamepad,
-            state.input_error,
-        ),
+        TopLevelMenu::Controls => {
+            render_controls_menu(ui, state.devices, state.selected_gamepad, state.input_error)
+        }
         TopLevelMenu::Options => render_options_menu(ui, state),
         TopLevelMenu::Debug => render_runtime_status(
             ui,
@@ -1630,7 +1626,13 @@ fn render_system_menu(ui: &mut egui::Ui) {
     });
     ui.separator();
     ui.label("Outros sistemas");
-    for system in ["SG-1000", "Game Gear", "Mega Drive / Genesis", "Sega CD", "32X"] {
+    for system in [
+        "SG-1000",
+        "Game Gear",
+        "Mega Drive / Genesis",
+        "Sega CD",
+        "32X",
+    ] {
         ui.add_enabled(false, egui::Button::new(system));
     }
     ui.small("Indisponíveis: o runtime ainda não está conectado a esta interface.");
