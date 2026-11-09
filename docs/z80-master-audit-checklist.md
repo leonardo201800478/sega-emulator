@@ -290,7 +290,7 @@ A próxima tarefa é F-037 — ALU A,IXH/IXL/IYH/IYL — em PR independente. Nã
 
 - **PR:** #686 — `feat/z80-e7-indexed-half-alu-20261109`.
 - **Main de entrada:** `5aaa74af3fbf6fa7f70ecb1e6b71f3a966bb91e4`.
-- **Commit de implementação:** `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; HEAD candidato atual `ed25c9b96cba284c57fc473cd960d7052f35d0e6`.
+- **Commit de implementação:** `5f9ca825feb45633c2baf200e502f1a05bf99c7d`; último commit de teste/otimização antes desta atualização documental: `2ef8d4c0c73cf5a339f8d258ba9e314bfeebcdd2`. O HEAD final da PR será consultado no GitHub antes do merge.
 - O dispatch cobre as 16 combinações DD/FD de ADD/ADC/SUB/SBC/AND/XOR/OR/CP com IXH/IXL/IYH/IYL, reutilizando a ALU compartilhada. O operando código 6 permanece no caminho de memória indexada E4B.
 - A suíte `indexed_half_register_alu_e7.rs` contém 10.816 casos diferenciais, vetores fixos para flags completas e X/Y de CP, preservação de A/IX/IY/H/L, Q/previous-Q, PC/R/WZ, WAIT nos dois M1, snapshot/restore e prefixos repetidos.
 - **Estado:** IMPLEMENTED_PENDING_VALIDATION. Nenhuma suíte da PR #686 é PASS até o resultado no HEAD final. F-036 permanece CLOSED; F-028 permanece AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
