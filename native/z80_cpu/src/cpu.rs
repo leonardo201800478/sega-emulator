@@ -3505,6 +3505,36 @@ mod tests {
     }
 
     #[test]
+    fn ed70_discards_all_port_values_and_updates_only_documented_flags() {
+        for value in 0_u8..=u8::MAX {
+            let mut bus = TestIoBus::default();
+            bus.memory[..2].copy_from_slice(&[0xED, 0x70]);
+            bus.port_value = value;
+            let mut cpu = Z80::default();
+            cpu.registers.set_bc(0x3307);
+            cpu.registers.a = 0xA5;
+            cpu.registers.f = FLAG_C;
+
+            assert_eq!(cpu.step(&mut bus), Ok(12), "ED 70, input={value:02X}");
+            assert_eq!(bus.port_reads, vec![0x3307], "ED 70, input={value:02X}");
+            assert!(bus.port_writes.is_empty());
+            assert_eq!(cpu.registers.a, 0xA5);
+            assert_eq!(cpu.registers.b, 0x33);
+            assert_eq!(cpu.registers.c, 0x07);
+            assert_eq!(cpu.registers.f & FLAG_C, FLAG_C, "Carry preserved");
+            let mut expected_flags = FLAG_C | (value & (FLAG_S | FLAG_XY));
+            if value == 0 {
+                expected_flags |= FLAG_Z;
+            }
+            if value.count_ones().is_multiple_of(2) {
+                expected_flags |= FLAG_PV;
+            }
+            assert_eq!(cpu.registers.f, expected_flags, "ED 70, input={value:02X}");
+            assert_eq!(cpu.wz, 0x3308);
+        }
+    }
+
+    #[test]
     fn ed_in_out_register_forms_use_bc_port_and_expected_data() {
         for (
             opcode,
