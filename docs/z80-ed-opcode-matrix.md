@@ -1,6 +1,6 @@
 # Z80 ED Opcode Matrix — 256 encodings
 
-**Main consultada:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1` (após squash das PRs #721/F-001 e #722/F-002; sem alteração do runtime ED).
+**Main consultada:** `7fde212aabc07e8c4b7df56938f8845f99d29499` (após squash da PR #724/F-003; sem alteração do runtime ED).
 **Profile alvo:** Zilog NMOS Z80 usado pelos sistemas Sega atuais. O núcleo não expõe seletor NMOS/CMOS; CMOS não está implementado nem validado.
 **Corpus externo:** SingleStepTests/Z80 revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` foi integrado para F-037, não para a família ED nesta etapa.
 
