@@ -266,10 +266,10 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 
 ## 22. Validação externa SingleStepTests F-037 — 2026-11-09
 
-**Main após integração:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`  
-**PR:** #692 — merge squash  
-**HEAD da PR validado:** `1606556814a8746a445d3ad32fc948ab97f0fde5`  
-**CI:** run `4262282817` — PASS nos checks aplicáveis  
+**Main após integração:** `1304bc0438e3ea333719d0ba3a495e2db9089da3`
+**PR:** #692 — merge squash
+**HEAD da PR validado:** `1606556814a8746a445d3ad32fc948ab97f0fde5`
+**CI:** run `4262282817` — PASS nos checks aplicáveis
 **Upstream:** SingleStepTests/z80, revisão `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
 
 - 32 fixtures: DD/FD × 16 segundos bytes.
