@@ -311,7 +311,6 @@ fn all_32000_dd_fd_indexed_half_register_alu_vectors_match_resumable_z80() {
     assert_eq!(total_vectors, 32_000);
 }
 
-
 #[test]
 #[ignore = "requires the pinned SingleStepTests checkout; run explicitly in z80-focused CI"]
 fn all_2000_dd_fd_scf_ccf_q_vectors_match_resumable_z80() {
