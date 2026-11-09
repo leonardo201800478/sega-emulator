@@ -210,7 +210,10 @@ fn execute_microsequencer(case: MicroAluCase<'_>) -> (Z80MicroSequencer, u32) {
         assert_eq!(fetch.base_tstates, 4);
         if snapshot_after_prefix {
             cpu = round_trip_at(cpu, "between prefix and terminal M1");
-            assert_eq!(cpu.q_previous, 0, "DD/FD prefix clears previous-Q before the terminal opcode");
+            assert_eq!(
+                cpu.q_previous, 0,
+                "DD/FD prefix clears previous-Q before the terminal opcode"
+            );
         }
     }
 
@@ -414,6 +417,7 @@ fn fixed_vectors_pin_all_alu_flags_and_cp_operand_xy_behavior() {
                     iy,
                     waits: &[0, 0],
                     snapshot_after_prefix: false,
+                    initial_q: INITIAL_Q,
                 });
 
                 assert_eq!(atomic_tstates, 8);
@@ -516,6 +520,7 @@ fn repeated_dd_fd_prefixes_select_the_last_index_half_for_alu() {
             iy,
             waits: &waits,
             snapshot_after_prefix: true,
+            initial_q: INITIAL_Q,
         });
 
         assert_eq!(atomic_tstates, 12);
