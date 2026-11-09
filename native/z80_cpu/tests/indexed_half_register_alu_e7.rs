@@ -148,7 +148,20 @@ fn execute_atomic(
     ix: u16,
     iy: u16,
 ) -> (Z80, FlatBus, u32) {
+    execute_atomic_with_q(prefixes, opcode, accumulator, flags, ix, iy, INITIAL_Q)
+}
+
+fn execute_atomic_with_q(
+    prefixes: &[u8],
+    opcode: u8,
+    accumulator: u8,
+    flags: u8,
+    ix: u16,
+    iy: u16,
+    initial_q: u8,
+) -> (Z80, FlatBus, u32) {
     let (mut cpu, mut bus) = seed_atomic(prefixes, opcode, accumulator, flags, ix, iy);
+    cpu.q = initial_q;
     let tstates = cpu.step(&mut bus).unwrap();
     (cpu, bus, tstates)
 }
@@ -162,6 +175,7 @@ struct MicroAluCase<'a> {
     iy: u16,
     waits: &'a [u32],
     snapshot_after_prefix: bool,
+    initial_q: u8,
 }
 
 fn execute_microsequencer(case: MicroAluCase<'_>) -> (Z80MicroSequencer, u32) {
@@ -174,11 +188,13 @@ fn execute_microsequencer(case: MicroAluCase<'_>) -> (Z80MicroSequencer, u32) {
         iy,
         waits,
         snapshot_after_prefix,
+        initial_q,
     } = case;
     assert!(!prefixes.is_empty());
     assert_eq!(waits.len(), prefixes.len() + 1);
 
     let mut cpu = seed_microsequencer(accumulator, flags, ix, iy);
+    cpu.q = initial_q;
     let mut fetch = request(cpu.begin_instruction().unwrap());
     assert_eq!(fetch.operation, Z80BusOperation::OpcodeFetch);
     assert_eq!(fetch.base_tstates, 4);
@@ -194,6 +210,7 @@ fn execute_microsequencer(case: MicroAluCase<'_>) -> (Z80MicroSequencer, u32) {
         assert_eq!(fetch.base_tstates, 4);
         if snapshot_after_prefix {
             cpu = round_trip_at(cpu, "between prefix and terminal M1");
+            assert_eq!(cpu.q_previous, 0, "DD/FD prefix clears previous-Q before the terminal opcode");
         }
     }
 
@@ -253,7 +270,8 @@ fn assert_shared_state(micro: &Z80MicroSequencer, atomic: &Z80, expected: Expect
     assert_eq!(atomic.alternate, initial_alternate());
     assert_eq!(micro.refresh, expected_refresh(prefixes.len() + 1));
     assert_eq!(atomic.r, expected_refresh(prefixes.len() + 1));
-    assert_eq!(micro.q_previous, INITIAL_Q);
+    assert_eq!(micro.q_previous, 0);
+    assert_eq!(atomic.q_previous, 0);
     assert_eq!(
         micro.q, expected_f,
         "Q follows the flags written by the ALU"
@@ -303,6 +321,7 @@ fn all_16_dd_fd_half_register_alu_forms_match_atomic_boundary_matrix() {
                                 iy,
                                 waits: &[0, 0],
                                 snapshot_after_prefix: false,
+                                initial_q: INITIAL_Q,
                             });
 
                             assert_eq!(atomic_tstates, 8);
@@ -454,6 +473,7 @@ fn all_half_register_alu_forms_resume_waits_and_snapshot_both_m1_safe_points() {
                     iy,
                     waits: &[1, 2],
                     snapshot_after_prefix: true,
+                    initial_q: INITIAL_Q,
                 });
 
                 assert_eq!(atomic_tstates, 8);
@@ -508,6 +528,61 @@ fn repeated_dd_fd_prefixes_select_the_last_index_half_for_alu() {
                 expected_a: atomic.registers.a,
                 expected_f: atomic.registers.f,
                 prefixes,
+                ix,
+                iy,
+                atomic_tstates,
+            },
+        );
+    }
+}
+
+#[test]
+fn dd_fd_before_scf_ccf_clears_previous_q_and_survives_prefix_snapshot() {
+    let cases = [
+        // DD 37: SCF uses A|F for undocumented X/Y after the DD prefix.
+        (0xDD, 0x37, 0x50, 0x75, 0x75, 0x65),
+        // FD 3F: CCF uses A|F for undocumented X/Y after the FD prefix.
+        (0xFD, 0x3F, 0x06, 0xED, 0xED, 0xFC),
+    ];
+
+    for (prefix, opcode, accumulator, flags, initial_q, expected_f) in cases {
+        let ix = 0x1234;
+        let iy = 0x5678;
+        let (atomic, bus, atomic_tstates) = execute_atomic_with_q(
+            &[prefix],
+            opcode,
+            accumulator,
+            flags,
+            ix,
+            iy,
+            initial_q,
+        );
+        let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
+            prefixes: &[prefix],
+            opcode,
+            accumulator,
+            flags,
+            ix,
+            iy,
+            waits: &[0, 0],
+            snapshot_after_prefix: true,
+            initial_q,
+        });
+
+        assert_eq!(atomic_tstates, 8);
+        assert_eq!(micro_tstates, 8);
+        assert!(bus.writes.is_empty());
+        assert_eq!(atomic.registers.f, expected_f);
+        assert_eq!(micro.registers.f, expected_f);
+        assert_eq!(atomic.q_previous, 0);
+        assert_eq!(micro.q_previous, 0);
+        assert_shared_state(
+            &micro,
+            &atomic,
+            ExpectedAluState {
+                expected_a: accumulator,
+                expected_f,
+                prefixes: &[prefix],
                 ix,
                 iy,
                 atomic_tstates,
