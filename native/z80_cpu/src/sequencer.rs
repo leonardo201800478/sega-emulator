@@ -9746,13 +9746,7 @@ mod ed_return_nibble_rotate_differential_tests {
         }
     }
 
-    fn run_retn_case(
-        opcode: u8,
-        iff2: bool,
-        sp: u16,
-        return_address: u16,
-        add_waits: bool,
-    ) {
+    fn run_retn_case(opcode: u8, iff2: bool, sp: u16, return_address: u16, add_waits: bool) {
         let mut initial = initial_state();
         initial.registers.pc = 0x1000;
         initial.registers.sp = sp;
