@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline remota consultada:** `main` = `29462cf0a788d5905de7a5e9e0499a1f1361fec1` (2026-11-09, após squash das PRs #721/F-001 e #722/F-002). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
+**Baseline remota consultada:** `main` = `7fde212aabc07e8c4b7df56938f8845f99d29499` (2026-11-09, após squash da PR #724/F-003). A PR #719 reconciliou F-025 e suas matrizes sem alterar o runtime Z80; CI documental #6076 e pós-merge #6077 PASS. A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -509,12 +509,12 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 **Estado:** CLOSED para semântica de software do perfil NMOS delimitado; integrada por squash na PR #722, commit `29462cf0a788d5905de7a5e9e0499a1f1361fec1`. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
 
 
-## 38. F-003 — LD A,(nn) / LD (nn),A — candidata validada, aguardando integração
+## 38. F-003 — LD A,(nn) / LD (nn),A — CLOSED no perfil NMOS delimitado
 
 **Baseline main pré-PR:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1`.
-**PR ativa:** #724 (substitui a #723, encerrada sem merge).
-**HEAD validado:** `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
-**CI:** #6108 / run `42674749663` PASS no HEAD exato.
+**PR:** #724, integrada por squash em `7fde212aabc07e8c4b7df56938f8845f99d29499`.
+**HEAD validado da PR:** `455ae4ea5ce68fdba53de1958fe0123afd39dc6d`.
+**CI no HEAD exato:** #6111 / run `42675073118` PASS.
 
 - 2.560 vetores: `LD A,(nn)` e `LD (nn),A` × cinco endereços (0000, 00FF, 1234, FFFE, FFFF) × 256 bytes.
 - Todos os 256 padrões de F; F preservado, Q zerado, previous-Q retido e refresh/R7.
@@ -525,16 +525,10 @@ A observação X/Y = bits 5/3 do novo A é testada como comportamento de referê
 - Diferencial atômico × microsequenciador, oracle WZ separado e integração SMS com snapshot durante M1, WAIT, retomada e comparação de trace.
 - Nenhuma alteração de runtime.
 
-**Validação no HEAD exato `ed20e79c`:**
-- Change impact classification: PASS.
-- Rustfmt Z80/SMS/SG-1000: PASS.
-- Clippy Z80/SMS/SG-1000 com `-D warnings`: PASS.
-- Testes Z80/SMS/SG-1000: PASS; os dois testes F-003 atômicos e o teste de integração temporal SMS foram executados e passaram.
-- SingleStepTests DD/FD: PASS, 34.000/34.000 vetores (2.000 + 32.000); regressão adjacente, não parte da matriz F-003.
-- Documentation patch hygiene: PASS.
-- Agregador Rust quality/unit: PASS.
-- Regressão integral `cargo test --workspace --locked`, Scheduler stress e jobs de hosts/subsistemas não relacionados: NOT RUN/SKIPPED pela classificação de impacto; não são promovidos a PASS.
+**Gates no HEAD validado:** rustfmt PASS; Clippy Z80/SMS/SG-1000 PASS; testes Z80/SMS/SG-1000 PASS (incluindo os dois testes F-003 atômicos e a integração temporal SMS); SingleStepTests DD/FD 34.000/34.000 PASS; documentation patch hygiene PASS; agregador Rust quality/unit PASS. Regressão integral do workspace, Scheduler stress e hosts/subsistemas não relacionados ficaram NOT RUN/SKIPPED pela política de impacto.
+
+**CI pós-merge:** NOT VERIFIED nesta consulta. O endpoint de status do commit de merge não retornou checks e a listagem de workflows disponível não expôs execução push associada ao SHA de merge; não atribuir PASS sem run identificado.
 
 **Referências:** ZiLOG UM008011-0816, LD A,(nn), p. 90, e LD (nn),A, p. 93; MAME `z80.lst`; ares `instructions.cpp`. O manual documenta operação/temporização, mas não WZ; as fórmulas WZ são comportamento comparativo NMOS de implementações, não prova física.
 
-**Estado:** AUDIT_PARTIAL somente até a integração por squash na main. Gates focados aprovados no HEAD indicado; não declarar CLOSED antes do merge. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.
+**Limites:** CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. Sem validação física SMS ou compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS; E8 permanece BLOCKED.

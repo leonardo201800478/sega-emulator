@@ -1,9 +1,10 @@
 # Auditoria E7.7 — F-003: LD A,(nn) / LD (nn),A
 
 **Baseline main pré-PR:** `29462cf0a788d5905de7a5e9e0499a1f1361fec1`.
-**PR:** #724 — `test(z80): audit absolute accumulator transfers (F-003)`.
-**HEAD validado:** `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
-**CI final disponível nesta etapa:** #6108 / run `42674749663` PASS no HEAD exato `ed20e79c2fbaa0cd35685f1dd1994da3d394a4e9`.
+**PR:** #724 — `test(z80): audit absolute accumulator transfers (F-003)`; squash merge `7fde212aabc07e8c4b7df56938f8845f99d29499`.
+**HEAD validado da PR:** `455ae4ea5ce68fdba53de1958fe0123afd39dc6d`.
+**CI final pré-merge:** #6111 / run `42675073118` PASS no HEAD exato `455ae4ea5ce68fdba53de1958fe0123afd39dc6d`.
+**Main pós-merge:** `7fde212aabc07e8c4b7df56938f8845f99d29499`.
 **Histórico de CI:** #6107 / run `42672954884` falhou no agregador por orquestração: classificação SUCCESS, `EXPECT_Z80=true` e `EXPECT_DOCS=true`, mas jobs Z80 e docs retornaram `abandoned`. Esse run não executou gates de código e não representa falha funcional. O evento `synchronize` subsequente disparou corretamente os jobs.
 **Gates no HEAD validado:** rustfmt PASS; Clippy focado PASS; testes Z80/SMS/SG-1000 PASS; SingleStepTests DD/FD 34.000/34.000 PASS; documentation patch hygiene PASS; agregador PASS. Regressão integral do workspace e jobs não relacionados NOT RUN/SKIPPED por política de impacto.
 
@@ -49,14 +50,14 @@ Arquivo: `native/sms_core/tests/z80_f003_temporal.rs`.
 
 | Suíte | Estado | Evidência |
 |---|---|---|
-| Rustfmt Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
-| Clippy Z80/SMS/SG-1000 com `-D warnings` | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c` |
-| Testes Z80/SMS/SG-1000 | PASS | CI #6108 / run `42674749663`, HEAD `ed20e79c`; testes F-003 atômicos e integração SMS temporal executados |
-| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores (2.000 + 32.000), CI #6108 |
-| Documentation patch hygiene | PASS | CI #6108 / run `42674749663` |
-| Agregador Rust quality/unit | PASS | CI #6108 / run `42674749663` |
+| Rustfmt Z80/SMS/SG-1000 | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea` |
+| Clippy Z80/SMS/SG-1000 com `-D warnings` | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea` |
+| Testes Z80/SMS/SG-1000 | PASS | CI #6111 / run `42675073118`, HEAD `455ae4ea`; testes F-003 atômicos e integração SMS temporal executados |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores (2.000 + 32.000), CI #6111 |
+| Documentation patch hygiene | PASS | CI #6111 / run `42675073118` |
+| Agregador Rust quality/unit | PASS | CI #6111 / run `42675073118` |
 | Regressão integral do workspace | NOT RUN | Não disparada pela política de impacto |
 | Scheduler stress e hosts/subsistemas não relacionados | NOT RUN | Jobs SKIPPED por política de impacto; não são PASS |
 | Validação física SMS | NOT RUN | Sem alegação de hardware |
 
-A candidata não altera runtime. A matriz e a integração temporal F-003 passaram nos gates focados no HEAD indicado. F-003 permanece AUDIT_PARTIAL até o squash merge e a confirmação do CI pós-merge na main. Sem validação física SMS; sem alegação de compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS e E8/ZEXDOC/ZEXALL BLOCKED.
+A implementação não altera runtime. A matriz e a integração temporal F-003 passaram nos gates focados no HEAD indicado e a PR #724 foi integrada por squash na main `7fde212aabc07e8c4b7df56938f8845f99d29499`. F-003 está CLOSED somente para semântica de software do perfil de compatibilidade Zilog NMOS delimitado. O CI pós-merge permanece NOT VERIFIED: a consulta não retornou checks nem run push associado ao SHA de merge; não classificar como PASS. Sem validação física SMS; sem alegação de compatibilidade universal CMOS/clones. E7 permanece IN_PROGRESS e E8/ZEXDOC/ZEXALL BLOCKED.
