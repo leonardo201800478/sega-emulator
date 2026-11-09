@@ -1229,8 +1229,9 @@ impl Z80 {
         self.q = flags;
     }
 
-    /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
-    /// documented as two-byte NOPs on the classic Z80.
+    /// Execute ED-prefixed Z80 instructions. The residual ED fallback models
+    /// reserved bytes as no-effect 8T encodings for the classic Zilog NMOS profile;
+    /// UM0080 does not specify these bytes universally across CPU variants.
     fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_enabled: bool) -> u32 {
         match opcode {
             0x47 => {
