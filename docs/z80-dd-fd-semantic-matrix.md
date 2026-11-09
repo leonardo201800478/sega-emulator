@@ -1,6 +1,6 @@
 # Matriz semântica DD/FD do Z80 — reconciliação após PR #680
 
-**Baseline remota consultada:** main `6945a5845be1233eda2681d8092e5d5d5feadc0c` após PR #719. A reconciliação F-025 foi documental e não alterou runtime DD/FD; a divergência Q/previous-Q DD/FD→SCF/CCF permanece corrigida; demais lacunas F-028 permanecem.
+**Baseline remota consultada:** main `37047ca2739dcfcf1fae6d0fb7bff93dafcaed0b` após squash da PR #721/F-001; sem alteração do runtime DD/FD. A reconciliação F-025 foi documental e não alterou runtime DD/FD; a divergência Q/previous-Q DD/FD→SCF/CCF permanece corrigida; demais lacunas F-028 permanecem.
 
 **Data:** 2026-11-09
 **Baseline histórica após PR #687 documental:** `main` — `4d8a862f254097e9dd1d0d1640edcd74f40ab12c`. A mudança #687 não alterou runtime Z80 nem a matriz de opcodes; não representa a main corrente.
