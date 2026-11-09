@@ -12,3 +12,6 @@ A captura detalhada é **opt-in por sessão**: iniciar o emulador ou abrir a gui
 - Logs e snapshots podem conter caminhos, hashes e estado de ROM; devem permanecer locais e nunca ser versionados.
 
 A thread separada remove o I/O de disco e a formatação do caminho produtor, mas a criação do LogRecord e a inserção não bloqueante ainda têm custo. O impacto deve ser medido em workload equivalente antes de alegar custo zero.
+
+
+A aplicação nativa egui registra transições dos menus, foco e dimensões dos viewports e operações do HWND D3D12 no target `sega::ui::menu`. Esses eventos reutilizam o subscriber e o writer compartilhados de `sega-observability`; não existe uma segunda fila ou arquivo de diagnóstico exclusivo da GUI. A coleta permanece opt-in e desligada por padrão.
