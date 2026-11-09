@@ -8303,7 +8303,6 @@ mod ed_16bit_arithmetic_differential_tests {
         );
         assert_eq!(sequenced_bus.reads, atomic_bus.reads);
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
-        assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
         assert_eq!(sequenced.pending_request(), None);
     }
 
@@ -10078,6 +10077,7 @@ mod ed_block_transfer_differential_tests {
         assert_eq!(sequenced_bus.reads, atomic_bus.reads);
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
         assert_eq!(sequenced.pending_request(), None);
     }
 
@@ -10325,6 +10325,7 @@ mod ed_block_compare_differential_tests {
         assert_eq!(sequenced_bus.reads, atomic_bus.reads);
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
         assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
         assert_eq!(sequenced.pending_request(), None);
     }
 
@@ -10644,8 +10645,7 @@ mod ed_block_io_differential_tests {
             assert_eq!(sequenced_bus.writes, atomic_bus.writes);
             assert_eq!(sequenced_bus.port_reads, atomic_bus.port_reads);
             assert_eq!(sequenced_bus.port_writes, atomic_bus.port_writes);
-            assert_eq!(sequenced.wz, expected_wz, "sequenced ED {opcode:02X} WZ");
-        assert_eq!(sequenced.pending_request(), None);
+            assert_eq!(sequenced.pending_request(), None);
         }
     }
 
