@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota reconciliada:** `main` = `3a81437362dad79577058852b5f469381d3bde2c` (2026-11-09, após PRs #711–#714). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
+**Baseline remota reconciliada:** `main` = `f0cfc7b9df1834ae8ad418c6241702e9003f072e` (2026-11-09, após PRs #711–#718). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -100,7 +100,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-022 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | AUDIT_PARTIAL | PR #712 integrada em `5e4a703daefdebe62fb7f8d220752359df59f8e3`; HEAD validado `7390744d9d6dc61ef2db3786f75fc9073dabdc12`, CI #6045 e pós-merge #6046 PASS. Fixture IM2 cobre LDIR/LDDR/CPIR/CPDR, F via PUSH AF, RETI, retomada e snapshot/restore. Restam matriz independente mais ampla, flags simples, WZ/MEMPTR nos caminhos não repetitivos e demais fronteiras. Não fechar a família com este teste isolado. |
 | F-023 | RRD/RLD | AUDIT_PARTIAL | PR #714 integrada em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`, CI #6056 e pós-merge #6057 PASS. Adiciona 262.144 vetores atômicos (2 opcodes × 256 A × 256 (HL) × 2 estados C) para permutação e flags documentadas, além de 16 vetores microsequenciados com WAIT/snapshot e ordem de barramento. X/Y e WZ=HL+1 são somente comparativos MAME/ares; não são evidência física. Restam prova independente de X/Y/WZ e validação física SMS/variantes. |
 | F-024 | LD I,A; LD R,A; LD A,I; LD A,R | CLOSED (perfil NMOS delimitado) | PR #716 integrada em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062/#6063 PASS. 4.096 vetores cobrem os quatro opcodes, todos os bytes, IFF2/C, refresh, flags e P; WAIT/snapshot no microsequenciador; erratum INT em ambos os executores. X/Y é referência MAME/ares, não especificação UM0080. Sem hardware SMS ou CMOS/clones. |
-| F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
+| F-025 | IM 0/1/2, RETN e RETI | CLOSED (perfil NMOS SMS/SG-1000) | PR #718 MERGED em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS. Oito aliases RETN/RETI × IFF2 0/1 × SP normal/FFFF/0000 em ambos os executores; IFF1 inicial invertida; PC/WZ, SP wrap, R, ordem low/high, WAIT e snapshot/restore. 14T nominal / 18T com quatro WAITs. IM aliases já têm testes independentes. RETI daisy-chain NOT_APPLICABLE sem consumidor SMS/SG-1000. CI pós-merge #6072 pendente de consulta; hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
 | F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #702 MERGED, main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`: correção Q/previous-Q nos dois executores. SingleStepTests DD 37/FD 3F: 2.000/2.000 PASS; F-037: 32.000/32.000 PASS. Total 34.000 PASS; runs #42626811588/#42626765522. Permanecem auditoria das demais exceções, prefixos, HALT e estado arquitetural. E4A/E4B preservados. |
@@ -394,3 +394,12 @@ F-024 CLOSED no perfil de compatibilidade Zilog NMOS clássico pela PR #716 (squ
 Cobertura: 4.096 vetores para ED 47/4F/57/5F (todos os valores de byte, IFF2 e Carry); refresh R inclui os dois M1; LD R,A copia os oito bits; flags normativas S/Z/PV/H/N/C; X/Y verificado como referência MAME/ares. Microsequenciador com WAIT e snapshot/restore em cada fronteira, 9T/11T. Erratum P/V=0 quando INT é aceito durante LD A,I/R, ambas as combinações IFF2/C e ambos os executores; NMI e instrução intermediária cobertos pelos testes existentes.
 
 Limite: não generalizar a CMOS/clones; X/Y não é declarado como especificação UM0080 nem prova física. Hardware SMS NOT RUN. E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 31. F-025 — fechamento RETN/RETI — 2026-11-09
+
+PR #718 MERGED por squash em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS no HEAD exato da PR. CI pós-merge #6072 / run `42658844499` deve ser reconciliada após concluir.
+
+A cobertura exercita os oito aliases ED45/4D/55/5D/65/6D/75/7D, ambos os estados de IFF2, três pontos de SP (normal, FFFF e 0000), IFF1 inicialmente inversa, PC, SP com wrap, WZ=PC retornado e R após os dois M1. O microsequenciador recebe WAIT em cada requisição nos casos de wrap e passa por snapshot encode/decode + restore após cada transação; valida ordem de fetches e leituras low/high da pilha. 14T nominal; 18T com quatro WAITs. A expectativa WZ=PC foi confrontada com MAME e ares.
+
+Os oito encodings de IM0/1/2 já têm testes independentes com seleção explícita do modo. RETI daisy-chain é NOT_APPLICABLE aos perfis SMS/SG-1000 atuais sem dispositivo consumidor. F-025 CLOSED somente para o perfil Zilog NMOS clássico adotado nos alvos SMS/SG-1000; sem validação física SMS; CMOS/R800/Z80N/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.
