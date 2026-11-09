@@ -64,7 +64,6 @@ impl BreakpointSet {
     }
 
     /// Return the configured addresses in ascending order.
-    #[must_use]
     pub fn addresses(&self) -> impl ExactSizeIterator<Item = u32> + '_ {
         self.addresses.iter().map(|item| item.address())
     }
