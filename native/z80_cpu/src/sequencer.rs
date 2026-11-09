@@ -8765,7 +8765,7 @@ mod ed_register_control_differential_tests {
     }
 
     #[test]
-    fn ed_im_aliases_match_explicit_nm os_profile_mapping() {
+    fn ed_im_aliases_match_explicit_nmos_profile_mapping() {
         for (opcode, expected_mode) in [
             (0x46, 0), (0x4E, 0), (0x66, 0), (0x6E, 0),
             (0x56, 1), (0x76, 1),
