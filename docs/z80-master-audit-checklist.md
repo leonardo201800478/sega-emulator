@@ -193,7 +193,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 
 ### 9.1 Baseline
 
-- `main` atual após a PR documental #681: `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`.
+- Snapshot da `main` imediatamente após a PR documental #681, usada como baseline desta varredura: `db6b4ec6d2f01ddaabccc124fe9ca7d95a856320`.
 - Baseline de código usada na abertura do checklist: `b41fa66e01e329d45f7704a229479c8ac3c2c9ea`; a PR #681 foi documental e não alterou runtime.
 - Núcleo canônico: `native/z80_cpu`.
 - E4C, E5 e E6 aparecem como integradas nos documentos consultados.
