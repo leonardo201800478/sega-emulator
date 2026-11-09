@@ -59,9 +59,8 @@ fn expected_rotate(accumulator: u8, flags: u8, operation: u8) -> (u8, u8) {
         ),
         _ => unreachable!("two-bit accumulator rotate operation"),
     };
-    let expected_flags = (flags & (FLAG_S | FLAG_Z | FLAG_PV))
-        | (result & FLAG_XY)
-        | if carry { FLAG_C } else { 0 };
+    let expected_flags =
+        (flags & (FLAG_S | FLAG_Z | FLAG_PV)) | (result & FLAG_XY) | if carry { FLAG_C } else { 0 };
     (result, expected_flags)
 }
 
@@ -101,13 +100,7 @@ fn retire_micro(
     let Z80MicroStep::InstructionRetired { tstates, .. } = step else {
         panic!("accumulator rotate retires at the end of M1");
     };
-    (
-        cpu,
-        tstates,
-        operation,
-        address,
-        base_tstates,
-    )
+    (cpu, tstates, operation, address, base_tstates)
 }
 
 fn assert_rotate_case(
@@ -159,7 +152,10 @@ fn assert_rotate_case(
     assert_eq!(atomic.wz, INITIAL_WZ, "atomic WZ is preserved");
     assert_eq!(micro.wz, INITIAL_WZ, "micro WZ is preserved");
     assert_eq!(atomic.q, expected_f, "Q stores the last flags byte written");
-    assert_eq!(micro.q, expected_f, "micro Q stores the last flags byte written");
+    assert_eq!(
+        micro.q, expected_f,
+        "micro Q stores the last flags byte written"
+    );
     assert_eq!(
         atomic.export_architectural_state().q_previous,
         INITIAL_Q,
@@ -170,8 +166,14 @@ fn assert_rotate_case(
         INITIAL_Q,
         "micro previous-Q captures the prior flags latch"
     );
-    assert_eq!(atomic.r, 0x80, "atomic R7 preserved while low seven bits wrap");
-    assert_eq!(micro.refresh, 0x80, "micro R7 preserved while low seven bits wrap");
+    assert_eq!(
+        atomic.r, 0x80,
+        "atomic R7 preserved while low seven bits wrap"
+    );
+    assert_eq!(
+        micro.refresh, 0x80,
+        "micro R7 preserved while low seven bits wrap"
+    );
     assert_eq!(
         atomic.export_architectural_state(),
         micro.export_architectural_state(),
@@ -247,15 +249,6 @@ fn accumulator_rotate_m1_snapshot_restore_preserves_every_accumulator_value() {
 fn accumulator_rotate_opcode_fetch_wraps_pc_from_ffff_to_0000() {
     let mut memory = Box::new([0u8; 65_536]);
     for (opcode, operation) in ROTATES {
-        assert_rotate_case(
-            opcode,
-            operation,
-            0x81,
-            0xD7,
-            0xFFFF,
-            &mut memory,
-            1,
-            true,
-        );
+        assert_rotate_case(opcode, operation, 0x81, 0xD7, 0xFFFF, &mut memory, 1, true);
     }
 }
