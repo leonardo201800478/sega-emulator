@@ -40,13 +40,20 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
 
-      - name: Format standalone debugger workspace
-        run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all
+      - name: Generate standalone debugger lockfile
+        run: cargo generate-lockfile --manifest-path native/sms_debugger/Cargo.toml
 
-      - name: Verify Rust formatting
+      - name: Format standalone debugger workspace
         run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all -- --check
 
-      - name: Commit rustfmt changes to the pull request branch
+      - name: Clippy standalone debugger workspace
+        run: cargo clippy --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Test standalone debugger workspace
+        run: cargo test --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked
+
+
+      - name: Commit generated debugger lockfile to the pull request branch
         if: github.event_name == 'pull_request'
         shell: pwsh
         env:
@@ -54,15 +61,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add native/debugger_core/src/lib.rs native/sms_debugger/src/app.rs
+          git add native/sms_debugger/Cargo.lock
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "style(debugger): apply rustfmt"
+            git commit -m "build(debugger): pin standalone workspace dependencies"
             git push origin "HEAD:$env:HEAD_REF"
           }
-
-      - name: Clippy standalone debugger workspace
-        run: cargo clippy --manifest-path native/sms_debugger/Cargo.toml --all-targets -- -D warnings
-
-      - name: Test standalone debugger workspace
-        run: cargo test --manifest-path native/sms_debugger/Cargo.toml --all-targets
