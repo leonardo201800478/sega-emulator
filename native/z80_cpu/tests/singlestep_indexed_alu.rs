@@ -22,6 +22,11 @@ const OPCODES: [u8; 16] = [
     0x84, 0x85, 0x8C, 0x8D, 0x94, 0x95, 0x9C, 0x9D, 0xA4, 0xA5, 0xAC, 0xAD, 0xB4, 0xB5, 0xBC, 0xBD,
 ];
 
+const Q_FIXTURES: [(&str, u8, &str); 2] = [
+    ("dd", 0x37, "c68369350b5a47ebb481d35a7b9e4dd86e292716"),
+    ("fd", 0x3F, "3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345"),
+];
+
 const FIXTURES: [(&str, u8, &str); 32] = [
     ("dd", 0x84, "9d9b002ef4b7e05fe290c71bbd87b0a622411040"),
     ("dd", 0x85, "60e745c68c9560799c240a0d8583fdde331f1fb2"),
@@ -267,7 +272,7 @@ fn run_vector(vector: &TestVector) {
     let final_memory: BTreeMap<u16, u8> = vector.final_state.ram.iter().copied().collect();
     assert_eq!(
         memory, final_memory,
-        "{name}: register-only ALU memory effects"
+        "{name}: no-memory instruction effects"
     );
 }
 
@@ -304,4 +309,39 @@ fn all_32000_dd_fd_indexed_half_register_alu_vectors_match_resumable_z80() {
     }
 
     assert_eq!(total_vectors, 32_000);
+}
+
+
+#[test]
+#[ignore = "requires the pinned SingleStepTests checkout; run explicitly in z80-focused CI"]
+fn all_2000_dd_fd_scf_ccf_q_vectors_match_resumable_z80() {
+    let corpus_dir = std::env::var_os("SINGLESTEP_Z80_DIR")
+        .map(PathBuf::from)
+        .expect("SINGLESTEP_Z80_DIR must point to the pinned upstream v1 directory");
+    let repository_root = assert_upstream_checkout(&corpus_dir);
+    let mut total_vectors = 0usize;
+
+    for (prefix, opcode, expected_blob_sha1) in Q_FIXTURES {
+        let filename = format!("{prefix} {opcode:02x}.json");
+        let fixture_path = corpus_dir.join(&filename);
+        assert_fixture_blob(&repository_root, &fixture_path, expected_blob_sha1);
+
+        let json = fs::read_to_string(&fixture_path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", fixture_path.display()));
+        let vectors: Vec<TestVector> = serde_json::from_str(&json)
+            .unwrap_or_else(|error| panic!("parse {}: {error}", fixture_path.display()));
+        assert_eq!(
+            vectors.len(),
+            1_000,
+            "{} must contain exactly 1,000 vectors",
+            fixture_path.display()
+        );
+
+        for vector in &vectors {
+            run_vector(vector);
+            total_vectors += 1;
+        }
+    }
+
+    assert_eq!(total_vectors, 2_000);
 }
