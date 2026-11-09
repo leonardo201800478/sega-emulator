@@ -11187,10 +11187,7 @@ mod base_16bit_register_differential_tests {
         }
     }
 
-    fn run_sequencer(
-        cpu: Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> (Z80ArchitecturalState, u32) {
+    fn run_sequencer(cpu: Z80MicroSequencer, bus: &mut TestBus) -> (Z80ArchitecturalState, u32) {
         run_sequencer_with_waits(cpu, bus, 0)
     }
 
@@ -11277,11 +11274,7 @@ mod base_16bit_register_differential_tests {
                 atomic.import_architectural_state(initial).unwrap();
                 let mut atomic_bus = initial_bus.clone();
                 let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
-                let expected_tstates = if matches!(opcode, 0x26 | 0x2E) {
-                    11
-                } else {
-                    8
-                };
+                let expected_tstates = if matches!(opcode, 0x26 | 0x2E) { 11 } else { 8 };
                 assert_eq!(atomic_tstates, expected_tstates);
 
                 let mut micro = Z80MicroSequencer::default();
@@ -11297,17 +11290,11 @@ mod base_16bit_register_differential_tests {
                 assert_eq!(micro_bus.memory.as_ref(), atomic_bus.memory.as_ref());
 
                 let mut waited_micro = Z80MicroSequencer::default();
-                waited_micro
-                    .import_architectural_state(initial)
-                    .unwrap();
+                waited_micro.import_architectural_state(initial).unwrap();
                 let mut waited_bus = initial_bus;
                 let (waited_state, waited_tstates) =
                     run_sequencer_with_waits(waited_micro, &mut waited_bus, 1);
-                let wait_cycles = if matches!(opcode, 0x26 | 0x2E) {
-                    3
-                } else {
-                    2
-                };
+                let wait_cycles = if matches!(opcode, 0x26 | 0x2E) { 3 } else { 2 };
                 assert_eq!(
                     waited_tstates,
                     atomic_tstates + wait_cycles,
