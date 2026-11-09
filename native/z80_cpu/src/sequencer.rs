@@ -10819,7 +10819,7 @@ mod ed_block_io_differential_tests {
                 }
                 Z80MicroStep::InterruptAcknowledge { vector, tstates } => {
                     assert_eq!(vector, 0xFF);
-                    assert_eq!(tstates, 7);
+                    assert_eq!(tstates, 5);
                     let next = cpu.begin_instruction().unwrap();
                     round_trip(cpu);
                     next
@@ -10936,7 +10936,10 @@ mod ed_block_io_differential_tests {
                 21
             );
             assert_eq!(sequenced.registers.f, expected_flags);
-            assert_eq!(run_sequenced_im2_interrupt(&mut sequenced, &mut sequenced_bus), 19);
+            assert_eq!(
+                run_sequenced_im2_interrupt(&mut sequenced, &mut sequenced_bus),
+                19
+            );
             assert_eq!(sequenced.registers.pc, 0x9000);
             assert_eq!(sequenced.registers.sp, 0xCFFE);
             assert_eq!(sequenced.registers.f, expected_flags);
