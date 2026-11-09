@@ -1,8 +1,10 @@
 # Instrumentação temporal dos endpoints de áudio SMS
 
 **Data:** 2026-11-09
-**Baseline:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`
-**Branch:** `diagnostics/sms-audio-endpoint-timing-20261109`
+**Baseline de implementação:** `ce4d14763fee258d5eea9aea109920eb2dac58cd`
+**HEAD integrado na main:** `c67056e3c4c9bb7839d819345cb6e7b45cce66ae` (PR #733)
+**Branch de origem:** `diagnostics/sms-audio-endpoint-timing-ci-20261109`
+**Integração:** PR [#733](https://github.com/leonardo201800478/sega-emulator/pull/733), merge squash em `c67056e3c4c9bb7839d819345cb6e7b45cce66ae`
 **Issues:** [#640](https://github.com/leonardo201800478/sega-emulator/issues/640), [#659](https://github.com/leonardo201800478/sega-emulator/issues/659)
 **Natureza:** instrumentação diagnóstica; não corrige nem declara resolvidos os sintomas.
 
@@ -112,15 +114,18 @@ Nenhum desses padrões isolados prova a causa raiz. São critérios de triagem p
 | `cargo fmt --all -- --check` | NOT RUN — sem checkout local |
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | NOT RUN — sem checkout local |
 | `cargo test --workspace --locked` | NOT RUN — sem checkout local |
-| CI Linux audio-output | PENDING |
-| CI Windows WASAPI/XAudio2 | PENDING |
+| CI Linux audio-output | PASS — workflow 42695223070, fmt/Clippy/testes |
+| CI Windows WASAPI/XAudio2 | PASS — workflow 42695223070, fmt/Clippy/testes |
 | Loopback WASAPI físico | BLOCKED — depende de Windows e endpoint real |
 | Captura física XAudio2 | BLOCKED — depende de Windows e endpoint real |
+| Windows egui fmt/Clippy/testes | PASS — workflow 42695223070 |
+| D3D12/DXGI | NOT RUN — steps SKIPPED por classificação de impacto |
+| Workspace, PSG, Scheduler, Z80, SDL3, PowerShell | NOT RUN — SKIPPED por classificação de impacto |
 | Causa raiz #640/#659 | UNKNOWN |
 
 A baseline `ce4d1476` tinha 15 checks: três PASS e doze SKIPPED. Workspace regression, PSG, Linux audio-output, Windows WASAPI/XAudio2 e Scheduler stress não foram executados nessa baseline.
 
-**Revalidação CI:** a primeira execução Windows identificou E0793 porque o macro de tracing tomava referência a `XAUDIO2_VOICE_STATE::BuffersQueued`, campo de uma estrutura FFI empacotada. A branch foi corrigida em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20`, copiando o campo para uma variável local alinhada antes do tracing e da comparação de starvation. A nova execução CI está em andamento; até sua conclusão, Windows WASAPI/XAudio2 permanece PENDING.
+**Revalidação CI:** workflow [42695223070 / CI 6156](https://github.com/leonardo201800478/sega-emulator/actions/runs/42695223070), executado no HEAD `0b78d93b59feba73f734f0eb2ddacb6a84eeafd3`, concluiu SUCCESS. A primeira execução Windows identificou E0793 porque o macro de tracing tomava referência a `XAUDIO2_VOICE_STATE::BuffersQueued`, campo de uma estrutura FFI empacotada. Corrigido em `9b50f0ae4e34f49a48ec03610bb3d566e269ad20`, copiando o campo para variável local alinhada antes do tracing e da comparação de starvation. Linux audio-output e Windows WASAPI/XAudio2 passaram fmt, Clippy e testes; Windows egui também passou fmt, Clippy e testes. D3D12/DXGI e as suítes fora do escopo foram SKIPPED e devem ser classificadas como NOT RUN.
 
 ## 7. Próxima etapa após CI
 
@@ -131,4 +136,4 @@ A baseline `ce4d1476` tinha 15 checks: três PASS e doze SKIPPED. Workspace regr
 5. Comparar duração, frequência fundamental, gaps, RMS, pico e clipping.
 6. Somente então definir uma correção mínima, acompanhada de teste que reproduza o defeito.
 
-**Estado final desta entrega:** instrumentação adicionada em branch; validação CI pendente; nenhuma correção acústica declarada.
+**Estado final desta entrega:** instrumentação integrada na `main` pela PR #733 (`c67056e3c4c9bb7839d819345cb6e7b45cce66ae`); CI aplicável PASS; D3D12/DXGI e regressões não relacionadas NOT RUN; loopback físico BLOCKED; nenhuma correção acústica declarada.
