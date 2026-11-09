@@ -553,15 +553,8 @@ fn dd_fd_before_scf_ccf_clears_previous_q_and_survives_prefix_snapshot() {
     for (prefix, opcode, accumulator, flags, initial_q, expected_f) in cases {
         let ix = 0x1234;
         let iy = 0x5678;
-        let (atomic, bus, atomic_tstates) = execute_atomic_with_q(
-            &[prefix],
-            opcode,
-            accumulator,
-            flags,
-            ix,
-            iy,
-            initial_q,
-        );
+        let (atomic, bus, atomic_tstates) =
+            execute_atomic_with_q(&[prefix], opcode, accumulator, flags, ix, iy, initial_q);
         let (micro, micro_tstates) = execute_microsequencer(MicroAluCase {
             prefixes: &[prefix],
             opcode,
