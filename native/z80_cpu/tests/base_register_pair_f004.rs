@@ -117,16 +117,6 @@ fn initial_registers(pc: u16, flags: u8) -> Z80Registers {
     }
 }
 
-fn pair_value(registers: &Z80Registers, pair: u8) -> u16 {
-    match pair {
-        0 => registers.bc(),
-        1 => registers.de(),
-        2 => registers.hl(),
-        3 => registers.sp,
-        _ => unreachable!("two-bit register pair"),
-    }
-}
-
 fn set_pair(registers: &mut Z80Registers, pair: u8, value: u16) {
     match pair {
         0 => registers.set_bc(value),
@@ -326,11 +316,7 @@ fn assert_absolute_word_case(
         access(low_operation, address, 3, ABSOLUTE_WAITS[3]),
         access(high_operation, next_address, 3, ABSOLUTE_WAITS[4]),
     ];
-    let expected_memory = if is_load {
-        (value_low, value_high)
-    } else {
-        (value_low, value_high)
-    };
+    let expected_memory = (value_low, value_high);
     assert_eq!(atomic_tstates, 16, "LD (nn),HL / LD HL,(nn) nominal timing");
     assert_eq!(micro_tstates, 25, "16 nominal T-states plus nine WAITs");
     assert_eq!(accesses, expected_accesses, "absolute HL transfer bus order");
