@@ -18,7 +18,7 @@ on:
       - ".github/workflows/sms-debugger.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sms-debugger-${{ github.event.pull_request.number || github.ref }}
@@ -32,19 +32,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.head_ref }}
-          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Install pinned Rust toolchain
         run: |
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
 
-      - name: Generate standalone debugger lockfile
-        run: cargo generate-lockfile --manifest-path native/sms_debugger/Cargo.toml
-
       - name: Format standalone debugger workspace
         run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all -- --check
+
+      - name: Validate standalone debugger lockfile
+        run: cargo metadata --manifest-path native/sms_debugger/Cargo.toml --locked --format-version 1 --no-deps
 
       - name: Clippy standalone debugger workspace
         run: cargo clippy --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked -- -D warnings
@@ -52,18 +52,3 @@ jobs:
       - name: Test standalone debugger workspace
         run: cargo test --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked
 
-
-      - name: Commit generated debugger lockfile to the pull request branch
-        if: github.event_name == 'pull_request'
-        shell: pwsh
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add native/sms_debugger/Cargo.lock
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "build(debugger): pin standalone workspace dependencies"
-            git push origin "HEAD:$env:HEAD_REF"
-          }
