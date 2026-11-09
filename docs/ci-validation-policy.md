@@ -8,7 +8,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 
 | Change area | Required automated validation |
 | --- | --- |
-| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Rust formatting; Clippy and tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU-focused validation is selected from Z80 implementation, SMS/SG-1000 temporal integration, and Z80 conformance-test paths. |
+| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Root workspace formatting, Clippy, unit and integration tests, plus focused Clippy/tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. A Z80 change must not leave the workspace regression NOT RUN. |
 | Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
 | Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes |
 | Video core / VDP | Root workspace validation. D3D12/DXGI Windows validation runs only for `native/video_runtime` or the native application (including its SMS runtime dependency). |
@@ -25,7 +25,7 @@ The CI pipeline is impact-based: it runs the smallest validation set that covers
 2. A change spanning multiple components runs the union of those components' required suites.
 3. Changes to global Cargo configuration, the root workspace manifest/lockfile, Rust toolchain configuration, or CI workflows trigger broad regression.
 4. A component-local manifest or lockfile change triggers that component's validation, not a full Windows matrix by default.
-5. A Z80-focused change also validates SMS and SG-1000 integration. If unrelated root-workspace code is changed in the same patch, both focused and workspace validation run.
+5. Any Z80-focused change runs the full root-workspace regression as well as the focused Z80/SMS/SG-1000 packages. The focused job may be skipped when a full/workflow change already causes the workspace suite to run; in that case the full workspace test includes the Z80 packages. A skipped workspace suite is never accepted as PASS.
 6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
 
 ## Determinism and hardware validation
