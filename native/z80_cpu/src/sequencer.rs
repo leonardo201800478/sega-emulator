@@ -10659,10 +10659,12 @@ mod ed_block_io_differential_tests {
                     // Banks' hardware-derived formula: T = M + low-term;
                     // Balu = Bo + (NF ? -CF : CF); H = (Balu ^ Bo).4;
                     // PV = parity((T & 7) ^ Bo ^ (Balu & 7)).
+                    // The hardware-test notation uses output register values:
+                    // C is unchanged, while L has already moved by the direction.
                     let low_term = if input {
                         c.wrapping_add_signed(direction as i8)
                     } else {
-                        hl as u8
+                        hl.wrapping_add_signed(direction) as u8
                     };
                     let sum = u16::from(value) + u16::from(low_term);
                     let carry = sum > 0xFF;
