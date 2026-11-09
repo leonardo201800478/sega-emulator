@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline remota após PR #692:** `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09). PR #692 integrou o harness externo SingleStepTests para 32.000 vetores F-037; o histórico anterior permanece preservado.
+**Baseline remota após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09). Q/previous-Q DD/FD→SCF/CCF foi corrigido e validado com 2.000 vetores externos adicionais; total SingleStepTests integrado: 34.000 PASS.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -103,7 +103,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-025 | IM 0/1/2, RETN e RETI | AUDIT_PARTIAL | Aliases, retorno, IFF1/IFF2 e notificação externa RETI quando exigida. |
 | F-026 | HALT, NOP e estado após HALT | AUDIT_PARTIAL | Fetch/refresh, R, saída por interrupção e snapshot. |
 | F-027 | DD/FD substituição HL por IX/IY | AUDIT_PARTIAL | Matriz por opcode e exceções. |
-| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | F-037: 32.000 vetores externos PASS. A divergência Q/previous-Q em DD/FD antes de SCF/CCF foi reproduzida: PR #695, run #42624833386, DD 37 0001 esperado F=65 e obtido F=45. O teste falhou antes de alcançar FD 3F. PR de correção Q/previous-Q contém correção em validação; preservar E4A/E4B e exceções 66/6E/74/75. |
+| F-028 | IXH/IXL/IYH/IYL: LD, INC/DEC, ALU e transferências | AUDIT_PARTIAL | PR #702 MERGED, main `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`: correção Q/previous-Q nos dois executores. SingleStepTests DD 37/FD 3F: 2.000/2.000 PASS; F-037: 32.000/32.000 PASS. Total 34.000 PASS; runs #42626811588/#42626765522. Permanecem auditoria das demais exceções, prefixos, HALT e estado arquitetural. E4A/E4B preservados. |
 | F-029 | (IX+d)/(IY+d): loads, stores e RMW | AUDIT_PARTIAL | Displacement assinado, wrap, exceções H/L e ordem de acesso. |
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
@@ -123,7 +123,7 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | S-003 | SP/PC/I/R | AUDIT_PARTIAL | Wrap, refresh e efeitos de fetch/interrupt. |
 | S-004 | IFF1/IFF2, IM e EI delay | AUDIT_PARTIAL | Transições, snapshot e interrupções nas fronteiras. |
 | S-005 | WZ/MEMPTR | AUDIT_PARTIAL | Tabela por família com vetores independentes. |
-| S-006 | Q/previous-Q | AUDIT_PARTIAL | Divergência DD/FD→SCF/CCF reproduzida em DD 37 0001 (esperado F=65, obtido F=45; run #42624833386). FD 3F está incluído, mas não foi alcançado pelo fail-fast. Correção nos dois executores e snapshot/restore em PR de correção Q/previous-Q, CI pendente. |
+| S-006 | Q/previous-Q | AUDIT_PARTIAL | DD/FD→SCF/CCF RESOLVED pela PR #702; 2.000 vetores externos PASS, incluindo DD 37 e FD 3F, com snapshot/restore. O estado Q/previous-Q global nas demais famílias permanece sujeito à auditoria E7. |
 | S-007 | S/Z/H/PV/N/C | AUDIT_PARTIAL | Fórmulas e fronteiras por família. |
 | S-008 | X/Y e flags não documentadas | AUDIT_PARTIAL | Proveniência NMOS/CMOS e vetores discriminantes. |
 | S-009 | Preservação de flags | NOT_AUDITED | Verificar instruções que preservam total ou parcialmente F. |
@@ -329,3 +329,13 @@ A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
 - F-033: divergência de cobertura entre executor atômico e microsequenciador identificada; teste retomável pendente.
 - F-034: classificação inicial ED iniciada; inventário global permanece parcial.
 - E7 permanece IN_PROGRESS. E8/ZEXDOC/ZEXALL permanece BLOCKED.
+
+
+## 24. Reconciliação após PR #702 — Q/previous-Q
+
+- Main: `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`.
+- PR #702 MERGED; HEAD validado `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`.
+- Runs #42626811588 e #42626765522: CI SUCCESS.
+- F-028: DD/FD→SCF/CCF corrigido no executor atômico e no microsequenciador. 2.000 vetores SingleStepTests PASS; snapshot/restore entre prefixo e opcode terminal PASS.
+- F-037: 32.000 vetores SingleStepTests PASS no mesmo HEAD. Total externo integrado: 34.000/34.000.
+- F-028 permanece AUDIT_PARTIAL; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
