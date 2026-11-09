@@ -1,7 +1,7 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-09
-**Baseline auditada:** `main` — `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c` (2026-11-09).
+**Baseline auditada:** `main` — `043ecb61d8d1cc77245fa72639d7f210d88cab26` (2026-11-09).
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.
 **Schema do microsequenciador:** 28 (E5 integrada)
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.
@@ -362,3 +362,12 @@ PR #672 alterou apenas GUI/D3D12. PR #673 adicionou teste/documentação de tran
 - A evidência de hardware para PF/HF/XY no ciclo de repetição de I/O em bloco é parcial e restrita ao perfil NMOS/testes publicados. A execução do ROM no core e no SMS físico não foi realizada.
 - `OUT (C),0` está resolvido para o perfil NMOS das placas SMS documentadas; não extrapolar para todos os clones/CMOS.
 - E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED; E9 não possui TEMPORAL_PASS global.
+
+
+## Atualização IM2/RETI — main 2026-11-09
+
+Baseline atual: `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+
+As PRs #677 e #678 adicionaram somente testes ao módulo Z80: observação das flags de I/O em bloco por INT IM2, execução de PUSH AF/POP AF/EI/RETI e retomada da instrução repetitiva. Nenhuma semântica DD/FD, decoder de prefixos ou runtime foi alterada.
+
+A semântica interna RETI/RETN e o retorno após IM2 são cobertos no core. A notificação externa de daisy-chain continua diferida até existir um periférico suportado; isso não bloqueia a semântica de retorno já implementada. E7.7 permanece IN_PROGRESS; E8 permanece BLOCKED.
