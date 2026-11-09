@@ -1,7 +1,7 @@
 # Checklist mestre de auditoria e fechamento do Z80
 
 **Documento operacional:** atualizar este checklist a cada etapa efetivamente concluída, sempre vinculando evidências ao SHA integrado na `main`.
-**Baseline de runtime Z80 após PR #702:** `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b` (2026-11-09). PRs documentais #703 e #704 não alteraram o runtime. Q/previous-Q DD/FD→SCF/CCF foi corrigido e validado com 2.000 vetores externos adicionais; total SingleStepTests integrado: 34.000 PASS.
+**Baseline remota reconciliada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09, após PRs #709/#710). Baseline de runtime/validação DD/FD histórica: PR #702, HEAD `34e85637eaac8ed2777ecc5cb9cd2e91ba137235`, com 34.000/34.000 vetores externos PASS; não atribuir esses resultados ao HEAD atual.
 **Baseline documental reconciliada:** scorecard, matriz DD/FD e checklist foram atualizados pelas PRs #687 e #688; baselines históricas permanecem preservadas e não representam a main corrente.
 **Núcleo canônico:** `native/z80_cpu` (`sega-z80-cpu`).
 **Perfil inicial de referência:** Zilog Z80 NMOS usado pelas plataformas Sega documentadas. Não generalizar automaticamente para Z80 CMOS, Z180, R800 ou clones.
@@ -108,8 +108,8 @@ A sequência abaixo é uma ordem inicial de trabalho por frequência esperada e 
 | F-030 | DDCB/FDCB: BIT/RES/SET/rotate/shift e destinos | AUDIT_PARTIAL | Matriz completa por prefixo, subopcode e destino. |
 | F-031 | Prefixos repetidos/alternados DD/FD e last-prefix-wins | AUDIT_PARTIAL | Verificar consumo, PC/R, M1 e semântica terminal. |
 | F-032 | Prefixos DD/FD ignorados antes de BASE/CB/ED | AUDIT_PARTIAL | Verificar não refetch, sem substituição indevida e custo prefixado. |
-| F-033 | Encodings ED reservados e fallback ED-NOP | IMPLEMENTED_PENDING_VALIDATION | PR #706 candidata (`cab1603e9699e44b5f2edd418186f63410cad65a`): braço residual do microsequenciador aposenta os 178 bytes após os dois M1; suíte `ed_reserved_f033.rs` cobre todos os 178, 8T, PC/R, F/Q/previous-Q/WZ/P/IFF/IM, fase Ready e ausência de request pendente; WAIT e snapshot/restore também cobertos. Hipótese delimitada ao perfil Zilog NMOS clássico, não especificada universalmente por UM0080 e sem generalização CMOS/clones. CI aplicável #42631919433: Z80 focused PASS, Rust quality PASS, Windows D3D12 PASS; workspace e demais jobs SKIPPED por não aplicabilidade segundo `docs/ci-validation-policy.md`. A PR ainda não está integrada; promover a CLOSED somente após merge e reconciliação da matriz.
-| F-034 | Encodings BASE/CB/DD/FD não documentados ou aliases | AUDIT_PARTIAL | Primeira classificação ED identifica aliases NEG, RETN/RETI e IM, ED70 indefinido e ED71 não documentado; falta matriz completa de todos os prefixos, distinção RETI/RETN observável e resolução de variantes. Não inventar semântica nem ampliar hardware. |
+| F-033 | Encodings ED reservados e fallback ED-NOP | CLOSED | PR #706 integrada; HEAD validado `b2291a83848e236d2354d8f03e22b831f9030b72`, CI #42635309051 SUCCESS. A suíte `ed_reserved_f033.rs` cobre os 178 bytes, aposentadoria após dois M1, 8T nominal, PC/R, F/Q/previous-Q/WZ/P/IFF/IM, fase Ready, ausência de request pendente, WAIT e snapshot/restore. CLOSED somente como perfil de compatibilidade Zilog NMOS clássico; UM0080 não especifica universalmente os reservados; sem generalização a CMOS/R800/Z80N/clones.
+| F-034 | Encodings ED não documentados e aliases ED | CLOSED (escopo ED, perfil NMOS delimitado) | PR #709 integrada; HEAD validado `b6e5db79047e7802620e76ad98f5cfd08deefd57`, CI #6034 SUCCESS; reconciliação documental PR #710 no HEAD `715a9fc739db731cea6572c8d56dc41b4f2df6fe`, CI #6036 SUCCESS. ED70 256/256, ED71 como OUT(C),0 observado no perfil NMOS, NEG oito aliases × 256 com fórmula independente, aliases RETN/RETI e modos IM aceitos pelo perfil. RETI daisy-chain NOT_APPLICABLE aos perfis SMS/SG-1000 atuais. Não generalizar a CMOS/R800/Z80N/clones nem alegar validação física. |
 | F-035 | RESET e estado arquitetural inicial | AUDIT_PARTIAL | Testes já documentados; revisar campos preservados e contrato de host. |
 | F-036 | DD/FD LD r,r' register-only com IXH/IXL/IYH/IYL | CLOSED | PR #684 integrada em `0b9b298f0f9791a6fa6db17580ad741db5c0515d`. CI #42614755935 PASS no HEAD exato `03dbd1552c8eb58ff8f9ef28d9ab0e97b615b4f3`: Z80 focused, docs hygiene e agregador PASS; D3D12/áudio/SDL3/workspace SKIPPED. 48 combinações, oracle de registradores, comparação atômica, 8T/2 M1, WAIT/snapshot, prefixos repetidos e HALT. As exceções 66/6E/74/75 permanecem no caminho E4A. |
 | F-037 | DD/FD ALU A,IXH/IXL/IYH/IYL | CLOSED | PR #686 merge SHA e testes internos preservados. Validação externa adicional: PR #692, HEAD `1606556814a8746a445d3ad32fc948ab97f0fde5`, CI #42622828177 PASS; 32 fixtures SingleStepTests × 1.000 = 32.000/32.000 no microsequenciador retomável. Merge SHA/main `1304bc0438e3ea333719d0ba3a495e2db9089da3`. Corpus Ares-derived; não é prova de silício. |
@@ -339,3 +339,15 @@ A próxima ação é validar o HEAD final da PR #686. Não iniciar E8.
 - F-028: DD/FD→SCF/CCF corrigido no executor atômico e no microsequenciador. 2.000 vetores SingleStepTests PASS; snapshot/restore entre prefixo e opcode terminal PASS.
 - F-037: 32.000 vetores SingleStepTests PASS no mesmo HEAD. Total externo integrado: 34.000/34.000.
 - F-028 permanece AUDIT_PARTIAL; F-033 GAP_CONFIRMED; F-034 AUDIT_PARTIAL; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 25. Reconciliação após PRs #706–#710 — 2026-11-09
+
+**Main:** `1142eb567746afe64356b60f2ce466581e1c0cef`.
+
+- F-033: CLOSED para o perfil de compatibilidade Zilog NMOS clássico, conforme PR #706 e CI #42635309051 no HEAD exato. Os 178 encodings reservados aposentam após os dois M1 já consumidos; não são instruções universalmente especificadas por UM0080.
+- F-034: CLOSED somente para a auditoria ED no perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000, conforme PR #709 e CI #6034 no HEAD exato; encodings não documentados BASE/CB/DD/FD permanecem cobertos pelas respectivas lacunas F-001..F-032 e não são fechados por F-034; PR #710 reconciliou a documentação e CI #6036 passou.
+- F-028 permanece AUDIT_PARTIAL. A divergência Q/previous-Q DD/FD→SCF/CCF está corrigida; outras exceções DD/FD, prefixos e efeitos arquiteturais ainda precisam de auditoria.
+- F-001..F-032 permanecem nos estados individuais registrados na tabela; não promover famílias com base apenas em igualdade entre executores internos.
+- E7 permanece IN_PROGRESS; E8 permanece BLOCKED. A execução do ROM Z80 Block Flags Test v5.0 completo no core e validação direta em hardware SMS continuam NOT RUN; CMOS/clones continuam NOT VERIFIED.
+- CI #6037 no HEAD atual executou classificação de impacto e higiene documental (PASS); jobs Z80 focused, workspace, Scheduler stress e hosts foram SKIPPED/NOT RUN. Não há nova execução semântica do Z80 no HEAD atual.

@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline de main consultada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613` (2026-11-09). As PRs documentais #703 e #704 reconciliaram o ledger sem alterar o runtime. A validação externa no HEAD da PR #702 totalizou 34.000 vetores PASS; evidências nas seções 22–24.
+**Baseline remota consultada:** `main` = `1142eb567746afe64356b60f2ce466581e1c0cef` (2026-11-09, após PRs #709 e #710). A validação externa DD/FD permanece em 34.000/34.000 vetores PASS no HEAD validado da PR #702; os resultados não são reatribuídos ao HEAD atual. F-033 e F-034 foram reconciliadas como CLOSED dentro do perfil NMOS clássico SMS/SG-1000, com os limites documentados nas seções 26–29.
 **Reconciliação:** PR #672 integrou GUI/D3D12; PR #673 adicionou teste ED; PR #674 reconciliou evidências; PR #675 adicionou o B-loop de flags; PRs #677/#678 adicionaram observação IM2, handler PUSH/POP AF, EI/RETI e retomada do bloco. Nenhuma alterou a semântica de runtime do Z80.
 **Nota de reconciliação:** as PRs #615 (filtro/reset SN76489) e #617 (clarificação documental Rust/egui) não alteraram o núcleo Z80, decoder DD/FD ou suas evidências. O conteúdo técnico e as conclusões semânticas abaixo permanecem conforme as auditorias de Z80 registradas.
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
@@ -369,3 +369,16 @@ As baselines antigas mantidas nas seções anteriores são fotografias históric
 - RETN/RETI e IM: aliases e modos aceitos pelo perfil atual cobertos; sinalização RETI daisy-chain NOT_APPLICABLE aos perfis SMS/SG-1000 sem consumidor.
 
 **Classificação vigente:** F-034 CLOSED exclusivamente para o perfil de compatibilidade Zilog NMOS clássico adotado pelo projeto nos alvos SMS/SG-1000. Não há alegação de equivalência de silício, compatibilidade CMOS/R800/Z80N/clones ou validação física. F-033 permanece CLOSED com limite de evidência; E7 permanece IN_PROGRESS por auditoria global e outras famílias/efeitos ainda pendentes; E8 permanece BLOCKED até o fechamento formal de E7.
+
+
+## 29. Reconciliação da main após PR #710 — 2026-11-09
+
+**Baseline:** `1142eb567746afe64356b60f2ce466581e1c0cef`.
+
+- PR #709 integrada no merge SHA `5dd98ddcadbb9a1d0316c41044e0dd3767a6fab8`; HEAD validado `b6e5db79047e7802620e76ad98f5cfd08deefd57`; CI #6034 SUCCESS.
+- PR #710 integrada no SHA atual acima; CI #6036 de higiene documental SUCCESS no HEAD da PR #710. CI pós-merge #6037 SUCCESS no HEAD atual, mas executou somente classificação de impacto e higiene documental.
+- F-033 CLOSED para o perfil de compatibilidade Zilog NMOS clássico, com a hipótese dos 178 encodings reservados delimitada; não é especificação universal UM0080 nem afirmação para CMOS/R800/Z80N/clones.
+- F-034 CLOSED para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000: ED70, ED71, aliases NEG, RETN/RETI e modos IM nos escopos e limites registrados na seção 28 e na matriz ED.
+- E7 permanece IN_PROGRESS. E8/ZEXDOC/ZEXALL permanece BLOCKED.
+- E7.7 continua exigindo reconciliação do inventário global F-001..F-034, flags e efeitos observáveis de outras famílias, interrupções, prefixos e determinismo. A execução do ROM v5.0 completo e validação física SMS não são declaradas PASS.
+- Não transferir os resultados de CI #6034/#6036/#6037 para suites que não foram executadas; jobs SKIPPED permanecem NOT RUN.
