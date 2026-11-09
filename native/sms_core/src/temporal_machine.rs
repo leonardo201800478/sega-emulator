@@ -3239,7 +3239,6 @@ mod temporal_frame_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_indirect_accumulator_f002_temporal_tests {
     use super::SmsTemporalMachine;
@@ -3281,8 +3280,7 @@ mod base_indirect_accumulator_f002_temporal_tests {
                     0x5A,
                     "opcode {opcode:02X} stores A through the scheduled memory transaction"
                 );
-                let expected_wz =
-                    (0x5Au16 << 8) | (address.wrapping_add(1) & 0x00FF);
+                let expected_wz = (0x5Au16 << 8) | (address.wrapping_add(1) & 0x00FF);
                 assert_eq!(machine.cpu().wz, expected_wz);
             } else {
                 // The fixture ROM begins with the opcode itself, so reading
