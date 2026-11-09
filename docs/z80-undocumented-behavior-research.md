@@ -191,3 +191,21 @@ Os bytes ED sem operação atribuída no Z80 clássico são modelados como ED-NO
 
 A auditoria de robustez repete execuções determinísticas e verifica invariantes; ela complementa, mas não substitui, a comparação funcional independente.
 
+
+
+## 8. DD/FD imediatamente antes de SCF/CCF — evidência Zilog NMOS (2026-11-09)
+
+A página [Undocumented Flags do projeto Z80Decoder](https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags), atualizada em 09/07/2026, registra que a regra X/Y de SCF/CCF foi verificada em um Zilog NMOS Z80 e em fontes secundárias. A atualização acrescenta que DD ou FD imediatamente antes de SCF/CCF faz o estado de “instrução anterior modificou flags” ser perdido: para SCF/CCF, o prefixo é a instrução precedente e não modifica flags. A mesma página documenta diferenças entre Zilog NMOS, NEC NMOS e ST CMOS; não generalizar a regra para todas as variantes.
+
+### Divergência candidata no núcleo atual
+
+O caminho atômico em `cpu.rs::execute_indexed` e o caminho retomável em `sequencer.rs` preservam `q_previous` ao consumir DD/FD. O handler SCF/CCF então seleciona X/Y como se a instrução anterior ainda fosse a que produziu Q. Para o perfil Zilog NMOS, o contexto de modificação de flags deve ser limpo pela fronteira DD/FD.
+
+### Vetores discriminantes
+
+Na revisão SingleStepTests/Z80 `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`:
+
+- `DD 37 0001`, blob `c68369350b5a47ebb481d35a7b9e4dd86e292716`: A=50, F=75, Q=75; final esperado F=65, Q=65.
+- `FD 3F 0001`, blob `3c8a105d7f3e9d6cae78e2e47b03d7d642f2b345`: A=06, F=ED, Q=ED; final esperado F=FC, Q=FC.
+
+A aplicação da fórmula atual com Q anterior preservado resulta em F=45 e F=D4, respectivamente. A comparação no harness ainda precisa ser executada para reproduzir formalmente a divergência nos dois executores. Não implementar a correção antes desse teste.
