@@ -2155,7 +2155,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_Z, Z80};
+    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
