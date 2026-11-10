@@ -1659,7 +1659,8 @@ mod tests {
         let mut video_sequence = 0;
         let telemetry = WorkerTelemetry::default();
         let mut audio_session = None;
-        let mut video_mailbox = None;
+        let mailbox = FrameMailbox::new();
+        let mut video_mailbox = Some(mailbox.clone());
 
         let (instructions, _, breakpoint_hit) = execute_frame(
             &mut machine,
@@ -1679,6 +1680,7 @@ mod tests {
         assert_eq!(telemetry.performance_metrics().completed_frames, 0);
         assert_eq!(telemetry.frame_number.load(Ordering::Acquire), 0);
         assert_eq!(video_sequence, 0);
+        assert!(mailbox.take_latest().unwrap().is_none());
     }
 
     #[test]
