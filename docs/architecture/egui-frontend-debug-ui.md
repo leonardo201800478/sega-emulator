@@ -28,6 +28,8 @@ DEBUG is off by default. Toggling it controls the observability writer and optio
 
 Diagnostic histories and writer queues must remain bounded. UI callbacks may send coarse-grained commands and render snapshots only; they must never own or advance machine hardware or scheduler time.
 
+Menu diagnostics are transition-oriented: menu activation/state changes, close requests, close events, and focus changes are recorded with the menu name or resulting focus state. Per-repaint events (popup requested/rendered/measured and repeated root HWND reads) are intentionally not logged; they add volume without describing a state transition. Native child-window creation and actual bounds changes remain observable.
+
 ## Current limitations
 
 - Only the Master System runtime is connected to this native frontend.
