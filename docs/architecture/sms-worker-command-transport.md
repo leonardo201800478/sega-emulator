@@ -11,6 +11,8 @@ debugger code may hold only the cloneable command handle and owned snapshots.
 - Host-to-worker commands use a bounded synchronous channel with a capacity of 64.
 - Producers use `try_send`; a full queue is reported immediately and does not
   block the UI thread while waiting for capacity.
+- Controller state changes are fire-and-forget after queue acceptance; runtime
+  application errors are surfaced through worker error telemetry.
 - Reply-bearing operations use one-shot bounded reply channels and a 100 ms
   receive deadline. Timeout and worker disconnection are explicit errors.
 - The paused worker polls its command receiver at a bounded interval so worker

@@ -29,6 +29,7 @@ const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
 const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
 const WORKER_REPLY_TIMEOUT: Duration = Duration::from_millis(100);
+const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 pub fn sms_temporal_region_profile(
@@ -369,12 +370,7 @@ enum WorkerCommand {
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
-    SetController(
-        u8,
-        ControllerButtons,
-        Instant,
-        SyncSender<Result<(), String>>,
-    ),
+    SetController(u8, ControllerButtons, Instant),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
@@ -542,7 +538,7 @@ impl SmsTemporalWorker {
             })
             .map_err(|error| format!("could not start SMS machine worker: {error}"))?;
 
-        match ready_receiver.recv() {
+        match ready_receiver.recv_timeout(WORKER_STARTUP_TIMEOUT) {
             Ok(Ok(())) => Ok(Self {
                 commands,
                 worker: Some(worker),
@@ -554,11 +550,15 @@ impl SmsTemporalWorker {
                 let _ = worker.join();
                 Err(error)
             }
-            Err(error) => {
+            Err(RecvTimeoutError::Timeout) => {
+                // The command sender is dropped on return; the detached startup
+                // thread then observes a disconnected command receiver and exits.
+                drop(worker);
+                Err("SMS machine worker startup timed out after 5 seconds".to_owned())
+            }
+            Err(RecvTimeoutError::Disconnected) => {
                 let _ = worker.join();
-                Err(format!(
-                    "SMS machine worker startup channel closed: {error}"
-                ))
+                Err("SMS machine worker startup channel closed".to_owned())
             }
         }
     }
@@ -653,7 +653,10 @@ impl SmsTemporalWorker {
         buttons: ControllerButtons,
         detected_at: Instant,
     ) -> Result<(), String> {
-        self.request_unit(|reply| WorkerCommand::SetController(player, buttons, detected_at, reply))
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::SetController(player, buttons, detected_at),
+        )
     }
 
     /// Return frame-completion and input-to-frame measurements from the SMS worker.
@@ -1438,14 +1441,11 @@ fn handle_command(
             };
             let _ = reply.send(result);
         }
-        WorkerCommand::SetController(player, buttons, detected_at, reply) => {
-            let result = machine
-                .set_controller(player, buttons)
-                .map_err(|error| error.to_string());
-            if result.is_ok() {
-                telemetry.record_input_detected(detected_at);
+        WorkerCommand::SetController(player, buttons, detected_at) => {
+            match machine.set_controller(player, buttons) {
+                Ok(()) => telemetry.record_input_detected(detected_at),
+                Err(error) => telemetry.set_runtime_error(Some(error.to_string())),
             }
-            let _ = reply.send(result);
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
         WorkerCommand::ConfigureAudio(factory, reply) => match factory() {
