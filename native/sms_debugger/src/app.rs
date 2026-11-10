@@ -248,11 +248,8 @@ impl DebuggerApp {
         if let Some(texture) = self.texture.as_mut() {
             texture.set(image, egui::TextureOptions::NEAREST);
         } else {
-            self.texture = Some(context.load_texture(
-                "sms-framebuffer",
-                image,
-                egui::TextureOptions::NEAREST,
-            ));
+            self.texture =
+                Some(context.load_texture("sms-framebuffer", image, egui::TextureOptions::NEAREST));
         }
         self.displayed_frame = snapshot.frame_number;
     }
@@ -284,13 +281,19 @@ impl eframe::App for DebuggerApp {
                     self.toggle_run();
                 }
                 if ui
-                    .add_enabled(self.worker.is_some() && !self.running, egui::Button::new("Step"))
+                    .add_enabled(
+                        self.worker.is_some() && !self.running,
+                        egui::Button::new("Step"),
+                    )
                     .clicked()
                 {
                     self.step();
                 }
                 if ui
-                    .add_enabled(self.snapshot.is_some(), egui::Button::new("Exportar diagnóstico"))
+                    .add_enabled(
+                        self.snapshot.is_some(),
+                        egui::Button::new("Exportar diagnóstico"),
+                    )
                     .clicked()
                 {
                     self.export_diagnostic();
@@ -325,18 +328,25 @@ impl eframe::App for DebuggerApp {
                             "IFF1: {}  IFF2: {}  IM: {}  HALT: {}",
                             snapshot.iff1, snapshot.iff2, snapshot.interrupt_mode, snapshot.halted
                         ));
-                        ui.label(format!("Instruction T-states: {}", snapshot.instruction_tstates));
+                        ui.label(format!(
+                            "Instruction T-states: {}",
+                            snapshot.instruction_tstates
+                        ));
                         ui.label(format!("Machine ticks: {}", snapshot.machine_time_ticks));
                         ui.separator();
                         ui.heading("Hardware");
                         ui.label(format!("Frame: {}", snapshot.frame_number));
                         ui.label(format!(
                             "VDP status: {:02X}  scanline: {}  cycles: {}",
-                            snapshot.vdp_status, snapshot.vdp_scanline, snapshot.vdp_cycles_into_line
+                            snapshot.vdp_status,
+                            snapshot.vdp_scanline,
+                            snapshot.vdp_cycles_into_line
                         ));
                         ui.label(format!(
                             "Mapper banks: {:02X}/{:02X}/{:02X}",
-                            snapshot.mapper_banks[0], snapshot.mapper_banks[1], snapshot.mapper_banks[2]
+                            snapshot.mapper_banks[0],
+                            snapshot.mapper_banks[1],
+                            snapshot.mapper_banks[2]
                         ));
                         ui.label(format!(
                             "Mapper control: {:02X}  Memory control: {:02X}",
@@ -396,7 +406,10 @@ impl eframe::App for DebuggerApp {
                                         ui.end_row();
                                     }
                                     let start = parse_address(&self.memory_address).unwrap_or(0);
-                                    ui.monospace(format!("{:04X}", start.wrapping_add(index as u16)));
+                                    ui.monospace(format!(
+                                        "{:04X}",
+                                        start.wrapping_add(index as u16)
+                                    ));
                                 }
                                 ui.monospace(format!("{byte:02X}"));
                             }
