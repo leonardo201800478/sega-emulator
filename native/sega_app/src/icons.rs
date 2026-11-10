@@ -186,18 +186,12 @@ mod tests {
 
         let output = context.run(egui::RawInput::default(), |context| {
             egui::CentralPanel::default().show(context, |ui| {
-                let rect = ui.available_rect_before_wrap();
-                for (index, icon) in icons.into_iter().enumerate() {
-                    let icon_rect = egui::Rect::from_min_size(
-                        egui::pos2(rect.left() + index as f32 * 40.0, rect.top()),
-                        egui::vec2(24.0, 18.0),
-                    );
-                    paint_icon(
-                        ui.painter(),
-                        icon_rect,
-                        icon,
-                        egui::Color32::WHITE,
-                    );
+                let rect = egui::Rect::from_min_size(
+                    ui.available_rect_before_wrap().min,
+                    egui::vec2(24.0, 18.0),
+                );
+                for icon in icons {
+                    paint_icon(ui.painter(), rect, icon, egui::Color32::WHITE);
                 }
             });
         });
