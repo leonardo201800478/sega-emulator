@@ -9,4 +9,7 @@ mod app;
 mod debugger_window;
 
 #[cfg(windows)]
+mod icons;
+
+#[cfg(windows)]
 pub use app::SegaApp;
