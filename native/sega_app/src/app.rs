@@ -163,6 +163,9 @@ impl Default for SegaApp {
             debugger_window: DebuggerWindowState::default(),
         };
         app.restore_ui_settings();
+        if app.diagnostics_enabled {
+            app.set_diagnostics_enabled(true);
+        }
         app
     }
 }
