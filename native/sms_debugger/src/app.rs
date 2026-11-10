@@ -415,6 +415,7 @@ impl eframe::App for DebuggerApp {
                             }
                         });
                 });
+            });
 
         if self.running {
             context.request_repaint();
