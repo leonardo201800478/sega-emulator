@@ -19,9 +19,9 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect,
     GetWindowLongPtrW, GetWindowTextW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
-    SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_SHOWWINDOW, WINDOW_EX_STYLE,
+    SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, WS_VISIBLE, GWL_EXSTYLE,
+    WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, GWL_EXSTYLE,
     GWL_STYLE, HWND_TOP, HTTRANSPARENT, LWA_COLORKEY, MA_NOACTIVATE,
 };
 use windows::core::{Error, PCWSTR, Result, w};
@@ -34,6 +34,7 @@ pub struct D3d12HudOverlay {
     hwnd: HWND,
     parent_hwnd: HWND,
     _thread_affinity: PhantomData<Rc<()>>,
+    visible: bool,
 }
 
 impl D3d12HudOverlay {
@@ -51,7 +52,7 @@ impl D3d12HudOverlay {
                 ),
                 w!("SegaEmulatorTelemetryHud"),
                 w!(""),
-                WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0 | WS_CLIPSIBLINGS.0),
+                WINDOW_STYLE(WS_CHILD.0 | WS_CLIPSIBLINGS.0),
                 0,
                 0,
                 1,
@@ -76,6 +77,7 @@ impl D3d12HudOverlay {
             hwnd,
             parent_hwnd: parent,
             _thread_affinity: PhantomData,
+            visible: false,
         };
         overlay.set_bounds(0, 0, 1, 1)?;
         Ok(overlay)
@@ -121,17 +123,21 @@ impl D3d12HudOverlay {
                 y,
                 width,
                 height,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                SWP_NOACTIVATE,
             )?;
         }
         Ok(())
     }
 
     /// Show or hide the child HUD without changing focus or desktop z-order.
-    pub fn set_visible(&self, visible: bool) {
+    pub fn set_visible(&mut self, visible: bool) {
+        if self.visible == visible {
+            return;
+        }
         unsafe {
             ShowWindow(self.hwnd, if visible { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
+        self.visible = visible;
     }
 
     /// Return whether this HWND is a direct child of the supplied parent.
