@@ -4,7 +4,7 @@
 use eframe::egui;
 use rfd::FileDialog;
 use sega_sms_runtime::{SmsDebugSnapshot, SmsTemporalWorker};
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, time::{Duration, Instant}};
 
 const MEMORY_WINDOW: usize = 64;
 const MAX_BREAKPOINTS: usize = 64;
@@ -25,6 +25,7 @@ pub struct DebuggerApp {
     texture: Option<egui::TextureHandle>,
     displayed_frame: u64,
     status: String,
+    last_snapshot_refresh: Instant,
 }
 
 impl Default for DebuggerApp {
@@ -41,6 +42,7 @@ impl Default for DebuggerApp {
             texture: None,
             displayed_frame: u64::MAX,
             status: "Abra uma ROM SMS".into(),
+            last_snapshot_refresh: Instant::now(),
         }
     }
 }
@@ -77,6 +79,7 @@ impl DebuggerApp {
     }
 
     fn refresh_snapshot(&mut self) {
+        self.last_snapshot_refresh = Instant::now();
         let Some(worker) = self.worker.as_ref() else {
             self.snapshot = None;
             return;
@@ -292,7 +295,9 @@ impl eframe::App for DebuggerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
         if self.worker.is_some() {
-            self.refresh_snapshot();
+            if self.running && self.last_snapshot_refresh.elapsed() >= Duration::from_millis(100) {
+                self.refresh_snapshot();
+            }
             if !self.running {
                 self.refresh_memory_if_idle();
             }
