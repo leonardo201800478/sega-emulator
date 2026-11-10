@@ -933,9 +933,10 @@ impl Drop for SmsTemporalWorker {
         let _ = self.close_video_output();
         self.telemetry.shutdown.store(true, Ordering::Release);
         let _ = enqueue_worker_command(&self.commands, WorkerCommand::Shutdown);
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        // The worker observes the shutdown flag at its next safe event-loop
+        // boundary and performs audio/mailbox cleanup on its owning thread.
+        // Detach here so dropping the host handle cannot stall the GUI on join.
+        drop(self.worker.take());
     }
 }
 

@@ -19,6 +19,9 @@ debugger code may hold only the cloneable command handle and owned snapshots.
   shutdown does not depend on all cloned debugger handles being dropped.
 - Worker shutdown is also signaled through shared atomic state. The worker
   checks that state at its event-loop boundary before accepting more work.
+- Dropping the host handle detaches the join handle after signaling shutdown;
+  the worker performs its audio and mailbox cleanup on its own thread, avoiding
+  a synchronous join on the GUI thread.
 
 A timed-out reply does not roll back a command already accepted by the worker.
 Callers must treat timeout as an unknown completion state and refresh the
