@@ -757,6 +757,7 @@ impl SegaApp {
         };
         let window_position = state.window_position;
         let window_size = state.window_size;
+        let window_initialized = state.window_initialized;
         drop(state);
 
         let worker = self
@@ -768,13 +769,15 @@ impl SegaApp {
         let open = Arc::clone(&self.debugger_window_open);
         let mut builder = egui::ViewportBuilder::default()
             .with_title("Sega Emulator — SMS Debugger")
-            .with_inner_size(window_size.unwrap_or(egui::vec2(980.0, 760.0)))
             .with_min_inner_size([760.0, 560.0])
             .with_resizable(true)
             .with_decorations(true)
             .with_taskbar(true);
-        if let Some(position) = window_position {
-            builder = builder.with_position(position);
+        if !window_initialized {
+            builder = builder.with_inner_size(window_size.unwrap_or(egui::vec2(980.0, 760.0)));
+            if let Some(position) = window_position {
+                builder = builder.with_position(position);
+            }
         }
 
         context.show_viewport_deferred(
@@ -786,10 +789,12 @@ impl SegaApp {
                     return;
                 };
                 if debugger_ui.input(|input| input.viewport().close_requested()) {
+                    state.window_initialized = false;
                     open.store(false, Ordering::Release);
                     return;
                 }
 
+                state.window_initialized = true;
                 render_debugger_contents(debugger_ui, worker.as_ref(), &mut state);
                 if let Some(position) =
                     debugger_ui.input(|input| input.viewport().outer_rect.map(|rect| rect.min))
