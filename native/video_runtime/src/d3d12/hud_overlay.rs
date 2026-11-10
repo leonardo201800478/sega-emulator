@@ -75,6 +75,9 @@ impl D3d12HudOverlay {
             }
             return Err(error);
         }
+        unsafe {
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 14);
+        }
 
         let overlay = Self {
             hwnd,
