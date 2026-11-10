@@ -72,6 +72,8 @@ struct WorkerTelemetry {
     running: AtomicBool,
     diagnostics_enabled: AtomicBool,
     frame_number: AtomicU64,
+    machine_time_ticks: AtomicU64,
+    machine_clock_hz: AtomicU64,
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
@@ -212,6 +214,7 @@ impl WorkerTelemetry {
     fn reset_machine_counters(&self) {
         self.total_instructions.store(0, Ordering::Release);
         self.set_frame_number(0);
+        self.machine_time_ticks.store(0, Ordering::Release);
         self.set_runtime_error(None);
     }
 }
@@ -250,6 +253,9 @@ impl SmsTemporalWorker {
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
+        if let Ok((_, _, clock_hz)) = sms_temporal_region_profile(&region) {
+            telemetry.machine_clock_hz.store(clock_hz, Ordering::Release);
+        }
         let worker_telemetry = Arc::clone(&telemetry);
         let (commands, receiver) = mpsc::channel();
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
@@ -571,6 +577,16 @@ impl SmsTemporalWorker {
         self.telemetry.frame_number.load(Ordering::Acquire)
     }
 
+    /// Scheduler time in master ticks at the most recently completed worker step.
+    pub fn machine_time_ticks(&self) -> u64 {
+        self.telemetry.machine_time_ticks.load(Ordering::Acquire)
+    }
+
+    /// Configured SMS machine clock in ticks per second for the active region.
+    pub fn machine_clock_hz(&self) -> u64 {
+        self.telemetry.machine_clock_hz.load(Ordering::Acquire)
+    }
+
     pub fn total_instructions(&self) -> u64 {
         self.telemetry.total_instructions.load(Ordering::Acquire)
     }
@@ -648,6 +664,9 @@ fn execute_frame(
             .fetch_add(instructions as u64, Ordering::AcqRel);
     }
     telemetry.set_frame_number(machine.frame_number());
+    telemetry
+        .machine_time_ticks
+        .store(machine.now().ticks(), Ordering::Release);
 
     *video_sequence = video_sequence
         .checked_add(1)
