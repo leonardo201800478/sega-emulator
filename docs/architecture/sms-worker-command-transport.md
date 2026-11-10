@@ -33,9 +33,10 @@ worker-owned state before retrying non-idempotent operations.
 - Frame time is the host-clock interval between those completion timestamps.
 - Emulation FPS is derived from completed SMS frames and expires to zero after
   500 ms without a new completed frame; no NTSC/PAL nominal rate is assumed.
-- Multiple host input events pending before the next completed frame retain the
-  earliest detection timestamp. The pending timestamp is cleared at the first
-  frame completion after the worker applies the input command.
+- Controller commands carry a complete button state. When multiple states are
+  accepted before a frame completes, the latest accepted state determines the
+  measured input timestamp; the pending timestamp is cleared at the first frame
+  completion after the worker applies that state.
 - Telemetry reads do not advance the Scheduler or machine clock.
 
 ## Validation

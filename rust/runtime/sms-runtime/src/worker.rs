@@ -122,10 +122,9 @@ struct FrameTimingState {
 
 impl FrameTimingState {
     fn record_input(&mut self, detected_at: Instant) {
-        self.pending_input = Some(
-            self.pending_input
-                .map_or(detected_at, |pending| pending.min(detected_at)),
-        );
+        // Controller commands carry a complete button state. The latest accepted
+        // state is the one that the next completed frame can incorporate.
+        self.pending_input = Some(detected_at);
     }
 
     fn record_frame_completed(&mut self, completed_at: Instant) {
@@ -1597,7 +1596,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_input_latency_uses_the_first_unincorporated_host_event() {
+    fn input_latency_uses_the_latest_controller_state_applied_before_frame() {
         use super::FrameTimingState;
         use std::time::Instant;
 
@@ -1606,7 +1605,7 @@ mod tests {
         timing.record_input(start + Duration::from_millis(3));
         timing.record_input(start + Duration::from_millis(10));
         timing.record_frame_completed(start + Duration::from_millis(19));
-        assert_eq!(timing.metrics.input_to_frame_ms, Some(16.0));
+        assert_eq!(timing.metrics.input_to_frame_ms, Some(9.0));
     }
 
     #[test]
