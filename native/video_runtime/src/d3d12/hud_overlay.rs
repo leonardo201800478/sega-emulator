@@ -394,6 +394,6 @@ mod tests {
         );
 
         let first_child = unsafe { GetWindow(parent.hwnd(), GW_CHILD).unwrap() };
-        assert_eq!(first_child, HWND(hud.handle() as *mut c_void));
+        assert_eq!(first_child.0 as usize, hud.handle());
     }
 }
