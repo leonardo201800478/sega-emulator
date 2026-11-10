@@ -243,6 +243,7 @@ unsafe extern "system" fn hud_window_proc(
 mod tests {
     use super::D3d12HudOverlay;
     use super::super::{D3d12ChildWindow, NativeVideoWindow};
+    use super::{LPARAM, LRESULT, WPARAM};
     use core::ffi::c_void;
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{GW_CHILD, GetWindow};
