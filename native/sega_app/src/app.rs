@@ -447,7 +447,7 @@ fn should_reveal_fullscreen_menu(
     pointer_y: Option<f32>,
     root_top: f32,
 ) -> bool {
-    !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 56.0)
+    !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 88.0)
 }
 
 /// Render the complete shell in the root window for native and headless use.
