@@ -6,4 +6,7 @@ mod audio;
 mod worker;
 
 pub use audio::AudioSession;
-pub use worker::{SmsDebugSnapshot, SmsTemporalWorker, sms_temporal_region_profile};
+pub use worker::{
+    SmsDebugSnapshot, SmsTemporalWorker, SmsTemporalWorkerDebugHandle,
+    sms_temporal_region_profile,
+};
