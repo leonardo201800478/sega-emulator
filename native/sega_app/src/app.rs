@@ -39,7 +39,10 @@ fn record_ui_diagnostic(event: &'static str, details: impl std::fmt::Display) {
 ///
 /// The independent flags represent orthogonal UI preferences and lifecycle states;
 /// consolidating them would obscure rather than clarify their ownership.
-#[allow(clippy::struct_excessive_bools, reason = "Independent UI preferences and lifecycle flags are intentionally orthogonal.")]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Independent UI preferences and lifecycle flags are intentionally orthogonal."
+)]
 pub struct SegaApp {
     rom_path: String,
     region: String,
