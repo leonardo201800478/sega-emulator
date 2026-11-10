@@ -3184,7 +3184,7 @@ fn render_debugger_breakpoints(
 
 fn render_debugger_memory(
     ui: &mut egui::Ui,
-    worker: &SmsTemporalWorker,
+    worker: &SmsTemporalWorkerDebugHandle,
     state: &mut DebuggerWindowState,
 ) {
     ui.heading("Inspeção de memória");
