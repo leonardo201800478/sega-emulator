@@ -85,7 +85,7 @@ pub(crate) fn render_debugger_contents(
                     } else {
                         "Máquina pausada"
                     })
-                        .clone_into(&mut state.status);
+                    .clone_into(&mut state.status);
                 }
                 Err(error) => {
                     state.status = format!("Falha ao consultar runtime: {error}");
