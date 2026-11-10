@@ -9,8 +9,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use windows::Win32::Foundation::{
-    COLORREF, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, RECT,
-    WPARAM,
+    COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
     ANTIALIASED_QUALITY, BeginPaint, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush,
@@ -21,7 +20,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GWL_STYLE,
-    GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT, HWND_TOP,
+    GWLP_USERDATA, GetClassInfoW, GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT, HWND_TOP,
     LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
     SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
     WINDOW_EX_STYLE, WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT,
@@ -221,8 +220,27 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
     };
 
     let atom = unsafe { RegisterClassW(&class) };
-    if atom == 0 && unsafe { GetLastError() } != ERROR_CLASS_ALREADY_EXISTS {
-        return Err(Error::from_thread());
+    if atom == 0 {
+        // Window classes are process-scoped and can outlive every HWND created
+        // from them. Verify an existing registration instead of relying only on
+        // GetLastError: another subsystem may already have registered this name.
+        let registration_error = Error::from_thread();
+        let mut existing = WNDCLASSW::default();
+        if unsafe {
+            GetClassInfoW(
+                Some(instance),
+                w!("SegaEmulatorTelemetryHud"),
+                &mut existing,
+            )
+        }
+        .is_err()
+            || existing.hInstance != instance
+            || !existing
+                .lpfnWndProc
+                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, hud_window_proc))
+        {
+            return Err(registration_error);
+        }
     }
     Ok(())
 }
