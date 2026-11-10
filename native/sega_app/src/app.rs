@@ -232,6 +232,14 @@ impl FpsOverlaySize {
             Self::Large => egui::vec2(224.0, 76.0),
         }
     }
+
+    const fn font_size(self) -> f32 {
+        match self {
+            Self::Small => 14.0,
+            Self::Medium => 18.0,
+            Self::Large => 22.0,
+        }
+    }
     const fn label(self) -> &'static str {
         match self {
             Self::Small => "Pequeno",
@@ -1558,6 +1566,17 @@ impl SegaApp {
             to_win32_pixel(overlay_size.x * scale),
             to_win32_pixel(overlay_size.y * scale),
         );
+        let font_size_pixels = to_win32_pixel(self.fps_overlay_size.font_size() * scale).clamp(8, 48);
+
+        if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
+            if let Err(error) = overlay.set_font_size_pixels(font_size_pixels) {
+                overlay.set_visible(false);
+                let message = format!("Falha ao dimensionar fonte do HUD: {error}");
+                record_ui_diagnostic("native.hud.font_error", &message);
+                self.native_viewport.hud_error = Some(message);
+                return;
+            }
+        }
 
         if self.native_viewport.last_hud_bounds != Some(bounds) {
             if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
