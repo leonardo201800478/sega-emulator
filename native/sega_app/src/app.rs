@@ -618,6 +618,7 @@ impl SegaApp {
                 }
             }
             self.main_window_geometry_restored = true;
+            return;
         }
 
         if let Some(position) = context.input(|input| input.viewport().outer_rect.map(|rect| rect.min)) {
