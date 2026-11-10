@@ -80,12 +80,12 @@ pub(crate) fn render_debugger_contents(
             match worker.debug_snapshot() {
                 Ok(snapshot) => {
                     state.snapshot = Some(snapshot);
-                    state.status = if worker.is_running() {
+                    (if worker.is_running() {
                         "Máquina em execução"
                     } else {
                         "Máquina pausada"
-                    }
-                    .to_owned();
+                    })
+                        .clone_into(&mut state.status);
                 }
                 Err(error) => {
                     state.status = format!("Falha ao consultar runtime: {error}");
@@ -164,7 +164,7 @@ fn render_debugger_toolbar(
                     if let Ok(snapshot) = worker.debug_snapshot() {
                         state.snapshot = Some(snapshot);
                     }
-                    state.status = "Instrução concluída no worker".to_owned();
+                    "Instrução concluída no worker".clone_into(&mut state.status);
                 }
                 Err(error) => {
                     state.status = format!("Falha no step: {error}");
@@ -270,7 +270,7 @@ fn render_debugger_breakpoints(
                     }
                 }
             } else {
-                state.status = "Endereço de breakpoint inválido".to_owned();
+                "Endereço de breakpoint inválido".clone_into(&mut state.status);
             }
         }
     });
@@ -328,7 +328,7 @@ fn render_debugger_memory(
                     }
                 }
             } else {
-                state.status = "Endereço de memória inválido".to_owned();
+                "Endereço de memória inválido".clone_into(&mut state.status);
             }
         }
     });
