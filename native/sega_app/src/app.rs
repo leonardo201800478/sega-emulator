@@ -2755,6 +2755,7 @@ fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
     (size.x.is_finite() && size.y.is_finite() && size.x >= 760.0 && size.y >= 560.0).then_some(size)
 }
 
+#[allow(clippy::too_many_lines, reason = "The debugger viewport is a single cohesive diagnostic presentation.")]
 fn render_debugger_contents(ui: &mut egui::Ui, worker: Option<&SmsTemporalWorker>, state: &mut DebuggerWindowState) {
     if let Some(worker) = worker {
         if state.last_refresh.elapsed() >= Duration::from_millis(100) {
@@ -3215,6 +3216,11 @@ mod tests {
         );
         assert!(super::parse_saved_size("400,300").is_none());
         assert!(super::parse_saved_size("NaN,760").is_none());
+        assert_eq!(
+            super::parse_saved_root_size("1440,900"),
+            Some(egui::vec2(1440.0, 900.0))
+        );
+        assert!(super::parse_saved_root_size("900,600").is_none());
     }
 
     #[test]
