@@ -14,6 +14,7 @@ pub(crate) enum IconKind {
     Add,
     Remove,
     Breakpoint,
+    Close,
 }
 
 /// Render a compact button whose icon is painted with egui vector primitives.
@@ -31,6 +32,27 @@ pub(crate) fn icon_button(
         egui::Button::new("").min_size(egui::vec2(38.0, 30.0)),
     );
     let icon_rect = response.rect.shrink(8.0);
+    let color = if enabled {
+        ui.visuals().text_color()
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    paint_icon(ui.painter(), icon_rect, icon, color);
+    response.on_hover_text(tooltip)
+}
+
+/// Render a compact icon-only button for popup and inline controls.
+pub(crate) fn small_icon_button(
+    ui: &mut egui::Ui,
+    icon: IconKind,
+    tooltip: &str,
+    enabled: bool,
+) -> egui::Response {
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new("").min_size(egui::vec2(24.0, 24.0)),
+    );
+    let icon_rect = response.rect.shrink(5.0);
     let color = if enabled {
         ui.visuals().text_color()
     } else {
@@ -138,6 +160,22 @@ fn paint_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: 
             painter.circle_stroke(center, rect.height() * 0.36, stroke);
             painter.circle_filled(center, rect.height() * 0.14, color);
         }
+        IconKind::Close => {
+            painter.line_segment(
+                [
+                    egui::pos2(left, top),
+                    egui::pos2(right, bottom),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    egui::pos2(right, top),
+                    egui::pos2(left, bottom),
+                ],
+                stroke,
+            );
+        }
     }
 }
 
@@ -159,6 +197,7 @@ mod tests {
             IconKind::Add,
             IconKind::Remove,
             IconKind::Breakpoint,
+            IconKind::Close,
         ];
 
         let output = context.run(egui::RawInput::default(), |context| {
@@ -173,6 +212,6 @@ mod tests {
             });
         });
 
-        assert!(output.shapes.len() >= 9);
+        assert!(output.shapes.len() >= 10);
     }
 }
