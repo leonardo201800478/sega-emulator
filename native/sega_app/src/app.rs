@@ -522,7 +522,6 @@ impl SegaApp {
         let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
-        record_ui_diagnostic("menu.popup.requested", "");
         let mut actions = MenuPopupActions {
             root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
             ..MenuPopupActions::default()
@@ -534,13 +533,6 @@ impl SegaApp {
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
             |menu_ui, class| {
-                let class_name = match class {
-                    egui::ViewportClass::Root => "root",
-                    egui::ViewportClass::Deferred => "deferred",
-                    egui::ViewportClass::Immediate => "immediate",
-                    egui::ViewportClass::EmbeddedWindow => "embedded_window",
-                };
-                record_ui_diagnostic("menu.viewport.render", class_name);
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
@@ -548,10 +540,12 @@ impl SegaApp {
         );
 
         if self.menu_last_focused != Some(popup_focused) {
-            record_ui_diagnostic("menu.viewport.focus_changed", "");
+            record_ui_diagnostic(
+                "menu.viewport.focus_changed",
+                if popup_focused { "focused" } else { "unfocused" },
+            );
             self.menu_last_focused = Some(popup_focused);
         }
-        record_ui_diagnostic("menu.popup.measured", "");
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -579,7 +573,7 @@ impl SegaApp {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
-            record_ui_diagnostic("menu.popup.closed", "");
+            record_ui_diagnostic("menu.popup.closed", menu.title());
             self.active_menu = None;
         }
         actions.input_updated
@@ -605,7 +599,7 @@ impl SegaApp {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
                                 if menu_ui.small_button("×").clicked() {
-                                    record_ui_diagnostic("menu.popup.closed", "");
+                                    record_ui_diagnostic("menu.popup.closed", menu.title());
                                     self.active_menu = None;
                                 }
                             });
@@ -659,7 +653,7 @@ impl SegaApp {
                                     || action_selected
                                     || header_state.diagnostics_command.is_some()
                                 {
-                                    record_ui_diagnostic("menu.popup.close_requested", "");
+                                    record_ui_diagnostic("menu.popup.close_requested", menu.title());
                                 }
                                 (
                                     close_requested || action_selected,
@@ -1118,7 +1112,6 @@ impl SegaApp {
             return;
         }
 
-        record_ui_diagnostic("native.root.hwnd", "");
         self.update_child_bounds(context, viewport_rect);
         self.poll_native_startup(context);
         self.connect_worker_video(context);
@@ -1326,7 +1319,7 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-            record_ui_diagnostic("menu.popup.closed", "");
+            record_ui_diagnostic("menu.popup.closed", menu.title());
             self.active_menu = None;
             self.menu_last_focused = None;
         }
@@ -1596,13 +1589,17 @@ fn top_level_menu_button(
         state.active_menu.is_some() && *state.active_menu != Some(menu) && response.hovered();
     if response.clicked() || switch_by_hover {
         let previous = *state.active_menu;
-        record_ui_diagnostic("menu.button.activated", "");
+        record_ui_diagnostic("menu.button.activated", menu.title());
         if response.clicked() && previous == Some(menu) {
             *state.active_menu = None;
-            record_ui_diagnostic("menu.state.changed", "");
+            record_ui_diagnostic("menu.state.changed", format!("{} -> closed", menu.title()));
         } else {
             *state.active_menu = Some(menu);
-            record_ui_diagnostic("menu.state.changed", "");
+            let previous_title = previous.map_or("closed", TopLevelMenu::title);
+            record_ui_diagnostic(
+                "menu.state.changed",
+                format!("{previous_title} -> {}", menu.title()),
+            );
             *state.menu_anchor = response.rect.left_bottom();
             *state.menu_popup_size = menu.minimum_size();
         }
