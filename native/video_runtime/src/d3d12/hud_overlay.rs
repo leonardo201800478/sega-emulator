@@ -323,10 +323,10 @@ mod tests {
     #[test]
     fn hud_is_a_transparent_non_topmost_child_above_the_d3d12_sibling() {
         let parent = NativeVideoWindow::create(320, 240).unwrap();
-        let video = D3d12ChildWindow::create(parent.handle()).unwrap();
+        let video = D3d12ChildWindow::create(parent.hwnd().0 as usize).unwrap();
         video.set_bounds(0, 0, 320, 240).unwrap();
 
-        let mut hud = D3d12HudOverlay::create(parent.handle()).unwrap();
+        let mut hud = D3d12HudOverlay::create(parent.hwnd().0 as usize).unwrap();
         hud.set_bounds(8, 8, 160, 60).unwrap();
         hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
             .unwrap();
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(client_rect.right - client_rect.left, 240);
         assert_eq!(client_rect.bottom - client_rect.top, 90);
 
-        assert!(hud.is_child_of(parent.handle()));
+        assert!(hud.is_child_of(parent.hwnd().0 as usize));
         assert_eq!(
             hud.composition_contract(),
             (true, true, true, true, true, true)
@@ -365,7 +365,7 @@ mod tests {
 
         let parent_style = unsafe {
             windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
-                HWND(parent.handle() as *mut c_void),
+                parent.hwnd(),
                 windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
             )
         };
@@ -394,7 +394,7 @@ mod tests {
             LRESULT(super::HTTRANSPARENT as isize)
         );
 
-        let first_child = unsafe { GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD) };
+        let first_child = unsafe { GetWindow(parent.hwnd(), GW_CHILD).unwrap() };
         assert_eq!(first_child, HWND(hud.handle() as *mut c_void));
     }
 }
