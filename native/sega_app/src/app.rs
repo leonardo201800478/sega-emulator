@@ -1771,7 +1771,9 @@ impl Drop for SegaApp {
         // Stop producers before shutting down the observability worker. The
         // viewport owns the SMS and D3D12 workers; they may emit final events
         // while being stopped and joined.
-        if let Err(error) = self.save_ui_settings() { eprintln!("Unable to save UI settings: {error}"); }
+        if let Err(error) = self.save_ui_settings() {
+            eprintln!("Unable to save UI settings: {error}");
+        }
         self.native_viewport.shutdown();
 
         // SDL3 is also an owned native resource. Shut it down explicitly while
