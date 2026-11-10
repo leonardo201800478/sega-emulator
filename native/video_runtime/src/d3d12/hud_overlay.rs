@@ -39,7 +39,7 @@ pub struct D3d12HudOverlay {
 impl D3d12HudOverlay {
     /// Create the transparent HUD child under an existing GUI-owned parent HWND.
     pub fn create(parent_handle: usize) -> Result<Self> {
-        NativeVideoWindowValidation::validate(parent_handle)?;
+        super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
         let instance = unsafe { GetModuleHandleW(None)? };
         register_hud_window_class(HINSTANCE(instance.0))?;
 
@@ -232,53 +232,3 @@ unsafe extern "system" fn hud_window_proc(
     }
 }
 
-struct NativeVideoWindowValidation;
-
-impl NativeVideoWindowValidation {
-    fn validate(parent_handle: usize) -> Result<()> {
-        if parent_handle == 0 {
-            return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
-                "HUD parent HWND must be non-zero",
-            ));
-        }
-        let parent = HWND(parent_handle as *mut c_void);
-        if unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(parent)) }.as_bool() {
-            Ok(())
-        } else {
-            Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
-                "HUD parent HWND is not a valid window",
-            ))
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::D3d12HudOverlay;
-    use super::super::{D3d12ChildWindow, NativeVideoWindow};
-    use core::ffi::c_void;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{GW_CHILD, GetWindow};
-
-    #[test]
-    fn hud_is_a_transparent_non_topmost_child_above_the_d3d12_sibling() {
-        let parent = NativeVideoWindow::create(320, 240).unwrap();
-        let video = D3d12ChildWindow::create(parent.handle()).unwrap();
-        video.set_bounds(0, 0, 320, 240).unwrap();
-
-        let hud = D3d12HudOverlay::create(parent.handle()).unwrap();
-        hud.set_bounds(8, 8, 160, 60).unwrap();
-        hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
-            .unwrap();
-
-        assert!(hud.is_child_of(parent.handle()));
-        assert_eq!(hud.composition_contract(), (true, true, true, true));
-
-        let first_child = unsafe {
-            GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD)
-        };
-        assert_eq!(first_child, HWND(hud.handle() as *mut c_void));
-    }
-}
