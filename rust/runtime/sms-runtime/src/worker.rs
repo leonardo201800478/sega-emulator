@@ -16,8 +16,8 @@ use crate::audio::AudioSession;
 use sega_audio_runtime::AudioOutputMetrics;
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
-    ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
-    SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
+    ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
+    SpriteLimitMode, Territory, VideoStandard,
 };
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
