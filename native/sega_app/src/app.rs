@@ -1011,9 +1011,7 @@ impl SegaApp {
                         menu_ui.vertical(|menu_ui| {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
-                                if small_icon_button(menu_ui, IconKind::Close, "Fechar menu", true)
-                                    .clicked()
-                                {
+                                if small_icon_button(menu_ui, IconKind::Close, "Fechar menu", true).clicked() {
                                     record_ui_diagnostic("menu.popup.closed", menu.title());
                                     self.active_menu = None;
                                 }
