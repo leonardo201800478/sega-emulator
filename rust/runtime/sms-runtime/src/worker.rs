@@ -1341,6 +1341,34 @@ mod tests {
     }
 
     #[test]
+    fn single_instruction_step_advances_scheduler_on_paused_worker() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.set_diagnostics_enabled(true);
+
+        let initial_ticks = worker.machine_time_ticks();
+        assert_eq!(worker.total_instructions(), 0);
+        assert!(!worker.is_running());
+
+        worker.step_instruction().unwrap();
+
+        assert!(!worker.is_running());
+        assert_eq!(worker.total_instructions(), 1);
+        assert!(worker.machine_time_ticks() > initial_ticks);
+    }
+
+    #[test]
+    fn single_instruction_step_is_rejected_while_worker_is_running() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.start().unwrap();
+
+        let result = worker.step_instruction();
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("only while the native worker is paused"));
+        assert!(worker.is_running());
+    }
+
+    #[test]
     fn reset_and_load_rom_restore_power_on_machine_counters() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         worker.step_frame(100_000).unwrap();
