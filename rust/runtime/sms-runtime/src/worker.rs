@@ -323,17 +323,17 @@ impl SmsTemporalWorkerDebugHandle {
 
     /// Resume the machine through the shared worker command queue.
     pub fn start(&self) -> Result<(), String> {
-        self.request_unit(WorkerCommand::Start)
+        self.request_unit(|reply| WorkerCommand::Start(reply))
     }
 
     /// Pause the machine at the worker's supported command boundary.
     pub fn pause(&self) -> Result<(), String> {
-        self.request_unit(WorkerCommand::Pause)
+        self.request_unit(|reply| WorkerCommand::Pause(reply))
     }
 
     /// Execute one complete instruction while the machine is paused.
     pub fn step_instruction(&self) -> Result<(), String> {
-        self.request_unit(WorkerCommand::StepInstruction)
+        self.request_unit(|reply| WorkerCommand::StepInstruction(reply))
     }
 
     /// Add or remove a program-counter breakpoint.
