@@ -13,7 +13,7 @@ use windows::Win32::Foundation::{
     WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, CreateFontW, CreateSolidBrush,
+    BeginPaint, ANTIALIASED_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush,
     DEFAULT_CHARSET, DEFAULT_PITCH, DeleteObject, DrawTextW, DT_LEFT, DT_NOPREFIX, DT_TOP,
     EndPaint, FF_DONTCARE, FillRect, FW_BOLD, HGDIOBJ, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
     SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
@@ -259,7 +259,7 @@ unsafe extern "system" fn hud_window_proc(
                             DEFAULT_CHARSET,
                             OUT_DEFAULT_PRECIS,
                             CLIP_DEFAULT_PRECIS,
-                            CLEARTYPE_QUALITY,
+                            ANTIALIASED_QUALITY,
                             DEFAULT_PITCH | FF_DONTCARE,
                             w!("Segoe UI"),
                         )
