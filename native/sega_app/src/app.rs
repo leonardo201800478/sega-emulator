@@ -776,7 +776,9 @@ impl SegaApp {
             } else {
                 let mut config = LogConfig::default();
                 if std::env::var_os("SEGA_LOG_FILTER").is_none() {
-                    "info,sega::audio::pacing=trace".clone_into(&mut config.filter);
+                    // Menu events are emitted at DEBUG and must be included explicitly.
+                    "info,sega::audio::pacing=trace,sega::ui::menu=debug"
+                        .clone_into(&mut config.filter);
                 }
                 let session = SessionMetadata::current(
                     env!("CARGO_PKG_VERSION"),
