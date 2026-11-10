@@ -226,19 +226,18 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
         // GetLastError: another subsystem may already have registered this name.
         let registration_error = Error::from_thread();
         let mut existing = WNDCLASSW::default();
-        if unsafe {
+        let class_matches = unsafe {
             GetClassInfoW(
                 Some(instance),
                 w!("SegaEmulatorTelemetryHud"),
                 &mut existing,
             )
-        }
-        .is_err()
-            || existing.hInstance != instance
-            || !existing
+            .is_ok()
+        } && existing.hInstance == instance
+            && existing
                 .lpfnWndProc
-                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, hud_window_proc))
-        {
+                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, hud_window_proc));
+        if !class_matches {
             return Err(registration_error);
         }
     }
