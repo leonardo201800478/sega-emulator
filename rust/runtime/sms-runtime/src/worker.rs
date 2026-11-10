@@ -257,6 +257,8 @@ pub struct SmsDebugSnapshot {
     pub hl_alt: u16,
     pub ix: u16,
     pub iy: u16,
+    pub wz: u16,
+    pub instruction_tstates: u32,
     pub i: u8,
     pub r: u8,
     pub iff1: bool,
@@ -271,6 +273,7 @@ pub struct SmsDebugSnapshot {
     pub mapper_banks: [u8; 3],
     pub mapper_control: u8,
     pub memory_control: u8,
+    pub framebuffer_rgb: Vec<u8>,
 }
 
 const DEBUG_MEMORY_READ_LIMIT: usize = 256;
@@ -1107,6 +1110,8 @@ fn handle_command(
                 hl_alt: u16::from_be_bytes([alternate.h, alternate.l]),
                 ix: cpu.ix,
                 iy: cpu.iy,
+                wz: cpu.wz,
+                instruction_tstates: machine.cpu().export_state().instruction_tstates,
                 i: cpu.i,
                 r: cpu.r,
                 iff1: cpu.iff1,
@@ -1121,6 +1126,7 @@ fn handle_command(
                 mapper_banks: machine.selected_mapper_banks(),
                 mapper_control: machine.mapper_control(),
                 memory_control: machine.memory_control(),
+                framebuffer_rgb: machine.framebuffer().to_vec(),
             };
             let _ = reply.send(Ok(snapshot));
         }
