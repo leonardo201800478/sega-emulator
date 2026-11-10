@@ -680,6 +680,7 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
+                                    debugger_window_open: &mut self.debugger_window_open,
                 fps_overlay_enabled: &mut self.fps_overlay_enabled,
                 fps_overlay_size: &mut self.fps_overlay_size,
                 fps_overlay_position: &mut self.fps_overlay_position,
@@ -843,6 +844,7 @@ impl SegaApp {
                                     diagnostics_enabled: self.diagnostics_enabled,
                                     diagnostics_command: &mut actions.diagnostics_command,
                                     diagnostics_error: self.diagnostics_error.as_deref(),
+                                    debugger_window_open: &mut self.debugger_window_open,
                                     fps_overlay_enabled: &mut self.fps_overlay_enabled,
                                     fps_overlay_size: &mut self.fps_overlay_size,
                                     fps_overlay_position: &mut self.fps_overlay_position,
@@ -1534,6 +1536,7 @@ impl Drop for SegaApp {
         // Stop producers before shutting down the observability worker. The
         // viewport owns the SMS and D3D12 workers; they may emit final events
         // while being stopped and joined.
+        if let Err(error) = self.save_ui_settings() { eprintln!("Unable to save UI settings: {error}"); }
         self.native_viewport.shutdown();
 
         // SDL3 is also an owned native resource. Shut it down explicitly while
@@ -1567,6 +1570,11 @@ impl Drop for SegaApp {
 }
 
 impl eframe::App for SegaApp {
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        if let Err(error) = self.save_ui_settings() { eprintln!("Unable to auto-save UI settings: {error}"); }
+    }
+    fn auto_save_interval(&self) -> Duration { Duration::from_secs(5) }
+    fn persist_egui_memory(&self) -> bool { true }
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
         if !self.theme_initialized {
@@ -1601,6 +1609,7 @@ impl eframe::App for SegaApp {
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+        self.render_debugger_window(&context);
         self.render_fps_overlay(&context, viewport_rect);
 
         // The FPS viewport is deferred and repainted independently. Keep the
@@ -2214,6 +2223,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
             state.diagnostics_enabled,
             state.diagnostics_command,
             state.diagnostics_error,
+            state.debugger_window_open,
         ),
     }
 }
@@ -2658,13 +2668,157 @@ fn render_input_controls(
     }
 }
 
+fn parse_debug_address(value: &str) -> Option<u16> {
+    u16::from_str_radix(value.trim().trim_start_matches("0x"), 16).ok()
+}
+
+fn parse_saved_position(value: &str) -> Option<egui::Pos2> {
+    let (x, y) = value.split_once(',')?;
+    let p = egui::pos2(x.parse().ok()?, y.parse().ok()?);
+    (p.x.is_finite() && p.y.is_finite()).then_some(p)
+}
+
+fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
+    let (x, y) = value.split_once(',')?;
+    let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
+    (size.x.is_finite() && size.y.is_finite() && size.x >= 760.0 && size.y >= 560.0).then_some(size)
+}
+
+fn render_debugger_contents(ui: &mut egui::Ui, worker: Option<&SmsTemporalWorker>, state: &mut DebuggerWindowState) {
+    if let Some(worker) = worker {
+        if state.last_refresh.elapsed() >= Duration::from_millis(100) {
+            match worker.debug_snapshot() {
+                Ok(snapshot) => {
+                    state.snapshot = Some(snapshot);
+                    state.status = if worker.is_running() { "Máquina em execução" } else { "Máquina pausada" }.to_owned();
+                }
+                Err(error) => state.status = format!("Falha ao consultar runtime: {error}"),
+            }
+            state.last_refresh = Instant::now();
+        }
+        ui.ctx().request_repaint_after(Duration::from_millis(100));
+    }
+    ui.horizontal_wrapped(|ui| { ui.heading("SMS Debugger"); ui.separator(); ui.label(&state.status); });
+    let Some(worker) = worker else {
+        ui.centered_and_justified(|ui| ui.label("Carregue uma ROM do Master System para habilitar o debugger."));
+        return;
+    };
+    ui.horizontal_wrapped(|ui| {
+        if ui.button(if worker.is_running() { "Pausar" } else { "Executar" }).clicked() {
+            let result = if worker.is_running() { worker.pause() } else { worker.start() };
+            if let Err(error) = result { state.status = format!("Falha ao alterar execução: {error}"); }
+        }
+        if ui.add_enabled(!worker.is_running(), egui::Button::new("Step instruction")).clicked() {
+            match worker.step_instruction() {
+                Ok(()) => {
+                    if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); }
+                    state.status = "Instrução concluída no worker".to_owned();
+                }
+                Err(error) => state.status = format!("Falha no step: {error}"),
+            }
+        }
+        let trace = state.snapshot.as_ref().is_some_and(|snapshot| snapshot.trace_enabled);
+        if ui.button(if trace { "Desativar trace" } else { "Ativar trace" }).clicked() {
+            match worker.set_trace_enabled(!trace) {
+                Ok(()) => if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); },
+                Err(error) => state.status = format!("Falha ao configurar trace: {error}"),
+            }
+        }
+    });
+    if let Some(snapshot) = state.snapshot.as_ref() {
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!("Frame: {}", snapshot.frame_number));
+            ui.label(format!("Machine ticks: {}", snapshot.machine_time_ticks));
+            ui.label(format!("T-states: {}", snapshot.instruction_tstates));
+            ui.label(format!("HALT: {}", snapshot.halted));
+        });
+        egui::CollapsingHeader::new("Z80 — registradores").default_open(true).show(ui, |ui| {
+            egui::Grid::new("sms_debugger_registers").num_columns(4).show(ui, |ui| {
+                for (name, value) in [
+                    ("AF", snapshot.af), ("BC", snapshot.bc), ("DE", snapshot.de), ("HL", snapshot.hl),
+                    ("AF'", snapshot.af_alt), ("BC'", snapshot.bc_alt), ("DE'", snapshot.de_alt), ("HL'", snapshot.hl_alt),
+                    ("IX", snapshot.ix), ("IY", snapshot.iy), ("SP", snapshot.sp), ("PC", snapshot.pc),
+                    ("WZ", snapshot.wz), ("I", u16::from(snapshot.i)), ("R", u16::from(snapshot.r)), ("IM", u16::from(snapshot.interrupt_mode)),
+                ] {
+                    ui.strong(name); ui.monospace(format!("{value:04X}"));
+                    if matches!(name, "HL" | "HL'" | "PC" | "IM") { ui.end_row(); }
+                }
+            });
+            ui.label(format!("IFF1: {} | IFF2: {}", snapshot.iff1, snapshot.iff2));
+        });
+        egui::CollapsingHeader::new("VDP / mapper").default_open(true).show(ui, |ui| {
+            ui.label(format!("VDP status: {:02X} | Scanline: {} | Cycles/line: {}", snapshot.vdp_status, snapshot.vdp_scanline, snapshot.vdp_cycles_into_line));
+            ui.label(format!("Mapper banks: {:02X} / {:02X} / {:02X} | Control: {:02X} | Memory: {:02X}", snapshot.mapper_banks[0], snapshot.mapper_banks[1], snapshot.mapper_banks[2], snapshot.mapper_control, snapshot.memory_control));
+        });
+    }
+    ui.separator();
+    ui.columns(2, |columns| {
+        columns[0].heading("Breakpoints");
+        columns[0].horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut state.breakpoint_input).desired_width(72.0));
+            if ui.button("Adicionar").clicked() {
+                if let Some(address) = parse_debug_address(&state.breakpoint_input) {
+                    if !state.breakpoints.contains(&address) && state.breakpoints.len() < 64 {
+                        match worker.set_breakpoint(address, true) {
+                            Ok(()) => state.breakpoints.push(address),
+                            Err(error) => state.status = format!("Falha no breakpoint: {error}"),
+                        }
+                    }
+                } else { state.status = "Endereço de breakpoint inválido".to_owned(); }
+            }
+        });
+        let mut remove = None;
+        for address in &state.breakpoints {
+            columns[0].horizontal(|ui| { ui.monospace(format!("{address:04X}")); if ui.small_button("Remover").clicked() { remove = Some(*address); } });
+        }
+        if let Some(address) = remove {
+            match worker.set_breakpoint(address, false) {
+                Ok(()) => state.breakpoints.retain(|item| *item != address),
+                Err(error) => state.status = format!("Falha ao remover breakpoint: {error}"),
+            }
+        }
+        columns[1].heading("Inspeção de memória");
+        columns[1].horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut state.memory_address).desired_width(72.0));
+            if ui.button("Ler 64 bytes").clicked() {
+                if let Some(address) = parse_debug_address(&state.memory_address) {
+                    match worker.inspect_memory(address, 64) {
+                        Ok(bytes) => state.memory_bytes = bytes,
+                        Err(error) => state.status = format!("Falha ao ler memória: {error}"),
+                    }
+                } else { state.status = "Endereço de memória inválido".to_owned(); }
+            }
+        });
+        egui::ScrollArea::vertical().max_height(180.0).show(&mut columns[1], |ui| {
+            for (row, bytes) in state.memory_bytes.chunks(16).enumerate() {
+                let address = parse_debug_address(&state.memory_address).unwrap_or_default().wrapping_add(u16::try_from(row * 16).unwrap_or(0));
+                let hex = bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ");
+                let ascii = bytes.iter().map(|byte| if (0x20..=0x7e).contains(byte) { char::from(*byte) } else { '.' }).collect::<String>();
+                ui.monospace(format!("{address:04X}: {hex:<47} {ascii}"));
+            }
+        });
+    });
+    ui.separator();
+    egui::CollapsingHeader::new("Trace do Scheduler / barramento").default_open(false).show(ui, |ui| {
+        if let Some(snapshot) = state.snapshot.as_ref() {
+            ui.label(format!("{} eventos retidos | {} descartados | captura {}", snapshot.trace_events.len(), snapshot.trace_dropped, if snapshot.trace_enabled { "ativa" } else { "inativa" }));
+            egui::ScrollArea::vertical().max_height(220.0).stick_to_bottom(true).show(ui, |ui| {
+                for event in &snapshot.trace_events { ui.monospace(format!("{event:?}")); }
+            });
+        }
+    });
+}
+
 fn render_runtime_status(
     ui: &mut egui::Ui,
     viewport: &NativeViewportState,
     diagnostics_enabled: bool,
     diagnostics_command: &mut Option<bool>,
     diagnostics_error: Option<&str>,
+    debugger_window_open: &mut bool,
 ) {
+    if ui.button("Abrir janela do Debugger").clicked() { *debugger_window_open = true; }
     let mut enabled = diagnostics_enabled;
     if ui
         .checkbox(&mut enabled, "Ativar DEBUG e coleta de dados")
