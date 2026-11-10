@@ -2240,8 +2240,7 @@ fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
                 ui.end_row();
             }
         });
-    if state.pending_key_binding.is_some()
-        && ui.small_button("Cancelar captura de tecla").clicked()
+    if state.pending_key_binding.is_some() && ui.small_button("Cancelar captura de tecla").clicked()
     {
         *state.pending_key_binding = None;
     }
