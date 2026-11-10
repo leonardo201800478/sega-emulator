@@ -215,9 +215,9 @@ impl TopLevelMenu {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 const SMS_HUD_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FpsOverlaySize {
     Small,
     Medium,
