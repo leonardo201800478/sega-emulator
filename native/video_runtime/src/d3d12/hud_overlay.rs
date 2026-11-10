@@ -258,8 +258,38 @@ mod tests {
         hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
             .unwrap();
 
+        let mut client_rect = windows::Win32::Foundation::RECT::default();
+        unsafe {
+            windows::Win32::UI::WindowsAndMessaging::GetClientRect(
+                hud.hwnd,
+                &mut client_rect,
+            )
+            .unwrap();
+        }
+        assert_eq!(client_rect.right - client_rect.left, 160);
+        assert_eq!(client_rect.bottom - client_rect.top, 60);
+
+        hud.set_bounds(12, 12, 240, 90).unwrap();
+        unsafe {
+            windows::Win32::UI::WindowsAndMessaging::GetClientRect(
+                hud.hwnd,
+                &mut client_rect,
+            )
+            .unwrap();
+        }
+        assert_eq!(client_rect.right - client_rect.left, 240);
+        assert_eq!(client_rect.bottom - client_rect.top, 90);
+
         assert!(hud.is_child_of(parent.handle()));
         assert_eq!(hud.composition_contract(), (true, true, true, true, true));
+        assert_eq!(
+            unsafe { super::hud_window_proc(hud.hwnd, super::WM_MOUSEACTIVATE, WPARAM(0), LPARAM(0)) },
+            LRESULT(super::MA_NOACTIVATE as isize)
+        );
+        assert_eq!(
+            unsafe { super::hud_window_proc(hud.hwnd, super::WM_NCHITTEST, WPARAM(0), LPARAM(0)) },
+            LRESULT(super::HTTRANSPARENT as isize)
+        );
 
         let first_child = unsafe {
             GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD)
