@@ -897,7 +897,7 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
-                                    debugger_window_open: self.debugger_window_open.as_ref(),
+                debugger_window_open: self.debugger_window_open.as_ref(),
                 fps_overlay_enabled: &mut self.fps_overlay_enabled,
                 fps_overlay_size: &mut self.fps_overlay_size,
                 fps_overlay_position: &mut self.fps_overlay_position,
