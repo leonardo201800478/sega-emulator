@@ -1117,7 +1117,7 @@ fn handle_command(
                 vdp_scanline: machine.vdp().scanline(),
                 vdp_cycles_into_line: machine.vdp().cycles_into_line(),
                 mapper_banks: machine.selected_mapper_banks(),
-                mapper_control: machine.export_state().bus.memory.mapper_control(),
+                mapper_control: machine.mapper_control(),
                 memory_control: machine.memory_control(),
             };
             let _ = reply.send(Ok(snapshot));
@@ -1471,6 +1471,23 @@ mod tests {
                 .contains("only while the native worker is paused")
         );
         assert!(worker.is_running());
+    }
+
+    #[test]
+    fn debugger_snapshot_and_mapper_reads_are_owned_and_bounded() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let initial_ticks = worker.machine_time_ticks();
+
+        let snapshot = worker.debug_snapshot().unwrap();
+        assert_eq!(snapshot.pc, 0);
+        assert_eq!(snapshot.frame_number, 0);
+        assert_eq!(snapshot.machine_time_ticks, 0);
+        assert_eq!(snapshot.mapper_banks, [0, 1, 2]);
+        assert_eq!(worker.machine_time_ticks(), initial_ticks);
+
+        assert_eq!(worker.inspect_memory(0, 4).unwrap(), [0, 0, 0, 0]);
+        assert!(worker.inspect_memory(0, 257).is_err());
+        assert_eq!(worker.machine_time_ticks(), initial_ticks);
     }
 
     #[test]

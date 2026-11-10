@@ -759,6 +759,11 @@ impl SmsTemporalMachine {
         self.bus.memory().selected_banks()
     }
 
+    /// Return the active mapper control register.
+    pub fn mapper_control(&self) -> u8 {
+        self.bus.memory().mapper_control()
+    }
+
     /// Return the SMS memory-control latch written through I/O port $3E.
     pub fn memory_control(&self) -> u8 {
         self.bus.memory().control_port()
