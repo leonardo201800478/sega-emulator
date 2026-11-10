@@ -196,6 +196,6 @@ mod tests {
             });
         });
 
-        assert!(!output.shapes.is_empty());
+        assert!(output.shapes.len() >= 9);
     }
 }
