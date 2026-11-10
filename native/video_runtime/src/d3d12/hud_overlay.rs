@@ -13,17 +13,20 @@ use windows::Win32::Foundation::{
     WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, CreateSolidBrush, DT_LEFT, DT_NOPREFIX, DT_TOP, DeleteObject, DrawTextW,
-    EndPaint, FillRect, HGDIOBJ, PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT,
+    BeginPaint, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, CreateFontW, CreateSolidBrush,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DeleteObject, DrawTextW, DT_LEFT, DT_NOPREFIX, DT_TOP,
+    EndPaint, FF_DONTCARE, FillRect, FW_BOLD, HGDIOBJ, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
+    SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GWL_STYLE,
-    GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT, HWND_TOP, LWA_COLORKEY,
-    MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
-    SetLayeredWindowAttributes, SetWindowPos, SetWindowTextW, ShowWindow, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
+    CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE,
+    GWL_STYLE, GetClientRect, GetWindowLongPtrW, GetWindowTextW, GWLP_USERDATA, HTTRANSPARENT,
+    HWND_TOP, LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SetLayeredWindowAttributes,
+    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE,
+    SWP_NOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST,
+    WM_PAINT, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+    WS_EX_TRANSPARENT,
 };
 use windows::core::{Error, PCWSTR, Result, w};
 
@@ -36,6 +39,7 @@ pub struct D3d12HudOverlay {
     parent_hwnd: HWND,
     _thread_affinity: PhantomData<Rc<()>>,
     visible: bool,
+    font_size_pixels: i32,
 }
 
 impl D3d12HudOverlay {
@@ -77,6 +81,7 @@ impl D3d12HudOverlay {
             parent_hwnd: parent,
             _thread_affinity: PhantomData,
             visible: false,
+            font_size_pixels: 14,
         };
         overlay.set_bounds(0, 0, 1, 1)?;
         Ok(overlay)
@@ -128,6 +133,28 @@ impl D3d12HudOverlay {
                 SWP_NOACTIVATE,
             )?;
         }
+        Ok(())
+    }
+
+    /// Set the GDI font height in physical pixels for the selected HUD size.
+    pub fn set_font_size_pixels(&mut self, height_pixels: i32) -> Result<()> {
+        if !(8..=48).contains(&height_pixels) {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "HUD font height must be between 8 and 48 physical pixels",
+            ));
+        }
+        if self.font_size_pixels == height_pixels {
+            return Ok(());
+        }
+
+        unsafe {
+            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, isize::try_from(height_pixels).unwrap_or(14));
+            let mut text = [0_u16; 512];
+            let _ = GetWindowTextW(self.hwnd, &mut text);
+            SetWindowTextW(self.hwnd, PCWSTR(text.as_ptr()))?;
+        }
+        self.font_size_pixels = height_pixels;
         Ok(())
     }
 
@@ -211,6 +238,34 @@ unsafe extern "system" fn hud_window_proc(
                 let mut rect = RECT::default();
                 if unsafe { GetClientRect(hwnd, &mut rect) }.is_ok() {
                     let black = unsafe { CreateSolidBrush(COLORREF(0)) };
+                    let font_height = i32::try_from(unsafe {
+                        GetWindowLongPtrW(hwnd, GWLP_USERDATA)
+                    })
+                    .unwrap_or(14)
+                    .clamp(8, 48);
+                    let font = unsafe {
+                        CreateFontW(
+                            -font_height,
+                            0,
+                            0,
+                            0,
+                            FW_BOLD,
+                            0,
+                            0,
+                            0,
+                            DEFAULT_CHARSET,
+                            OUT_DEFAULT_PRECIS,
+                            CLIP_DEFAULT_PRECIS,
+                            CLEARTYPE_QUALITY,
+                            DEFAULT_PITCH | FF_DONTCARE,
+                            w!("Segoe UI"),
+                        )
+                    };
+                    let previous_font = if font.0.is_null() {
+                        None
+                    } else {
+                        Some(unsafe { SelectObject(hdc, HGDIOBJ(font.0)) })
+                    };
                     unsafe {
                         FillRect(hdc, &rect, black);
                         let _ = DeleteObject(HGDIOBJ(black.0));
@@ -232,6 +287,12 @@ unsafe extern "system" fn hud_window_proc(
                                 &mut rect,
                                 DT_LEFT | DT_TOP | DT_NOPREFIX,
                             );
+                        }
+                    }
+                    if let Some(previous_font) = previous_font {
+                        unsafe {
+                            SelectObject(hdc, previous_font);
+                            let _ = DeleteObject(HGDIOBJ(font.0));
                         }
                     }
                 }
