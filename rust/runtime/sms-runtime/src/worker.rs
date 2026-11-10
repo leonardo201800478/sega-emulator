@@ -4,9 +4,11 @@
 //! thread. The host sends only coarse-grained commands; CPU, Scheduler, VDP, PSG,
 //! audio pacing and state transitions remain inside Rust.
 
+#[cfg(test)]
+use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -68,7 +70,10 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
 #[derive(Debug, Default)]
 struct WorkerTelemetry {
     running: AtomicBool,
+    diagnostics_enabled: AtomicBool,
     frame_number: AtomicU64,
+    machine_time_ticks: AtomicU64,
+    machine_clock_hz: AtomicU64,
     total_instructions: AtomicU64,
     audio_underruns: AtomicU64,
     audio_dropped_blocks: AtomicU64,
@@ -88,12 +93,14 @@ struct WorkerTelemetry {
     video_last_published_sequence: AtomicU64,
     video_replaced_frames: AtomicU64,
     runtime_error: Mutex<Option<String>>,
+    #[cfg(test)]
     frame_signal: (Mutex<u64>, Condvar),
 }
 
 impl WorkerTelemetry {
     fn set_frame_number(&self, frame_number: u64) {
         self.frame_number.store(frame_number, Ordering::Release);
+        #[cfg(test)]
         if let Ok(mut observed) = self.frame_signal.0.lock() {
             *observed = frame_number;
             self.frame_signal.1.notify_all();
@@ -118,7 +125,38 @@ impl WorkerTelemetry {
         }
     }
 
+    fn set_diagnostics_enabled(&self, enabled: bool) {
+        self.diagnostics_enabled.store(enabled, Ordering::Release);
+        if !enabled {
+            self.total_instructions.store(0, Ordering::Release);
+            self.video_replaced_frames.store(0, Ordering::Release);
+            self.audio_underruns.store(0, Ordering::Release);
+            self.audio_dropped_blocks.store(0, Ordering::Release);
+            self.audio_sample_rate_hz.store(0, Ordering::Release);
+            self.audio_queue_capacity_frames.store(0, Ordering::Release);
+            self.audio_queue_queued_frames.store(0, Ordering::Release);
+            self.audio_queue_high_water_frames
+                .store(0, Ordering::Release);
+            self.audio_accepted_frames.store(0, Ordering::Release);
+            self.audio_consumed_frames.store(0, Ordering::Release);
+            self.audio_dropped_frames.store(0, Ordering::Release);
+            self.audio_underrun_frames.store(0, Ordering::Release);
+            self.audio_flushed_frames.store(0, Ordering::Release);
+            self.audio_endpoint_starvation_events
+                .store(0, Ordering::Release);
+            self.audio_submission_failed_frames
+                .store(0, Ordering::Release);
+        }
+    }
+
+    fn diagnostics_enabled(&self) -> bool {
+        self.diagnostics_enabled.load(Ordering::Acquire)
+    }
+
     fn set_audio_metrics(&self, metrics: AudioOutputMetrics) {
+        if !self.diagnostics_enabled() {
+            return;
+        }
         self.audio_underruns
             .store(metrics.underrun_events, Ordering::Release);
         self.audio_dropped_blocks
@@ -147,6 +185,12 @@ impl WorkerTelemetry {
             .store(metrics.submission_failed_frames, Ordering::Release);
     }
 
+    fn record_audio_session_metrics(&self, session: &dyn AudioSession) {
+        if self.diagnostics_enabled() {
+            self.set_audio_metrics(session.metrics());
+        }
+    }
+
     fn audio_output_metrics(&self) -> AudioOutputMetrics {
         AudioOutputMetrics {
             sample_rate_hz: self.audio_sample_rate_hz.load(Ordering::Acquire) as u32,
@@ -170,6 +214,7 @@ impl WorkerTelemetry {
     fn reset_machine_counters(&self) {
         self.total_instructions.store(0, Ordering::Release);
         self.set_frame_number(0);
+        self.machine_time_ticks.store(0, Ordering::Release);
         self.set_runtime_error(None);
     }
 }
@@ -208,6 +253,11 @@ impl SmsTemporalWorker {
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
+        if let Ok((_, _, clock_hz)) = sms_temporal_region_profile(&region) {
+            telemetry
+                .machine_clock_hz
+                .store(clock_hz, Ordering::Release);
+        }
         let worker_telemetry = Arc::clone(&telemetry);
         let (commands, receiver) = mpsc::channel();
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
@@ -266,6 +316,11 @@ impl SmsTemporalWorker {
 
     pub fn load_rom(&self, rom: Vec<u8>) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::LoadRom(rom, reply))
+    }
+
+    /// Enable or disable optional diagnostic telemetry without changing emulation.
+    pub fn set_diagnostics_enabled(&self, enabled: bool) {
+        self.telemetry.set_diagnostics_enabled(enabled);
     }
 
     pub fn reset(&self) -> Result<(), String> {
@@ -524,6 +579,16 @@ impl SmsTemporalWorker {
         self.telemetry.frame_number.load(Ordering::Acquire)
     }
 
+    /// Scheduler time in master ticks at the most recently completed worker step.
+    pub fn machine_time_ticks(&self) -> u64 {
+        self.telemetry.machine_time_ticks.load(Ordering::Acquire)
+    }
+
+    /// Configured SMS machine clock in ticks per second for the active region.
+    pub fn machine_clock_hz(&self) -> u64 {
+        self.telemetry.machine_clock_hz.load(Ordering::Acquire)
+    }
+
     pub fn total_instructions(&self) -> u64 {
         self.telemetry.total_instructions.load(Ordering::Acquire)
     }
@@ -586,18 +651,25 @@ fn execute_frame(
     telemetry: &WorkerTelemetry,
 ) -> Result<(usize, Duration, bool), String> {
     let frame_started = Instant::now();
-    let machine_time_start = machine.now().ticks();
-    let step_started = Instant::now();
+    let diagnostics_enabled = telemetry.diagnostics_enabled();
+    let diagnostic_machine_start = diagnostics_enabled.then(|| machine.now().ticks());
+    let diagnostic_step_start = diagnostics_enabled.then(Instant::now);
     let (instructions, breakpoint_hit) = machine
         .step_frame_until(max_instructions, |pc| breakpoints.contains(u32::from(pc)))
         .map_err(|error| error.to_string())?;
-    let step_frame_elapsed = step_started.elapsed();
-    let machine_time_end = machine.now().ticks();
-    let machine_time_delta = machine_time_end.saturating_sub(machine_time_start);
-    telemetry
-        .total_instructions
-        .fetch_add(instructions as u64, Ordering::AcqRel);
+    let step_frame_elapsed =
+        diagnostic_step_start.map_or(Duration::ZERO, |started| started.elapsed());
+    let diagnostic_machine_end = diagnostic_machine_start.map(|_| machine.now().ticks());
+    if diagnostics_enabled {
+        telemetry
+            .total_instructions
+            .fetch_add(instructions as u64, Ordering::AcqRel);
+    }
     telemetry.set_frame_number(machine.frame_number());
+    telemetry.machine_time_ticks.store(
+        u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
+        Ordering::Release,
+    );
 
     *video_sequence = video_sequence
         .checked_add(1)
@@ -620,11 +692,13 @@ fn execute_frame(
                 telemetry
                     .video_last_published_sequence
                     .store(*video_sequence, Ordering::Release);
-                match mailbox.replaced_frames() {
-                    Ok(replaced) => telemetry
-                        .video_replaced_frames
-                        .store(replaced, Ordering::Release),
-                    Err(error) => video_error = Some(error.to_string()),
+                if diagnostics_enabled {
+                    match mailbox.replaced_frames() {
+                        Ok(replaced) => telemetry
+                            .video_replaced_frames
+                            .store(replaced, Ordering::Release),
+                        Err(error) => video_error = Some(error.to_string()),
+                    }
                 }
             }
             Err(error) => video_error = Some(error),
@@ -636,7 +710,7 @@ fn execute_frame(
     }
 
     let samples = machine.drain_audio_samples(None);
-    let audio_submit_started = Instant::now();
+    let diagnostic_audio_start = diagnostics_enabled.then(Instant::now);
     let audio_result = audio_session.as_mut().map(|session| {
         if publish_audio {
             session.process_samples(&samples)
@@ -644,18 +718,19 @@ fn execute_frame(
             session.process_samples_discarding_output(&samples)
         }
     });
-    let audio_submit_elapsed = audio_submit_started.elapsed();
+    let audio_submit_elapsed =
+        diagnostic_audio_start.map_or(Duration::ZERO, |started| started.elapsed());
     match audio_result {
         Some(Ok(())) => {
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
         }
         Some(Err(error)) => {
             if let Some(mut failed_session) = audio_session.take() {
                 // Preserve the backend's terminal counters before close drops
                 // its producer endpoint and makes queue occupancy unavailable.
-                telemetry.set_audio_metrics(failed_session.metrics());
+                telemetry.record_audio_session_metrics(failed_session.as_ref());
                 failed_session.close();
             }
             telemetry.set_audio_error(Some(error));
@@ -670,25 +745,27 @@ fn execute_frame(
     let processing_elapsed = frame_started.elapsed();
     let frame_wait = frame_duration.saturating_sub(processing_elapsed);
 
-    // One TRACE event per completed frame. The tracing subscriber uses a
-    // bounded lossy queue and a dedicated writer thread; no disk I/O or
-    // synchronous diagnostics formatting runs on the machine worker.
-    sega_observability::tracing::trace!(
-        target: "sega::audio::pacing",
-        frame_number = machine.frame_number(),
-        machine_time_start_ticks = machine_time_start,
-        machine_time_end_ticks = machine_time_end,
-        machine_time_delta_ticks = machine_time_delta,
-        instructions,
-        psg_samples = sample_count,
-        step_frame_elapsed_ns = step_frame_elapsed.as_nanos(),
-        audio_submit_elapsed_ns = audio_submit_elapsed.as_nanos(),
-        frame_processing_elapsed_ns = processing_elapsed.as_nanos(),
-        pacing_budget_ns = frame_duration.as_nanos(),
-        pacing_wait_ns = frame_wait.as_nanos(),
-        publish_audio,
-        "SMS frame pacing diagnostic"
-    );
+    // Per-frame timing instrumentation is sampled and emitted only in DEBUG.
+    if let (Some(machine_time_start), Some(machine_time_end)) =
+        (diagnostic_machine_start, diagnostic_machine_end)
+    {
+        sega_observability::tracing::trace!(
+            target: "sega::audio::pacing",
+            frame_number = machine.frame_number(),
+            machine_time_start_ticks = machine_time_start,
+            machine_time_end_ticks = machine_time_end,
+            machine_time_delta_ticks = machine_time_end.saturating_sub(machine_time_start),
+            instructions,
+            psg_samples = sample_count,
+            step_frame_elapsed_ns = step_frame_elapsed.as_nanos(),
+            audio_submit_elapsed_ns = audio_submit_elapsed.as_nanos(),
+            frame_processing_elapsed_ns = processing_elapsed.as_nanos(),
+            pacing_budget_ns = frame_duration.as_nanos(),
+            pacing_wait_ns = frame_wait.as_nanos(),
+            publish_audio,
+            "SMS frame pacing diagnostic"
+        );
+    }
 
     Ok((instructions, frame_wait, breakpoint_hit))
 }
@@ -756,7 +833,9 @@ fn worker_loop(
                         if let Err(error) = session.suspend_and_flush() {
                             telemetry.set_audio_error(Some(error));
                         }
-                        telemetry.set_audio_metrics(session.metrics());
+                        if telemetry.diagnostics_enabled() {
+                            telemetry.set_audio_metrics(session.metrics());
+                        }
                     }
                 }
                 if running && !frame_wait.is_zero() {
@@ -826,7 +905,7 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.resume());
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
             match result {
                 Ok(()) => {
@@ -847,7 +926,7 @@ fn handle_command(
                 .as_mut()
                 .map_or(Ok(()), |session| session.suspend_and_flush());
             if let Some(session) = audio_session.as_ref() {
-                telemetry.set_audio_metrics(session.metrics());
+                telemetry.record_audio_session_metrics(session.as_ref());
             }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
@@ -864,7 +943,7 @@ fn handle_command(
                     Ok(())
                 });
                 if let Some(session) = audio_session.as_ref() {
-                    telemetry.set_audio_metrics(session.metrics());
+                    telemetry.record_audio_session_metrics(session.as_ref());
                 }
                 match result {
                     Ok(()) => {
@@ -894,7 +973,7 @@ fn handle_command(
                             Ok(())
                         });
                     if let Some(session) = audio_session.as_ref() {
-                        telemetry.set_audio_metrics(session.metrics());
+                        telemetry.record_audio_session_metrics(session.as_ref());
                     }
                     match result {
                         Ok(()) => {
@@ -987,7 +1066,7 @@ fn handle_command(
                     };
                     match result {
                         Ok(()) => {
-                            telemetry.set_audio_metrics(session.metrics());
+                            telemetry.record_audio_session_metrics(session.as_ref());
                             *audio_session = Some(session);
                             telemetry.set_audio_error(None);
                             let _ = reply.send(Ok(()));
@@ -1090,8 +1169,42 @@ mod tests {
             submission_failed_frames: 7,
         };
 
+        telemetry.set_diagnostics_enabled(true);
         telemetry.set_audio_metrics(expected);
         assert_eq!(telemetry.audio_output_metrics(), expected);
+    }
+
+    #[test]
+    fn optional_diagnostic_telemetry_is_disabled_by_default() {
+        let telemetry = WorkerTelemetry::default();
+        assert!(!telemetry.diagnostics_enabled());
+        telemetry.set_audio_metrics(AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            underrun_events: 3,
+            ..AudioOutputMetrics::default()
+        });
+        assert_eq!(
+            telemetry.audio_output_metrics(),
+            AudioOutputMetrics::default()
+        );
+    }
+
+    #[test]
+    fn disabling_diagnostics_clears_optional_telemetry_counters() {
+        let telemetry = WorkerTelemetry::default();
+        telemetry.set_diagnostics_enabled(true);
+        telemetry.set_audio_metrics(AudioOutputMetrics {
+            sample_rate_hz: 48_000,
+            underrun_events: 3,
+            ..AudioOutputMetrics::default()
+        });
+        telemetry.total_instructions.store(99, Ordering::Release);
+        telemetry.set_diagnostics_enabled(false);
+        assert_eq!(
+            telemetry.audio_output_metrics(),
+            AudioOutputMetrics::default()
+        );
+        assert_eq!(telemetry.total_instructions.load(Ordering::Acquire), 0);
     }
 
     #[derive(Clone, Default)]

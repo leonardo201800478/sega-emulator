@@ -1,14 +1,17 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
 use sega_input_runtime::{
-    DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
+    ActionBinding, ActionId, ActionState, AxisDirection, DeviceClass, DeviceDescriptor, DeviceId,
+    DeviceState, InputBackend, InputBuffers, InputProfile, PhysicalControl,
     sdl3_backend::Sdl3Backend,
 };
 use sega_observability::{
@@ -28,10 +31,19 @@ const MAX_RECENT_ROMS: usize = 10;
 const MENU_BAR_HEIGHT: f32 = 32.0;
 
 fn record_ui_diagnostic(event: &'static str, details: impl std::fmt::Display) {
-    sega_observability::tracing::debug!(target: "sega::ui::menu", event, details = %details);
+    if current_logging().is_some_and(sega_observability::LoggingHandle::is_enabled) {
+        sega_observability::tracing::debug!(target: "sega::ui::menu", event, details = %details);
+    }
 }
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
+///
+/// The independent flags represent orthogonal UI preferences and lifecycle states;
+/// consolidating them would obscure rather than clarify their ownership.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Independent UI preferences and lifecycle flags are intentionally orthogonal."
+)]
 pub struct SegaApp {
     rom_path: String,
     region: String,
@@ -50,6 +62,12 @@ pub struct SegaApp {
     input_buffers: InputBuffers,
     input_devices: Vec<DeviceDescriptor>,
     selected_gamepad: Option<DeviceId>,
+    keyboard_bindings: KeyboardBindings,
+    pending_key_binding: Option<KeyboardAction>,
+    gamepad_bindings: GamepadBindings,
+    gamepad_profile: InputProfile,
+    pending_gamepad_binding: Option<GamepadAction>,
+    input_mapping_error: Option<String>,
     active_menu: Option<TopLevelMenu>,
     menu_anchor: egui::Pos2,
     menu_popup_size: egui::Vec2,
@@ -57,13 +75,22 @@ pub struct SegaApp {
     native_viewport: NativeViewportState,
     diagnostics_enabled: bool,
     diagnostics_error: Option<String>,
+    fps_overlay_enabled: bool,
+    fps_overlay_was_active: bool,
+    fps_overlay_size: FpsOverlaySize,
+    fps_overlay_position: FpsOverlayPosition,
+    fps_counter: FpsCounter,
+    fps_shared_value: Arc<AtomicU32>,
+    theme_initialized: bool,
 }
 
 impl Default for SegaApp {
     fn default() -> Self {
+        let gamepad_bindings = load_gamepad_bindings();
+        let gamepad_profile = gamepad_bindings.to_profile();
         Self {
             rom_path: String::new(),
-            region: String::new(),
+            region: "usa".to_owned(),
             last_rom_directory: load_last_rom_directory(),
             rom_dialog_requested: false,
             recent_roms: load_recent_roms(),
@@ -79,6 +106,12 @@ impl Default for SegaApp {
             input_buffers: InputBuffers::default(),
             input_devices: Vec::new(),
             selected_gamepad: None,
+            keyboard_bindings: load_keyboard_bindings(),
+            pending_key_binding: None,
+            gamepad_bindings,
+            gamepad_profile,
+            pending_gamepad_binding: None,
+            input_mapping_error: None,
             active_menu: None,
             menu_anchor: egui::Pos2::ZERO,
             menu_popup_size: egui::vec2(360.0, 280.0),
@@ -86,6 +119,13 @@ impl Default for SegaApp {
             native_viewport: NativeViewportState::default(),
             diagnostics_enabled: false,
             diagnostics_error: None,
+            fps_overlay_enabled: true,
+            fps_overlay_was_active: false,
+            fps_overlay_size: FpsOverlaySize::Medium,
+            fps_overlay_position: FpsOverlayPosition::BottomRight,
+            fps_counter: FpsCounter::default(),
+            fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+            theme_initialized: false,
         }
     }
 }
@@ -109,11 +149,13 @@ impl AspectRatioMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TopLevelMenu {
+    System,
     File,
     Video,
     Audio,
+    Controls,
     Options,
-    Diagnostics,
+    Debug,
 }
 
 fn close_menu_if_current(
@@ -129,22 +171,132 @@ fn close_menu_if_current(
 impl TopLevelMenu {
     const fn title(self) -> &'static str {
         match self {
+            Self::System => "Sistema",
             Self::File => "Arquivo",
             Self::Video => "Vídeo",
-            Self::Audio => "Som",
+            Self::Audio => "Áudio",
+            Self::Controls => "Controles",
             Self::Options => "Opções",
-            Self::Diagnostics => "Diagnostics",
+            Self::Debug => "DEBUG",
         }
     }
 
     fn minimum_size(self) -> egui::Vec2 {
         match self {
+            Self::System => egui::vec2(340.0, 500.0),
             Self::File => egui::vec2(420.0, 280.0),
-            Self::Video => egui::vec2(240.0, 150.0),
-            Self::Audio => egui::vec2(300.0, 240.0),
-            Self::Options => egui::vec2(520.0, 480.0),
-            Self::Diagnostics => egui::vec2(640.0, 540.0),
+            Self::Video => egui::vec2(320.0, 220.0),
+            Self::Audio => egui::vec2(340.0, 280.0),
+            Self::Controls => egui::vec2(460.0, 420.0),
+            Self::Options => egui::vec2(440.0, 380.0),
+            Self::Debug => egui::vec2(640.0, 540.0),
         }
+    }
+}
+
+const FPS_SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
+
+#[derive(Debug)]
+struct FpsCounter {
+    last_sequence: u64,
+    last_sample: Instant,
+    fps: f32,
+}
+
+impl Default for FpsCounter {
+    fn default() -> Self {
+        Self {
+            last_sequence: 0,
+            last_sample: Instant::now(),
+            fps: 0.0,
+        }
+    }
+}
+
+impl FpsCounter {
+    fn reset(&mut self, sequence: u64, now: Instant) {
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        self.fps = 0.0;
+    }
+
+    fn update(&mut self, sequence: u64, now: Instant) -> bool {
+        let elapsed = now.saturating_duration_since(self.last_sample);
+        if elapsed < FPS_SAMPLE_INTERVAL {
+            return false;
+        }
+        let frames = u16::try_from(sequence.saturating_sub(self.last_sequence)).unwrap_or(u16::MAX);
+        self.fps = f32::from(frames) / elapsed.as_secs_f32();
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        true
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FpsOverlaySize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl FpsOverlaySize {
+    const fn dimensions(self) -> egui::Vec2 {
+        match self {
+            Self::Small => egui::vec2(88.0, 26.0),
+            Self::Medium => egui::vec2(104.0, 30.0),
+            Self::Large => egui::vec2(128.0, 36.0),
+        }
+    }
+    const fn font_size(self) -> f32 {
+        match self {
+            Self::Small => 14.0,
+            Self::Medium => 18.0,
+            Self::Large => 22.0,
+        }
+    }
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Small => "Pequeno",
+            Self::Medium => "Médio",
+            Self::Large => "Grande",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FpsOverlayPosition {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl FpsOverlayPosition {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::TopLeft => "Superior esquerdo",
+            Self::TopRight => "Superior direito",
+            Self::BottomLeft => "Inferior esquerdo",
+            Self::BottomRight => "Inferior direito",
+        }
+    }
+}
+
+fn fps_overlay_position(
+    root_min: egui::Pos2,
+    viewport: egui::Rect,
+    size: egui::Vec2,
+    anchor: FpsOverlayPosition,
+) -> egui::Pos2 {
+    let margin = egui::vec2(12.0, 12.0);
+    let min = root_min + viewport.min.to_vec2();
+    let max = root_min + viewport.max.to_vec2();
+    match anchor {
+        FpsOverlayPosition::TopLeft => min + margin,
+        FpsOverlayPosition::TopRight => egui::pos2(max.x - size.x - margin.x, min.y + margin.y),
+        FpsOverlayPosition::BottomLeft => egui::pos2(min.x + margin.x, max.y - size.y - margin.y),
+        FpsOverlayPosition::BottomRight => max - size - margin,
     }
 }
 
@@ -287,14 +439,45 @@ impl Drop for NativeViewportState {
     }
 }
 
+/// Reveal the fullscreen menu while the pointer is at the top edge or a menu is open.
+fn should_reveal_fullscreen_menu(
+    fullscreen: bool,
+    menu_open: bool,
+    pointer_y: Option<f32>,
+    root_top: f32,
+) -> bool {
+    !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 88.0)
+}
+
 impl SegaApp {
     /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
-        ui.vertical(|ui| {
-            self.render_header_controls(ui);
-            viewport_rect = self.render_game_area(ui);
-        });
+        egui::Frame::new()
+            .fill(egui::Color32::from_rgb(17, 21, 29))
+            .inner_margin(12.0)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                ui.vertical(|ui| {
+                    let fullscreen = ui
+                        .ctx()
+                        .input(|input| input.viewport().fullscreen.unwrap_or(false));
+                    let root_top = ui.min_rect().top();
+                    let pointer_y = ui
+                        .ctx()
+                        .input(|input| input.pointer.hover_pos().map(|p| p.y));
+                    let reveal_menu = should_reveal_fullscreen_menu(
+                        fullscreen,
+                        self.active_menu.is_some(),
+                        pointer_y,
+                        root_top,
+                    );
+                    if reveal_menu {
+                        self.render_header_controls(ui);
+                    }
+                    viewport_rect = self.render_game_area(ui);
+                });
+            });
         viewport_rect
     }
 
@@ -324,6 +507,11 @@ impl SegaApp {
                 machine_command: &mut command,
                 devices: &self.input_devices,
                 selected_gamepad: &mut self.selected_gamepad,
+                keyboard_bindings: &self.keyboard_bindings,
+                pending_key_binding: &mut self.pending_key_binding,
+                gamepad_bindings: &self.gamepad_bindings,
+                pending_gamepad_binding: &mut self.pending_gamepad_binding,
+                input_mapping_error: self.input_mapping_error.as_deref(),
                 input_error: self
                     .input_backend
                     .as_ref()
@@ -338,6 +526,9 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
+                fps_overlay_enabled: &mut self.fps_overlay_enabled,
+                fps_overlay_size: &mut self.fps_overlay_size,
+                fps_overlay_position: &mut self.fps_overlay_position,
             };
             render_header(ui, &mut header_state);
         }
@@ -376,7 +567,6 @@ impl SegaApp {
         let popup_size = menu_popup_size(menu, self.menu_popup_size, root_bounds);
         let position = menu_popup_position(root_bounds, self.menu_anchor, popup_size);
         let builder = menu_popup_viewport_builder(menu.title(), position, popup_size);
-        record_ui_diagnostic("menu.popup.requested", "");
         let mut actions = MenuPopupActions {
             root_fullscreen: context.input(|input| input.viewport().fullscreen.unwrap_or(false)),
             ..MenuPopupActions::default()
@@ -387,14 +577,7 @@ impl SegaApp {
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
-            |menu_ui, class| {
-                let class_name = match class {
-                    egui::ViewportClass::Root => "root",
-                    egui::ViewportClass::Deferred => "deferred",
-                    egui::ViewportClass::Immediate => "immediate",
-                    egui::ViewportClass::EmbeddedWindow => "embedded_window",
-                };
-                record_ui_diagnostic("menu.viewport.render", class_name);
+            |menu_ui, _class| {
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
@@ -402,10 +585,16 @@ impl SegaApp {
         );
 
         if self.menu_last_focused != Some(popup_focused) {
-            record_ui_diagnostic("menu.viewport.focus_changed", "");
+            record_ui_diagnostic(
+                "menu.viewport.focus_changed",
+                if popup_focused {
+                    "focused"
+                } else {
+                    "unfocused"
+                },
+            );
             self.menu_last_focused = Some(popup_focused);
         }
-        record_ui_diagnostic("menu.popup.measured", "");
         self.menu_popup_size = menu_popup_size(menu, measured_size, root_bounds);
 
         if let Some(path) = self.recent_rom_requested.take() {
@@ -433,7 +622,7 @@ impl SegaApp {
             context.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
         }
         if self.rom_dialog_requested {
-            record_ui_diagnostic("menu.popup.closed", "");
+            record_ui_diagnostic("menu.popup.closed", menu.title());
             self.active_menu = None;
         }
         actions.input_updated
@@ -459,7 +648,7 @@ impl SegaApp {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
                                 if menu_ui.small_button("×").clicked() {
-                                    record_ui_diagnostic("menu.popup.closed", "");
+                                    record_ui_diagnostic("menu.popup.closed", menu.title());
                                     self.active_menu = None;
                                 }
                             });
@@ -486,6 +675,11 @@ impl SegaApp {
                                         .as_ref()
                                         .and_then(|state| state.as_ref().err())
                                         .map(String::as_str),
+                                    keyboard_bindings: &self.keyboard_bindings,
+                                    pending_key_binding: &mut self.pending_key_binding,
+                                    gamepad_bindings: &self.gamepad_bindings,
+                                    pending_gamepad_binding: &mut self.pending_gamepad_binding,
+                                    input_mapping_error: self.input_mapping_error.as_deref(),
                                     active_menu: &mut self.active_menu,
                                     menu_anchor: &mut self.menu_anchor,
                                     menu_popup_size: &mut self.menu_popup_size,
@@ -495,6 +689,9 @@ impl SegaApp {
                                     diagnostics_enabled: self.diagnostics_enabled,
                                     diagnostics_command: &mut actions.diagnostics_command,
                                     diagnostics_error: self.diagnostics_error.as_deref(),
+                                    fps_overlay_enabled: &mut self.fps_overlay_enabled,
+                                    fps_overlay_size: &mut self.fps_overlay_size,
+                                    fps_overlay_position: &mut self.fps_overlay_position,
                                 };
                                 render_menu_content(menu_ui, menu, &mut header_state);
 
@@ -510,7 +707,10 @@ impl SegaApp {
                                     || action_selected
                                     || header_state.diagnostics_command.is_some()
                                 {
-                                    record_ui_diagnostic("menu.popup.close_requested", "");
+                                    record_ui_diagnostic(
+                                        "menu.popup.close_requested",
+                                        menu.title(),
+                                    );
                                 }
                                 (
                                     close_requested || action_selected,
@@ -598,6 +798,14 @@ impl SegaApp {
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                if self.diagnostics_enabled
+                    && let Some(worker) = self.native_viewport.worker.as_ref()
+                {
+                    worker.set_diagnostics_enabled(true);
+                }
+                self.fps_counter.reset(0, Instant::now());
+                self.fps_shared_value
+                    .store(0.0_f32.to_bits(), Ordering::Relaxed);
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
@@ -618,7 +826,9 @@ impl SegaApp {
             } else {
                 let mut config = LogConfig::default();
                 if std::env::var_os("SEGA_LOG_FILTER").is_none() {
-                    "info,sega::audio::pacing=trace".clone_into(&mut config.filter);
+                    // Menu events are emitted at DEBUG and must be included explicitly.
+                    "info,sega::audio::pacing=trace,sega::ui::menu=debug"
+                        .clone_into(&mut config.filter);
                 }
                 let session = SessionMetadata::current(
                     env!("CARGO_PKG_VERSION"),
@@ -637,6 +847,9 @@ impl SegaApp {
                         event = "diagnostics_enabled",
                         session_id = %logging.session().session_id,
                     );
+                    if let Some(worker) = self.native_viewport.worker.as_ref() {
+                        worker.set_diagnostics_enabled(true);
+                    }
                     self.diagnostics_enabled = true;
                     self.diagnostics_error = None;
                 }
@@ -650,6 +863,9 @@ impl SegaApp {
         } else {
             if let Some(logging) = current_logging() {
                 let _ = logging.set_enabled(false);
+            }
+            if let Some(worker) = self.native_viewport.worker.as_ref() {
+                worker.set_diagnostics_enabled(false);
             }
             self.diagnostics_enabled = false;
             self.diagnostics_error = None;
@@ -784,7 +1000,30 @@ impl SegaApp {
         else {
             return (ControllerButtons::default(), false);
         };
-        map_sdl3_gamepad(reading.state)
+
+        if let Some(action) = self.pending_gamepad_binding {
+            let button_count = self
+                .input_devices
+                .iter()
+                .find(|device| Some(device.id) == self.selected_gamepad)
+                .map_or(0, |device| device.capabilities.button_count)
+                .min(u16::try_from(sega_input_runtime::MAX_BUTTONS).unwrap_or(u16::MAX));
+            if let Some(button) =
+                (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
+            {
+                let button =
+                    u8::try_from(button).expect("gamepad button index is bounded by MAX_BUTTONS");
+                self.gamepad_bindings.set(action, button);
+                self.gamepad_profile = self.gamepad_bindings.to_profile();
+                self.pending_gamepad_binding = None;
+                self.input_mapping_error = save_gamepad_bindings(self.gamepad_bindings)
+                    .err()
+                    .map(|error| format!("Falha ao salvar mapeamento do controle: {error}"));
+            }
+            return (ControllerButtons::default(), false);
+        }
+
+        map_sdl3_gamepad(reading.state, &self.gamepad_profile)
     }
 
     /// Poll gameplay input and dispatch edge-triggered emulator shortcuts.
@@ -796,33 +1035,56 @@ impl SegaApp {
         input_context: &egui::Context,
         root_context: &egui::Context,
     ) {
+        if let Some(action) = self.pending_key_binding {
+            let captured = input_context.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        ..
+                    } => Some(*key),
+                    _ => None,
+                })
+            });
+            if let Some(key) = captured {
+                self.keyboard_bindings.set(action, key);
+                self.pending_key_binding = None;
+                self.input_mapping_error = save_keyboard_bindings(&self.keyboard_bindings)
+                    .err()
+                    .map(|error| format!("Falha ao salvar mapeamento do teclado: {error}"));
+            }
+            return;
+        }
+
+        let bindings = self.keyboard_bindings;
         let (keyboard_buttons, keyboard_pause, shortcut, toggle_fullscreen) =
             input_context.input(|input| {
-                let shortcut = if input.key_pressed(egui::Key::F5) {
+                let shortcut = if input.key_pressed(bindings.start) {
                     Some(UiCommand::Start)
-                } else if input.key_pressed(egui::Key::F6) {
+                } else if input.key_pressed(bindings.pause) {
                     Some(UiCommand::Pause)
-                } else if input.key_pressed(egui::Key::F7) {
+                } else if input.key_pressed(bindings.stop) {
                     Some(UiCommand::Stop)
-                } else if input.key_pressed(egui::Key::F8) {
+                } else if input.key_pressed(bindings.reset) {
                     Some(UiCommand::Reset)
-                } else if input.key_pressed(egui::Key::F9) {
+                } else if input.key_pressed(bindings.step_frame) {
                     Some(UiCommand::StepFrame)
                 } else {
                     None
                 };
                 (
                     ControllerButtons {
-                        up: input.key_down(egui::Key::ArrowUp),
-                        down: input.key_down(egui::Key::ArrowDown),
-                        left: input.key_down(egui::Key::ArrowLeft),
-                        right: input.key_down(egui::Key::ArrowRight),
-                        button_1: input.key_down(egui::Key::Z),
-                        button_2: input.key_down(egui::Key::X),
+                        up: input.key_down(bindings.up),
+                        down: input.key_down(bindings.down),
+                        left: input.key_down(bindings.left),
+                        right: input.key_down(bindings.right),
+                        button_1: input.key_down(bindings.button_1),
+                        button_2: input.key_down(bindings.button_2),
                     },
-                    input.key_down(egui::Key::P),
+                    input.key_down(bindings.nmi),
                     shortcut,
-                    input.key_pressed(egui::Key::F11),
+                    input.key_pressed(bindings.toggle_fullscreen),
                 )
             });
         let (gamepad_buttons, gamepad_pause) = self.update_gamepad_input();
@@ -858,6 +1120,88 @@ impl SegaApp {
         }
     }
 
+    fn render_fps_overlay(&mut self, context: &egui::Context, viewport_rect: egui::Rect) {
+        if !self.fps_overlay_enabled || !self.native_viewport.video_attached {
+            self.fps_overlay_was_active = false;
+            return;
+        }
+
+        let now = Instant::now();
+        if !self.fps_overlay_was_active {
+            let presented_sequence = self
+                .native_viewport
+                .session
+                .as_ref()
+                .map_or(0, D3d12MailboxSession::last_presented_sequence);
+            self.fps_counter.reset(presented_sequence, now);
+            self.fps_shared_value
+                .store(0.0_f32.to_bits(), Ordering::Relaxed);
+            self.fps_overlay_was_active = true;
+        } else if now.saturating_duration_since(self.fps_counter.last_sample) >= FPS_SAMPLE_INTERVAL
+        {
+            let presented_sequence = self
+                .native_viewport
+                .session
+                .as_ref()
+                .map_or(0, D3d12MailboxSession::last_presented_sequence);
+            if self.fps_counter.update(presented_sequence, now) {
+                self.fps_shared_value
+                    .store(self.fps_counter.fps.to_bits(), Ordering::Relaxed);
+            }
+        }
+
+        let Some(root_bounds) = context.input(|input| input.viewport().inner_rect) else {
+            return;
+        };
+        let overlay_size = self.fps_overlay_size.dimensions();
+        let position = fps_overlay_position(
+            root_bounds.min,
+            viewport_rect,
+            overlay_size,
+            self.fps_overlay_position,
+        );
+        let fps_value = Arc::clone(&self.fps_shared_value);
+        let font_size = self.fps_overlay_size.font_size();
+        let builder = egui::ViewportBuilder::default()
+            .with_title("Sega Emulator FPS")
+            .with_position(position)
+            .with_inner_size(overlay_size)
+            .with_min_inner_size(overlay_size)
+            .with_max_inner_size(overlay_size)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_taskbar(false)
+            .with_active(false)
+            .with_transparent(true)
+            .with_mouse_passthrough(true)
+            .with_window_level(egui::WindowLevel::AlwaysOnTop)
+            .with_has_shadow(false);
+
+        context.show_viewport_deferred(
+            egui::ViewportId::from_hash_of("sega-fps-overlay"),
+            builder,
+            move |overlay_ui, _class| {
+                egui::Frame::NONE.show(overlay_ui, |overlay_ui| {
+                    overlay_ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |overlay_ui| {
+                            let fps = f32::from_bits(fps_value.load(Ordering::Relaxed));
+                            overlay_ui.label(
+                                egui::RichText::new(format!("{fps:.0} FPS"))
+                                    .color(egui::Color32::from_rgb(170, 255, 170))
+                                    .strong()
+                                    .size(font_size),
+                            );
+                        },
+                    );
+                });
+                overlay_ui
+                    .ctx()
+                    .request_repaint_after(Duration::from_millis(250));
+            },
+        );
+    }
+
     fn update_native_viewport(
         &mut self,
         frame: &eframe::Frame,
@@ -874,7 +1218,6 @@ impl SegaApp {
             return;
         }
 
-        record_ui_diagnostic("native.root.hwnd", "");
         self.update_child_bounds(context, viewport_rect);
         self.poll_native_startup(context);
         self.connect_worker_video(context);
@@ -1072,10 +1415,19 @@ impl Drop for SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
+        if !self.theme_initialized {
+            let mut visuals = egui::Visuals::dark();
+            visuals.panel_fill = egui::Color32::from_rgb(17, 21, 29);
+            visuals.window_fill = egui::Color32::from_rgb(25, 30, 40);
+            context.set_visuals(visuals);
+            self.theme_initialized = true;
+        }
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-            record_ui_diagnostic("menu.popup.closed", "");
+            if let Some(menu) = self.active_menu {
+                record_ui_diagnostic("menu.popup.closed", menu.title());
+            }
             self.active_menu = None;
             self.menu_last_focused = None;
         }
@@ -1095,6 +1447,19 @@ impl eframe::App for SegaApp {
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+        self.render_fps_overlay(&context, viewport_rect);
+
+        // The FPS viewport is deferred and repainted independently. Keep the
+        // root viewport alive while it is enabled so its declaration, position
+        // and sampled presentation counter are refreshed even when a child
+        // menu currently owns keyboard focus.
+        if self.fps_overlay_enabled && self.native_viewport.video_attached {
+            context.request_repaint_after(Duration::from_millis(16));
+        }
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
     }
 }
 
@@ -1262,6 +1627,319 @@ fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     )
 }
 
+const KEYBOARD_BINDINGS_FILE: &str = "keyboard_bindings.txt";
+const GAMEPAD_BINDINGS_FILE: &str = "gamepad_bindings.txt";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyboardAction {
+    Up,
+    Down,
+    Left,
+    Right,
+    Button1,
+    Button2,
+    Nmi,
+    Start,
+    Pause,
+    Stop,
+    Reset,
+    StepFrame,
+    Fullscreen,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct KeyboardBindings {
+    up: egui::Key,
+    down: egui::Key,
+    left: egui::Key,
+    right: egui::Key,
+    button_1: egui::Key,
+    button_2: egui::Key,
+    nmi: egui::Key,
+    start: egui::Key,
+    pause: egui::Key,
+    stop: egui::Key,
+    reset: egui::Key,
+    step_frame: egui::Key,
+    toggle_fullscreen: egui::Key,
+}
+
+impl Default for KeyboardBindings {
+    fn default() -> Self {
+        Self {
+            up: egui::Key::ArrowUp,
+            down: egui::Key::ArrowDown,
+            left: egui::Key::ArrowLeft,
+            right: egui::Key::ArrowRight,
+            button_1: egui::Key::Z,
+            button_2: egui::Key::X,
+            nmi: egui::Key::P,
+            start: egui::Key::F5,
+            pause: egui::Key::F6,
+            stop: egui::Key::F7,
+            reset: egui::Key::F8,
+            step_frame: egui::Key::F9,
+            toggle_fullscreen: egui::Key::F11,
+        }
+    }
+}
+
+impl KeyboardBindings {
+    fn key(self, action: KeyboardAction) -> egui::Key {
+        match action {
+            KeyboardAction::Up => self.up,
+            KeyboardAction::Down => self.down,
+            KeyboardAction::Left => self.left,
+            KeyboardAction::Right => self.right,
+            KeyboardAction::Button1 => self.button_1,
+            KeyboardAction::Button2 => self.button_2,
+            KeyboardAction::Nmi => self.nmi,
+            KeyboardAction::Start => self.start,
+            KeyboardAction::Pause => self.pause,
+            KeyboardAction::Stop => self.stop,
+            KeyboardAction::Reset => self.reset,
+            KeyboardAction::StepFrame => self.step_frame,
+            KeyboardAction::Fullscreen => self.toggle_fullscreen,
+        }
+    }
+
+    fn set(&mut self, action: KeyboardAction, key: egui::Key) {
+        match action {
+            KeyboardAction::Up => self.up = key,
+            KeyboardAction::Down => self.down = key,
+            KeyboardAction::Left => self.left = key,
+            KeyboardAction::Right => self.right = key,
+            KeyboardAction::Button1 => self.button_1 = key,
+            KeyboardAction::Button2 => self.button_2 = key,
+            KeyboardAction::Nmi => self.nmi = key,
+            KeyboardAction::Start => self.start = key,
+            KeyboardAction::Pause => self.pause = key,
+            KeyboardAction::Stop => self.stop = key,
+            KeyboardAction::Reset => self.reset = key,
+            KeyboardAction::StepFrame => self.step_frame = key,
+            KeyboardAction::Fullscreen => self.toggle_fullscreen = key,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GamepadAction {
+    Up,
+    Down,
+    Left,
+    Right,
+    Button1,
+    Button2,
+    Pause,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GamepadBindings {
+    up: u8,
+    down: u8,
+    left: u8,
+    right: u8,
+    button_1: u8,
+    button_2: u8,
+    pause: u8,
+}
+
+impl Default for GamepadBindings {
+    fn default() -> Self {
+        Self {
+            up: 11,
+            down: 12,
+            left: 13,
+            right: 14,
+            button_1: 0,
+            button_2: 1,
+            pause: 6,
+        }
+    }
+}
+
+impl GamepadBindings {
+    fn set(&mut self, action: GamepadAction, button: u8) {
+        match action {
+            GamepadAction::Up => self.up = button,
+            GamepadAction::Down => self.down = button,
+            GamepadAction::Left => self.left = button,
+            GamepadAction::Right => self.right = button,
+            GamepadAction::Button1 => self.button_1 = button,
+            GamepadAction::Button2 => self.button_2 = button,
+            GamepadAction::Pause => self.pause = button,
+        }
+    }
+
+    fn to_profile(self) -> InputProfile {
+        let action = |index| ActionId::new(index).expect("built-in gamepad action is in range");
+        let button = |action_id, index| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Button(index),
+        };
+        let axis = |action_id, index, direction| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Axis {
+                index,
+                direction,
+                threshold: 16_000,
+            },
+        };
+        let hat = |action_id, direction_mask| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Hat {
+                index: 0,
+                direction_mask,
+            },
+        };
+
+        InputProfile::new(
+            vec![
+                button(0, self.up),
+                axis(0, 1, AxisDirection::Negative),
+                hat(0, 0x01),
+                button(1, self.down),
+                axis(1, 1, AxisDirection::Positive),
+                hat(1, 0x04),
+                button(2, self.left),
+                axis(2, 0, AxisDirection::Negative),
+                hat(2, 0x08),
+                button(3, self.right),
+                axis(3, 0, AxisDirection::Positive),
+                hat(3, 0x02),
+                button(4, self.button_1),
+                button(5, self.button_2),
+                button(6, self.pause),
+            ],
+            0,
+        )
+        .expect("built-in gamepad profile is valid")
+    }
+}
+
+fn key_from_name(name: &str) -> Option<egui::Key> {
+    egui::Key::from_name(name)
+}
+
+fn load_keyboard_bindings() -> KeyboardBindings {
+    let mut bindings = KeyboardBindings::default();
+    let Some(directory) = rom_settings_directory() else {
+        return bindings;
+    };
+    let Ok(contents) = fs::read_to_string(directory.join(KEYBOARD_BINDINGS_FILE)) else {
+        return bindings;
+    };
+
+    for line in contents.lines() {
+        let Some((action, key)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(key) = key_from_name(key.trim()) else {
+            continue;
+        };
+        let action = match action.trim() {
+            "up" => KeyboardAction::Up,
+            "down" => KeyboardAction::Down,
+            "left" => KeyboardAction::Left,
+            "right" => KeyboardAction::Right,
+            "button1" => KeyboardAction::Button1,
+            "button2" => KeyboardAction::Button2,
+            "nmi" => KeyboardAction::Nmi,
+            "start" => KeyboardAction::Start,
+            "pause" => KeyboardAction::Pause,
+            "stop" => KeyboardAction::Stop,
+            "reset" => KeyboardAction::Reset,
+            "step_frame" => KeyboardAction::StepFrame,
+            "fullscreen" => KeyboardAction::Fullscreen,
+            _ => continue,
+        };
+        bindings.set(action, key);
+    }
+    bindings
+}
+
+fn save_keyboard_bindings(bindings: &KeyboardBindings) -> std::io::Result<()> {
+    let directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&directory)?;
+    let rows = [
+        ("up", bindings.up),
+        ("down", bindings.down),
+        ("left", bindings.left),
+        ("right", bindings.right),
+        ("button1", bindings.button_1),
+        ("button2", bindings.button_2),
+        ("nmi", bindings.nmi),
+        ("start", bindings.start),
+        ("pause", bindings.pause),
+        ("stop", bindings.stop),
+        ("reset", bindings.reset),
+        ("step_frame", bindings.step_frame),
+        ("fullscreen", bindings.toggle_fullscreen),
+    ];
+    let contents = rows
+        .iter()
+        .map(|(name, key)| format!("{name}={}", key.name()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(directory.join(KEYBOARD_BINDINGS_FILE), contents)
+}
+
+fn load_gamepad_bindings() -> GamepadBindings {
+    let mut bindings = GamepadBindings::default();
+    let Some(directory) = rom_settings_directory() else {
+        return bindings;
+    };
+    let Ok(contents) = fs::read_to_string(directory.join(GAMEPAD_BINDINGS_FILE)) else {
+        return bindings;
+    };
+
+    for line in contents.lines() {
+        let Some((action, value)) = line.split_once('=') else {
+            continue;
+        };
+        let Ok(button) = value.trim().parse::<u8>() else {
+            continue;
+        };
+        if button as usize >= sega_input_runtime::MAX_BUTTONS {
+            continue;
+        }
+        let action = match action.trim() {
+            "up" => GamepadAction::Up,
+            "down" => GamepadAction::Down,
+            "left" => GamepadAction::Left,
+            "right" => GamepadAction::Right,
+            "button1" => GamepadAction::Button1,
+            "button2" => GamepadAction::Button2,
+            "pause" => GamepadAction::Pause,
+            _ => continue,
+        };
+        bindings.set(action, button);
+    }
+    bindings
+}
+
+fn save_gamepad_bindings(bindings: GamepadBindings) -> std::io::Result<()> {
+    let directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&directory)?;
+    let rows = [
+        ("up", bindings.up),
+        ("down", bindings.down),
+        ("left", bindings.left),
+        ("right", bindings.right),
+        ("button1", bindings.button_1),
+        ("button2", bindings.button_2),
+        ("pause", bindings.pause),
+    ];
+    let contents = rows
+        .iter()
+        .map(|(name, button)| format!("{name}={button}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(directory.join(GAMEPAD_BINDINGS_FILE), contents)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FooterMode {
     Visible,
@@ -1291,6 +1969,11 @@ struct HeaderState<'a> {
     devices: &'a [DeviceDescriptor],
     selected_gamepad: &'a mut Option<DeviceId>,
     input_error: Option<&'a str>,
+    keyboard_bindings: &'a KeyboardBindings,
+    pending_key_binding: &'a mut Option<KeyboardAction>,
+    gamepad_bindings: &'a GamepadBindings,
+    pending_gamepad_binding: &'a mut Option<GamepadAction>,
+    input_mapping_error: Option<&'a str>,
     active_menu: &'a mut Option<TopLevelMenu>,
     menu_anchor: &'a mut egui::Pos2,
     menu_popup_size: &'a mut egui::Vec2,
@@ -1300,18 +1983,28 @@ struct HeaderState<'a> {
     diagnostics_enabled: bool,
     diagnostics_command: &'a mut Option<bool>,
     diagnostics_error: Option<&'a str>,
+    fps_overlay_enabled: &'a mut bool,
+    fps_overlay_size: &'a mut FpsOverlaySize,
+    fps_overlay_position: &'a mut FpsOverlayPosition,
 }
 
 /// Render the menu bar. Dropdown content is hosted by a native child viewport.
 fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        ui.small("SEGA · SMS");
+        ui.strong("SEGA EMULATOR");
+        top_level_menu_button(ui, "Sistema", TopLevelMenu::System, state);
         top_level_menu_button(ui, "Arquivo", TopLevelMenu::File, state);
         top_level_menu_button(ui, "Vídeo", TopLevelMenu::Video, state);
-        top_level_menu_button(ui, "Som", TopLevelMenu::Audio, state);
+        top_level_menu_button(ui, "Áudio", TopLevelMenu::Audio, state);
+        top_level_menu_button(ui, "Controles", TopLevelMenu::Controls, state);
         top_level_menu_button(ui, "Opções", TopLevelMenu::Options, state);
-        top_level_menu_button(ui, "Diagnostics", TopLevelMenu::Diagnostics, state);
+        top_level_menu_button(ui, "DEBUG", TopLevelMenu::Debug, state);
+    });
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        render_machine_controls(ui, state.viewport, state.machine_command);
     });
     ui.separator();
 }
@@ -1322,20 +2015,30 @@ fn top_level_menu_button(
     menu: TopLevelMenu,
     state: &mut HeaderState<'_>,
 ) {
-    let response = ui.button(label);
+    let active = *state.active_menu == Some(menu);
+    let fill = if active {
+        egui::Color32::from_rgb(47, 61, 82)
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let response = ui.add(egui::Button::new(label).fill(fill));
     // Use egui's completed click gesture. Toggling on both press and release
     // can open and immediately close the native popup.
     let switch_by_hover =
         state.active_menu.is_some() && *state.active_menu != Some(menu) && response.hovered();
     if response.clicked() || switch_by_hover {
         let previous = *state.active_menu;
-        record_ui_diagnostic("menu.button.activated", "");
+        record_ui_diagnostic("menu.button.activated", menu.title());
         if response.clicked() && previous == Some(menu) {
             *state.active_menu = None;
-            record_ui_diagnostic("menu.state.changed", "");
+            record_ui_diagnostic("menu.state.changed", format!("{} -> closed", menu.title()));
         } else {
             *state.active_menu = Some(menu);
-            record_ui_diagnostic("menu.state.changed", "");
+            let previous_title = previous.map_or("closed", TopLevelMenu::title);
+            record_ui_diagnostic(
+                "menu.state.changed",
+                format!("{previous_title} -> {}", menu.title()),
+            );
             *state.menu_anchor = response.rect.left_bottom();
             *state.menu_popup_size = menu.minimum_size();
         }
@@ -1344,11 +2047,13 @@ fn top_level_menu_button(
 
 fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut HeaderState<'_>) {
     match menu {
+        TopLevelMenu::System => render_system_menu(ui, state),
         TopLevelMenu::File => render_file_menu(ui, state),
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
+        TopLevelMenu::Controls => render_controls_menu(ui, state),
         TopLevelMenu::Options => render_options_menu(ui, state),
-        TopLevelMenu::Diagnostics => render_runtime_status(
+        TopLevelMenu::Debug => render_runtime_status(
             ui,
             state.viewport,
             state.diagnostics_enabled,
@@ -1438,6 +2143,7 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     add_machine_button(
         ui,
         "Fechar ROM",
+        "Fechar a ROM atualmente carregada",
         state.viewport.worker.is_some(),
         UiCommand::CloseMachine,
         state.machine_command,
@@ -1450,7 +2156,41 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 }
 
 /// Render display aspect-ratio selection.
+fn render_system_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.horizontal(|ui| {
+        ui.strong("Sega Master System");
+        ui.colored_label(egui::Color32::LIGHT_GREEN, "ATIVO");
+    });
+    ui.separator();
+    ui.label("Região / padrão de vídeo");
+    ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
+    ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
+    ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
+    ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
+    ui.add_enabled(
+        false,
+        egui::RadioButton::new(false, "Automática (não integrada ao runtime Rust)"),
+    );
+    ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
+    ui.small(
+        "A seleção automática ainda não está integrada nesta interface; não é inferida pelo nome do arquivo.",
+    );
+    ui.separator();
+    ui.label("Outros sistemas");
+    for system in [
+        "SG-1000",
+        "Game Gear",
+        "Mega Drive / Genesis",
+        "Sega CD",
+        "32X",
+    ] {
+        ui.add_enabled(false, egui::Button::new(system));
+    }
+    ui.small("Indisponíveis: o runtime ainda não está conectado a esta interface.");
+}
+
 fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.label("Proporção da imagem");
     ui.radio_value(
         state.aspect_ratio,
         AspectRatioMode::FourThree,
@@ -1458,6 +2198,98 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     );
     ui.radio_value(state.aspect_ratio, AspectRatioMode::OneToOne, "1:1");
     ui.radio_value(state.aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
+}
+
+fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.heading("Dispositivo de entrada");
+    render_input_controls(ui, state.devices, state.selected_gamepad, state.input_error);
+    if let Some(error) = state.input_mapping_error {
+        ui.colored_label(egui::Color32::YELLOW, error);
+    }
+
+    ui.separator();
+    ui.heading("Teclado");
+    egui::Grid::new("sms_keyboard_bindings")
+        .num_columns(3)
+        .show(ui, |ui| {
+            for (action, label) in [
+                (KeyboardAction::Up, "Cima"),
+                (KeyboardAction::Down, "Baixo"),
+                (KeyboardAction::Left, "Esquerda"),
+                (KeyboardAction::Right, "Direita"),
+                (KeyboardAction::Button1, "Botão 1"),
+                (KeyboardAction::Button2, "Botão 2"),
+                (KeyboardAction::Nmi, "Solicitar NMI"),
+                (KeyboardAction::Start, "Iniciar"),
+                (KeyboardAction::Pause, "Pausar"),
+                (KeyboardAction::Stop, "Parar"),
+                (KeyboardAction::Reset, "Reset"),
+                (KeyboardAction::StepFrame, "Avançar quadro"),
+                (KeyboardAction::Fullscreen, "Tela cheia"),
+            ] {
+                ui.label(label);
+                ui.monospace(state.keyboard_bindings.key(action).name());
+                if *state.pending_key_binding == Some(action) {
+                    ui.weak("Pressione uma tecla...");
+                } else if ui.small_button("Remapear").clicked() {
+                    *state.pending_key_binding = Some(action);
+                    *state.pending_gamepad_binding = None;
+                }
+                ui.end_row();
+            }
+        });
+    if state.pending_key_binding.is_some() && ui.small_button("Cancelar captura de tecla").clicked()
+    {
+        *state.pending_key_binding = None;
+    }
+
+    ui.separator();
+    ui.heading("Controle");
+    ui.small("Selecione Remapear e pressione o botão físico desejado. Direcionais analógicos e hats continuam ativos.");
+    egui::Grid::new("sms_gamepad_bindings")
+        .num_columns(3)
+        .show(ui, |ui| {
+            for (action, label, button) in [
+                (GamepadAction::Up, "Cima", state.gamepad_bindings.up),
+                (GamepadAction::Down, "Baixo", state.gamepad_bindings.down),
+                (GamepadAction::Left, "Esquerda", state.gamepad_bindings.left),
+                (
+                    GamepadAction::Right,
+                    "Direita",
+                    state.gamepad_bindings.right,
+                ),
+                (
+                    GamepadAction::Button1,
+                    "Botão 1",
+                    state.gamepad_bindings.button_1,
+                ),
+                (
+                    GamepadAction::Button2,
+                    "Botão 2",
+                    state.gamepad_bindings.button_2,
+                ),
+                (
+                    GamepadAction::Pause,
+                    "Solicitar NMI",
+                    state.gamepad_bindings.pause,
+                ),
+            ] {
+                ui.label(label);
+                ui.monospace(format!("Botão {button}"));
+                if *state.pending_gamepad_binding == Some(action) {
+                    ui.weak("Pressione o botão...");
+                } else if ui.small_button("Remapear").clicked() {
+                    *state.pending_gamepad_binding = Some(action);
+                    *state.pending_key_binding = None;
+                }
+                ui.end_row();
+            }
+        });
+    if state.pending_gamepad_binding.is_some()
+        && ui.small_button("Cancelar captura do controle").clicked()
+    {
+        *state.pending_gamepad_binding = None;
+    }
 }
 
 /// Render audio output configuration without consuming permanent viewport space.
@@ -1498,6 +2330,42 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 
 /// Render less frequently used machine and input options.
 fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
+    ui.strong("Overlay de FPS");
+    ui.checkbox(state.fps_overlay_enabled, "Exibir HUD de FPS");
+    ui.add_enabled_ui(*state.fps_overlay_enabled, |ui| {
+        egui::ComboBox::from_id_salt("fps_overlay_size")
+            .selected_text(state.fps_overlay_size.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
+                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Medium, "Médio");
+                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
+            });
+        egui::ComboBox::from_id_salt("fps_overlay_position")
+            .selected_text(state.fps_overlay_position.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::TopLeft,
+                    "Superior esquerdo",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::TopRight,
+                    "Superior direito",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::BottomLeft,
+                    "Inferior esquerdo",
+                );
+                ui.selectable_value(
+                    state.fps_overlay_position,
+                    FpsOverlayPosition::BottomRight,
+                    "Inferior direito",
+                );
+            });
+    });
+    ui.separator();
     let mut show_status = state.footer_mode.is_visible();
     if ui
         .checkbox(&mut show_status, "Exibir status no rodapé")
@@ -1514,23 +2382,6 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         *state.fullscreen_requested = Some(fullscreen);
     }
     ui.separator();
-    ui.menu_button("Região / padrão de vídeo", |ui| {
-        ui.radio_value(state.region, "usa".to_owned(), "USA / NTSC");
-        ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
-        ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
-        ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
-    });
-    ui.menu_button("Execução", |ui| {
-        render_machine_controls(ui, state.viewport, state.machine_command);
-    });
-    ui.menu_button("Controles", |ui| {
-        render_input_controls(ui, state.devices, state.selected_gamepad, state.input_error);
-        ui.separator();
-        ui.small("Jogo: setas / Z / X · P solicita NMI");
-        ui.small("Execução: F5 iniciar · F6 pausar · F7 parar");
-        ui.small("F8 reset · F9 quadro · F11 tela cheia");
-        ui.small("Gamepad: direcional / analógico · A / B · Start");
-    });
 }
 
 fn render_machine_controls(
@@ -1541,6 +2392,7 @@ fn render_machine_controls(
     let worker = viewport.worker.as_ref();
     add_machine_button(
         ui,
+        "▶",
         "Iniciar",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::Start,
@@ -1548,16 +2400,25 @@ fn render_machine_controls(
     );
     add_machine_button(
         ui,
+        "Ⅱ",
         "Pausar",
         worker.is_some_and(SmsTemporalWorker::is_running),
         UiCommand::Pause,
         command,
     );
-    add_machine_button(ui, "Parar", worker.is_some(), UiCommand::Stop, command);
-    add_machine_button(ui, "Reset", worker.is_some(), UiCommand::Reset, command);
+    add_machine_button(ui, "■", "Parar", worker.is_some(), UiCommand::Stop, command);
     add_machine_button(
         ui,
-        "Avançar quadro",
+        "↻",
+        "Reset",
+        worker.is_some(),
+        UiCommand::Reset,
+        command,
+    );
+    add_machine_button(
+        ui,
+        "⏭",
+        "Avançar um quadro",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::StepFrame,
         command,
@@ -1566,32 +2427,37 @@ fn render_machine_controls(
 
 fn add_machine_button(
     ui: &mut egui::Ui,
-    label: &str,
+    icon: &str,
+    description: &str,
     enabled: bool,
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
-    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+    let button =
+        egui::Button::new(egui::RichText::new(icon).size(18.0)).min_size(egui::vec2(38.0, 30.0));
+    if ui
+        .add_enabled(enabled, button)
+        .on_hover_text(description)
+        .clicked()
+    {
         *command = Some(value);
-        ui.close();
     }
 }
 
-fn map_sdl3_gamepad(state: DeviceState) -> (ControllerButtons, bool) {
-    let up = state.buttons.is_pressed(11) || state.hat(0) & 0x01 != 0 || state.axis(1) < -16_000;
-    let down = state.buttons.is_pressed(12) || state.hat(0) & 0x04 != 0 || state.axis(1) > 16_000;
-    let left = state.buttons.is_pressed(13) || state.hat(0) & 0x08 != 0 || state.axis(0) < -16_000;
-    let right = state.buttons.is_pressed(14) || state.hat(0) & 0x02 != 0 || state.axis(0) > 16_000;
+fn map_sdl3_gamepad(state: DeviceState, profile: &InputProfile) -> (ControllerButtons, bool) {
+    let mut actions = ActionState::default();
+    profile.evaluate(&state, &mut actions);
+    let is_active = |index| ActionId::new(index).is_some_and(|action| actions.is_active(action));
     (
         ControllerButtons {
-            up,
-            down,
-            left,
-            right,
-            button_1: state.buttons.is_pressed(0),
-            button_2: state.buttons.is_pressed(1),
+            up: is_active(0),
+            down: is_active(1),
+            left: is_active(2),
+            right: is_active(3),
+            button_1: is_active(4),
+            button_2: is_active(5),
         },
-        state.buttons.is_pressed(6),
+        is_active(6),
     )
 }
 
@@ -1646,16 +2512,16 @@ fn render_runtime_status(
 ) {
     let mut enabled = diagnostics_enabled;
     if ui
-        .checkbox(&mut enabled, "Ativar coleta de diagnóstico")
-        .on_hover_text("Desligado por padrão. A coleta usa o writer assíncrono compartilhado.")
+        .checkbox(&mut enabled, "Ativar DEBUG e coleta de dados")
+        .on_hover_text("Desativado por padrão. Habilita logs e métricas diagnósticas opcionais.")
         .changed()
     {
         *diagnostics_command = Some(enabled);
     }
     ui.label(if diagnostics_enabled {
-        "Coleta ativa — gravação assíncrona"
+        "DEBUG ATIVO — coleta diagnóstica habilitada"
     } else {
-        "Coleta desativada — nenhum diagnóstico gravado"
+        "DEBUG DESATIVADO — logs e métricas opcionais suspensos"
     });
     if let Some(error) = diagnostics_error {
         ui.colored_label(egui::Color32::RED, error);
@@ -1663,7 +2529,11 @@ fn render_runtime_status(
     ui.separator();
     ui.label(format!("Estado: {}", viewport.status()));
     if let Some(worker) = viewport.worker.as_ref() {
-        render_runtime_telemetry(ui, worker);
+        if diagnostics_enabled {
+            render_runtime_telemetry(ui, worker);
+        } else {
+            ui.weak("As métricas detalhadas não são coletadas enquanto DEBUG estiver desligado.");
+        }
         render_output_errors(ui, worker);
     }
 }
@@ -1896,17 +2766,125 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::SegaApp;
+    use super::{FpsCounter, FpsOverlayPosition, FpsOverlaySize, SegaApp};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn fullscreen_menu_is_hidden_until_pointer_reaches_top_edge() {
+        assert!(!super::should_reveal_fullscreen_menu(
+            true,
+            false,
+            Some(120.0),
+            0.0
+        ));
+        assert!(super::should_reveal_fullscreen_menu(
+            true,
+            false,
+            Some(40.0),
+            0.0
+        ));
+        assert!(super::should_reveal_fullscreen_menu(true, true, None, 0.0));
+        assert!(super::should_reveal_fullscreen_menu(
+            false, false, None, 0.0
+        ));
+    }
+
+    #[test]
+    fn keyboard_bindings_default_to_documented_shortcuts() {
+        let bindings = super::KeyboardBindings::default();
+        assert_eq!(bindings.key(super::KeyboardAction::Up), egui::Key::ArrowUp);
+        assert_eq!(bindings.key(super::KeyboardAction::Button1), egui::Key::Z);
+        assert_eq!(
+            bindings.key(super::KeyboardAction::Fullscreen),
+            egui::Key::F11
+        );
+        assert_eq!(super::key_from_name("F9"), Some(egui::Key::F9));
+        assert_eq!(super::key_from_name("not-a-key"), None);
+        for key in egui::Key::ALL {
+            assert_eq!(super::key_from_name(key.name()), Some(*key));
+        }
+    }
+
+    #[test]
+    fn gamepad_bindings_are_used_for_physical_button_mapping() {
+        let mut state = DeviceState::default();
+        state.buttons.set(4, true).unwrap();
+        let mut bindings = super::GamepadBindings::default();
+        bindings.set(super::GamepadAction::Button1, 4);
+        let profile = bindings.to_profile();
+        let (mapped, _) = super::map_sdl3_gamepad(state, &profile);
+        assert!(mapped.button_1);
+        assert!(!mapped.button_2);
+    }
 
     #[test]
     fn diagnostics_collection_is_opt_in_by_default() {
         let app = SegaApp::default();
         assert!(!app.diagnostics_enabled);
         assert!(app.diagnostics_error.is_none());
+        assert_eq!(app.region, "usa");
+        assert!(app.fps_overlay_enabled);
+        assert_eq!(app.fps_overlay_size, FpsOverlaySize::Medium);
+        assert_eq!(app.fps_overlay_position, FpsOverlayPosition::BottomRight);
+    }
+
+    #[test]
+    fn fps_counter_ignores_short_sampling_windows() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(10, now);
+        assert!(!counter.update(20, now + Duration::from_millis(250)));
+        assert_eq!(counter.fps, 0.0);
+    }
+
+    #[test]
+    fn fps_counter_uses_presented_frame_delta() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, now);
+        assert!(counter.update(160, now + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_counter_restarts_from_the_presented_sequence_when_overlay_is_reenabled() {
+        let hidden_since = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, hidden_since);
+
+        let reenabled_at = hidden_since + Duration::from_secs(30);
+        counter.reset(1_900, reenabled_at);
+        assert!(counter.update(1_960, reenabled_at + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_overlay_sizes_are_monotonic() {
+        assert!(FpsOverlaySize::Small.dimensions().x < FpsOverlaySize::Medium.dimensions().x);
+        assert!(FpsOverlaySize::Medium.dimensions().x < FpsOverlaySize::Large.dimensions().x);
+    }
+
+    #[test]
+    fn fps_overlay_positions_stay_inside_each_viewport_corner() {
+        let root = egui::pos2(100.0, 50.0);
+        let viewport = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
+        let size = FpsOverlaySize::Medium.dimensions();
+        for anchor in [
+            FpsOverlayPosition::TopLeft,
+            FpsOverlayPosition::TopRight,
+            FpsOverlayPosition::BottomLeft,
+            FpsOverlayPosition::BottomRight,
+        ] {
+            let point = super::fps_overlay_position(root, viewport, size, anchor);
+            assert!(point.x >= root.x + viewport.left() + 12.0);
+            assert!(point.y >= root.y + viewport.top() + 12.0);
+            assert!(point.x + size.x <= root.x + viewport.right() - 12.0);
+            assert!(point.y + size.y <= root.y + viewport.bottom() - 12.0);
+        }
     }
 
     #[test]
@@ -2039,7 +3017,8 @@ mod tests {
             .unwrap();
         state.set_hat(0, 0x01).unwrap();
 
-        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        let profile = super::GamepadBindings::default().to_profile();
+        let (buttons, pause) = super::map_sdl3_gamepad(state, &profile);
         assert!(buttons.up);
         assert!(buttons.left);
         assert!(buttons.button_1);
@@ -2053,7 +3032,8 @@ mod tests {
         state.set_axis(0, 20_000, AxisSemantic::LeftStickX).unwrap();
         state.set_axis(1, 20_000, AxisSemantic::LeftStickY).unwrap();
 
-        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        let profile = super::GamepadBindings::default().to_profile();
+        let (buttons, pause) = super::map_sdl3_gamepad(state, &profile);
         assert!(buttons.right);
         assert!(buttons.down);
         assert!(!buttons.button_1);
