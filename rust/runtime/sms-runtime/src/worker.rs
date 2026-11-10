@@ -1632,6 +1632,9 @@ mod tests {
 
     #[test]
     fn cloneable_debug_handle_controls_the_same_worker_instance() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<SmsTemporalWorkerDebugHandle>();
+
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let handle = worker.debug_handle();
 
