@@ -535,7 +535,9 @@ impl SegaApp {
                 .take(64)
                 .collect();
         }
-        if let Some(enabled) = value("debugger_trace_enabled").and_then(|value| value.parse().ok()) {
+        if let Some(enabled) = value("debugger_trace_enabled")
+            .and_then(|value| value.parse().ok())
+        {
             self.debugger_window.trace_capture_enabled = enabled;
         }
         if let Some(region) =
@@ -601,10 +603,14 @@ impl SegaApp {
         if let Some(size) = value("main_window_size").and_then(parse_saved_root_size) {
             self.main_window_size = Some(size);
         }
-        if let Some(maximized) = value("main_window_maximized").and_then(|value| value.parse().ok()) {
+        if let Some(maximized) = value("main_window_maximized")
+            .and_then(|value| value.parse().ok())
+        {
             self.main_window_maximized = maximized;
         }
-        if let Some(fullscreen) = value("main_window_fullscreen").and_then(|value| value.parse().ok()) {
+        if let Some(fullscreen) = value("main_window_fullscreen")
+            .and_then(|value| value.parse().ok())
+        {
             self.main_window_fullscreen = fullscreen;
         }
         if let Some(open) = value("debugger_open").and_then(|value| value.parse().ok()) {
@@ -1144,13 +1150,17 @@ impl SegaApp {
                 if let Some(worker) = self.native_viewport.worker.as_ref() {
                     for address in &self.debugger_window.breakpoints {
                         if let Err(error) = worker.set_breakpoint(*address, true) {
-                            self.native_viewport.error = Some(format!("Falha ao restaurar breakpoint 0x{address:04X}: {error}"));
+                            self.native_viewport.error = Some(format!(
+                                "Falha ao restaurar breakpoint 0x{address:04X}: {error}"
+                            ));
                             break;
                         }
                     }
                     if self.debugger_window.trace_capture_enabled {
                         if let Err(error) = worker.set_trace_enabled(true) {
-                            self.native_viewport.error = Some(format!("Falha ao restaurar trace do debugger: {error}"));
+                            self.native_viewport.error = Some(format!(
+                                "Falha ao restaurar trace do debugger: {error}"
+                            ));
                         }
                     }
                 }
@@ -2877,13 +2887,21 @@ fn parse_saved_position(value: &str) -> Option<egui::Pos2> {
 fn parse_saved_root_size(value: &str) -> Option<egui::Vec2> {
     let (x, y) = value.split_once(',')?;
     let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
-    (size.x.is_finite() && size.y.is_finite() && size.x >= 1024.0 && size.y >= 720.0).then_some(size)
+    (size.x.is_finite()
+        && size.y.is_finite()
+        && size.x >= 1024.0
+        && size.y >= 720.0)
+        .then_some(size)
 }
 
 fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
     let (x, y) = value.split_once(',')?;
     let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
-    (size.x.is_finite() && size.y.is_finite() && size.x >= 760.0 && size.y >= 560.0).then_some(size)
+    (size.x.is_finite()
+        && size.y.is_finite()
+        && size.x >= 760.0
+        && size.y >= 560.0)
+        .then_some(size)
 }
 
 fn render_debugger_contents(
@@ -3215,7 +3233,9 @@ fn render_runtime_status(
     diagnostics_error: Option<&str>,
     debugger_window_open: &mut bool,
 ) {
-    if ui.button("Abrir janela do Debugger").clicked() { *debugger_window_open = true; }
+    if ui.button("Abrir janela do Debugger").clicked() {
+        *debugger_window_open = true;
+    }
     let mut enabled = diagnostics_enabled;
     if ui
         .checkbox(&mut enabled, "Ativar DEBUG e coleta de dados")
