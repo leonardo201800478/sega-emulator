@@ -254,7 +254,7 @@ unsafe extern "system" fn hud_window_proc(
                             0,
                             0,
                             0,
-                            FW_BOLD.0,
+                            i32::try_from(FW_BOLD.0).unwrap_or(700),
                             0,
                             0,
                             0,
