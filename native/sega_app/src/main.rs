@@ -5,11 +5,18 @@
 
 #[cfg(windows)]
 fn main() -> eframe::Result {
+    let persistence_path = std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .map(|directory| directory.join("Sega Emulator"));
+    if let Some(directory) = persistence_path.as_ref() {
+        std::fs::create_dir_all(directory).map_err(eframe::Error::AppCreation)?;
+    }
     let options = eframe::NativeOptions {
+        persistence_path,
+        persist_window: true,
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([1024.0, 720.0])
-            .with_maximized(true),
+            .with_min_inner_size([1024.0, 720.0]),
         ..Default::default()
     };
 
