@@ -425,7 +425,17 @@ impl Drop for NativeViewportState {
 }
 
 impl SegaApp {
-    /// Render the complete shell in the root window for native and headless use.
+    /// Reveal the fullscreen menu while the pointer is at the top edge or a menu is open.
+fn should_reveal_fullscreen_menu(
+    fullscreen: bool,
+    menu_open: bool,
+    pointer_y: Option<f32>,
+    root_top: f32,
+) -> bool {
+    !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 56.0)
+}
+
+/// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
         egui::Frame::new()
@@ -434,7 +444,20 @@ impl SegaApp {
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                 ui.vertical(|ui| {
-                    self.render_header_controls(ui);
+                    let fullscreen = ui
+                        .ctx()
+                        .input(|input| input.viewport().fullscreen.unwrap_or(false));
+                    let root_top = ui.min_rect().top();
+                    let pointer_y = ui.ctx().input(|input| input.pointer.hover_pos().map(|p| p.y));
+                    let reveal_menu = should_reveal_fullscreen_menu(
+                        fullscreen,
+                        self.active_menu.is_some(),
+                        pointer_y,
+                        root_top,
+                    );
+                    if reveal_menu {
+                        self.render_header_controls(ui);
+                    }
                     viewport_rect = self.render_game_area(ui);
                 });
             });
@@ -1078,6 +1101,7 @@ impl SegaApp {
             .with_active(false)
             .with_transparent(true)
             .with_mouse_passthrough(true)
+            .with_window_level(egui::WindowLevel::AlwaysOnTop)
             .with_has_shadow(false);
 
         context.show_viewport_deferred(
@@ -1351,6 +1375,14 @@ impl eframe::App for SegaApp {
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
         self.render_fps_overlay(&context, viewport_rect);
+
+        // The FPS viewport is deferred and repainted independently. Keep the
+        // root viewport alive while it is enabled so its declaration, position
+        // and sampled presentation counter are refreshed even when a child
+        // menu currently owns keyboard focus.
+        if self.fps_overlay_enabled && self.native_viewport.video_attached {
+            context.request_repaint_after(Duration::from_millis(16));
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -1577,6 +1609,11 @@ fn render_header(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         top_level_menu_button(ui, "Controles", TopLevelMenu::Controls, state);
         top_level_menu_button(ui, "Opções", TopLevelMenu::Options, state);
         top_level_menu_button(ui, "DEBUG", TopLevelMenu::Debug, state);
+    });
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        render_machine_controls(ui, state.viewport, state.machine_command);
     });
     ui.separator();
 }
@@ -1892,9 +1929,6 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         *state.fullscreen_requested = Some(fullscreen);
     }
     ui.separator();
-    ui.menu_button("Controles de execução", |ui| {
-        render_machine_controls(ui, state.viewport, state.machine_command);
-    });
 }
 
 fn render_machine_controls(
@@ -1905,6 +1939,7 @@ fn render_machine_controls(
     let worker = viewport.worker.as_ref();
     add_machine_button(
         ui,
+        "▶",
         "Iniciar",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::Start,
@@ -1912,16 +1947,18 @@ fn render_machine_controls(
     );
     add_machine_button(
         ui,
+        "Ⅱ",
         "Pausar",
         worker.is_some_and(SmsTemporalWorker::is_running),
         UiCommand::Pause,
         command,
     );
-    add_machine_button(ui, "Parar", worker.is_some(), UiCommand::Stop, command);
-    add_machine_button(ui, "Reset", worker.is_some(), UiCommand::Reset, command);
+    add_machine_button(ui, "■", "Parar", worker.is_some(), UiCommand::Stop, command);
+    add_machine_button(ui, "↻", "Reset", worker.is_some(), UiCommand::Reset, command);
     add_machine_button(
         ui,
-        "Avançar quadro",
+        "⏭",
+        "Avançar um quadro",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::StepFrame,
         command,
@@ -1930,14 +1967,17 @@ fn render_machine_controls(
 
 fn add_machine_button(
     ui: &mut egui::Ui,
-    label: &str,
+    icon: &str,
+    description: &str,
     enabled: bool,
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
-    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+    let button = egui::Button::new(egui::RichText::new(icon).size(18.0))
+        .min_size(egui::vec2(38.0, 30.0))
+        .on_hover_text(description);
+    if ui.add_enabled(enabled, button).clicked() {
         *command = Some(value);
-        ui.close();
     }
 }
 
@@ -2270,6 +2310,22 @@ mod tests {
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn fullscreen_menu_is_hidden_until_pointer_reaches_top_edge() {
+        assert!(!super::should_reveal_fullscreen_menu(
+            true, false, Some(120.0), 0.0
+        ));
+        assert!(super::should_reveal_fullscreen_menu(
+            true, false, Some(40.0), 0.0
+        ));
+        assert!(super::should_reveal_fullscreen_menu(
+            true, true, None, 0.0
+        ));
+        assert!(super::should_reveal_fullscreen_menu(
+            false, false, None, 0.0
+        ));
+    }
 
     #[test]
     fn diagnostics_collection_is_opt_in_by_default() {
