@@ -393,15 +393,17 @@ impl SmsTemporalWorker {
         self.commands
             .send(WorkerCommand::DebugSnapshot(reply_sender))
             .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not return a debug snapshot: {error}"))?
+        reply_receiver.recv().map_err(|error| {
+            format!("SMS machine worker did not return a debug snapshot: {error}")
+        })?
     }
 
     /// Read at most 256 bytes through the active mapper without advancing time.
     pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
         if length > DEBUG_MEMORY_READ_LIMIT {
-            return Err(format!("memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"));
+            return Err(format!(
+                "memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"
+            ));
         }
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
         self.commands
