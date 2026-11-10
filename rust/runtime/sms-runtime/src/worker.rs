@@ -254,7 +254,9 @@ impl SmsTemporalWorker {
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
         if let Ok((_, _, clock_hz)) = sms_temporal_region_profile(&region) {
-            telemetry.machine_clock_hz.store(clock_hz, Ordering::Release);
+            telemetry
+                .machine_clock_hz
+                .store(clock_hz, Ordering::Release);
         }
         let worker_telemetry = Arc::clone(&telemetry);
         let (commands, receiver) = mpsc::channel();
@@ -666,7 +668,10 @@ fn execute_frame(
     telemetry.set_frame_number(machine.frame_number());
     telemetry
         .machine_time_ticks
-        .store(machine.now().ticks(), Ordering::Release);
+        .store(
+            u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
+            Ordering::Release,
+        );
 
     *video_sequence = video_sequence
         .checked_add(1)
