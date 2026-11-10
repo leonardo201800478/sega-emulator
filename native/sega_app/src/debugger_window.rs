@@ -42,7 +42,10 @@ impl Default for DebuggerWindowState {
 
 pub(crate) fn parse_debug_address(value: &str) -> Option<u16> {
     u16::from_str_radix(
-        value.trim().trim_start_matches("0x").trim_start_matches("0X"),
+        value
+            .trim()
+            .trim_start_matches("0x")
+            .trim_start_matches("0X"),
         16,
     )
     .ok()
@@ -57,21 +60,14 @@ pub(crate) fn parse_saved_position(value: &str) -> Option<egui::Pos2> {
 pub(crate) fn parse_saved_root_size(value: &str) -> Option<egui::Vec2> {
     let (x, y) = value.split_once(',')?;
     let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
-    (size.x.is_finite()
-        && size.y.is_finite()
-        && size.x >= 1024.0
-        && size.y >= 720.0)
+    (size.x.is_finite() && size.y.is_finite() && size.x >= 1024.0 && size.y >= 720.0)
         .then_some(size)
 }
 
 pub(crate) fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
     let (x, y) = value.split_once(',')?;
     let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
-    (size.x.is_finite()
-        && size.y.is_finite()
-        && size.x >= 760.0
-        && size.y >= 560.0)
-        .then_some(size)
+    (size.x.is_finite() && size.y.is_finite() && size.x >= 760.0 && size.y >= 560.0).then_some(size)
 }
 
 pub(crate) fn render_debugger_contents(
@@ -160,10 +156,7 @@ fn render_debugger_toolbar(
         }
 
         if ui
-            .add_enabled(
-                !worker.is_running(),
-                egui::Button::new("Step instruction"),
-            )
+            .add_enabled(!worker.is_running(), egui::Button::new("Step instruction"))
             .clicked()
         {
             match worker.step_instruction() {
@@ -235,10 +228,7 @@ fn render_debugger_registers(ui: &mut egui::Ui, snapshot: &SmsDebugSnapshot) {
                         }
                     }
                 });
-            ui.label(format!(
-                "IFF1: {} | IFF2: {}",
-                snapshot.iff1, snapshot.iff2
-            ));
+            ui.label(format!("IFF1: {} | IFF2: {}", snapshot.iff1, snapshot.iff2));
         });
 }
 
@@ -305,7 +295,10 @@ fn render_debugger_breakpoints(
     }
 
     if ui
-        .add_enabled(!state.breakpoints.is_empty(), egui::Button::new("Limpar todos"))
+        .add_enabled(
+            !state.breakpoints.is_empty(),
+            egui::Button::new("Limpar todos"),
+        )
         .clicked()
     {
         for address in state.breakpoints.clone() {
