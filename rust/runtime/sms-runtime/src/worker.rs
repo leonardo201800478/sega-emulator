@@ -295,7 +295,87 @@ pub struct SmsTemporalWorker {
     video_session: Mutex<Option<D3d12MailboxSession>>,
 }
 
+/// Cloneable, lightweight command handle for debugger viewports.
+#[derive(Clone)]
+pub struct SmsTemporalWorkerDebugHandle {
+    commands: Sender<WorkerCommand>,
+    telemetry: Arc<WorkerTelemetry>,
+}
+
+impl SmsTemporalWorkerDebugHandle {
+    fn request_unit(
+        &self,
+        command: impl FnOnce(SyncSender<Result<(), String>>) -> WorkerCommand,
+    ) -> Result<(), String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(command(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not acknowledge command: {error}"))?
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.telemetry.running.load(Ordering::Acquire)
+    }
+
+    pub fn start(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::Start)
+    }
+
+    pub fn pause(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::Pause)
+    }
+
+    pub fn step_instruction(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::StepInstruction)
+    }
+
+    pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
+    }
+
+    pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
+    }
+
+    pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::DebugSnapshot(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return a debug snapshot: {error}"))?
+    }
+
+    pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
+        if length > DEBUG_MEMORY_READ_LIMIT {
+            return Err(format!(
+                "memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"
+            ));
+        }
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
+    }
+}
+
+
 impl SmsTemporalWorker {
+    /// Create a cloneable debugger client without transferring machine ownership.
+    pub fn debug_handle(&self) -> SmsTemporalWorkerDebugHandle {
+        SmsTemporalWorkerDebugHandle {
+            commands: self.commands.clone(),
+            telemetry: Arc::clone(&self.telemetry),
+        }
+    }
+
     /// Start the native worker and wait until the first machine is constructed.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
         let region = region.to_owned();
