@@ -506,12 +506,19 @@ fn should_reveal_fullscreen_menu(
 impl SegaApp {
     /// Restore the user's UI preferences from the per-user settings file.
     fn restore_ui_settings(&mut self) {
-        let Some(directory) = rom_settings_directory() else { return; };
-        let Ok(contents) = fs::read_to_string(directory.join(UI_SETTINGS_FILE)) else { return; };
-        let value = |key: &str| contents.lines().find_map(|line| {
-            let (candidate, value) = line.split_once('=')?;
-            (candidate == key).then_some(value)
-        });
+        let Some(directory) = rom_settings_directory() else {
+            return;
+        };
+        let Ok(contents) = fs::read_to_string(directory.join(UI_SETTINGS_FILE)) else {
+            return;
+        };
+        let value = |key: &str| {
+            contents.lines().find_map(|line| {
+                let (candidate, value) = line.split_once('=')?;
+                (candidate == key).then_some(value)
+            })
+        };
+
         if let Some(rom_path) = value("rom_path") {
             self.rom_path = rom_path.to_owned();
         }
@@ -522,26 +529,47 @@ impl SegaApp {
             self.debugger_window.breakpoint_input = breakpoint_input.to_owned();
         }
         if let Some(breakpoints) = value("debugger_breakpoints") {
-            self.debugger_window.breakpoints = breakpoints.split(',')
-                .filter_map(parse_debug_address).take(64).collect();
+            self.debugger_window.breakpoints = breakpoints
+                .split(',')
+                .filter_map(parse_debug_address)
+                .take(64)
+                .collect();
         }
         if let Some(enabled) = value("debugger_trace_enabled").and_then(|value| value.parse().ok()) {
             self.debugger_window.trace_capture_enabled = enabled;
         }
-        if let Some(region) = value("region").filter(|value| matches!(*value, "usa" | "europe" | "japan")) {
+        if let Some(region) =
+            value("region").filter(|value| matches!(*value, "usa" | "europe" | "japan"))
+        {
             self.region = region.to_owned();
         }
         if let Some(mode) = value("aspect_ratio") {
-            self.aspect_ratio = match mode { "1:1" => AspectRatioMode::OneToOne, "16:9" => AspectRatioMode::SixteenNine, _ => AspectRatioMode::FourThree };
+            self.aspect_ratio = match mode {
+                "1:1" => AspectRatioMode::OneToOne,
+                "16:9" => AspectRatioMode::SixteenNine,
+                _ => AspectRatioMode::FourThree,
+            };
         }
         if let Some(mode) = value("footer") {
-            self.footer_mode = if mode == "hidden" { FooterMode::Hidden } else { FooterMode::Visible };
+            self.footer_mode = if mode == "hidden" {
+                FooterMode::Hidden
+            } else {
+                FooterMode::Visible
+            };
         }
         if let Some(mode) = value("audio_state") {
-            self.audio_state = if mode == "disabled" { AudioState::Disabled } else { AudioState::Enabled };
+            self.audio_state = if mode == "disabled" {
+                AudioState::Disabled
+            } else {
+                AudioState::Enabled
+            };
         }
         if let Some(backend) = value("audio_backend") {
-            self.audio_backend = if backend == "xaudio2" { AudioBackend::XAudio2 } else { AudioBackend::Wasapi };
+            self.audio_backend = if backend == "xaudio2" {
+                AudioBackend::XAudio2
+            } else {
+                AudioBackend::Wasapi
+            };
         }
         if let Some(volume) = value("audio_volume").and_then(|value| value.parse::<u8>().ok()) {
             self.audio_volume = volume.min(100);
@@ -553,7 +581,11 @@ impl SegaApp {
             self.fps_overlay_enabled = enabled;
         }
         if let Some(size) = value("fps_overlay_size") {
-            self.fps_overlay_size = match size { "small" => FpsOverlaySize::Small, "large" => FpsOverlaySize::Large, _ => FpsOverlaySize::Medium };
+            self.fps_overlay_size = match size {
+                "small" => FpsOverlaySize::Small,
+                "large" => FpsOverlaySize::Large,
+                _ => FpsOverlaySize::Medium,
+            };
         }
         if let Some(position) = value("fps_overlay_position") {
             self.fps_overlay_position = match position {
@@ -591,37 +623,87 @@ impl SegaApp {
         let directory = rom_settings_directory()
             .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
         fs::create_dir_all(&directory)?;
+
         let aspect_ratio = match self.aspect_ratio {
             AspectRatioMode::OneToOne => "1:1",
             AspectRatioMode::FourThree => "4:3",
             AspectRatioMode::SixteenNine => "16:9",
         };
-        let footer = if self.footer_mode.is_visible() { "visible" } else { "hidden" };
-        let audio_state = if self.audio_state.is_enabled() { "enabled" } else { "disabled" };
-        let audio_backend = match self.audio_backend { AudioBackend::Wasapi => "wasapi", AudioBackend::XAudio2 => "xaudio2" };
-        let fps_size = match self.fps_overlay_size { FpsOverlaySize::Small => "small", FpsOverlaySize::Medium => "medium", FpsOverlaySize::Large => "large" };
+        let footer = if self.footer_mode.is_visible() {
+            "visible"
+        } else {
+            "hidden"
+        };
+        let audio_state = if self.audio_state.is_enabled() {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        let audio_backend = match self.audio_backend {
+            AudioBackend::Wasapi => "wasapi",
+            AudioBackend::XAudio2 => "xaudio2",
+        };
+        let fps_size = match self.fps_overlay_size {
+            FpsOverlaySize::Small => "small",
+            FpsOverlaySize::Medium => "medium",
+            FpsOverlaySize::Large => "large",
+        };
         let fps_position = match self.fps_overlay_position {
             FpsOverlayPosition::TopLeft => "top_left",
             FpsOverlayPosition::TopRight => "top_right",
             FpsOverlayPosition::BottomLeft => "bottom_left",
             FpsOverlayPosition::BottomRight => "bottom_right",
         };
-        let position = self.debugger_window.window_position.map_or_else(String::new, |p| format!("{:.1},{:.1}", p.x, p.y));
-        let size = self.debugger_window.window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
-        let main_position = self.main_window_position.map_or_else(String::new, |p| format!("{:.1},{:.1}", p.x, p.y));
-        let main_size = self.main_window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
-        let breakpoints = self.debugger_window.breakpoints.iter()
+        let debugger_position = self
+            .debugger_window
+            .window_position
+            .map_or_else(String::new, |position| {
+                format!("{:.1},{:.1}", position.x, position.y)
+            });
+        let debugger_size = self
+            .debugger_window
+            .window_size
+            .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
+        let main_position = self
+            .main_window_position
+            .map_or_else(String::new, |position| {
+                format!("{:.1},{:.1}", position.x, position.y)
+            });
+        let main_size = self
+            .main_window_size
+            .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
+        let breakpoints = self
+            .debugger_window
+            .breakpoints
+            .iter()
             .map(|address| format!("{address:04X}"))
             .collect::<Vec<_>>()
             .join(",");
+
         let contents = format!(
-            "rom_path={}\\ndebugger_memory_address={}\\ndebugger_breakpoint_input={}\\ndebugger_breakpoints={}\\ndebugger_trace_enabled={}\\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
-            self.rom_path, self.debugger_window.memory_address, self.debugger_window.breakpoint_input,
-            breakpoints, self.debugger_window.trace_capture_enabled,
-            self.region, aspect_ratio, footer, audio_state, audio_backend, self.audio_volume,
-            self.diagnostics_enabled, self.fps_overlay_enabled, fps_size, fps_position,
-            self.debugger_window_open, position, size, main_position, main_size,
-            self.main_window_maximized, self.main_window_fullscreen,
+            "rom_path={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            self.rom_path,
+            self.debugger_window.memory_address,
+            self.debugger_window.breakpoint_input,
+            breakpoints,
+            self.debugger_window.trace_capture_enabled,
+            self.region,
+            aspect_ratio,
+            footer,
+            audio_state,
+            audio_backend,
+            self.audio_volume,
+            self.diagnostics_enabled,
+            self.fps_overlay_enabled,
+            fps_size,
+            fps_position,
+            self.debugger_window_open,
+            debugger_position,
+            debugger_size,
+            main_position,
+            main_size,
+            self.main_window_maximized,
+            self.main_window_fullscreen,
         );
         fs::write(directory.join(UI_SETTINGS_FILE), contents)
     }
@@ -645,10 +727,14 @@ impl SegaApp {
             return;
         }
 
-        if let Some(position) = context.input(|input| input.viewport().outer_rect.map(|rect| rect.min)) {
+        if let Some(position) =
+            context.input(|input| input.viewport().outer_rect.map(|rect| rect.min))
+        {
             self.main_window_position = Some(position);
         }
-        if let Some(size) = context.input(|input| input.viewport().inner_rect.map(|rect| rect.size())) {
+        if let Some(size) =
+            context.input(|input| input.viewport().inner_rect.map(|rect| rect.size()))
+        {
             self.main_window_size = Some(size);
         }
         if let Some(maximized) = context.input(|input| input.viewport().maximized) {
@@ -668,7 +754,10 @@ impl SegaApp {
 
     /// Render the debugger as a separate, freely movable and resizable native window.
     fn render_debugger_window(&mut self, context: &egui::Context) {
-        if !self.debugger_window_open { return; }
+        if !self.debugger_window_open {
+            return;
+        }
+
         let state = &mut self.debugger_window;
         let worker = self.native_viewport.worker.as_ref();
         let mut builder = egui::ViewportBuilder::default()
@@ -678,7 +767,10 @@ impl SegaApp {
             .with_resizable(true)
             .with_decorations(true)
             .with_taskbar(true);
-        if let Some(position) = state.window_position { builder = builder.with_position(position); }
+        if let Some(position) = state.window_position {
+            builder = builder.with_position(position);
+        }
+
         let mut keep_open = true;
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-sms-debugger-window"),
@@ -688,6 +780,7 @@ impl SegaApp {
                     keep_open = false;
                     return;
                 }
+
                 render_debugger_contents(debugger_ui, worker, state);
                 if let Some(rect) = debugger_ui.input(|input| input.viewport().outer_rect) {
                     state.window_position = Some(rect.min);
@@ -2793,7 +2886,6 @@ fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
     (size.x.is_finite() && size.y.is_finite() && size.x >= 760.0 && size.y >= 560.0).then_some(size)
 }
 
-#[allow(clippy::too_many_lines, reason = "The debugger viewport is a single cohesive diagnostic presentation.")]
 fn render_debugger_contents(
     ui: &mut egui::Ui,
     worker: Option<&SmsTemporalWorker>,
