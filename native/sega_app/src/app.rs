@@ -439,8 +439,7 @@ impl Drop for NativeViewportState {
     }
 }
 
-impl SegaApp {
-    /// Reveal the fullscreen menu while the pointer is at the top edge or a menu is open.
+/// Reveal the fullscreen menu while the pointer is at the top edge or a menu is open.
 fn should_reveal_fullscreen_menu(
     fullscreen: bool,
     menu_open: bool,
@@ -450,6 +449,7 @@ fn should_reveal_fullscreen_menu(
     !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 88.0)
 }
 
+impl SegaApp {
 /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
@@ -463,7 +463,9 @@ fn should_reveal_fullscreen_menu(
                         .ctx()
                         .input(|input| input.viewport().fullscreen.unwrap_or(false));
                     let root_top = ui.min_rect().top();
-                    let pointer_y = ui.ctx().input(|input| input.pointer.hover_pos().map(|p| p.y));
+                    let pointer_y = ui
+                        .ctx()
+                        .input(|input| input.pointer.hover_pos().map(|p| p.y));
                     let reveal_menu = should_reveal_fullscreen_menu(
                         fullscreen,
                         self.active_menu.is_some(),
@@ -2408,7 +2410,14 @@ fn render_machine_controls(
         command,
     );
     add_machine_button(ui, "■", "Parar", worker.is_some(), UiCommand::Stop, command);
-    add_machine_button(ui, "↻", "Reset", worker.is_some(), UiCommand::Reset, command);
+    add_machine_button(
+        ui,
+        "↻",
+        "Reset",
+        worker.is_some(),
+        UiCommand::Reset,
+        command,
+    );
     add_machine_button(
         ui,
         "⏭",
@@ -2427,22 +2436,21 @@ fn add_machine_button(
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
-    let button = egui::Button::new(egui::RichText::new(icon).size(18.0))
-        .min_size(egui::vec2(38.0, 30.0));
-    if ui.add_enabled(enabled, button).on_hover_text(description).clicked() {
+    let button =
+        egui::Button::new(egui::RichText::new(icon).size(18.0)).min_size(egui::vec2(38.0, 30.0));
+    if ui
+        .add_enabled(enabled, button)
+        .on_hover_text(description)
+        .clicked()
+    {
         *command = Some(value);
     }
 }
 
-fn map_sdl3_gamepad(
-    state: DeviceState,
-    profile: &InputProfile,
-) -> (ControllerButtons, bool) {
+fn map_sdl3_gamepad(state: DeviceState, profile: &InputProfile) -> (ControllerButtons, bool) {
     let mut actions = ActionState::default();
     profile.evaluate(&state, &mut actions);
-    let is_active = |index| {
-        ActionId::new(index).is_some_and(|action| actions.is_active(action))
-    };
+    let is_active = |index| ActionId::new(index).is_some_and(|action| actions.is_active(action));
     (
         ControllerButtons {
             up: is_active(0),
@@ -2771,14 +2779,18 @@ mod tests {
     #[test]
     fn fullscreen_menu_is_hidden_until_pointer_reaches_top_edge() {
         assert!(!super::should_reveal_fullscreen_menu(
-            true, false, Some(120.0), 0.0
+            true,
+            false,
+            Some(120.0),
+            0.0
         ));
         assert!(super::should_reveal_fullscreen_menu(
-            true, false, Some(40.0), 0.0
+            true,
+            false,
+            Some(40.0),
+            0.0
         ));
-        assert!(super::should_reveal_fullscreen_menu(
-            true, true, None, 0.0
-        ));
+        assert!(super::should_reveal_fullscreen_menu(true, true, None, 0.0));
         assert!(super::should_reveal_fullscreen_menu(
             false, false, None, 0.0
         ));
@@ -2789,7 +2801,10 @@ mod tests {
         let bindings = super::KeyboardBindings::default();
         assert_eq!(bindings.key(super::KeyboardAction::Up), egui::Key::ArrowUp);
         assert_eq!(bindings.key(super::KeyboardAction::Button1), egui::Key::Z);
-        assert_eq!(bindings.key(super::KeyboardAction::Fullscreen), egui::Key::F11);
+        assert_eq!(
+            bindings.key(super::KeyboardAction::Fullscreen),
+            egui::Key::F11
+        );
         assert_eq!(super::key_from_name("F9"), Some(egui::Key::F9));
         assert_eq!(super::key_from_name("not-a-key"), None);
     }
