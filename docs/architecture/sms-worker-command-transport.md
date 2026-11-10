@@ -57,4 +57,3 @@ boundary before the VDP completes the next frame. That partial execution must no
 The worker still updates machine-time diagnostics and drains generated audio
 through the discard path while stopping at the breakpoint. Input latency remains
 pending until the first subsequent complete SMS frame.
-
