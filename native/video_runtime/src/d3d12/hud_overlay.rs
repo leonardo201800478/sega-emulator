@@ -13,18 +13,18 @@ use windows::Win32::Foundation::{
     WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, ANTIALIASED_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush,
-    DEFAULT_CHARSET, DEFAULT_PITCH, DeleteObject, DrawTextW, DT_LEFT, DT_NOPREFIX, DT_TOP,
-    EndPaint, FF_DONTCARE, FillRect, FW_BOLD, HGDIOBJ, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
+    ANTIALIASED_QUALITY, BeginPaint, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DT_LEFT, DT_NOPREFIX, DT_TOP, DeleteObject, DrawTextW,
+    EndPaint, FF_DONTCARE, FW_BOLD, FillRect, HGDIOBJ, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
     SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE,
-    GWL_STYLE, GetClientRect, GetWindowLongPtrW, GetWindowTextW, GWLP_USERDATA, HTTRANSPARENT,
-    HWND_TOP, LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SetLayeredWindowAttributes,
-    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE,
-    SWP_NOACTIVATE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST,
+    GWL_STYLE, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT,
+    HWND_TOP, LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE,
+    SWP_NOACTIVATE, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST,
     WM_PAINT, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE,
     WS_EX_TRANSPARENT,
 };
@@ -152,7 +152,11 @@ impl D3d12HudOverlay {
         }
 
         unsafe {
-            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, isize::try_from(height_pixels).unwrap_or(14));
+            SetWindowLongPtrW(
+                self.hwnd,
+                GWLP_USERDATA,
+                isize::try_from(height_pixels).unwrap_or(14),
+            );
             let mut text = [0_u16; 512];
             let _ = GetWindowTextW(self.hwnd, &mut text);
             SetWindowTextW(self.hwnd, PCWSTR(text.as_ptr()))?;
@@ -241,11 +245,10 @@ unsafe extern "system" fn hud_window_proc(
                 let mut rect = RECT::default();
                 if unsafe { GetClientRect(hwnd, &mut rect) }.is_ok() {
                     let black = unsafe { CreateSolidBrush(COLORREF(0)) };
-                    let font_height = i32::try_from(unsafe {
-                        GetWindowLongPtrW(hwnd, GWLP_USERDATA)
-                    })
-                    .unwrap_or(14)
-                    .clamp(8, 48);
+                    let font_height =
+                        i32::try_from(unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) })
+                            .unwrap_or(14)
+                            .clamp(8, 48);
                     let font = unsafe {
                         CreateFontW(
                             -font_height,
@@ -330,10 +333,12 @@ mod tests {
             .unwrap();
         hud.set_font_size_pixels(22).unwrap();
         assert_eq!(
-            unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
-                hud.hwnd,
-                windows::Win32::UI::WindowsAndMessaging::GWLP_USERDATA,
-            ) },
+            unsafe {
+                windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
+                    hud.hwnd,
+                    windows::Win32::UI::WindowsAndMessaging::GWLP_USERDATA,
+                )
+            },
             22
         );
 
