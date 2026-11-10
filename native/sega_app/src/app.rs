@@ -1710,20 +1710,14 @@ impl Default for GamepadBindings {
 }
 
 impl GamepadBindings {
-    fn get(self, action: GamepadAction) -> u8 {
-        match action {
-            GamepadAction::Up => self.up, GamepadAction::Down => self.down,
-            GamepadAction::Left => self.left, GamepadAction::Right => self.right,
-            GamepadAction::Button1 => self.button_1, GamepadAction::Button2 => self.button_2,
-            GamepadAction::Pause => self.pause,
-        }
-    }
-
     fn set(&mut self, action: GamepadAction, button: u8) {
         match action {
-            GamepadAction::Up => self.up = button, GamepadAction::Down => self.down = button,
-            GamepadAction::Left => self.left = button, GamepadAction::Right => self.right = button,
-            GamepadAction::Button1 => self.button_1 = button, GamepadAction::Button2 => self.button_2 = button,
+            GamepadAction::Up => self.up = button,
+            GamepadAction::Down => self.down = button,
+            GamepadAction::Left => self.left = button,
+            GamepadAction::Right => self.right = button,
+            GamepadAction::Button1 => self.button_1 = button,
+            GamepadAction::Button2 => self.button_2 = button,
             GamepadAction::Pause => self.pause = button,
         }
     }
@@ -2059,7 +2053,12 @@ fn render_system_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.radio_value(state.region, "brazil".to_owned(), "Brasil / PAL-M");
     ui.radio_value(state.region, "europe".to_owned(), "Europa / PAL");
     ui.radio_value(state.region, "japan".to_owned(), "Japão / NTSC");
+    ui.add_enabled(
+        false,
+        egui::RadioButton::new(false, "Automática (não integrada ao runtime Rust)"),
+    );
     ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
+    ui.small("A seleção automática ainda não está integrada nesta interface; não é inferida pelo nome do arquivo.");
     ui.separator();
     ui.label("Outros sistemas");
     for system in [
@@ -2306,9 +2305,8 @@ fn add_machine_button(
     command: &mut Option<UiCommand>,
 ) {
     let button = egui::Button::new(egui::RichText::new(icon).size(18.0))
-        .min_size(egui::vec2(38.0, 30.0))
-        .on_hover_text(description);
-    if ui.add_enabled(enabled, button).clicked() {
+        .min_size(egui::vec2(38.0, 30.0));
+    if ui.add_enabled(enabled, button).on_hover_text(description).clicked() {
         *command = Some(value);
     }
 }
@@ -2668,6 +2666,33 @@ mod tests {
         assert!(super::should_reveal_fullscreen_menu(
             false, false, None, 0.0
         ));
+    }
+
+    #[test]
+    fn keyboard_bindings_default_to_documented_shortcuts() {
+        let bindings = super::KeyboardBindings::default();
+        assert_eq!(bindings.key(super::KeyboardAction::Up), egui::Key::ArrowUp);
+        assert_eq!(bindings.key(super::KeyboardAction::Button1), egui::Key::Z);
+        assert_eq!(bindings.key(super::KeyboardAction::Fullscreen), egui::Key::F11);
+        assert_eq!(super::key_from_name("F9"), Some(egui::Key::F9));
+        assert_eq!(super::key_from_name("not-a-key"), None);
+    }
+
+    #[test]
+    fn gamepad_bindings_are_used_for_physical_button_mapping() {
+        let mut state = DeviceState::default();
+        let mut buttons = sega_input_runtime::ButtonSet::default();
+        buttons.set(4, true).unwrap();
+        state = {
+            let mut state = DeviceState::default();
+            state.buttons = buttons;
+            state
+        };
+        let mut bindings = super::GamepadBindings::default();
+        bindings.set(super::GamepadAction::Button1, 4);
+        let (mapped, _) = super::map_sdl3_gamepad(state, &bindings);
+        assert!(mapped.button_1);
+        assert!(!mapped.button_2);
     }
 
     #[test]
