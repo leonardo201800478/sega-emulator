@@ -1525,6 +1525,10 @@ impl SegaApp {
             return;
         }
 
+        if self.native_viewport.hud_error.is_some() {
+            return;
+        }
+
         if self.native_viewport.hud_overlay.is_none() {
             if let Some(parent_hwnd) = self.native_viewport.parent_hwnd {
                 match D3d12HudOverlay::create(parent_hwnd) {
@@ -1542,10 +1546,6 @@ impl SegaApp {
             } else {
                 return;
             }
-        }
-
-        if self.native_viewport.hud_error.is_some() {
-            return;
         }
 
         let scale = context.pixels_per_point();
@@ -3176,12 +3176,11 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FpsCounter, FpsOverlayPosition, FpsOverlaySize, SegaApp};
+    use super::{FpsOverlayPosition, FpsOverlaySize, SegaApp};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
-    use std::time::{Duration, Instant};
 
     #[test]
     fn fullscreen_menu_is_hidden_until_pointer_reaches_top_edge() {
