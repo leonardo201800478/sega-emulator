@@ -274,6 +274,7 @@ fn render_debugger_breakpoints(
     let mut remove = None;
     for address in &state.breakpoints {
         ui.horizontal(|ui| {
+            let _ = icon_button(ui, IconKind::Breakpoint, "Breakpoint ativo", false);
             ui.monospace(format!("{address:04X}"));
             if icon_button(ui, IconKind::Remove, "Remover breakpoint", true).clicked() {
                 remove = Some(*address);
