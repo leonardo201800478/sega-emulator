@@ -1011,8 +1011,8 @@ impl SegaApp {
             if let Some(button) =
                 (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
             {
-                let button = u8::try_from(button)
-                    .expect("gamepad button index is bounded by MAX_BUTTONS");
+                let button =
+                    u8::try_from(button).expect("gamepad button index is bounded by MAX_BUTTONS");
                 self.gamepad_bindings.set(action, button);
                 self.gamepad_profile = self.gamepad_bindings.to_profile();
                 self.pending_gamepad_binding = None;
@@ -2240,7 +2240,9 @@ fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
                 ui.end_row();
             }
         });
-    if state.pending_key_binding.is_some() && ui.small_button("Cancelar captura de tecla").clicked() {
+    if state.pending_key_binding.is_some()
+        && ui.small_button("Cancelar captura de tecla").clicked()
+    {
         *state.pending_key_binding = None;
     }
 
@@ -2254,10 +2256,26 @@ fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
                 (GamepadAction::Up, "Cima", state.gamepad_bindings.up),
                 (GamepadAction::Down, "Baixo", state.gamepad_bindings.down),
                 (GamepadAction::Left, "Esquerda", state.gamepad_bindings.left),
-                (GamepadAction::Right, "Direita", state.gamepad_bindings.right),
-                (GamepadAction::Button1, "Botão 1", state.gamepad_bindings.button_1),
-                (GamepadAction::Button2, "Botão 2", state.gamepad_bindings.button_2),
-                (GamepadAction::Pause, "Solicitar NMI", state.gamepad_bindings.pause),
+                (
+                    GamepadAction::Right,
+                    "Direita",
+                    state.gamepad_bindings.right,
+                ),
+                (
+                    GamepadAction::Button1,
+                    "Botão 1",
+                    state.gamepad_bindings.button_1,
+                ),
+                (
+                    GamepadAction::Button2,
+                    "Botão 2",
+                    state.gamepad_bindings.button_2,
+                ),
+                (
+                    GamepadAction::Pause,
+                    "Solicitar NMI",
+                    state.gamepad_bindings.pause,
+                ),
             ] {
                 ui.label(label);
                 ui.monospace(format!("Botão {button}"));
@@ -2270,7 +2288,9 @@ fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
                 ui.end_row();
             }
         });
-    if state.pending_gamepad_binding.is_some() && ui.small_button("Cancelar captura do controle").clicked() {
+    if state.pending_gamepad_binding.is_some()
+        && ui.small_button("Cancelar captura do controle").clicked()
+    {
         *state.pending_gamepad_binding = None;
     }
 }
