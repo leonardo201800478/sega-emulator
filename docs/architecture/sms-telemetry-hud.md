@@ -62,7 +62,7 @@ The main execution toolbar and debugger controls share
 `native/sega_app/src/icons.rs`. Icons are drawn with egui vector primitives
 (lines, circles, rectangles, and filled polygons); no Unicode glyph is used as
 an icon substitute. The shared icon set includes play, pause, stop, reset,
-step, trace, add, remove, and breakpoint state.
+step, trace, add, remove, close, and breakpoint state.
 
 ## Validation contract
 
