@@ -85,6 +85,12 @@ pub struct SegaApp {
     theme_initialized: bool,
     debugger_window_open: bool,
     debugger_window: DebuggerWindowState,
+    last_settings_save: Instant,
+    main_window_position: Option<egui::Pos2>,
+    main_window_size: Option<egui::Vec2>,
+    main_window_maximized: bool,
+    main_window_fullscreen: bool,
+    main_window_geometry_restored: bool,
 }
 
 
@@ -161,6 +167,12 @@ impl Default for SegaApp {
             theme_initialized: false,
             debugger_window_open: false,
             debugger_window: DebuggerWindowState::default(),
+            last_settings_save: Instant::now(),
+            main_window_position: None,
+            main_window_size: None,
+            main_window_maximized: false,
+            main_window_fullscreen: false,
+            main_window_geometry_restored: false,
         };
         app.restore_ui_settings();
         if app.diagnostics_enabled {
@@ -533,6 +545,18 @@ impl SegaApp {
                 _ => FpsOverlayPosition::BottomRight,
             };
         }
+        if let Some(position) = value("main_window_position").and_then(parse_saved_position) {
+            self.main_window_position = Some(position);
+        }
+        if let Some(size) = value("main_window_size").and_then(parse_saved_root_size) {
+            self.main_window_size = Some(size);
+        }
+        if let Some(maximized) = value("main_window_maximized").and_then(|value| value.parse().ok()) {
+            self.main_window_maximized = maximized;
+        }
+        if let Some(fullscreen) = value("main_window_fullscreen").and_then(|value| value.parse().ok()) {
+            self.main_window_fullscreen = fullscreen;
+        }
         if let Some(open) = value("debugger_open").and_then(|value| value.parse().ok()) {
             self.debugger_window_open = open;
         }
@@ -566,13 +590,55 @@ impl SegaApp {
         };
         let position = self.debugger_window.window_position.map_or_else(String::new, |p| format!("{:.1},{:.1}", p.x, p.y));
         let size = self.debugger_window.window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
+        let main_position = self.main_window_position.map_or_else(String::new, |p| format!("{:.1},{:.1}", p.x, p.y));
+        let main_size = self.main_window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
         let contents = format!(
-            "region={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\n",
+            "region={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
             self.region, aspect_ratio, footer, audio_state, audio_backend, self.audio_volume,
             self.diagnostics_enabled, self.fps_overlay_enabled, fps_size, fps_position,
-            self.debugger_window_open, position, size,
+            self.debugger_window_open, position, size, main_position, main_size,
+            self.main_window_maximized, self.main_window_fullscreen,
         );
         fs::write(directory.join(UI_SETTINGS_FILE), contents)
+    }
+
+    /// Restore root-window geometry once and periodically auto-save all UI preferences.
+    fn maintain_window_settings(&mut self, context: &egui::Context) {
+        if !self.main_window_geometry_restored {
+            if self.main_window_fullscreen {
+                context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+            } else if self.main_window_maximized {
+                context.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            } else {
+                if let Some(position) = self.main_window_position {
+                    context.send_viewport_cmd(egui::ViewportCommand::OuterPosition(position));
+                }
+                if let Some(size) = self.main_window_size {
+                    context.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+                }
+            }
+            self.main_window_geometry_restored = true;
+        }
+
+        if let Some(position) = context.input(|input| input.viewport().outer_rect.map(|rect| rect.min)) {
+            self.main_window_position = Some(position);
+        }
+        if let Some(size) = context.input(|input| input.viewport().inner_rect.map(|rect| rect.size())) {
+            self.main_window_size = Some(size);
+        }
+        if let Some(maximized) = context.input(|input| input.viewport().maximized) {
+            self.main_window_maximized = maximized;
+        }
+        if let Some(fullscreen) = context.input(|input| input.viewport().fullscreen) {
+            self.main_window_fullscreen = fullscreen;
+        }
+
+        if self.last_settings_save.elapsed() >= Duration::from_secs(5) {
+            if let Err(error) = self.save_ui_settings() {
+                eprintln!("Unable to auto-save UI settings: {error}");
+            }
+            self.last_settings_save = Instant::now();
+        }
     }
 
     /// Render the debugger as a separate, freely movable and resizable native window.
@@ -1573,13 +1639,9 @@ impl Drop for SegaApp {
 }
 
 impl eframe::App for SegaApp {
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        if let Err(error) = self.save_ui_settings() { eprintln!("Unable to auto-save UI settings: {error}"); }
-    }
-    fn auto_save_interval(&self) -> Duration { Duration::from_secs(5) }
-    fn persist_egui_memory(&self) -> bool { true }
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
+        self.maintain_window_settings(&context);
         if !self.theme_initialized {
             let mut visuals = egui::Visuals::dark();
             visuals.panel_fill = egui::Color32::from_rgb(17, 21, 29);
@@ -2679,6 +2741,12 @@ fn parse_saved_position(value: &str) -> Option<egui::Pos2> {
     let (x, y) = value.split_once(',')?;
     let p = egui::pos2(x.parse().ok()?, y.parse().ok()?);
     (p.x.is_finite() && p.y.is_finite()).then_some(p)
+}
+
+fn parse_saved_root_size(value: &str) -> Option<egui::Vec2> {
+    let (x, y) = value.split_once(',')?;
+    let size = egui::vec2(x.parse().ok()?, y.parse().ok()?);
+    (size.x.is_finite() && size.y.is_finite() && size.x >= 1024.0 && size.y >= 720.0).then_some(size)
 }
 
 fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
