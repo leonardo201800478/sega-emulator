@@ -666,12 +666,10 @@ fn execute_frame(
             .fetch_add(instructions as u64, Ordering::AcqRel);
     }
     telemetry.set_frame_number(machine.frame_number());
-    telemetry
-        .machine_time_ticks
-        .store(
-            u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
-            Ordering::Release,
-        );
+    telemetry.machine_time_ticks.store(
+        u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
+        Ordering::Release,
+    );
 
     *video_sequence = video_sequence
         .checked_add(1)
