@@ -61,6 +61,11 @@ pub struct SegaApp {
     input_buffers: InputBuffers,
     input_devices: Vec<DeviceDescriptor>,
     selected_gamepad: Option<DeviceId>,
+    keyboard_bindings: KeyboardBindings,
+    pending_key_binding: Option<KeyboardAction>,
+    gamepad_bindings: GamepadBindings,
+    pending_gamepad_binding: Option<GamepadAction>,
+    input_mapping_error: Option<String>,
     active_menu: Option<TopLevelMenu>,
     menu_anchor: egui::Pos2,
     menu_popup_size: egui::Vec2,
@@ -97,6 +102,11 @@ impl Default for SegaApp {
             input_buffers: InputBuffers::default(),
             input_devices: Vec::new(),
             selected_gamepad: None,
+            keyboard_bindings: load_keyboard_bindings(),
+            pending_key_binding: None,
+            gamepad_bindings: load_gamepad_bindings(),
+            pending_gamepad_binding: None,
+            input_mapping_error: None,
             active_menu: None,
             menu_anchor: egui::Pos2::ZERO,
             menu_popup_size: egui::vec2(360.0, 280.0),
@@ -490,6 +500,11 @@ fn should_reveal_fullscreen_menu(
                 machine_command: &mut command,
                 devices: &self.input_devices,
                 selected_gamepad: &mut self.selected_gamepad,
+                keyboard_bindings: &self.keyboard_bindings,
+                pending_key_binding: &mut self.pending_key_binding,
+                gamepad_bindings: &self.gamepad_bindings,
+                pending_gamepad_binding: &mut self.pending_gamepad_binding,
+                input_mapping_error: self.input_mapping_error.as_deref(),
                 input_error: self
                     .input_backend
                     .as_ref()
@@ -973,7 +988,27 @@ fn should_reveal_fullscreen_menu(
         else {
             return (ControllerButtons::default(), false);
         };
-        map_sdl3_gamepad(reading.state)
+
+        if let Some(action) = self.pending_gamepad_binding {
+            let button_count = self
+                .input_devices
+                .iter()
+                .find(|device| Some(device.id) == self.selected_gamepad)
+                .map_or(0, |device| device.capabilities.button_count)
+                .min(sega_input_runtime::MAX_BUTTONS as u16);
+            if let Some(button) =
+                (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
+            {
+                self.gamepad_bindings.set(action, button as u8);
+                self.pending_gamepad_binding = None;
+                self.input_mapping_error = save_gamepad_bindings(&self.gamepad_bindings)
+                    .err()
+                    .map(|error| format!("Falha ao salvar mapeamento do controle: {error}"));
+            }
+            return (ControllerButtons::default(), false);
+        }
+
+        map_sdl3_gamepad(reading.state, &self.gamepad_bindings)
     }
 
     /// Poll gameplay input and dispatch edge-triggered emulator shortcuts.
@@ -985,33 +1020,56 @@ fn should_reveal_fullscreen_menu(
         input_context: &egui::Context,
         root_context: &egui::Context,
     ) {
+        if let Some(action) = self.pending_key_binding {
+            let captured = input_context.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        ..
+                    } => Some(*key),
+                    _ => None,
+                })
+            });
+            if let Some(key) = captured {
+                self.keyboard_bindings.set(action, key);
+                self.pending_key_binding = None;
+                self.input_mapping_error = save_keyboard_bindings(&self.keyboard_bindings)
+                    .err()
+                    .map(|error| format!("Falha ao salvar mapeamento do teclado: {error}"));
+            }
+            return;
+        }
+
+        let bindings = self.keyboard_bindings;
         let (keyboard_buttons, keyboard_pause, shortcut, toggle_fullscreen) =
             input_context.input(|input| {
-                let shortcut = if input.key_pressed(egui::Key::F5) {
+                let shortcut = if input.key_pressed(bindings.start) {
                     Some(UiCommand::Start)
-                } else if input.key_pressed(egui::Key::F6) {
+                } else if input.key_pressed(bindings.pause) {
                     Some(UiCommand::Pause)
-                } else if input.key_pressed(egui::Key::F7) {
+                } else if input.key_pressed(bindings.stop) {
                     Some(UiCommand::Stop)
-                } else if input.key_pressed(egui::Key::F8) {
+                } else if input.key_pressed(bindings.reset) {
                     Some(UiCommand::Reset)
-                } else if input.key_pressed(egui::Key::F9) {
+                } else if input.key_pressed(bindings.step_frame) {
                     Some(UiCommand::StepFrame)
                 } else {
                     None
                 };
                 (
                     ControllerButtons {
-                        up: input.key_down(egui::Key::ArrowUp),
-                        down: input.key_down(egui::Key::ArrowDown),
-                        left: input.key_down(egui::Key::ArrowLeft),
-                        right: input.key_down(egui::Key::ArrowRight),
-                        button_1: input.key_down(egui::Key::Z),
-                        button_2: input.key_down(egui::Key::X),
+                        up: input.key_down(bindings.up),
+                        down: input.key_down(bindings.down),
+                        left: input.key_down(bindings.left),
+                        right: input.key_down(bindings.right),
+                        button_1: input.key_down(bindings.button_1),
+                        button_2: input.key_down(bindings.button_2),
                     },
-                    input.key_down(egui::Key::P),
+                    input.key_down(bindings.nmi),
                     shortcut,
-                    input.key_pressed(egui::Key::F11),
+                    input.key_pressed(bindings.toggle_fullscreen),
                 )
             });
         let (gamepad_buttons, gamepad_pause) = self.update_gamepad_input();
@@ -1554,6 +1612,215 @@ fn save_last_rom_directory(directory: &Path) -> std::io::Result<()> {
     )
 }
 
+const KEYBOARD_BINDINGS_FILE: &str = "keyboard_bindings.txt";
+const GAMEPAD_BINDINGS_FILE: &str = "gamepad_bindings.txt";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyboardAction {
+    Up, Down, Left, Right, Button1, Button2, Nmi, Start, Pause, Stop, Reset, StepFrame, Fullscreen,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct KeyboardBindings {
+    up: egui::Key,
+    down: egui::Key,
+    left: egui::Key,
+    right: egui::Key,
+    button_1: egui::Key,
+    button_2: egui::Key,
+    nmi: egui::Key,
+    start: egui::Key,
+    pause: egui::Key,
+    stop: egui::Key,
+    reset: egui::Key,
+    step_frame: egui::Key,
+    toggle_fullscreen: egui::Key,
+}
+
+impl Default for KeyboardBindings {
+    fn default() -> Self {
+        Self {
+            up: egui::Key::ArrowUp,
+            down: egui::Key::ArrowDown,
+            left: egui::Key::ArrowLeft,
+            right: egui::Key::ArrowRight,
+            button_1: egui::Key::Z,
+            button_2: egui::Key::X,
+            nmi: egui::Key::P,
+            start: egui::Key::F5,
+            pause: egui::Key::F6,
+            stop: egui::Key::F7,
+            reset: egui::Key::F8,
+            step_frame: egui::Key::F9,
+            toggle_fullscreen: egui::Key::F11,
+        }
+    }
+}
+
+impl KeyboardBindings {
+    fn key(self, action: KeyboardAction) -> egui::Key {
+        match action {
+            KeyboardAction::Up => self.up,
+            KeyboardAction::Down => self.down,
+            KeyboardAction::Left => self.left,
+            KeyboardAction::Right => self.right,
+            KeyboardAction::Button1 => self.button_1,
+            KeyboardAction::Button2 => self.button_2,
+            KeyboardAction::Nmi => self.nmi,
+            KeyboardAction::Start => self.start,
+            KeyboardAction::Pause => self.pause,
+            KeyboardAction::Stop => self.stop,
+            KeyboardAction::Reset => self.reset,
+            KeyboardAction::StepFrame => self.step_frame,
+            KeyboardAction::Fullscreen => self.toggle_fullscreen,
+        }
+    }
+
+    fn set(&mut self, action: KeyboardAction, key: egui::Key) {
+        match action {
+            KeyboardAction::Up => self.up = key,
+            KeyboardAction::Down => self.down = key,
+            KeyboardAction::Left => self.left = key,
+            KeyboardAction::Right => self.right = key,
+            KeyboardAction::Button1 => self.button_1 = key,
+            KeyboardAction::Button2 => self.button_2 = key,
+            KeyboardAction::Nmi => self.nmi = key,
+            KeyboardAction::Start => self.start = key,
+            KeyboardAction::Pause => self.pause = key,
+            KeyboardAction::Stop => self.stop = key,
+            KeyboardAction::Reset => self.reset = key,
+            KeyboardAction::StepFrame => self.step_frame = key,
+            KeyboardAction::Fullscreen => self.toggle_fullscreen = key,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GamepadAction { Up, Down, Left, Right, Button1, Button2, Pause }
+
+#[derive(Debug, Clone, Copy)]
+struct GamepadBindings {
+    up: u8, down: u8, left: u8, right: u8, button_1: u8, button_2: u8, pause: u8,
+}
+
+impl Default for GamepadBindings {
+    fn default() -> Self {
+        Self { up: 11, down: 12, left: 13, right: 14, button_1: 0, button_2: 1, pause: 6 }
+    }
+}
+
+impl GamepadBindings {
+    fn get(self, action: GamepadAction) -> u8 {
+        match action {
+            GamepadAction::Up => self.up, GamepadAction::Down => self.down,
+            GamepadAction::Left => self.left, GamepadAction::Right => self.right,
+            GamepadAction::Button1 => self.button_1, GamepadAction::Button2 => self.button_2,
+            GamepadAction::Pause => self.pause,
+        }
+    }
+
+    fn set(&mut self, action: GamepadAction, button: u8) {
+        match action {
+            GamepadAction::Up => self.up = button, GamepadAction::Down => self.down = button,
+            GamepadAction::Left => self.left = button, GamepadAction::Right => self.right = button,
+            GamepadAction::Button1 => self.button_1 = button, GamepadAction::Button2 => self.button_2 = button,
+            GamepadAction::Pause => self.pause = button,
+        }
+    }
+}
+
+fn key_from_name(name: &str) -> Option<egui::Key> {
+    Some(match name {
+        "ArrowUp" => egui::Key::ArrowUp, "ArrowDown" => egui::Key::ArrowDown,
+        "ArrowLeft" => egui::Key::ArrowLeft, "ArrowRight" => egui::Key::ArrowRight,
+        "Space" => egui::Key::Space, "Enter" => egui::Key::Enter,
+        "Escape" => egui::Key::Escape, "Tab" => egui::Key::Tab,
+        "Backspace" => egui::Key::Backspace, "Delete" => egui::Key::Delete,
+        "Insert" => egui::Key::Insert, "Home" => egui::Key::Home, "End" => egui::Key::End,
+        "PageUp" => egui::Key::PageUp, "PageDown" => egui::Key::PageDown,
+        "A" => egui::Key::A, "B" => egui::Key::B, "C" => egui::Key::C,
+        "D" => egui::Key::D, "E" => egui::Key::E, "F" => egui::Key::F,
+        "G" => egui::Key::G, "H" => egui::Key::H, "I" => egui::Key::I,
+        "J" => egui::Key::J, "K" => egui::Key::K, "L" => egui::Key::L,
+        "M" => egui::Key::M, "N" => egui::Key::N, "O" => egui::Key::O,
+        "P" => egui::Key::P, "Q" => egui::Key::Q, "R" => egui::Key::R,
+        "S" => egui::Key::S, "T" => egui::Key::T, "U" => egui::Key::U,
+        "V" => egui::Key::V, "W" => egui::Key::W, "X" => egui::Key::X,
+        "Y" => egui::Key::Y, "Z" => egui::Key::Z,
+        "F1" => egui::Key::F1, "F2" => egui::Key::F2, "F3" => egui::Key::F3,
+        "F4" => egui::Key::F4, "F5" => egui::Key::F5, "F6" => egui::Key::F6,
+        "F7" => egui::Key::F7, "F8" => egui::Key::F8, "F9" => egui::Key::F9,
+        "F10" => egui::Key::F10, "F11" => egui::Key::F11, "F12" => egui::Key::F12,
+        _ => return None,
+    })
+}
+
+fn load_keyboard_bindings() -> KeyboardBindings {
+    let mut bindings = KeyboardBindings::default();
+    let Some(directory) = rom_settings_directory() else { return bindings; };
+    let Ok(contents) = fs::read_to_string(directory.join(KEYBOARD_BINDINGS_FILE)) else { return bindings; };
+    for line in contents.lines() {
+        let Some((action, key)) = line.split_once('=') else { continue; };
+        let Some(key) = key_from_name(key.trim()) else { continue; };
+        let action = match action.trim() {
+            "up" => KeyboardAction::Up, "down" => KeyboardAction::Down,
+            "left" => KeyboardAction::Left, "right" => KeyboardAction::Right,
+            "button1" => KeyboardAction::Button1, "button2" => KeyboardAction::Button2,
+            "nmi" => KeyboardAction::Nmi, "start" => KeyboardAction::Start,
+            "pause" => KeyboardAction::Pause, "stop" => KeyboardAction::Stop,
+            "reset" => KeyboardAction::Reset, "step_frame" => KeyboardAction::StepFrame,
+            "fullscreen" => KeyboardAction::Fullscreen, _ => continue,
+        };
+        bindings.set(action, key);
+    }
+    bindings
+}
+
+fn save_keyboard_bindings(bindings: &KeyboardBindings) -> std::io::Result<()> {
+    let directory = rom_settings_directory().ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&directory)?;
+    let rows = [
+        ("up", bindings.up), ("down", bindings.down), ("left", bindings.left),
+        ("right", bindings.right), ("button1", bindings.button_1), ("button2", bindings.button_2),
+        ("nmi", bindings.nmi), ("start", bindings.start), ("pause", bindings.pause),
+        ("stop", bindings.stop), ("reset", bindings.reset), ("step_frame", bindings.step_frame),
+        ("fullscreen", bindings.toggle_fullscreen),
+    ];
+    let contents = rows.iter().map(|(name, key)| format!("{name}={key:?}")).collect::<Vec<_>>().join("\n");
+    fs::write(directory.join(KEYBOARD_BINDINGS_FILE), contents)
+}
+
+fn load_gamepad_bindings() -> GamepadBindings {
+    let mut bindings = GamepadBindings::default();
+    let Some(directory) = rom_settings_directory() else { return bindings; };
+    let Ok(contents) = fs::read_to_string(directory.join(GAMEPAD_BINDINGS_FILE)) else { return bindings; };
+    for line in contents.lines() {
+        let Some((action, value)) = line.split_once('=') else { continue; };
+        let Ok(button) = value.trim().parse::<u8>() else { continue; };
+        if button as usize >= sega_input_runtime::MAX_BUTTONS { continue; }
+        let action = match action.trim() {
+            "up" => GamepadAction::Up, "down" => GamepadAction::Down,
+            "left" => GamepadAction::Left, "right" => GamepadAction::Right,
+            "button1" => GamepadAction::Button1, "button2" => GamepadAction::Button2,
+            "pause" => GamepadAction::Pause, _ => continue,
+        };
+        bindings.set(action, button);
+    }
+    bindings
+}
+
+fn save_gamepad_bindings(bindings: &GamepadBindings) -> std::io::Result<()> {
+    let directory = rom_settings_directory().ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    fs::create_dir_all(&directory)?;
+    let rows = [
+        ("up", bindings.up), ("down", bindings.down), ("left", bindings.left),
+        ("right", bindings.right), ("button1", bindings.button_1), ("button2", bindings.button_2),
+        ("pause", bindings.pause),
+    ];
+    let contents = rows.iter().map(|(name, button)| format!("{name}={button}")).collect::<Vec<_>>().join("\n");
+    fs::write(directory.join(GAMEPAD_BINDINGS_FILE), contents)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FooterMode {
     Visible,
@@ -1583,6 +1850,11 @@ struct HeaderState<'a> {
     devices: &'a [DeviceDescriptor],
     selected_gamepad: &'a mut Option<DeviceId>,
     input_error: Option<&'a str>,
+    keyboard_bindings: &'a KeyboardBindings,
+    pending_key_binding: &'a mut Option<KeyboardAction>,
+    gamepad_bindings: &'a GamepadBindings,
+    pending_gamepad_binding: &'a mut Option<GamepadAction>,
+    input_mapping_error: Option<&'a str>,
     active_menu: &'a mut Option<TopLevelMenu>,
     menu_anchor: &'a mut egui::Pos2,
     menu_popup_size: &'a mut egui::Vec2,
@@ -1661,7 +1933,17 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
         TopLevelMenu::Controls => {
-            render_controls_menu(ui, state.devices, state.selected_gamepad, state.input_error);
+            render_controls_menu(
+                ui,
+                state.devices,
+                state.selected_gamepad,
+                state.input_error,
+                state.keyboard_bindings,
+                state.pending_key_binding,
+                state.gamepad_bindings,
+                state.pending_gamepad_binding,
+                state.input_mapping_error,
+            );
         }
         TopLevelMenu::Options => render_options_menu(ui, state),
         TopLevelMenu::Debug => render_runtime_status(
@@ -1811,32 +2093,82 @@ fn render_controls_menu(
     devices: &[DeviceDescriptor],
     selected: &mut Option<DeviceId>,
     error: Option<&str>,
+    keyboard: &KeyboardBindings,
+    pending_key: &mut Option<KeyboardAction>,
+    gamepad: &GamepadBindings,
+    pending_gamepad: &mut Option<GamepadAction>,
+    mapping_error: Option<&str>,
 ) {
     ui.heading("Dispositivo de entrada");
     render_input_controls(ui, devices, selected, error);
+    if let Some(error) = mapping_error {
+        ui.colored_label(egui::Color32::YELLOW, error);
+    }
+
     ui.separator();
     ui.heading("Teclado");
     egui::Grid::new("sms_keyboard_bindings")
-        .num_columns(2)
+        .num_columns(3)
         .show(ui, |ui| {
-            for (action, key) in [
-                ("Direcional", "Setas"),
-                ("Botão 1", "Z"),
-                ("Botão 2", "X"),
-                ("Solicitar NMI", "P"),
-                ("Iniciar", "F5"),
-                ("Pausar", "F6"),
-                ("Parar", "F7"),
-                ("Reset", "F8"),
-                ("Avançar um quadro", "F9"),
-                ("Tela cheia", "F11"),
+            for (action, label) in [
+                (KeyboardAction::Up, "Cima"),
+                (KeyboardAction::Down, "Baixo"),
+                (KeyboardAction::Left, "Esquerda"),
+                (KeyboardAction::Right, "Direita"),
+                (KeyboardAction::Button1, "Botão 1"),
+                (KeyboardAction::Button2, "Botão 2"),
+                (KeyboardAction::Nmi, "Solicitar NMI"),
+                (KeyboardAction::Start, "Iniciar"),
+                (KeyboardAction::Pause, "Pausar"),
+                (KeyboardAction::Stop, "Parar"),
+                (KeyboardAction::Reset, "Reset"),
+                (KeyboardAction::StepFrame, "Avançar quadro"),
+                (KeyboardAction::Fullscreen, "Tela cheia"),
             ] {
-                ui.label(action);
-                ui.monospace(key);
+                ui.label(label);
+                ui.monospace(format!("{:?}", keyboard.key(action)));
+                if *pending_key == Some(action) {
+                    ui.weak("Pressione uma tecla...");
+                } else if ui.small_button("Remapear").clicked() {
+                    *pending_key = Some(action);
+                    *pending_gamepad = None;
+                }
                 ui.end_row();
             }
         });
-    ui.small("O remapeamento de teclas ainda não está implementado.");
+    if pending_key.is_some() && ui.small_button("Cancelar captura de tecla").clicked() {
+        *pending_key = None;
+    }
+
+    ui.separator();
+    ui.heading("Controle");
+    ui.small("Selecione Remapear e pressione o botão físico desejado. Direcionais analógicos e hats continuam ativos.");
+    egui::Grid::new("sms_gamepad_bindings")
+        .num_columns(3)
+        .show(ui, |ui| {
+            for (action, label, button) in [
+                (GamepadAction::Up, "Cima", gamepad.up),
+                (GamepadAction::Down, "Baixo", gamepad.down),
+                (GamepadAction::Left, "Esquerda", gamepad.left),
+                (GamepadAction::Right, "Direita", gamepad.right),
+                (GamepadAction::Button1, "Botão 1", gamepad.button_1),
+                (GamepadAction::Button2, "Botão 2", gamepad.button_2),
+                (GamepadAction::Pause, "Solicitar NMI", gamepad.pause),
+            ] {
+                ui.label(label);
+                ui.monospace(format!("Botão {button}"));
+                if *pending_gamepad == Some(action) {
+                    ui.weak("Pressione o botão...");
+                } else if ui.small_button("Remapear").clicked() {
+                    *pending_gamepad = Some(action);
+                    *pending_key = None;
+                }
+                ui.end_row();
+            }
+        });
+    if pending_gamepad.is_some() && ui.small_button("Cancelar captura do controle").clicked() {
+        *pending_gamepad = None;
+    }
 }
 
 /// Render audio output configuration without consuming permanent viewport space.
@@ -1981,21 +2313,32 @@ fn add_machine_button(
     }
 }
 
-fn map_sdl3_gamepad(state: DeviceState) -> (ControllerButtons, bool) {
-    let up = state.buttons.is_pressed(11) || state.hat(0) & 0x01 != 0 || state.axis(1) < -16_000;
-    let down = state.buttons.is_pressed(12) || state.hat(0) & 0x04 != 0 || state.axis(1) > 16_000;
-    let left = state.buttons.is_pressed(13) || state.hat(0) & 0x08 != 0 || state.axis(0) < -16_000;
-    let right = state.buttons.is_pressed(14) || state.hat(0) & 0x02 != 0 || state.axis(0) > 16_000;
+fn map_sdl3_gamepad(
+    state: DeviceState,
+    bindings: &GamepadBindings,
+) -> (ControllerButtons, bool) {
+    let up = state.buttons.is_pressed(bindings.up as usize)
+        || state.hat(0) & 0x01 != 0
+        || state.axis(1) < -16_000;
+    let down = state.buttons.is_pressed(bindings.down as usize)
+        || state.hat(0) & 0x04 != 0
+        || state.axis(1) > 16_000;
+    let left = state.buttons.is_pressed(bindings.left as usize)
+        || state.hat(0) & 0x08 != 0
+        || state.axis(0) < -16_000;
+    let right = state.buttons.is_pressed(bindings.right as usize)
+        || state.hat(0) & 0x02 != 0
+        || state.axis(0) > 16_000;
     (
         ControllerButtons {
             up,
             down,
             left,
             right,
-            button_1: state.buttons.is_pressed(0),
-            button_2: state.buttons.is_pressed(1),
+            button_1: state.buttons.is_pressed(bindings.button_1 as usize),
+            button_2: state.buttons.is_pressed(bindings.button_2 as usize),
         },
-        state.buttons.is_pressed(6),
+        state.buttons.is_pressed(bindings.pause as usize),
     )
 }
 
