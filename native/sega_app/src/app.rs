@@ -1622,7 +1622,19 @@ const GAMEPAD_BINDINGS_FILE: &str = "gamepad_bindings.txt";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyboardAction {
-    Up, Down, Left, Right, Button1, Button2, Nmi, Start, Pause, Stop, Reset, StepFrame, Fullscreen,
+    Up,
+    Down,
+    Left,
+    Right,
+    Button1,
+    Button2,
+    Nmi,
+    Start,
+    Pause,
+    Stop,
+    Reset,
+    StepFrame,
+    Fullscreen,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1701,16 +1713,38 @@ impl KeyboardBindings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GamepadAction { Up, Down, Left, Right, Button1, Button2, Pause }
+enum GamepadAction {
+    Up,
+    Down,
+    Left,
+    Right,
+    Button1,
+    Button2,
+    Pause,
+}
 
 #[derive(Debug, Clone, Copy)]
 struct GamepadBindings {
-    up: u8, down: u8, left: u8, right: u8, button_1: u8, button_2: u8, pause: u8,
+    up: u8,
+    down: u8,
+    left: u8,
+    right: u8,
+    button_1: u8,
+    button_2: u8,
+    pause: u8,
 }
 
 impl Default for GamepadBindings {
     fn default() -> Self {
-        Self { up: 11, down: 12, left: 13, right: 14, button_1: 0, button_2: 1, pause: 6 }
+        Self {
+            up: 11,
+            down: 12,
+            left: 13,
+            right: 14,
+            button_1: 0,
+            button_2: 1,
+            pause: 6,
+        }
     }
 }
 
@@ -1730,45 +1764,94 @@ impl GamepadBindings {
 
 fn key_from_name(name: &str) -> Option<egui::Key> {
     Some(match name {
-        "ArrowUp" => egui::Key::ArrowUp, "ArrowDown" => egui::Key::ArrowDown,
-        "ArrowLeft" => egui::Key::ArrowLeft, "ArrowRight" => egui::Key::ArrowRight,
-        "Space" => egui::Key::Space, "Enter" => egui::Key::Enter,
-        "Escape" => egui::Key::Escape, "Tab" => egui::Key::Tab,
-        "Backspace" => egui::Key::Backspace, "Delete" => egui::Key::Delete,
-        "Insert" => egui::Key::Insert, "Home" => egui::Key::Home, "End" => egui::Key::End,
-        "PageUp" => egui::Key::PageUp, "PageDown" => egui::Key::PageDown,
-        "A" => egui::Key::A, "B" => egui::Key::B, "C" => egui::Key::C,
-        "D" => egui::Key::D, "E" => egui::Key::E, "F" => egui::Key::F,
-        "G" => egui::Key::G, "H" => egui::Key::H, "I" => egui::Key::I,
-        "J" => egui::Key::J, "K" => egui::Key::K, "L" => egui::Key::L,
-        "M" => egui::Key::M, "N" => egui::Key::N, "O" => egui::Key::O,
-        "P" => egui::Key::P, "Q" => egui::Key::Q, "R" => egui::Key::R,
-        "S" => egui::Key::S, "T" => egui::Key::T, "U" => egui::Key::U,
-        "V" => egui::Key::V, "W" => egui::Key::W, "X" => egui::Key::X,
-        "Y" => egui::Key::Y, "Z" => egui::Key::Z,
-        "F1" => egui::Key::F1, "F2" => egui::Key::F2, "F3" => egui::Key::F3,
-        "F4" => egui::Key::F4, "F5" => egui::Key::F5, "F6" => egui::Key::F6,
-        "F7" => egui::Key::F7, "F8" => egui::Key::F8, "F9" => egui::Key::F9,
-        "F10" => egui::Key::F10, "F11" => egui::Key::F11, "F12" => egui::Key::F12,
+        "ArrowUp" => egui::Key::ArrowUp,
+        "ArrowDown" => egui::Key::ArrowDown,
+        "ArrowLeft" => egui::Key::ArrowLeft,
+        "ArrowRight" => egui::Key::ArrowRight,
+        "Space" => egui::Key::Space,
+        "Enter" => egui::Key::Enter,
+        "Escape" => egui::Key::Escape,
+        "Tab" => egui::Key::Tab,
+        "Backspace" => egui::Key::Backspace,
+        "Delete" => egui::Key::Delete,
+        "Insert" => egui::Key::Insert,
+        "Home" => egui::Key::Home,
+        "End" => egui::Key::End,
+        "PageUp" => egui::Key::PageUp,
+        "PageDown" => egui::Key::PageDown,
+        "A" => egui::Key::A,
+        "B" => egui::Key::B,
+        "C" => egui::Key::C,
+        "D" => egui::Key::D,
+        "E" => egui::Key::E,
+        "F" => egui::Key::F,
+        "G" => egui::Key::G,
+        "H" => egui::Key::H,
+        "I" => egui::Key::I,
+        "J" => egui::Key::J,
+        "K" => egui::Key::K,
+        "L" => egui::Key::L,
+        "M" => egui::Key::M,
+        "N" => egui::Key::N,
+        "O" => egui::Key::O,
+        "P" => egui::Key::P,
+        "Q" => egui::Key::Q,
+        "R" => egui::Key::R,
+        "S" => egui::Key::S,
+        "T" => egui::Key::T,
+        "U" => egui::Key::U,
+        "V" => egui::Key::V,
+        "W" => egui::Key::W,
+        "X" => egui::Key::X,
+        "Y" => egui::Key::Y,
+        "Z" => egui::Key::Z,
+        "F1" => egui::Key::F1,
+        "F2" => egui::Key::F2,
+        "F3" => egui::Key::F3,
+        "F4" => egui::Key::F4,
+        "F5" => egui::Key::F5,
+        "F6" => egui::Key::F6,
+        "F7" => egui::Key::F7,
+        "F8" => egui::Key::F8,
+        "F9" => egui::Key::F9,
+        "F10" => egui::Key::F10,
+        "F11" => egui::Key::F11,
+        "F12" => egui::Key::F12,
         _ => return None,
     })
 }
 
 fn load_keyboard_bindings() -> KeyboardBindings {
     let mut bindings = KeyboardBindings::default();
-    let Some(directory) = rom_settings_directory() else { return bindings; };
-    let Ok(contents) = fs::read_to_string(directory.join(KEYBOARD_BINDINGS_FILE)) else { return bindings; };
+    let Some(directory) = rom_settings_directory() else {
+        return bindings;
+    };
+    let Ok(contents) = fs::read_to_string(directory.join(KEYBOARD_BINDINGS_FILE)) else {
+        return bindings;
+    };
+
     for line in contents.lines() {
-        let Some((action, key)) = line.split_once('=') else { continue; };
-        let Some(key) = key_from_name(key.trim()) else { continue; };
+        let Some((action, key)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(key) = key_from_name(key.trim()) else {
+            continue;
+        };
         let action = match action.trim() {
-            "up" => KeyboardAction::Up, "down" => KeyboardAction::Down,
-            "left" => KeyboardAction::Left, "right" => KeyboardAction::Right,
-            "button1" => KeyboardAction::Button1, "button2" => KeyboardAction::Button2,
-            "nmi" => KeyboardAction::Nmi, "start" => KeyboardAction::Start,
-            "pause" => KeyboardAction::Pause, "stop" => KeyboardAction::Stop,
-            "reset" => KeyboardAction::Reset, "step_frame" => KeyboardAction::StepFrame,
-            "fullscreen" => KeyboardAction::Fullscreen, _ => continue,
+            "up" => KeyboardAction::Up,
+            "down" => KeyboardAction::Down,
+            "left" => KeyboardAction::Left,
+            "right" => KeyboardAction::Right,
+            "button1" => KeyboardAction::Button1,
+            "button2" => KeyboardAction::Button2,
+            "nmi" => KeyboardAction::Nmi,
+            "start" => KeyboardAction::Start,
+            "pause" => KeyboardAction::Pause,
+            "stop" => KeyboardAction::Stop,
+            "reset" => KeyboardAction::Reset,
+            "step_frame" => KeyboardAction::StepFrame,
+            "fullscreen" => KeyboardAction::Fullscreen,
+            _ => continue,
         };
         bindings.set(action, key);
     }
@@ -1776,32 +1859,60 @@ fn load_keyboard_bindings() -> KeyboardBindings {
 }
 
 fn save_keyboard_bindings(bindings: &KeyboardBindings) -> std::io::Result<()> {
-    let directory = rom_settings_directory().ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    let directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
     fs::create_dir_all(&directory)?;
     let rows = [
-        ("up", bindings.up), ("down", bindings.down), ("left", bindings.left),
-        ("right", bindings.right), ("button1", bindings.button_1), ("button2", bindings.button_2),
-        ("nmi", bindings.nmi), ("start", bindings.start), ("pause", bindings.pause),
-        ("stop", bindings.stop), ("reset", bindings.reset), ("step_frame", bindings.step_frame),
+        ("up", bindings.up),
+        ("down", bindings.down),
+        ("left", bindings.left),
+        ("right", bindings.right),
+        ("button1", bindings.button_1),
+        ("button2", bindings.button_2),
+        ("nmi", bindings.nmi),
+        ("start", bindings.start),
+        ("pause", bindings.pause),
+        ("stop", bindings.stop),
+        ("reset", bindings.reset),
+        ("step_frame", bindings.step_frame),
         ("fullscreen", bindings.toggle_fullscreen),
     ];
-    let contents = rows.iter().map(|(name, key)| format!("{name}={key:?}")).collect::<Vec<_>>().join("\n");
+    let contents = rows
+        .iter()
+        .map(|(name, key)| format!("{name}={key:?}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(directory.join(KEYBOARD_BINDINGS_FILE), contents)
 }
 
 fn load_gamepad_bindings() -> GamepadBindings {
     let mut bindings = GamepadBindings::default();
-    let Some(directory) = rom_settings_directory() else { return bindings; };
-    let Ok(contents) = fs::read_to_string(directory.join(GAMEPAD_BINDINGS_FILE)) else { return bindings; };
+    let Some(directory) = rom_settings_directory() else {
+        return bindings;
+    };
+    let Ok(contents) = fs::read_to_string(directory.join(GAMEPAD_BINDINGS_FILE)) else {
+        return bindings;
+    };
+
     for line in contents.lines() {
-        let Some((action, value)) = line.split_once('=') else { continue; };
-        let Ok(button) = value.trim().parse::<u8>() else { continue; };
-        if button as usize >= sega_input_runtime::MAX_BUTTONS { continue; }
+        let Some((action, value)) = line.split_once('=') else {
+            continue;
+        };
+        let Ok(button) = value.trim().parse::<u8>() else {
+            continue;
+        };
+        if button as usize >= sega_input_runtime::MAX_BUTTONS {
+            continue;
+        }
         let action = match action.trim() {
-            "up" => GamepadAction::Up, "down" => GamepadAction::Down,
-            "left" => GamepadAction::Left, "right" => GamepadAction::Right,
-            "button1" => GamepadAction::Button1, "button2" => GamepadAction::Button2,
-            "pause" => GamepadAction::Pause, _ => continue,
+            "up" => GamepadAction::Up,
+            "down" => GamepadAction::Down,
+            "left" => GamepadAction::Left,
+            "right" => GamepadAction::Right,
+            "button1" => GamepadAction::Button1,
+            "button2" => GamepadAction::Button2,
+            "pause" => GamepadAction::Pause,
+            _ => continue,
         };
         bindings.set(action, button);
     }
@@ -1809,14 +1920,23 @@ fn load_gamepad_bindings() -> GamepadBindings {
 }
 
 fn save_gamepad_bindings(bindings: &GamepadBindings) -> std::io::Result<()> {
-    let directory = rom_settings_directory().ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+    let directory = rom_settings_directory()
+        .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
     fs::create_dir_all(&directory)?;
     let rows = [
-        ("up", bindings.up), ("down", bindings.down), ("left", bindings.left),
-        ("right", bindings.right), ("button1", bindings.button_1), ("button2", bindings.button_2),
+        ("up", bindings.up),
+        ("down", bindings.down),
+        ("left", bindings.left),
+        ("right", bindings.right),
+        ("button1", bindings.button_1),
+        ("button2", bindings.button_2),
         ("pause", bindings.pause),
     ];
-    let contents = rows.iter().map(|(name, button)| format!("{name}={button}")).collect::<Vec<_>>().join("\n");
+    let contents = rows
+        .iter()
+        .map(|(name, button)| format!("{name}={button}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(directory.join(GAMEPAD_BINDINGS_FILE), contents)
 }
 
