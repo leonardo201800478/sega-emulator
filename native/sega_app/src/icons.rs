@@ -161,20 +161,8 @@ fn paint_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: 
             painter.circle_filled(center, rect.height() * 0.14, color);
         }
         IconKind::Close => {
-            painter.line_segment(
-                [
-                    egui::pos2(left, top),
-                    egui::pos2(right, bottom),
-                ],
-                stroke,
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(right, top),
-                    egui::pos2(left, bottom),
-                ],
-                stroke,
-            );
+            painter.line_segment([egui::pos2(left, top), egui::pos2(right, bottom)], stroke);
+            painter.line_segment([egui::pos2(right, top), egui::pos2(left, bottom)], stroke);
         }
     }
 }
