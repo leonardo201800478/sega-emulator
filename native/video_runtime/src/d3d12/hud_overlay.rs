@@ -277,7 +277,10 @@ mod tests {
         assert_eq!(client_rect.bottom - client_rect.top, 90);
 
         assert!(hud.is_child_of(parent.handle()));
-        assert_eq!(hud.composition_contract(), (true, true, true, true, true, true));
+        assert_eq!(
+            hud.composition_contract(),
+            (true, true, true, true, true, true)
+        );
 
         let parent_style = unsafe {
             windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
@@ -286,8 +289,7 @@ mod tests {
             )
         };
         assert_ne!(
-            parent_style
-                & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPCHILDREN.0 as isize),
+            parent_style & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPCHILDREN.0 as isize),
             0
         );
         let video_style = unsafe {
@@ -297,8 +299,7 @@ mod tests {
             )
         };
         assert_ne!(
-            video_style
-                & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPSIBLINGS.0 as isize),
+            video_style & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPSIBLINGS.0 as isize),
             0
         );
         assert_eq!(
