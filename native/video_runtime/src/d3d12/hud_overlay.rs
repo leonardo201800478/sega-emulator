@@ -9,10 +9,11 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use windows::Win32::Foundation::{
-    ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
+    COLORREF, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, RECT,
+    WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, COLORREF, CreateSolidBrush, DT_LEFT, DT_NOPREFIX, DT_TOP, DeleteObject, DrawTextW,
+    BeginPaint, CreateSolidBrush, DT_LEFT, DT_NOPREFIX, DT_TOP, DeleteObject, DrawTextW,
     EndPaint, FillRect, HGDIOBJ, PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -40,7 +41,8 @@ pub struct D3d12HudOverlay {
 impl D3d12HudOverlay {
     /// Create the transparent HUD child under an existing GUI-owned parent HWND.
     pub fn create(parent_handle: usize) -> Result<Self> {
-        let parent = super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
+        super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
+        let parent = HWND(parent_handle as *mut c_void);
         let instance = unsafe { GetModuleHandleW(None)? };
         register_hud_window_class(HINSTANCE(instance.0))?;
 
@@ -143,7 +145,10 @@ impl D3d12HudOverlay {
     /// Return whether this HWND is a direct child of the supplied parent.
     pub fn is_child_of(&self, parent_handle: usize) -> bool {
         let parent = HWND(parent_handle as *mut c_void);
-        unsafe { windows::Win32::UI::WindowsAndMessaging::GetParent(self.hwnd) == parent }
+        unsafe {
+            windows::Win32::UI::WindowsAndMessaging::GetParent(self.hwnd)
+                .is_ok_and(|actual_parent| actual_parent == parent)
+        }
     }
 
     /// Report whether the HWND has the required child/layered/pass-through styles.
