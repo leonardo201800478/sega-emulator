@@ -1,6 +1,6 @@
 # Shared Debugger MVP — Architecture and Delivery Plan
 
-Status: SMS adapter implementation in progress; runtime trace capture and native UI are wired on the feature branch, pending final Release validation
+Status: SMS debugger is integrated into the application as a separate native viewport; user-settings persistence and Release validation are in progress
 Scope owner: emulator runtime; GUI is a presentation and command surface only.
 
 ## Objective
@@ -46,16 +46,19 @@ The existing `SmsTemporalMachine::set_trace_enabled` / `take_trace` API is the e
 
 ## GUI
 
-A compact Diagnostics window should expose:
+A dedicated, independently movable and resizable native Debugger window should expose:
 
-- Pause / Continue / Step;
+- Pause / Continue / Step against the same `SmsTemporalWorker` that owns the running game (no second machine instance);
+- independent native window chrome, free movement and resizing;
 - a hexadecimal PC breakpoint field with Add / Remove / Clear;
 - CPU and hardware summary;
 - memory address + short hex/ASCII view;
 - recent events and dropped-event count (trace capture is opt-in; the GUI refreshes live snapshots at 10 Hz while running);
 - export report to a user-selected local file.
 
-The GUI sends commands and renders snapshots only. It must not execute instructions, advance machine time, decode hardware state or own hardware timing.
+The GUI sends commands and renders snapshots only. It must not execute instructions, advance machine time, decode hardware state or own hardware timing. The debugger is opened from DEBUG > Abrir janela do Debugger and is hosted by an egui native viewport, not embedded over the game viewport.
+
+User-configurable frontend preferences are auto-saved every five seconds and again during orderly shutdown to `%APPDATA%/Sega Emulator/ui_settings.txt`. This includes region, aspect ratio, footer visibility, audio backend/state/volume, diagnostics preference, FPS overlay settings, and main/debugger window geometry and open state. Keyboard and gamepad mappings and recent ROM paths continue to use their existing files in the same user directory. The emulator does not automatically load a ROM on startup.
 
 ## Cross-console extension
 
