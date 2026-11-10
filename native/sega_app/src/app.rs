@@ -1763,95 +1763,7 @@ impl GamepadBindings {
 }
 
 fn key_from_name(name: &str) -> Option<egui::Key> {
-    Some(match name {
-        "ArrowUp" => egui::Key::ArrowUp,
-        "ArrowDown" => egui::Key::ArrowDown,
-        "ArrowLeft" => egui::Key::ArrowLeft,
-        "ArrowRight" => egui::Key::ArrowRight,
-        "Space" => egui::Key::Space,
-        "Enter" => egui::Key::Enter,
-        "Escape" => egui::Key::Escape,
-        "Tab" => egui::Key::Tab,
-        "Backspace" => egui::Key::Backspace,
-        "Delete" => egui::Key::Delete,
-        "Insert" => egui::Key::Insert,
-        "Home" => egui::Key::Home,
-        "End" => egui::Key::End,
-        "PageUp" => egui::Key::PageUp,
-        "PageDown" => egui::Key::PageDown,
-        "A" => egui::Key::A,
-        "B" => egui::Key::B,
-        "C" => egui::Key::C,
-        "D" => egui::Key::D,
-        "E" => egui::Key::E,
-        "F" => egui::Key::F,
-        "G" => egui::Key::G,
-        "H" => egui::Key::H,
-        "I" => egui::Key::I,
-        "J" => egui::Key::J,
-        "K" => egui::Key::K,
-        "L" => egui::Key::L,
-        "M" => egui::Key::M,
-        "N" => egui::Key::N,
-        "O" => egui::Key::O,
-        "P" => egui::Key::P,
-        "Q" => egui::Key::Q,
-        "R" => egui::Key::R,
-        "S" => egui::Key::S,
-        "T" => egui::Key::T,
-        "U" => egui::Key::U,
-        "V" => egui::Key::V,
-        "W" => egui::Key::W,
-        "X" => egui::Key::X,
-        "Y" => egui::Key::Y,
-        "Z" => egui::Key::Z,
-        "Num0" => egui::Key::Num0,
-        "Num1" => egui::Key::Num1,
-        "Num2" => egui::Key::Num2,
-        "Num3" => egui::Key::Num3,
-        "Num4" => egui::Key::Num4,
-        "Num5" => egui::Key::Num5,
-        "Num6" => egui::Key::Num6,
-        "Num7" => egui::Key::Num7,
-        "Num8" => egui::Key::Num8,
-        "Num9" => egui::Key::Num9,
-        "F1" => egui::Key::F1,
-        "F2" => egui::Key::F2,
-        "F3" => egui::Key::F3,
-        "F4" => egui::Key::F4,
-        "F5" => egui::Key::F5,
-        "F6" => egui::Key::F6,
-        "F7" => egui::Key::F7,
-        "F8" => egui::Key::F8,
-        "F9" => egui::Key::F9,
-        "F10" => egui::Key::F10,
-        "F11" => egui::Key::F11,
-        "F12" => egui::Key::F12,
-        "F13" => egui::Key::F13,
-        "F14" => egui::Key::F14,
-        "F15" => egui::Key::F15,
-        "F16" => egui::Key::F16,
-        "F17" => egui::Key::F17,
-        "F18" => egui::Key::F18,
-        "F19" => egui::Key::F19,
-        "F20" => egui::Key::F20,
-        "F21" => egui::Key::F21,
-        "F22" => egui::Key::F22,
-        "F23" => egui::Key::F23,
-        "F24" => egui::Key::F24,
-        "F25" => egui::Key::F25,
-        "F26" => egui::Key::F26,
-        "F27" => egui::Key::F27,
-        "F28" => egui::Key::F28,
-        "F29" => egui::Key::F29,
-        "F30" => egui::Key::F30,
-        "F31" => egui::Key::F31,
-        "F32" => egui::Key::F32,
-        "F33" => egui::Key::F33,
-        "F34" => egui::Key::F34,
-        "F35" => egui::Key::F35,
-        _ => return None,
-    })
+    egui::Key::from_name(name)
 }
 
 fn load_keyboard_bindings() -> KeyboardBindings {
@@ -1912,7 +1824,7 @@ fn save_keyboard_bindings(bindings: &KeyboardBindings) -> std::io::Result<()> {
     ];
     let contents = rows
         .iter()
-        .map(|(name, key)| format!("{name}={key:?}"))
+        .map(|(name, key)| format!("{name}={}", key.name()))
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(directory.join(KEYBOARD_BINDINGS_FILE), contents)
@@ -2285,7 +2197,7 @@ fn render_controls_menu(
                 (KeyboardAction::Fullscreen, "Tela cheia"),
             ] {
                 ui.label(label);
-                ui.monospace(format!("{:?}", keyboard.key(action)));
+                ui.monospace(keyboard.key(action).name());
                 if *pending_key == Some(action) {
                     ui.weak("Pressione uma tecla...");
                 } else if ui.small_button("Remapear").clicked() {
