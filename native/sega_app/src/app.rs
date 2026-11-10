@@ -521,7 +521,7 @@ impl SegaApp {
             })
         };
 
-        let Ok(mut debugger_window) = debugger_window.lock() else {
+        let Ok(mut debugger_window) = self.debugger_window.lock() else {
             return;
         };
         if let Some(rom_path) = value("rom_path") {
@@ -767,43 +767,58 @@ impl SegaApp {
         }
     }
 
-    /// Render the debugger as a separate, freely movable and resizable native window.
+    /// Render the debugger in a deferred native viewport to avoid coupling its repaint rate to the game.
     fn render_debugger_window(&mut self, context: &egui::Context) {
-        if !self.debugger_window_open {
+        if !self.debugger_window_open.load(Ordering::Acquire) {
             return;
         }
 
-        let state = &mut self.debugger_window;
-        let worker = self.native_viewport.worker.as_ref();
+        let Ok(state) = self.debugger_window.lock() else {
+            self.debugger_window_open.store(false, Ordering::Release);
+            return;
+        };
+        let window_position = state.window_position;
+        let window_size = state.window_size;
+        drop(state);
+
+        let worker = self
+            .native_viewport
+            .worker
+            .as_ref()
+            .map(SmsTemporalWorker::debug_handle);
+        let state = Arc::clone(&self.debugger_window);
+        let open = Arc::clone(&self.debugger_window_open);
         let mut builder = egui::ViewportBuilder::default()
             .with_title("Sega Emulator — SMS Debugger")
-            .with_inner_size(state.window_size.unwrap_or(egui::vec2(980.0, 760.0)))
+            .with_inner_size(window_size.unwrap_or(egui::vec2(980.0, 760.0)))
             .with_min_inner_size([760.0, 560.0])
             .with_resizable(true)
             .with_decorations(true)
             .with_taskbar(true);
-        if let Some(position) = state.window_position {
+        if let Some(position) = window_position {
             builder = builder.with_position(position);
         }
 
-        let mut keep_open = true;
-        context.show_viewport_immediate(
+        context.show_viewport_deferred(
             egui::ViewportId::from_hash_of("sega-sms-debugger-window"),
             builder,
-            |debugger_ui, _class| {
+            move |debugger_ui, _class| {
+                let Ok(mut state) = state.lock() else {
+                    open.store(false, Ordering::Release);
+                    return;
+                };
                 if debugger_ui.input(|input| input.viewport().close_requested()) {
-                    keep_open = false;
+                    open.store(false, Ordering::Release);
                     return;
                 }
 
-                render_debugger_contents(debugger_ui, worker, state);
+                render_debugger_contents(debugger_ui, worker.as_ref(), &mut state);
                 if let Some(rect) = debugger_ui.input(|input| input.viewport().outer_rect) {
                     state.window_position = Some(rect.min);
                     state.window_size = Some(rect.size());
                 }
             },
         );
-        self.debugger_window_open = keep_open;
     }
 
     /// Render the complete shell in the root window for native and headless use.
@@ -882,7 +897,7 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
-                                    debugger_window_open: &mut self.debugger_window_open,
+                                    debugger_window_open: self.debugger_window_open.as_ref(),
                 fps_overlay_enabled: &mut self.fps_overlay_enabled,
                 fps_overlay_size: &mut self.fps_overlay_size,
                 fps_overlay_position: &mut self.fps_overlay_position,
@@ -1153,11 +1168,17 @@ impl SegaApp {
         } else {
             &self.region
         };
+        let (restored_breakpoints, trace_capture_enabled) = self
+            .debugger_window
+            .lock()
+            .map(|state| (state.breakpoints.clone(), state.trace_capture_enabled))
+            .unwrap_or_default();
+
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
                 if let Some(worker) = self.native_viewport.worker.as_ref() {
-                    for address in &self.debugger_window.breakpoints {
+                    for address in &restored_breakpoints {
                         if let Err(error) = worker.set_breakpoint(*address, true) {
                             self.native_viewport.error = Some(format!(
                                 "Falha ao restaurar breakpoint 0x{address:04X}: {error}"
@@ -1165,7 +1186,7 @@ impl SegaApp {
                             break;
                         }
                     }
-                    if self.debugger_window.trace_capture_enabled {
+                    if trace_capture_enabled {
                         if let Err(error) = worker.set_trace_enabled(true) {
                             self.native_viewport.error = Some(format!(
                                 "Falha ao restaurar trace do debugger: {error}"
@@ -2361,7 +2382,7 @@ struct HeaderState<'a> {
     diagnostics_enabled: bool,
     diagnostics_command: &'a mut Option<bool>,
     diagnostics_error: Option<&'a str>,
-    debugger_window_open: &'a mut bool,
+    debugger_window_open: &'a AtomicBool,
     fps_overlay_enabled: &'a mut bool,
     fps_overlay_size: &'a mut FpsOverlaySize,
     fps_overlay_position: &'a mut FpsOverlayPosition,
@@ -2980,7 +3001,7 @@ fn render_debugger_contents(
 
 fn render_debugger_toolbar(
     ui: &mut egui::Ui,
-    worker: &SmsTemporalWorker,
+    worker: &SmsTemporalWorkerDebugHandle,
     state: &mut DebuggerWindowState,
 ) {
     ui.horizontal_wrapped(|ui| {
@@ -3244,10 +3265,10 @@ fn render_runtime_status(
     diagnostics_enabled: bool,
     diagnostics_command: &mut Option<bool>,
     diagnostics_error: Option<&str>,
-    debugger_window_open: &mut bool,
+    debugger_window_open: &AtomicBool,
 ) {
     if ui.button("Abrir janela do Debugger").clicked() {
-        *debugger_window_open = true;
+        debugger_window_open.store(true, Ordering::Release);
     }
     let mut enabled = diagnostics_enabled;
     if ui
