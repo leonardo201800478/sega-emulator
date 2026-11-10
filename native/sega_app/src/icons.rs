@@ -63,111 +63,150 @@ pub(crate) fn small_icon_button(
 }
 
 fn paint_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: egui::Color32) {
+    match icon {
+        IconKind::Play => paint_play(painter, rect, color),
+        IconKind::Pause => paint_pause(painter, rect, color),
+        IconKind::Stop => paint_stop(painter, rect, color),
+        IconKind::Reset => paint_reset(painter, rect, color),
+        IconKind::Step => paint_step(painter, rect, color),
+        IconKind::Trace => paint_trace(painter, rect, color),
+        IconKind::Add => paint_add(painter, rect, color),
+        IconKind::Remove => paint_remove(painter, rect, color),
+        IconKind::Breakpoint => paint_breakpoint(painter, rect, color),
+        IconKind::Close => paint_close(painter, rect, color),
+    }
+}
+
+fn paint_play(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            egui::pos2(rect.left() + 2.0, rect.top() + 1.0),
+            egui::pos2(rect.left() + 2.0, rect.bottom() - 1.0),
+            egui::pos2(rect.right() - 2.0, rect.center().y),
+        ],
+        color,
+        egui::Stroke::NONE,
+    ));
+}
+
+fn paint_pause(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
     let center = rect.center();
+    let bar_width = (rect.width() * 0.22).max(3.0);
+    let bar_height = rect.height() * 0.78;
+    for offset in [-1.0, 1.0] {
+        let bar = egui::Rect::from_center_size(
+            egui::pos2(center.x + offset * bar_width, center.y),
+            egui::vec2(bar_width, bar_height),
+        );
+        painter.rect_filled(bar, egui::CornerRadius::same(1), color);
+    }
+}
+
+fn paint_stop(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let side = rect.height() * 0.72;
+    painter.rect_filled(
+        egui::Rect::from_center_size(rect.center(), egui::vec2(side, side)),
+        egui::CornerRadius::same(1),
+        color,
+    );
+}
+
+fn paint_reset(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let center = rect.center();
+    let right = rect.right() - 2.0;
+    let top = rect.top() + 1.0;
     let stroke = egui::Stroke::new(2.0, color);
+    painter.circle_stroke(center, rect.height() * 0.36, stroke);
+    painter.line_segment(
+        [egui::pos2(center.x + 1.0, top + 1.0), egui::pos2(right, top + 1.0)],
+        stroke,
+    );
+    painter.line_segment(
+        [egui::pos2(right, top + 1.0), egui::pos2(right - 1.0, top + 6.0)],
+        stroke,
+    );
+}
+
+fn paint_step(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
     let left = rect.left() + 2.0;
     let right = rect.right() - 2.0;
     let top = rect.top() + 1.0;
     let bottom = rect.bottom() - 1.0;
+    let stroke = egui::Stroke::new(2.0, color);
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            egui::pos2(left, top),
+            egui::pos2(left, bottom),
+            egui::pos2(right - 4.0, rect.center().y),
+        ],
+        color,
+        egui::Stroke::NONE,
+    ));
+    painter.line_segment([egui::pos2(right, top), egui::pos2(right, bottom)], stroke);
+}
 
-    match icon {
-        IconKind::Play => {
-            painter.add(egui::Shape::convex_polygon(
-                vec![
-                    egui::pos2(left, top),
-                    egui::pos2(left, bottom),
-                    egui::pos2(right, center.y),
-                ],
-                color,
-                egui::Stroke::NONE,
-            ));
-        }
-        IconKind::Pause => {
-            let bar_width = (rect.width() * 0.22).max(3.0);
-            let bar_height = rect.height() * 0.78;
-            for offset in [-1.0, 1.0] {
-                let bar = egui::Rect::from_center_size(
-                    egui::pos2(center.x + offset * bar_width, center.y),
-                    egui::vec2(bar_width, bar_height),
-                );
-                painter.rect_filled(bar, egui::CornerRadius::same(1), color);
-            }
-        }
-        IconKind::Stop => {
-            let side = rect.height() * 0.72;
-            painter.rect_filled(
-                egui::Rect::from_center_size(center, egui::vec2(side, side)),
-                egui::CornerRadius::same(1),
-                color,
-            );
-        }
-        IconKind::Reset => {
-            painter.circle_stroke(center, rect.height() * 0.36, stroke);
-            painter.line_segment(
-                [
-                    egui::pos2(center.x + 1.0, top + 1.0),
-                    egui::pos2(right, top + 1.0),
-                ],
-                stroke,
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(right, top + 1.0),
-                    egui::pos2(right - 1.0, top + 6.0),
-                ],
-                stroke,
-            );
-        }
-        IconKind::Step => {
-            let triangle_right = right - 4.0;
-            painter.add(egui::Shape::convex_polygon(
-                vec![
-                    egui::pos2(left, top),
-                    egui::pos2(left, bottom),
-                    egui::pos2(triangle_right, center.y),
-                ],
-                color,
-                egui::Stroke::NONE,
-            ));
-            painter.line_segment([egui::pos2(right, top), egui::pos2(right, bottom)], stroke);
-        }
-        IconKind::Trace => {
-            painter.add(egui::Shape::line(
-                vec![
-                    egui::pos2(left, bottom),
-                    egui::pos2(left + 4.0, bottom - 4.0),
-                    egui::pos2(center.x - 2.0, center.y + 2.0),
-                    egui::pos2(center.x + 2.0, top + 2.0),
-                    egui::pos2(right, top + 2.0),
-                ],
-                stroke,
-            ));
-        }
-        IconKind::Add => {
-            painter.line_segment(
-                [egui::pos2(center.x, top), egui::pos2(center.x, bottom)],
-                stroke,
-            );
-            painter.line_segment(
-                [egui::pos2(left, center.y), egui::pos2(right, center.y)],
-                stroke,
-            );
-        }
-        IconKind::Remove => {
-            painter.line_segment(
-                [egui::pos2(left, center.y), egui::pos2(right, center.y)],
-                stroke,
-            );
-        }
-        IconKind::Breakpoint => {
-            painter.circle_stroke(center, rect.height() * 0.36, stroke);
-            painter.circle_filled(center, rect.height() * 0.14, color);
-        }
-        IconKind::Close => {
-            painter.line_segment([egui::pos2(left, top), egui::pos2(right, bottom)], stroke);
-            painter.line_segment([egui::pos2(right, top), egui::pos2(left, bottom)], stroke);
-        }
-    }
+fn paint_trace(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let left = rect.left() + 2.0;
+    let right = rect.right() - 2.0;
+    let top = rect.top() + 1.0;
+    let bottom = rect.bottom() - 1.0;
+    let center = rect.center();
+    painter.add(egui::Shape::line(
+        vec![
+            egui::pos2(left, bottom),
+            egui::pos2(left + 4.0, bottom - 4.0),
+            egui::pos2(center.x - 2.0, center.y + 2.0),
+            egui::pos2(center.x + 2.0, top + 2.0),
+            egui::pos2(right, top + 2.0),
+        ],
+        egui::Stroke::new(2.0, color),
+    ));
+}
+
+fn paint_add(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let center = rect.center();
+    let stroke = egui::Stroke::new(2.0, color);
+    painter.line_segment(
+        [
+            egui::pos2(center.x, rect.top() + 1.0),
+            egui::pos2(center.x, rect.bottom() - 1.0),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            egui::pos2(rect.left() + 2.0, center.y),
+            egui::pos2(rect.right() - 2.0, center.y),
+        ],
+        stroke,
+    );
+}
+
+fn paint_remove(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let center = rect.center();
+    painter.line_segment(
+        [
+            egui::pos2(rect.left() + 2.0, center.y),
+            egui::pos2(rect.right() - 2.0, center.y),
+        ],
+        egui::Stroke::new(2.0, color),
+    );
+}
+
+fn paint_breakpoint(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let center = rect.center();
+    painter.circle_stroke(center, rect.height() * 0.36, egui::Stroke::new(2.0, color));
+    painter.circle_filled(center, rect.height() * 0.14, color);
+}
+
+fn paint_close(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    let left = rect.left() + 2.0;
+    let right = rect.right() - 2.0;
+    let top = rect.top() + 1.0;
+    let bottom = rect.bottom() - 1.0;
+    let stroke = egui::Stroke::new(2.0, color);
+    painter.line_segment([egui::pos2(left, top), egui::pos2(right, bottom)], stroke);
+    painter.line_segment([egui::pos2(right, top), egui::pos2(left, bottom)], stroke);
 }
 
 #[cfg(test)]
