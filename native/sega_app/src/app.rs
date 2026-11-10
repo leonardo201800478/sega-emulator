@@ -542,9 +542,7 @@ impl SegaApp {
         {
             debugger_window.window_position = Some(position);
         }
-        if let Some(size) =
-            saved_ui_setting(contents, "debugger_size").and_then(parse_saved_size)
-        {
+        if let Some(size) = saved_ui_setting(contents, "debugger_size").and_then(parse_saved_size) {
             debugger_window.window_size = Some(size);
         }
     }
@@ -626,8 +624,8 @@ impl SegaApp {
         {
             self.main_window_size = Some(size);
         }
-        if let Some(maximized) = saved_ui_setting(contents, "main_window_maximized")
-            .and_then(|value| value.parse().ok())
+        if let Some(maximized) =
+            saved_ui_setting(contents, "main_window_maximized").and_then(|value| value.parse().ok())
         {
             self.main_window_maximized = maximized;
         }
@@ -1213,9 +1211,7 @@ impl SegaApp {
                             break;
                         }
                     }
-                    if trace_capture_enabled
-                        && let Err(error) = worker.set_trace_enabled(true)
-                    {
+                    if trace_capture_enabled && let Err(error) = worker.set_trace_enabled(true) {
                         self.native_viewport.error =
                             Some(format!("Falha ao restaurar trace do debugger: {error}"));
                     }
