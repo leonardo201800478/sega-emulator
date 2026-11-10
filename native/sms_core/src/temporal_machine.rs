@@ -814,6 +814,21 @@ impl SmsTemporalMachine {
         }
     }
 
+    /// Execute exactly one complete CPU instruction through the machine scheduler.
+    ///
+    /// Interrupt acknowledge is a resumable boundary in the Z80 microsequencer;
+    /// finish its continuation before returning so callers always observe an
+    /// instruction boundary. Generated audio is drained to keep diagnostic
+    /// single-stepping from accumulating an unbounded host sample buffer.
+    pub fn step_complete_instruction(&mut self) -> Result<(), SmsTemporalMachineError> {
+        let step = self.step_instruction(0)?;
+        if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+            self.resume_instruction(0)?;
+        }
+        self.drain_audio_samples(None);
+        Ok(())
+    }
+
     /// Resume an already active instruction from its current safe point.
     pub fn resume_instruction(
         &mut self,

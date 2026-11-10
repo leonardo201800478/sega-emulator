@@ -228,6 +228,7 @@ enum WorkerCommand {
     Reset(SyncSender<Result<(), String>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
+    StepInstruction(SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
@@ -342,6 +343,13 @@ impl SmsTemporalWorker {
     /// Add or remove an instruction-boundary program-counter breakpoint.
     pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
+    }
+
+    /// Execute one complete CPU instruction while the worker is paused.
+    ///
+    /// CPU and Scheduler access remain exclusively on the machine-owning thread.
+    pub fn step_instruction(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::StepInstruction)
     }
 
     pub fn step_frame(&self, max_instructions: usize) -> Result<usize, String> {
@@ -990,6 +998,32 @@ fn handle_command(
                 }
                 Err(error) => {
                     let _ = reply.send(Err(error));
+                }
+            }
+        }
+        WorkerCommand::StepInstruction(reply) => {
+            if *running {
+                let _ = reply.send(Err(
+                    "step_instruction is available only while the native worker is paused".to_owned(),
+                ));
+            } else {
+                match machine.step_complete_instruction() {
+                    Ok(()) => {
+                        if telemetry.diagnostics_enabled() {
+                            telemetry.total_instructions.fetch_add(1, Ordering::AcqRel);
+                        }
+                        telemetry.set_frame_number(machine.frame_number());
+                        telemetry.machine_time_ticks.store(
+                            u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
+                            Ordering::Release,
+                        );
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        let error = error.to_string();
+                        telemetry.set_runtime_error(Some(error.clone()));
+                        let _ = reply.send(Err(error));
+                    }
                 }
             }
         }
