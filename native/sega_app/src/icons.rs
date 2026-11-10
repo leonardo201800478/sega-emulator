@@ -40,12 +40,7 @@ pub(crate) fn icon_button(
     response.on_hover_text(tooltip)
 }
 
-fn paint_icon(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    icon: IconKind,
-    color: egui::Color32,
-) {
+fn paint_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: egui::Color32) {
     let center = rect.center();
     let stroke = egui::Stroke::new(2.0, color);
     let left = rect.left() + 2.0;
@@ -112,13 +107,7 @@ fn paint_icon(
                 color,
                 egui::Stroke::NONE,
             ));
-            painter.line_segment(
-                [
-                    egui::pos2(right, top),
-                    egui::pos2(right, bottom),
-                ],
-                stroke,
-            );
+            painter.line_segment([egui::pos2(right, top), egui::pos2(right, bottom)], stroke);
         }
         IconKind::Trace => {
             painter.add(egui::Shape::line(
@@ -133,20 +122,8 @@ fn paint_icon(
             ));
         }
         IconKind::Add => {
-            painter.line_segment(
-                [
-                    egui::pos2(center.x, top),
-                    egui::pos2(center.x, bottom),
-                ],
-                stroke,
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(left, center.y),
-                    egui::pos2(right, center.y),
-                ],
-                stroke,
-            );
+            painter.line_segment([egui::pos2(center.x, top), egui::pos2(center.x, bottom)], stroke);
+            painter.line_segment([egui::pos2(left, center.y), egui::pos2(right, center.y)], stroke);
         }
         IconKind::Remove => {
             painter.line_segment(
