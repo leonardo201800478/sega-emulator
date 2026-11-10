@@ -145,22 +145,19 @@ fn paint_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: 
         }
         IconKind::Add => {
             painter.line_segment(
-                [
-                    egui::pos2(center.x, top),
-                    egui::pos2(center.x, bottom),
-                ],
+                [egui::pos2(center.x, top), egui::pos2(center.x, bottom)],
                 stroke,
             );
             painter.line_segment(
-                [
-                    egui::pos2(left, center.y),
-                    egui::pos2(right, center.y),
-                ],
+                [egui::pos2(left, center.y), egui::pos2(right, center.y)],
                 stroke,
             );
         }
         IconKind::Remove => {
-            painter.line_segment([egui::pos2(left, center.y), egui::pos2(right, center.y)], stroke);
+            painter.line_segment(
+                [egui::pos2(left, center.y), egui::pos2(right, center.y)],
+                stroke,
+            );
         }
         IconKind::Breakpoint => {
             painter.circle_stroke(center, rect.height() * 0.36, stroke);
