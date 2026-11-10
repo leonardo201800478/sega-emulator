@@ -103,6 +103,7 @@ struct DebuggerWindowState {
     snapshot: Option<SmsDebugSnapshot>,
     last_refresh: Instant,
     status: String,
+    trace_capture_enabled: bool,
     window_position: Option<egui::Pos2>,
     window_size: Option<egui::Vec2>,
 }
@@ -117,6 +118,7 @@ impl Default for DebuggerWindowState {
             snapshot: None,
             last_refresh: Instant::now(),
             status: "Aguardando máquina SMS".to_owned(),
+            trace_capture_enabled: false,
             window_position: None,
             window_size: None,
         }
@@ -510,6 +512,22 @@ impl SegaApp {
             let (candidate, value) = line.split_once('=')?;
             (candidate == key).then_some(value)
         });
+        if let Some(rom_path) = value("rom_path") {
+            self.rom_path = rom_path.to_owned();
+        }
+        if let Some(memory_address) = value("debugger_memory_address") {
+            self.debugger_window.memory_address = memory_address.to_owned();
+        }
+        if let Some(breakpoint_input) = value("debugger_breakpoint_input") {
+            self.debugger_window.breakpoint_input = breakpoint_input.to_owned();
+        }
+        if let Some(breakpoints) = value("debugger_breakpoints") {
+            self.debugger_window.breakpoints = breakpoints.split(',')
+                .filter_map(parse_debug_address).take(64).collect();
+        }
+        if let Some(enabled) = value("debugger_trace_enabled").and_then(|value| value.parse().ok()) {
+            self.debugger_window.trace_capture_enabled = enabled;
+        }
         if let Some(region) = value("region").filter(|value| matches!(*value, "usa" | "europe" | "japan")) {
             self.region = region.to_owned();
         }
@@ -592,8 +610,14 @@ impl SegaApp {
         let size = self.debugger_window.window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
         let main_position = self.main_window_position.map_or_else(String::new, |p| format!("{:.1},{:.1}", p.x, p.y));
         let main_size = self.main_window_size.map_or_else(String::new, |s| format!("{:.1},{:.1}", s.x, s.y));
+        let breakpoints = self.debugger_window.breakpoints.iter()
+            .map(|address| format!("{address:04X}"))
+            .collect::<Vec<_>>()
+            .join(",");
         let contents = format!(
-            "region={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            "rom_path={}\\ndebugger_memory_address={}\\ndebugger_breakpoint_input={}\\ndebugger_breakpoints={}\\ndebugger_trace_enabled={}\\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            self.rom_path, self.debugger_window.memory_address, self.debugger_window.breakpoint_input,
+            breakpoints, self.debugger_window.trace_capture_enabled,
             self.region, aspect_ratio, footer, audio_state, audio_backend, self.audio_volume,
             self.diagnostics_enabled, self.fps_overlay_enabled, fps_size, fps_position,
             self.debugger_window_open, position, size, main_position, main_size,
@@ -1024,6 +1048,19 @@ impl SegaApp {
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                if let Some(worker) = self.native_viewport.worker.as_ref() {
+                    for address in &self.debugger_window.breakpoints {
+                        if let Err(error) = worker.set_breakpoint(*address, true) {
+                            self.native_viewport.error = Some(format!("Falha ao restaurar breakpoint 0x{address:04X}: {error}"));
+                            break;
+                        }
+                    }
+                    if self.debugger_window.trace_capture_enabled {
+                        if let Err(error) = worker.set_trace_enabled(true) {
+                            self.native_viewport.error = Some(format!("Falha ao restaurar trace do debugger: {error}"));
+                        }
+                    }
+                }
                 if self.diagnostics_enabled
                     && let Some(worker) = self.native_viewport.worker.as_ref()
                 {
@@ -2790,10 +2827,13 @@ fn render_debugger_contents(ui: &mut egui::Ui, worker: Option<&SmsTemporalWorker
                 Err(error) => state.status = format!("Falha no step: {error}"),
             }
         }
-        let trace = state.snapshot.as_ref().is_some_and(|snapshot| snapshot.trace_enabled);
+        let trace = state.trace_capture_enabled;
         if ui.button(if trace { "Desativar trace" } else { "Ativar trace" }).clicked() {
             match worker.set_trace_enabled(!trace) {
-                Ok(()) => if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); },
+                Ok(()) => {
+                    state.trace_capture_enabled = !trace;
+                    if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); }
+                },
                 Err(error) => state.status = format!("Falha ao configurar trace: {error}"),
             }
         }
