@@ -170,7 +170,7 @@ impl D3d12HudOverlay {
             return;
         }
         unsafe {
-            ShowWindow(self.hwnd, if visible { SW_SHOWNOACTIVATE } else { SW_HIDE });
+            let _ = ShowWindow(self.hwnd, if visible { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
         self.visible = visible;
     }
