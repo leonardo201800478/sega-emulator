@@ -3329,6 +3329,8 @@ mod tests {
     fn fps_overlay_sizes_are_monotonic() {
         assert!(FpsOverlaySize::Small.dimensions().x < FpsOverlaySize::Medium.dimensions().x);
         assert!(FpsOverlaySize::Medium.dimensions().x < FpsOverlaySize::Large.dimensions().x);
+        assert!(FpsOverlaySize::Small.font_size() < FpsOverlaySize::Medium.font_size());
+        assert!(FpsOverlaySize::Medium.font_size() < FpsOverlaySize::Large.font_size());
     }
 
     #[test]
