@@ -58,7 +58,7 @@ A dedicated, independently movable and resizable native Debugger window should e
 
 The GUI sends commands and renders snapshots only. It must not execute instructions, advance machine time, decode hardware state or own hardware timing. The debugger is opened from DEBUG > Abrir janela do Debugger and is hosted by an egui native viewport, not embedded over the game viewport.
 
-User-configurable frontend preferences are auto-saved every five seconds and again during orderly shutdown to `%APPDATA%/Sega Emulator/ui_settings.txt`. This includes region, aspect ratio, footer visibility, audio backend/state/volume, diagnostics preference, FPS overlay settings, and main/debugger window geometry and open state. Keyboard and gamepad mappings and recent ROM paths continue to use their existing files in the same user directory. The emulator does not automatically load a ROM on startup.
+User-configurable frontend preferences are auto-saved every five seconds and again during orderly shutdown to `%APPDATA%/Sega Emulator/ui_settings.txt`. This includes the last ROM path field (without auto-loading it), region, aspect ratio, footer visibility, audio backend/state/volume, diagnostics preference, FPS overlay settings, debugger open state, breakpoint list, memory-inspection address, trace preference, and main/debugger window geometry. Keyboard and gamepad mappings, the last ROM-picker directory and recent ROM paths continue to use their existing files in the same user directory. The emulator does not automatically load a ROM on startup.
 
 ## Cross-console extension
 
