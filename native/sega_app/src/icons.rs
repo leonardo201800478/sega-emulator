@@ -191,7 +191,7 @@ mod tests {
             IconKind::Close,
         ];
 
-        let output = context.run(egui::RawInput::default(), |context| {
+        let output = context.run_ui(egui::RawInput::default(), |context| {
             egui::CentralPanel::default().show(context, |ui| {
                 let rect = egui::Rect::from_min_size(
                     ui.available_rect_before_wrap().min,
