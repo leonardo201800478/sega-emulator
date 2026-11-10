@@ -1,8 +1,8 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::debugger_window::{
@@ -96,7 +96,6 @@ pub struct SegaApp {
     main_window_fullscreen: bool,
     main_window_geometry_restored: bool,
 }
-
 
 impl Default for SegaApp {
     fn default() -> Self {
@@ -520,8 +519,7 @@ impl SegaApp {
         {
             debugger_window.breakpoints.clear();
         }
-        if let Some(enabled) = value("debugger_trace_enabled")
-            .and_then(|value| value.parse().ok())
+        if let Some(enabled) = value("debugger_trace_enabled").and_then(|value| value.parse().ok())
         {
             debugger_window.trace_capture_enabled = enabled;
         }
@@ -588,13 +586,12 @@ impl SegaApp {
         if let Some(size) = value("main_window_size").and_then(parse_saved_root_size) {
             self.main_window_size = Some(size);
         }
-        if let Some(maximized) = value("main_window_maximized")
-            .and_then(|value| value.parse().ok())
+        if let Some(maximized) = value("main_window_maximized").and_then(|value| value.parse().ok())
         {
             self.main_window_maximized = maximized;
         }
-        if let Some(fullscreen) = value("main_window_fullscreen")
-            .and_then(|value| value.parse().ok())
+        if let Some(fullscreen) =
+            value("main_window_fullscreen").and_then(|value| value.parse().ok())
         {
             self.main_window_fullscreen = fullscreen;
         }
@@ -1189,9 +1186,8 @@ impl SegaApp {
                     }
                     if trace_capture_enabled {
                         if let Err(error) = worker.set_trace_enabled(true) {
-                            self.native_viewport.error = Some(format!(
-                                "Falha ao restaurar trace do debugger: {error}"
-                            ));
+                            self.native_viewport.error =
+                                Some(format!("Falha ao restaurar trace do debugger: {error}"));
                         }
                     }
                 }
@@ -3237,7 +3233,10 @@ mod tests {
         );
         assert!(crate::debugger_window::parse_saved_position("NaN,20").is_none());
         assert!(crate::debugger_window::parse_saved_position("invalid").is_none());
-        assert_eq!(crate::debugger_window::parse_debug_address("0x00AF"), Some(0x00AF));
+        assert_eq!(
+            crate::debugger_window::parse_debug_address("0x00AF"),
+            Some(0x00AF)
+        );
         assert_eq!(crate::debugger_window::parse_debug_address("invalid"), None);
         assert_eq!(
             crate::debugger_window::parse_saved_size("980,760"),
