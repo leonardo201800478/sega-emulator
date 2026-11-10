@@ -339,7 +339,8 @@ struct MenuPopupActions {
 /// Owns the UI-thread HWND child, SMS worker and D3D12 presentation session.
 ///
 /// Shutdown order is deliberate: stop the machine, detach its borrowed mailbox,
-/// join the machine worker, close/join D3D12 presentation, then destroy the HWND.
+/// signal worker shutdown without joining on the GUI thread, close/join D3D12
+/// presentation, then destroy the HUD and video child HWNDs.
 #[derive(Default)]
 struct NativeViewportState {
     parent_hwnd: Option<usize>,
