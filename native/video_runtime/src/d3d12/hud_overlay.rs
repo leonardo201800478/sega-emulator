@@ -316,7 +316,6 @@ mod tests {
     use super::super::{D3d12ChildWindow, NativeVideoWindow};
     use super::D3d12HudOverlay;
     use super::{LPARAM, LRESULT, WPARAM};
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{GW_CHILD, GetWindow};
 
     #[test]
