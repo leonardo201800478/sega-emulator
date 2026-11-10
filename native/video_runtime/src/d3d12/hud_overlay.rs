@@ -19,7 +19,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect,
     GetWindowLongPtrW, GetWindowTextW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
-    SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_SHOWWINDOW, WINDOW_EX_STYLE,
+    SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_SHOWWINDOW, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_CHILD,
     WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, WS_VISIBLE, GWL_EXSTYLE,
     GWL_STYLE, HWND_TOP, HTTRANSPARENT, LWA_COLORKEY, MA_NOACTIVATE,
@@ -130,7 +130,7 @@ impl D3d12HudOverlay {
     /// Show or hide the child HUD without changing focus or desktop z-order.
     pub fn set_visible(&self, visible: bool) {
         unsafe {
-            ShowWindow(self.hwnd, if visible { SW_SHOW } else { SW_HIDE });
+            ShowWindow(self.hwnd, if visible { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
     }
 
@@ -141,13 +141,14 @@ impl D3d12HudOverlay {
     }
 
     /// Report whether the HWND has the required child/layered/pass-through styles.
-    pub fn composition_contract(&self) -> (bool, bool, bool, bool) {
+    pub fn composition_contract(&self) -> (bool, bool, bool, bool, bool) {
         let style = unsafe { GetWindowLongPtrW(self.hwnd, GWL_STYLE) };
         let ex_style = unsafe { GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE) };
         (
             style & (WS_CHILD.0 as isize) != 0,
             ex_style & (WS_EX_LAYERED.0 as isize) != 0,
             ex_style & (WS_EX_TRANSPARENT.0 as isize) != 0,
+            ex_style & (WS_EX_NOACTIVATE.0 as isize) != 0,
             ex_style & (windows::Win32::UI::WindowsAndMessaging::WS_EX_TOPMOST.0 as isize) == 0,
         )
     }
@@ -252,7 +253,7 @@ mod tests {
             .unwrap();
 
         assert!(hud.is_child_of(parent.handle()));
-        assert_eq!(hud.composition_contract(), (true, true, true, true));
+        assert_eq!(hud.composition_contract(), (true, true, true, true, true));
 
         let first_child = unsafe {
             GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD)
