@@ -1004,7 +1004,8 @@ fn handle_command(
         WorkerCommand::StepInstruction(reply) => {
             if *running {
                 let _ = reply.send(Err(
-                    "step_instruction is available only while the native worker is paused".to_owned(),
+                    "step_instruction is available only while the native worker is paused"
+                        .to_owned(),
                 ));
             } else {
                 match machine.step_complete_instruction() {
@@ -1364,7 +1365,11 @@ mod tests {
         let result = worker.step_instruction();
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("only while the native worker is paused"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("only while the native worker is paused")
+        );
         assert!(worker.is_running());
     }
 
