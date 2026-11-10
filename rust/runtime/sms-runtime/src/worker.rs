@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
 use sega_audio_runtime::AudioOutputMetrics;
-use sega_debugger_core::BreakpointSet;
+use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
-    ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
-    Territory, VideoStandard,
+    ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
+    SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
@@ -26,6 +26,7 @@ use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
+const DEBUG_TRACE_CAPACITY: usize = 2_048;
 
 pub fn sms_temporal_region_profile(
     region: &str,
@@ -231,6 +232,7 @@ enum WorkerCommand {
     StepInstruction(SyncSender<Result<(), String>>),
     DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
+    SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
@@ -274,6 +276,12 @@ pub struct SmsDebugSnapshot {
     pub mapper_control: u8,
     pub memory_control: u8,
     pub framebuffer_rgb: Vec<u8>,
+    /// Most recent scheduler/bus events, oldest first.
+    pub trace_events: Vec<SmsTemporalTraceEvent>,
+    /// Number of trace events discarded after the bounded history filled.
+    pub trace_dropped: u64,
+    /// Whether runtime trace capture is currently enabled.
+    pub trace_enabled: bool,
 }
 
 const DEBUG_MEMORY_READ_LIMIT: usize = 256;
@@ -399,6 +407,11 @@ impl SmsTemporalWorker {
         reply_receiver.recv().map_err(|error| {
             format!("SMS machine worker did not return a debug snapshot: {error}")
         })?
+    }
+
+    /// Enable or disable bounded scheduler/bus trace capture.
+    pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
     }
 
     /// Read at most 256 bytes through the active mapper without advancing time.
@@ -852,6 +865,8 @@ fn worker_loop(
 ) {
     let mut running = false;
     let mut breakpoints = BreakpointSet::default();
+    let mut trace_history = BoundedHistory::new(DEBUG_TRACE_CAPACITY);
+    let mut trace_enabled = false;
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
@@ -882,9 +897,12 @@ fn worker_loop(
                 &mut video_mailbox,
                 &mut video_sequence,
                 &telemetry,
+                &mut trace_history,
+                &mut trace_enabled,
             ) {
                 break;
             }
+            drain_machine_trace(&mut machine, &mut trace_history);
             continue;
         }
 
@@ -899,6 +917,7 @@ fn worker_loop(
             &telemetry,
         ) {
             Ok((_, frame_wait, breakpoint_hit)) => {
+                drain_machine_trace(&mut machine, &mut trace_history);
                 if breakpoint_hit {
                     running = false;
                     telemetry.running.store(false, Ordering::Release);
@@ -925,9 +944,12 @@ fn worker_loop(
                                 &mut video_mailbox,
                                 &mut video_sequence,
                                 &telemetry,
+                                &mut trace_history,
+                                &mut trace_enabled,
                             ) {
                                 break;
                             }
+                            drain_machine_trace(&mut machine, &mut trace_history);
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -955,6 +977,15 @@ fn worker_loop(
     drop(video_mailbox);
 }
 
+fn drain_machine_trace(
+    machine: &mut SmsTemporalMachine,
+    history: &mut BoundedHistory<SmsTemporalTraceEvent>,
+) {
+    for event in machine.take_trace() {
+        history.push(event);
+    }
+}
+
 /// Dispatch one coarse worker command over the worker-owned machine and outputs.
 ///
 /// The explicit state references keep machine, audio, video and timing ownership
@@ -971,6 +1002,8 @@ fn handle_command(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
+    trace_history: &mut BoundedHistory<SmsTemporalTraceEvent>,
+    trace_enabled: &mut bool,
 ) -> bool {
     match command {
         WorkerCommand::Start(reply) => {
@@ -1127,8 +1160,19 @@ fn handle_command(
                 mapper_control: machine.mapper_control(),
                 memory_control: machine.memory_control(),
                 framebuffer_rgb: machine.framebuffer().to_vec(),
+                trace_events: trace_history.entries().iter().copied().collect(),
+                trace_dropped: trace_history.dropped(),
+                trace_enabled: *trace_enabled,
             };
             let _ = reply.send(Ok(snapshot));
+        }
+        WorkerCommand::SetTraceEnabled(enabled, reply) => {
+            machine.set_trace_enabled(enabled);
+            *trace_enabled = enabled;
+            if !enabled {
+                trace_history.clear();
+            }
+            let _ = reply.send(Ok(()));
         }
         WorkerCommand::ReadMemory(start, length, reply) => {
             let bytes = (0..length)
@@ -1496,6 +1540,27 @@ mod tests {
         assert_eq!(worker.inspect_memory(0, 4).unwrap(), [0, 0, 0, 0]);
         assert!(worker.inspect_memory(0, 257).is_err());
         assert_eq!(worker.machine_time_ticks(), initial_ticks);
+    }
+
+    #[test]
+    fn trace_capture_is_opt_in_and_exposes_bounded_owned_events() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let initial = worker.debug_snapshot().unwrap();
+        assert!(!initial.trace_enabled);
+        assert!(initial.trace_events.is_empty());
+
+        worker.set_trace_enabled(true).unwrap();
+        worker.step_instruction().unwrap();
+        let captured = worker.debug_snapshot().unwrap();
+        assert!(captured.trace_enabled);
+        assert!(!captured.trace_events.is_empty());
+        assert_eq!(captured.trace_dropped, 0);
+
+        worker.set_trace_enabled(false).unwrap();
+        let disabled = worker.debug_snapshot().unwrap();
+        assert!(!disabled.trace_enabled);
+        assert!(disabled.trace_events.is_empty());
+        assert_eq!(disabled.trace_dropped, 0);
     }
 
     #[test]
