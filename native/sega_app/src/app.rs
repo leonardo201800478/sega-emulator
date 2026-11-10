@@ -100,6 +100,7 @@ pub struct SegaApp {
 struct DebuggerWindowState {
     breakpoint_input: String,
     breakpoints: Vec<u16>,
+    breakpoint_rom_path: String,
     memory_address: String,
     memory_bytes: Vec<u8>,
     snapshot: Option<SmsDebugSnapshot>,
@@ -115,6 +116,7 @@ impl Default for DebuggerWindowState {
         Self {
             breakpoint_input: "0088".to_owned(),
             breakpoints: Vec::new(),
+            breakpoint_rom_path: String::new(),
             memory_address: "C000".to_owned(),
             memory_bytes: Vec::new(),
             snapshot: None,
@@ -533,12 +535,18 @@ impl SegaApp {
         if let Some(breakpoint_input) = value("debugger_breakpoint_input") {
             debugger_window.breakpoint_input = breakpoint_input.to_owned();
         }
+        if let Some(rom_path) = value("debugger_breakpoints_rom") {
+            debugger_window.breakpoint_rom_path = rom_path.to_owned();
+        }
         if let Some(breakpoints) = value("debugger_breakpoints") {
             debugger_window.breakpoints = breakpoints
                 .split(',')
                 .filter_map(parse_debug_address)
                 .take(64)
                 .collect();
+        }
+        if debugger_window.breakpoint_rom_path != self.rom_path {
+            debugger_window.breakpoints.clear();
         }
         if let Some(enabled) = value("debugger_trace_enabled")
             .and_then(|value| value.parse().ok())
@@ -696,8 +704,9 @@ impl SegaApp {
             .join(",");
 
         let contents = format!(
-            "rom_path={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
             self.rom_path,
+            debugger_window.breakpoint_rom_path,
             debugger_window.memory_address,
             debugger_window.breakpoint_input,
             breakpoints,
@@ -1171,7 +1180,13 @@ impl SegaApp {
         let (restored_breakpoints, trace_capture_enabled) = self
             .debugger_window
             .lock()
-            .map(|state| (state.breakpoints.clone(), state.trace_capture_enabled))
+            .map(|mut state| {
+                if state.breakpoint_rom_path != self.rom_path {
+                    state.breakpoints.clear();
+                    state.breakpoint_rom_path.clone_from(&self.rom_path);
+                }
+                (state.breakpoints.clone(), state.trace_capture_enabled)
+            })
             .unwrap_or_default();
 
         match SmsTemporalWorker::new(rom, region) {
