@@ -1556,8 +1556,9 @@ impl SegaApp {
         );
 
         if self.native_viewport.last_hud_bounds != Some(bounds) {
-            if let Some(overlay) = self.native_viewport.hud_overlay.as_ref() {
+            if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
                 if let Err(error) = overlay.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3) {
+                    overlay.set_visible(false);
                     let message = format!("Falha ao posicionar HUD nativo: {error}");
                     record_ui_diagnostic("native.hud.bounds_error", &message);
                     self.native_viewport.hud_error = Some(message);
@@ -1580,8 +1581,9 @@ impl SegaApp {
                 .map(SmsTemporalWorker::performance_metrics);
             let text = format_sms_hud_text(metrics);
             if self.native_viewport.last_hud_text.as_deref() != Some(&text) {
-                if let Some(overlay) = self.native_viewport.hud_overlay.as_ref() {
+                if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
                     if let Err(error) = overlay.set_text(&text) {
+                        overlay.set_visible(false);
                         let message = format!("Falha ao atualizar HUD nativo: {error}");
                         record_ui_diagnostic("native.hud.text_error", &message);
                         self.native_viewport.hud_error = Some(message);
