@@ -2875,7 +2875,11 @@ fn render_input_controls(
 }
 
 fn parse_debug_address(value: &str) -> Option<u16> {
-    u16::from_str_radix(value.trim().trim_start_matches("0x"), 16).ok()
+    u16::from_str_radix(
+        value.trim().trim_start_matches("0x").trim_start_matches("0X"),
+        16,
+    )
+    .ok()
 }
 
 fn parse_saved_position(value: &str) -> Option<egui::Pos2> {
@@ -3555,6 +3559,8 @@ mod tests {
         );
         assert!(super::parse_saved_position("NaN,20").is_none());
         assert!(super::parse_saved_position("invalid").is_none());
+        assert_eq!(super::parse_debug_address("0x00AF"), Some(0x00AF));
+        assert_eq!(super::parse_debug_address("invalid"), None);
         assert_eq!(
             super::parse_saved_size("980,760"),
             Some(egui::vec2(980.0, 760.0))
