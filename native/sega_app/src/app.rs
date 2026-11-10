@@ -3134,6 +3134,22 @@ mod tests {
     }
 
     #[test]
+    fn debugger_window_geometry_rejects_invalid_or_unusable_values() {
+        assert_eq!(
+            super::parse_saved_position("120.5,240.0"),
+            Some(egui::pos2(120.5, 240.0))
+        );
+        assert!(super::parse_saved_position("NaN,20").is_none());
+        assert!(super::parse_saved_position("invalid").is_none());
+        assert_eq!(
+            super::parse_saved_size("980,760"),
+            Some(egui::vec2(980.0, 760.0))
+        );
+        assert!(super::parse_saved_size("400,300").is_none());
+        assert!(super::parse_saved_size("NaN,760").is_none());
+    }
+
+    #[test]
     fn diagnostics_collection_is_opt_in_by_default() {
         let app = SegaApp::default();
         assert!(!app.diagnostics_enabled);
