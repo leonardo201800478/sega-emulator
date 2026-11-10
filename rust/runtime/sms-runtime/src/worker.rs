@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
 use sega_audio_runtime::AudioOutputMetrics;
-use sega_debugger_core::BreakpointSet;
+use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
-    ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
-    Territory, VideoStandard,
+    ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
+    SpriteLimitMode, Territory, VideoStandard,
 };
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
@@ -26,6 +26,7 @@ use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
+const DEBUG_TRACE_CAPACITY: usize = 2_048;
 
 pub fn sms_temporal_region_profile(
     region: &str,
@@ -228,6 +229,10 @@ enum WorkerCommand {
     Reset(SyncSender<Result<(), String>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
+    StepInstruction(SyncSender<Result<(), String>>),
+    DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
+    ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
+    SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
@@ -239,6 +244,48 @@ enum WorkerCommand {
     Shutdown,
 }
 
+/// Owned, immutable SMS/Z80 state captured on the machine worker thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmsDebugSnapshot {
+    pub pc: u16,
+    pub sp: u16,
+    pub af: u16,
+    pub bc: u16,
+    pub de: u16,
+    pub hl: u16,
+    pub af_alt: u16,
+    pub bc_alt: u16,
+    pub de_alt: u16,
+    pub hl_alt: u16,
+    pub ix: u16,
+    pub iy: u16,
+    pub wz: u16,
+    pub instruction_tstates: u32,
+    pub i: u8,
+    pub r: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub halted: bool,
+    pub machine_time_ticks: u128,
+    pub frame_number: u64,
+    pub vdp_status: u8,
+    pub vdp_scanline: u16,
+    pub vdp_cycles_into_line: u16,
+    pub mapper_banks: [u8; 3],
+    pub mapper_control: u8,
+    pub memory_control: u8,
+    pub framebuffer_rgb: Vec<u8>,
+    /// Most recent scheduler/bus events, oldest first.
+    pub trace_events: Vec<SmsTemporalTraceEvent>,
+    /// Number of trace events discarded after the bounded history filled.
+    pub trace_dropped: u64,
+    /// Whether runtime trace capture is currently enabled.
+    pub trace_enabled: bool,
+}
+
+const DEBUG_MEMORY_READ_LIMIT: usize = 256;
+
 /// Handle to the thread that exclusively owns the temporal SMS machine.
 pub struct SmsTemporalWorker {
     commands: Sender<WorkerCommand>,
@@ -248,7 +295,94 @@ pub struct SmsTemporalWorker {
     video_session: Mutex<Option<D3d12MailboxSession>>,
 }
 
+/// Cloneable, lightweight command handle for debugger viewports.
+#[derive(Clone)]
+pub struct SmsTemporalWorkerDebugHandle {
+    commands: Sender<WorkerCommand>,
+    telemetry: Arc<WorkerTelemetry>,
+}
+
+impl SmsTemporalWorkerDebugHandle {
+    fn request_unit(
+        &self,
+        command: impl FnOnce(SyncSender<Result<(), String>>) -> WorkerCommand,
+    ) -> Result<(), String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(command(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not acknowledge command: {error}"))?
+    }
+
+    /// Return whether the shared machine worker is currently running.
+    pub fn is_running(&self) -> bool {
+        self.telemetry.running.load(Ordering::Acquire)
+    }
+
+    /// Resume the machine through the shared worker command queue.
+    pub fn start(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::Start)
+    }
+
+    /// Pause the machine at the worker's supported command boundary.
+    pub fn pause(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::Pause)
+    }
+
+    /// Execute one complete instruction while the machine is paused.
+    pub fn step_instruction(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::StepInstruction)
+    }
+
+    /// Add or remove a program-counter breakpoint.
+    pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
+    }
+
+    /// Enable or disable bounded scheduler and bus trace capture.
+    pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
+    }
+
+    /// Capture an immutable, owned machine snapshot.
+    pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::DebugSnapshot(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver.recv().map_err(|error| {
+            format!("SMS machine worker did not return a debug snapshot: {error}")
+        })?
+    }
+
+    /// Read at most 256 bytes from the active mapper without advancing emulated time.
+    pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
+        if length > DEBUG_MEMORY_READ_LIMIT {
+            return Err(format!(
+                "memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"
+            ));
+        }
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
+    }
+}
+
 impl SmsTemporalWorker {
+    /// Create a cloneable debugger client without transferring machine ownership.
+    pub fn debug_handle(&self) -> SmsTemporalWorkerDebugHandle {
+        SmsTemporalWorkerDebugHandle {
+            commands: self.commands.clone(),
+            telemetry: Arc::clone(&self.telemetry),
+        }
+    }
+
     /// Start the native worker and wait until the first machine is constructed.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
         let region = region.to_owned();
@@ -342,6 +476,45 @@ impl SmsTemporalWorker {
     /// Add or remove an instruction-boundary program-counter breakpoint.
     pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
+    }
+
+    /// Execute one complete CPU instruction while the worker is paused.
+    ///
+    /// CPU and Scheduler access remain exclusively on the machine-owning thread.
+    pub fn step_instruction(&self) -> Result<(), String> {
+        self.request_unit(WorkerCommand::StepInstruction)
+    }
+
+    /// Capture a coherent, owned debugger snapshot at a worker command boundary.
+    pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::DebugSnapshot(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver.recv().map_err(|error| {
+            format!("SMS machine worker did not return a debug snapshot: {error}")
+        })?
+    }
+
+    /// Enable or disable bounded scheduler/bus trace capture.
+    pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
+    }
+
+    /// Read at most 256 bytes through the active mapper without advancing time.
+    pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
+        if length > DEBUG_MEMORY_READ_LIMIT {
+            return Err(format!(
+                "memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"
+            ));
+        }
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
     }
 
     pub fn step_frame(&self, max_instructions: usize) -> Result<usize, String> {
@@ -779,6 +952,8 @@ fn worker_loop(
 ) {
     let mut running = false;
     let mut breakpoints = BreakpointSet::default();
+    let mut trace_history = BoundedHistory::new(DEBUG_TRACE_CAPACITY);
+    let mut trace_enabled = false;
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
@@ -809,9 +984,12 @@ fn worker_loop(
                 &mut video_mailbox,
                 &mut video_sequence,
                 &telemetry,
+                &mut trace_history,
+                &mut trace_enabled,
             ) {
                 break;
             }
+            drain_machine_trace(&mut machine, &mut trace_history);
             continue;
         }
 
@@ -826,6 +1004,7 @@ fn worker_loop(
             &telemetry,
         ) {
             Ok((_, frame_wait, breakpoint_hit)) => {
+                drain_machine_trace(&mut machine, &mut trace_history);
                 if breakpoint_hit {
                     running = false;
                     telemetry.running.store(false, Ordering::Release);
@@ -852,9 +1031,12 @@ fn worker_loop(
                                 &mut video_mailbox,
                                 &mut video_sequence,
                                 &telemetry,
+                                &mut trace_history,
+                                &mut trace_enabled,
                             ) {
                                 break;
                             }
+                            drain_machine_trace(&mut machine, &mut trace_history);
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -882,6 +1064,15 @@ fn worker_loop(
     drop(video_mailbox);
 }
 
+fn drain_machine_trace(
+    machine: &mut SmsTemporalMachine,
+    history: &mut BoundedHistory<SmsTemporalTraceEvent>,
+) {
+    for event in machine.take_trace() {
+        history.push(event);
+    }
+}
+
 /// Dispatch one coarse worker command over the worker-owned machine and outputs.
 ///
 /// The explicit state references keep machine, audio, video and timing ownership
@@ -898,6 +1089,8 @@ fn handle_command(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
+    trace_history: &mut BoundedHistory<SmsTemporalTraceEvent>,
+    trace_enabled: &mut bool,
 ) -> bool {
     match command {
         WorkerCommand::Start(reply) => {
@@ -992,6 +1185,87 @@ fn handle_command(
                     let _ = reply.send(Err(error));
                 }
             }
+        }
+        WorkerCommand::StepInstruction(reply) => {
+            if *running {
+                let _ = reply.send(Err(
+                    "step_instruction is available only while the native worker is paused"
+                        .to_owned(),
+                ));
+            } else {
+                match machine.step_complete_instruction() {
+                    Ok(()) => {
+                        if telemetry.diagnostics_enabled() {
+                            telemetry.total_instructions.fetch_add(1, Ordering::AcqRel);
+                        }
+                        telemetry.set_frame_number(machine.frame_number());
+                        telemetry.machine_time_ticks.store(
+                            u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
+                            Ordering::Release,
+                        );
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        let error = error.to_string();
+                        telemetry.set_runtime_error(Some(error.clone()));
+                        let _ = reply.send(Err(error));
+                    }
+                }
+            }
+        }
+        WorkerCommand::DebugSnapshot(reply) => {
+            let cpu = machine.cpu().export_architectural_state();
+            let registers = cpu.registers;
+            let alternate = cpu.alternate;
+            let snapshot = SmsDebugSnapshot {
+                pc: registers.pc,
+                sp: registers.sp,
+                af: u16::from_be_bytes([registers.a, registers.f]),
+                bc: registers.bc(),
+                de: registers.de(),
+                hl: registers.hl(),
+                af_alt: u16::from_be_bytes([alternate.a, alternate.f]),
+                bc_alt: u16::from_be_bytes([alternate.b, alternate.c]),
+                de_alt: u16::from_be_bytes([alternate.d, alternate.e]),
+                hl_alt: u16::from_be_bytes([alternate.h, alternate.l]),
+                ix: cpu.ix,
+                iy: cpu.iy,
+                wz: cpu.wz,
+                instruction_tstates: machine.cpu().export_state().instruction_tstates,
+                i: cpu.i,
+                r: cpu.r,
+                iff1: cpu.iff1,
+                iff2: cpu.iff2,
+                interrupt_mode: cpu.interrupt_mode,
+                halted: cpu.halted,
+                machine_time_ticks: machine.now().ticks(),
+                frame_number: machine.frame_number(),
+                vdp_status: machine.vdp().status(),
+                vdp_scanline: machine.vdp().scanline(),
+                vdp_cycles_into_line: machine.vdp().cycles_into_line(),
+                mapper_banks: machine.selected_mapper_banks(),
+                mapper_control: machine.mapper_control(),
+                memory_control: machine.memory_control(),
+                framebuffer_rgb: machine.framebuffer().to_vec(),
+                trace_events: trace_history.entries().iter().copied().collect(),
+                trace_dropped: trace_history.dropped(),
+                trace_enabled: *trace_enabled,
+            };
+            let _ = reply.send(Ok(snapshot));
+        }
+        WorkerCommand::SetTraceEnabled(enabled, reply) => {
+            machine.set_trace_enabled(enabled);
+            *trace_enabled = enabled;
+            if !enabled {
+                trace_history.clear();
+            }
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::ReadMemory(start, length, reply) => {
+            let bytes = (0..length)
+                .map(|offset| machine.inspect_memory(start.wrapping_add(offset as u16)))
+                .collect();
+            let _ = reply.send(Ok(bytes));
         }
         WorkerCommand::StepFrame(max_instructions, reply) => {
             if *running {
@@ -1144,6 +1418,7 @@ mod tests {
         BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
         SmsTemporalWorker, WorkerTelemetry, build_sms_temporal_machine, execute_frame,
     };
+    use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
@@ -1304,6 +1579,96 @@ mod tests {
 
         worker.step_frame(100_000).unwrap();
         assert_eq!(worker.frame_number(), paused_frame + 1);
+    }
+
+    #[test]
+    fn single_instruction_step_advances_scheduler_on_paused_worker() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.set_diagnostics_enabled(true);
+
+        let initial_ticks = worker.machine_time_ticks();
+        assert_eq!(worker.total_instructions(), 0);
+        assert!(!worker.is_running());
+
+        worker.step_instruction().unwrap();
+
+        assert!(!worker.is_running());
+        assert_eq!(worker.total_instructions(), 1);
+        assert!(worker.machine_time_ticks() > initial_ticks);
+    }
+
+    #[test]
+    fn single_instruction_step_is_rejected_while_worker_is_running() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.start().unwrap();
+
+        let result = worker.step_instruction();
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("only while the native worker is paused")
+        );
+        assert!(worker.is_running());
+    }
+
+    #[test]
+    fn debugger_snapshot_and_mapper_reads_are_owned_and_bounded() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let initial_ticks = worker.machine_time_ticks();
+
+        let snapshot = worker.debug_snapshot().unwrap();
+        assert_eq!(snapshot.pc, 0);
+        assert_eq!(snapshot.frame_number, 0);
+        assert_eq!(snapshot.machine_time_ticks, 0);
+        assert_eq!(snapshot.mapper_banks, [0, 1, 2]);
+        assert_eq!(worker.machine_time_ticks(), initial_ticks);
+
+        assert_eq!(worker.inspect_memory(0, 4).unwrap(), [0, 0, 0, 0]);
+        assert!(worker.inspect_memory(0, 257).is_err());
+        assert_eq!(worker.machine_time_ticks(), initial_ticks);
+    }
+
+    #[test]
+    fn cloneable_debug_handle_controls_the_same_worker_instance() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<SmsTemporalWorkerDebugHandle>();
+
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let handle = worker.debug_handle();
+
+        assert_eq!(
+            handle.debug_snapshot().unwrap(),
+            worker.debug_snapshot().unwrap()
+        );
+        handle.set_breakpoint(0x0000, true).unwrap();
+        handle.set_trace_enabled(true).unwrap();
+        assert!(handle.debug_snapshot().unwrap().trace_enabled);
+
+        handle.set_trace_enabled(false).unwrap();
+        assert!(!worker.debug_snapshot().unwrap().trace_enabled);
+    }
+
+    #[test]
+    fn trace_capture_is_opt_in_and_exposes_bounded_owned_events() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let initial = worker.debug_snapshot().unwrap();
+        assert!(!initial.trace_enabled);
+        assert!(initial.trace_events.is_empty());
+
+        worker.set_trace_enabled(true).unwrap();
+        worker.step_instruction().unwrap();
+        let captured = worker.debug_snapshot().unwrap();
+        assert!(captured.trace_enabled);
+        assert!(!captured.trace_events.is_empty());
+        assert_eq!(captured.trace_dropped, 0);
+
+        worker.set_trace_enabled(false).unwrap();
+        let disabled = worker.debug_snapshot().unwrap();
+        assert!(!disabled.trace_enabled);
+        assert!(disabled.trace_events.is_empty());
+        assert_eq!(disabled.trace_dropped, 0);
     }
 
     #[test]

@@ -748,6 +748,27 @@ impl SmsTemporalMachine {
         self.bus.vdp().framebuffer()
     }
 
+    /// Read one byte through the active SMS mapper and memory-control state.
+    /// This is a diagnostic read and does not advance Scheduler time.
+    pub fn inspect_memory(&self, address: u16) -> u8 {
+        self.bus.memory().read(address)
+    }
+
+    /// Return the three active Sega mapper bank registers.
+    pub fn selected_mapper_banks(&self) -> [u8; 3] {
+        self.bus.memory().selected_banks()
+    }
+
+    /// Return the active mapper control register.
+    pub fn mapper_control(&self) -> u8 {
+        self.bus.memory().mapper_control()
+    }
+
+    /// Return the SMS memory-control latch written through I/O port $3E.
+    pub fn memory_control(&self) -> u8 {
+        self.bus.memory().control_port()
+    }
+
     /// Advance the machine until one VDP frame completes.
     ///
     /// The instruction limit is a safety bound, not a timing source. Hardware
@@ -812,6 +833,21 @@ impl SmsTemporalMachine {
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
+    }
+
+    /// Execute exactly one complete CPU instruction through the machine scheduler.
+    ///
+    /// Interrupt acknowledge is a resumable boundary in the Z80 microsequencer;
+    /// finish its continuation before returning so callers always observe an
+    /// instruction boundary. Generated audio is drained to keep diagnostic
+    /// single-stepping from accumulating an unbounded host sample buffer.
+    pub fn step_complete_instruction(&mut self) -> Result<(), SmsTemporalMachineError> {
+        let step = self.step_instruction(0)?;
+        if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+            self.resume_instruction(0)?;
+        }
+        self.drain_audio_samples(None);
+        Ok(())
     }
 
     /// Resume an already active instruction from its current safe point.

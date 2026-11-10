@@ -1,10 +1,14 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::debugger_window::{
+    DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
+    parse_saved_size, render_debugger_contents,
+};
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
@@ -27,6 +31,7 @@ const MAX_ROM_SIZE_BYTES_U64: u64 = 16 * 1024 * 1024;
 const APP_DATA_DIRECTORY: &str = "Sega Emulator";
 const LAST_ROM_DIRECTORY_FILE: &str = "last_rom_directory.txt";
 const RECENT_ROM_LIST_FILE: &str = "recent_roms.txt";
+const UI_SETTINGS_FILE: &str = "ui_settings.txt";
 const MAX_RECENT_ROMS: usize = 10;
 const MENU_BAR_HEIGHT: f32 = 32.0;
 
@@ -82,13 +87,21 @@ pub struct SegaApp {
     fps_counter: FpsCounter,
     fps_shared_value: Arc<AtomicU32>,
     theme_initialized: bool,
+    debugger_window_open: Arc<AtomicBool>,
+    debugger_window: Arc<Mutex<DebuggerWindowState>>,
+    last_settings_save: Instant,
+    main_window_position: Option<egui::Pos2>,
+    main_window_size: Option<egui::Vec2>,
+    main_window_maximized: bool,
+    main_window_fullscreen: bool,
+    main_window_geometry_restored: bool,
 }
 
 impl Default for SegaApp {
     fn default() -> Self {
         let gamepad_bindings = load_gamepad_bindings();
         let gamepad_profile = gamepad_bindings.to_profile();
-        Self {
+        let mut app = Self {
             rom_path: String::new(),
             region: "usa".to_owned(),
             last_rom_directory: load_last_rom_directory(),
@@ -126,7 +139,20 @@ impl Default for SegaApp {
             fps_counter: FpsCounter::default(),
             fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             theme_initialized: false,
+            debugger_window_open: Arc::new(AtomicBool::new(false)),
+            debugger_window: Arc::new(Mutex::new(DebuggerWindowState::default())),
+            last_settings_save: Instant::now(),
+            main_window_position: None,
+            main_window_size: None,
+            main_window_maximized: false,
+            main_window_fullscreen: false,
+            main_window_geometry_restored: false,
+        };
+        app.restore_ui_settings();
+        if app.diagnostics_enabled {
+            app.set_diagnostics_enabled(true);
         }
+        app
     }
 }
 
@@ -449,7 +475,368 @@ fn should_reveal_fullscreen_menu(
     !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 88.0)
 }
 
+fn saved_ui_setting<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
+    contents.lines().find_map(|line| {
+        let (candidate, value) = line.split_once('=')?;
+        (candidate == key).then_some(value)
+    })
+}
+
 impl SegaApp {
+    /// Restore the user's UI preferences from the per-user settings file.
+    fn restore_ui_settings(&mut self) {
+        let Some(directory) = rom_settings_directory() else {
+            return;
+        };
+        let Ok(contents) = fs::read_to_string(directory.join(UI_SETTINGS_FILE)) else {
+            return;
+        };
+
+        self.restore_debugger_settings(&contents);
+        self.restore_audio_settings(&contents);
+        self.restore_display_settings(&contents);
+    }
+
+    fn restore_debugger_settings(&mut self, contents: &str) {
+        if let Some(rom_path) = saved_ui_setting(contents, "rom_path") {
+            rom_path.clone_into(&mut self.rom_path);
+        }
+
+        let Ok(mut debugger_window) = self.debugger_window.lock() else {
+            return;
+        };
+        if let Some(memory_address) = saved_ui_setting(contents, "debugger_memory_address") {
+            memory_address.clone_into(&mut debugger_window.memory_address);
+        }
+        if let Some(breakpoint_input) = saved_ui_setting(contents, "debugger_breakpoint_input") {
+            breakpoint_input.clone_into(&mut debugger_window.breakpoint_input);
+        }
+        if let Some(rom_path) = saved_ui_setting(contents, "debugger_breakpoints_rom") {
+            rom_path.clone_into(&mut debugger_window.breakpoint_rom_path);
+        }
+        if let Some(breakpoints) = saved_ui_setting(contents, "debugger_breakpoints") {
+            debugger_window.breakpoints = breakpoints
+                .split(',')
+                .filter_map(parse_debug_address)
+                .take(64)
+                .collect();
+        }
+        if !debugger_window
+            .breakpoint_rom_path
+            .eq_ignore_ascii_case(&self.rom_path)
+        {
+            debugger_window.breakpoints.clear();
+        }
+        if let Some(enabled) = saved_ui_setting(contents, "debugger_trace_enabled")
+            .and_then(|value| value.parse().ok())
+        {
+            debugger_window.trace_capture_enabled = enabled;
+        }
+        if let Some(open) =
+            saved_ui_setting(contents, "debugger_open").and_then(|value| value.parse().ok())
+        {
+            self.debugger_window_open.store(open, Ordering::Release);
+        }
+        if let Some(position) =
+            saved_ui_setting(contents, "debugger_position").and_then(parse_saved_position)
+        {
+            debugger_window.window_position = Some(position);
+        }
+        if let Some(size) = saved_ui_setting(contents, "debugger_size").and_then(parse_saved_size) {
+            debugger_window.window_size = Some(size);
+        }
+    }
+
+    fn restore_audio_settings(&mut self, contents: &str) {
+        if let Some(region) = saved_ui_setting(contents, "region")
+            .filter(|value| matches!(*value, "usa" | "brazil" | "europe" | "japan"))
+        {
+            region.clone_into(&mut self.region);
+        }
+        if let Some(mode) = saved_ui_setting(contents, "footer") {
+            self.footer_mode = if mode == "hidden" {
+                FooterMode::Hidden
+            } else {
+                FooterMode::Visible
+            };
+        }
+        if let Some(mode) = saved_ui_setting(contents, "audio_state") {
+            self.audio_state = if mode == "disabled" {
+                AudioState::Disabled
+            } else {
+                AudioState::Enabled
+            };
+        }
+        if let Some(backend) = saved_ui_setting(contents, "audio_backend") {
+            self.audio_backend = if backend == "xaudio2" {
+                AudioBackend::XAudio2
+            } else {
+                AudioBackend::Wasapi
+            };
+        }
+        if let Some(volume) =
+            saved_ui_setting(contents, "audio_volume").and_then(|value| value.parse::<u8>().ok())
+        {
+            self.audio_volume = volume.min(100);
+        }
+        if let Some(enabled) =
+            saved_ui_setting(contents, "diagnostics_enabled").and_then(|value| value.parse().ok())
+        {
+            self.diagnostics_enabled = enabled;
+        }
+    }
+
+    fn restore_display_settings(&mut self, contents: &str) {
+        if let Some(mode) = saved_ui_setting(contents, "aspect_ratio") {
+            self.aspect_ratio = match mode {
+                "1:1" => AspectRatioMode::OneToOne,
+                "16:9" => AspectRatioMode::SixteenNine,
+                _ => AspectRatioMode::FourThree,
+            };
+        }
+        if let Some(enabled) =
+            saved_ui_setting(contents, "fps_overlay_enabled").and_then(|value| value.parse().ok())
+        {
+            self.fps_overlay_enabled = enabled;
+        }
+        if let Some(size) = saved_ui_setting(contents, "fps_overlay_size") {
+            self.fps_overlay_size = match size {
+                "small" => FpsOverlaySize::Small,
+                "large" => FpsOverlaySize::Large,
+                _ => FpsOverlaySize::Medium,
+            };
+        }
+        if let Some(position) = saved_ui_setting(contents, "fps_overlay_position") {
+            self.fps_overlay_position = match position {
+                "top_left" => FpsOverlayPosition::TopLeft,
+                "top_right" => FpsOverlayPosition::TopRight,
+                "bottom_left" => FpsOverlayPosition::BottomLeft,
+                _ => FpsOverlayPosition::BottomRight,
+            };
+        }
+        if let Some(position) =
+            saved_ui_setting(contents, "main_window_position").and_then(parse_saved_position)
+        {
+            self.main_window_position = Some(position);
+        }
+        if let Some(size) =
+            saved_ui_setting(contents, "main_window_size").and_then(parse_saved_root_size)
+        {
+            self.main_window_size = Some(size);
+        }
+        if let Some(maximized) =
+            saved_ui_setting(contents, "main_window_maximized").and_then(|value| value.parse().ok())
+        {
+            self.main_window_maximized = maximized;
+        }
+        if let Some(fullscreen) = saved_ui_setting(contents, "main_window_fullscreen")
+            .and_then(|value| value.parse().ok())
+        {
+            self.main_window_fullscreen = fullscreen;
+        }
+    }
+
+    /// Persist the complete set of user-configurable UI preferences.
+    fn save_ui_settings(&self) -> std::io::Result<()> {
+        let directory = rom_settings_directory()
+            .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
+        fs::create_dir_all(&directory)?;
+        let debugger_window = self
+            .debugger_window
+            .lock()
+            .map_err(|_| std::io::Error::other("debugger settings lock poisoned"))?;
+
+        let aspect_ratio = match self.aspect_ratio {
+            AspectRatioMode::OneToOne => "1:1",
+            AspectRatioMode::FourThree => "4:3",
+            AspectRatioMode::SixteenNine => "16:9",
+        };
+        let footer = if self.footer_mode.is_visible() {
+            "visible"
+        } else {
+            "hidden"
+        };
+        let audio_state = if self.audio_state.is_enabled() {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        let audio_backend = match self.audio_backend {
+            AudioBackend::Wasapi => "wasapi",
+            AudioBackend::XAudio2 => "xaudio2",
+        };
+        let fps_size = match self.fps_overlay_size {
+            FpsOverlaySize::Small => "small",
+            FpsOverlaySize::Medium => "medium",
+            FpsOverlaySize::Large => "large",
+        };
+        let fps_position = match self.fps_overlay_position {
+            FpsOverlayPosition::TopLeft => "top_left",
+            FpsOverlayPosition::TopRight => "top_right",
+            FpsOverlayPosition::BottomLeft => "bottom_left",
+            FpsOverlayPosition::BottomRight => "bottom_right",
+        };
+        let debugger_position = debugger_window
+            .window_position
+            .map_or_else(String::new, |position| {
+                format!("{:.1},{:.1}", position.x, position.y)
+            });
+        let debugger_size = debugger_window
+            .window_size
+            .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
+        let main_position = self
+            .main_window_position
+            .map_or_else(String::new, |position| {
+                format!("{:.1},{:.1}", position.x, position.y)
+            });
+        let main_size = self
+            .main_window_size
+            .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
+        let breakpoints = debugger_window
+            .breakpoints
+            .iter()
+            .map(|address| format!("{address:04X}"))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let contents = format!(
+            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            self.rom_path,
+            debugger_window.breakpoint_rom_path,
+            debugger_window.memory_address,
+            debugger_window.breakpoint_input,
+            breakpoints,
+            debugger_window.trace_capture_enabled,
+            self.region,
+            aspect_ratio,
+            footer,
+            audio_state,
+            audio_backend,
+            self.audio_volume,
+            self.diagnostics_enabled,
+            self.fps_overlay_enabled,
+            fps_size,
+            fps_position,
+            self.debugger_window_open.load(Ordering::Acquire),
+            debugger_position,
+            debugger_size,
+            main_position,
+            main_size,
+            self.main_window_maximized,
+            self.main_window_fullscreen,
+        );
+        fs::write(directory.join(UI_SETTINGS_FILE), contents)
+    }
+
+    /// Restore root-window geometry once and periodically auto-save all UI preferences.
+    fn maintain_window_settings(&mut self, context: &egui::Context) {
+        if !self.main_window_geometry_restored {
+            if self.main_window_fullscreen {
+                context.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+            } else if self.main_window_maximized {
+                context.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            } else {
+                if let Some(position) = self.main_window_position {
+                    context.send_viewport_cmd(egui::ViewportCommand::OuterPosition(position));
+                }
+                if let Some(size) = self.main_window_size {
+                    context.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+                }
+            }
+            self.main_window_geometry_restored = true;
+            return;
+        }
+
+        if let Some(position) =
+            context.input(|input| input.viewport().outer_rect.map(|rect| rect.min))
+        {
+            self.main_window_position = Some(position);
+        }
+        if let Some(size) =
+            context.input(|input| input.viewport().inner_rect.map(|rect| rect.size()))
+        {
+            self.main_window_size = Some(size);
+        }
+        if let Some(maximized) = context.input(|input| input.viewport().maximized) {
+            self.main_window_maximized = maximized;
+        }
+        if let Some(fullscreen) = context.input(|input| input.viewport().fullscreen) {
+            self.main_window_fullscreen = fullscreen;
+        }
+
+        if self.last_settings_save.elapsed() >= Duration::from_secs(5) {
+            if let Err(error) = self.save_ui_settings() {
+                eprintln!("Unable to auto-save UI settings: {error}");
+            }
+            self.last_settings_save = Instant::now();
+        }
+    }
+
+    /// Render the debugger in a deferred native viewport to avoid coupling its repaint rate to the game.
+    fn render_debugger_window(&mut self, context: &egui::Context) {
+        if !self.debugger_window_open.load(Ordering::Acquire) {
+            return;
+        }
+
+        let Ok(state) = self.debugger_window.lock() else {
+            self.debugger_window_open.store(false, Ordering::Release);
+            return;
+        };
+        let window_position = state.window_position;
+        let window_size = state.window_size;
+        let window_initialized = state.window_initialized;
+        drop(state);
+
+        let worker = self
+            .native_viewport
+            .worker
+            .as_ref()
+            .map(SmsTemporalWorker::debug_handle);
+        let state = Arc::clone(&self.debugger_window);
+        let open = Arc::clone(&self.debugger_window_open);
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title("Sega Emulator — SMS Debugger")
+            .with_min_inner_size([760.0, 560.0])
+            .with_resizable(true)
+            .with_decorations(true)
+            .with_taskbar(true);
+        if !window_initialized {
+            builder = builder.with_inner_size(window_size.unwrap_or(egui::vec2(980.0, 760.0)));
+            if let Some(position) = window_position {
+                builder = builder.with_position(position);
+            }
+        }
+
+        context.show_viewport_deferred(
+            egui::ViewportId::from_hash_of("sega-sms-debugger-window"),
+            builder,
+            move |debugger_ui, _viewport_class| {
+                let Ok(mut state) = state.lock() else {
+                    open.store(false, Ordering::Release);
+                    return;
+                };
+                if debugger_ui.input(|input| input.viewport().close_requested()) {
+                    state.window_initialized = false;
+                    open.store(false, Ordering::Release);
+                    return;
+                }
+
+                state.window_initialized = true;
+                render_debugger_contents(debugger_ui, worker.as_ref(), &mut state);
+                if let Some(position) =
+                    debugger_ui.input(|input| input.viewport().outer_rect.map(|rect| rect.min))
+                {
+                    state.window_position = Some(position);
+                }
+                if let Some(size) =
+                    debugger_ui.input(|input| input.viewport().inner_rect.map(|rect| rect.size()))
+                {
+                    state.window_size = Some(size);
+                }
+            },
+        );
+    }
+
     /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
@@ -526,6 +913,7 @@ impl SegaApp {
                 diagnostics_enabled: self.diagnostics_enabled,
                 diagnostics_command: &mut diagnostics_command,
                 diagnostics_error: self.diagnostics_error.as_deref(),
+                debugger_window_open: self.debugger_window_open.as_ref(),
                 fps_overlay_enabled: &mut self.fps_overlay_enabled,
                 fps_overlay_size: &mut self.fps_overlay_size,
                 fps_overlay_position: &mut self.fps_overlay_position,
@@ -689,6 +1077,7 @@ impl SegaApp {
                                     diagnostics_enabled: self.diagnostics_enabled,
                                     diagnostics_command: &mut actions.diagnostics_command,
                                     diagnostics_error: self.diagnostics_error.as_deref(),
+                                    debugger_window_open: self.debugger_window_open.as_ref(),
                                     fps_overlay_enabled: &mut self.fps_overlay_enabled,
                                     fps_overlay_size: &mut self.fps_overlay_size,
                                     fps_overlay_position: &mut self.fps_overlay_position,
@@ -795,9 +1184,38 @@ impl SegaApp {
         } else {
             &self.region
         };
+        let (restored_breakpoints, trace_capture_enabled) = self
+            .debugger_window
+            .lock()
+            .map(|mut state| {
+                if !state
+                    .breakpoint_rom_path
+                    .eq_ignore_ascii_case(&self.rom_path)
+                {
+                    state.breakpoints.clear();
+                    state.breakpoint_rom_path.clone_from(&self.rom_path);
+                }
+                (state.breakpoints.clone(), state.trace_capture_enabled)
+            })
+            .unwrap_or_default();
+
         match SmsTemporalWorker::new(rom, region) {
             Ok(worker) => {
                 self.native_viewport.replace_worker(worker);
+                if let Some(worker) = self.native_viewport.worker.as_ref() {
+                    for address in &restored_breakpoints {
+                        if let Err(error) = worker.set_breakpoint(*address, true) {
+                            self.native_viewport.error = Some(format!(
+                                "Falha ao restaurar breakpoint 0x{address:04X}: {error}"
+                            ));
+                            break;
+                        }
+                    }
+                    if trace_capture_enabled && let Err(error) = worker.set_trace_enabled(true) {
+                        self.native_viewport.error =
+                            Some(format!("Falha ao restaurar trace do debugger: {error}"));
+                    }
+                }
                 if self.diagnostics_enabled
                     && let Some(worker) = self.native_viewport.worker.as_ref()
                 {
@@ -1380,6 +1798,9 @@ impl Drop for SegaApp {
         // Stop producers before shutting down the observability worker. The
         // viewport owns the SMS and D3D12 workers; they may emit final events
         // while being stopped and joined.
+        if let Err(error) = self.save_ui_settings() {
+            eprintln!("Unable to save UI settings: {error}");
+        }
         self.native_viewport.shutdown();
 
         // SDL3 is also an owned native resource. Shut it down explicitly while
@@ -1415,6 +1836,7 @@ impl Drop for SegaApp {
 impl eframe::App for SegaApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
+        self.maintain_window_settings(&context);
         if !self.theme_initialized {
             let mut visuals = egui::Visuals::dark();
             visuals.panel_fill = egui::Color32::from_rgb(17, 21, 29);
@@ -1447,6 +1869,7 @@ impl eframe::App for SegaApp {
             self.open_rom_dialog(frame);
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
+        self.render_debugger_window(&context);
         self.render_fps_overlay(&context, viewport_rect);
 
         // The FPS viewport is deferred and repainted independently. Keep the
@@ -1983,6 +2406,7 @@ struct HeaderState<'a> {
     diagnostics_enabled: bool,
     diagnostics_command: &'a mut Option<bool>,
     diagnostics_error: Option<&'a str>,
+    debugger_window_open: &'a AtomicBool,
     fps_overlay_enabled: &'a mut bool,
     fps_overlay_size: &'a mut FpsOverlaySize,
     fps_overlay_position: &'a mut FpsOverlayPosition,
@@ -2059,6 +2483,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
             state.diagnostics_enabled,
             state.diagnostics_command,
             state.diagnostics_error,
+            state.debugger_window_open,
         ),
     }
 }
@@ -2509,7 +2934,11 @@ fn render_runtime_status(
     diagnostics_enabled: bool,
     diagnostics_command: &mut Option<bool>,
     diagnostics_error: Option<&str>,
+    debugger_window_open: &AtomicBool,
 ) {
+    if ui.button("Abrir janela do Debugger").clicked() {
+        debugger_window_open.store(true, Ordering::Release);
+    }
     let mut enabled = diagnostics_enabled;
     if ui
         .checkbox(&mut enabled, "Ativar DEBUG e coleta de dados")
@@ -2819,6 +3248,32 @@ mod tests {
         let (mapped, _) = super::map_sdl3_gamepad(state, &profile);
         assert!(mapped.button_1);
         assert!(!mapped.button_2);
+    }
+
+    #[test]
+    fn debugger_window_geometry_rejects_invalid_or_unusable_values() {
+        assert_eq!(
+            crate::debugger_window::parse_saved_position("120.5,240.0"),
+            Some(egui::pos2(120.5, 240.0))
+        );
+        assert!(crate::debugger_window::parse_saved_position("NaN,20").is_none());
+        assert!(crate::debugger_window::parse_saved_position("invalid").is_none());
+        assert_eq!(
+            crate::debugger_window::parse_debug_address("0x00AF"),
+            Some(0x00AF)
+        );
+        assert_eq!(crate::debugger_window::parse_debug_address("invalid"), None);
+        assert_eq!(
+            crate::debugger_window::parse_saved_size("980,760"),
+            Some(egui::vec2(980.0, 760.0))
+        );
+        assert!(crate::debugger_window::parse_saved_size("400,300").is_none());
+        assert!(crate::debugger_window::parse_saved_size("NaN,760").is_none());
+        assert_eq!(
+            crate::debugger_window::parse_saved_root_size("1440,900"),
+            Some(egui::vec2(1440.0, 900.0))
+        );
+        assert!(crate::debugger_window::parse_saved_root_size("900,600").is_none());
     }
 
     #[test]
