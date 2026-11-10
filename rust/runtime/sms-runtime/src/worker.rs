@@ -67,21 +67,21 @@ fn enqueue_worker_command(
         Err(TrySendError::Full(_)) => {
             Err("SMS machine worker command queue is full; retry shortly".to_owned())
         }
-        Err(TrySendError::Disconnected(_)) => {
-            Err("SMS machine worker is unavailable".to_owned())
-        }
+        Err(TrySendError::Disconnected(_)) => Err("SMS machine worker is unavailable".to_owned()),
     }
 }
 
 fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
-    receiver.recv_timeout(WORKER_REPLY_TIMEOUT).map_err(|error| match error {
-        RecvTimeoutError::Timeout => {
-            format!("SMS machine worker timed out while {operation}")
-        }
-        RecvTimeoutError::Disconnected => {
-            format!("SMS machine worker stopped while {operation}")
-        }
-    })
+    receiver
+        .recv_timeout(WORKER_REPLY_TIMEOUT)
+        .map_err(|error| match error {
+            RecvTimeoutError::Timeout => {
+                format!("SMS machine worker timed out while {operation}")
+            }
+            RecvTimeoutError::Disconnected => {
+                format!("SMS machine worker stopped while {operation}")
+            }
+        })
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
@@ -492,7 +492,10 @@ impl SmsTemporalWorkerDebugHandle {
             ));
         }
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        enqueue_worker_command(&self.commands, WorkerCommand::ReadMemory(start, length, reply_sender))?;
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::ReadMemory(start, length, reply_sender),
+        )?;
         receive_worker_reply(reply_receiver, "returning memory inspection data")?
     }
 }
@@ -628,7 +631,10 @@ impl SmsTemporalWorker {
             ));
         }
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        enqueue_worker_command(&self.commands, WorkerCommand::ReadMemory(start, length, reply_sender))?;
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::ReadMemory(start, length, reply_sender),
+        )?;
         receive_worker_reply(reply_receiver, "returning memory inspection data")?
     }
 
@@ -1617,8 +1623,18 @@ mod tests {
         let mut timing = FrameTimingState::default();
         timing.record_frame_completed(start);
         timing.record_frame_completed(start + Duration::from_millis(500));
-        assert!(timing.metrics_at(start + Duration::from_millis(999)).emulation_fps > 0.0);
-        assert_eq!(timing.metrics_at(start + Duration::from_secs(1)).emulation_fps, 0.0);
+        assert!(
+            timing
+                .metrics_at(start + Duration::from_millis(999))
+                .emulation_fps
+                > 0.0
+        );
+        assert_eq!(
+            timing
+                .metrics_at(start + Duration::from_secs(1))
+                .emulation_fps,
+            0.0
+        );
     }
 
     #[test]
