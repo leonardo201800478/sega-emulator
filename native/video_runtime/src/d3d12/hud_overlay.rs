@@ -254,7 +254,7 @@ unsafe extern "system" fn hud_window_proc(
                             0,
                             0,
                             0,
-                            FW_BOLD,
+                            FW_BOLD.0,
                             0,
                             0,
                             0,
@@ -262,7 +262,7 @@ unsafe extern "system" fn hud_window_proc(
                             OUT_DEFAULT_PRECIS,
                             CLIP_DEFAULT_PRECIS,
                             ANTIALIASED_QUALITY,
-                            DEFAULT_PITCH | FF_DONTCARE,
+                            u32::from(DEFAULT_PITCH.0) | u32::from(FF_DONTCARE.0),
                             w!("Segoe UI"),
                         )
                     };
