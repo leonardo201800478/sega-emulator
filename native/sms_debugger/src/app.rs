@@ -77,12 +77,16 @@ impl DebuggerApp {
             self.snapshot = None;
             return;
         };
+        let was_running = self.running;
+        self.running = worker.is_running();
         match worker.debug_snapshot() {
             Ok(snapshot) => {
                 self.snapshot = Some(snapshot);
-                self.status = worker
-                    .runtime_error()
-                    .unwrap_or_else(|| "Snapshot atualizado".into());
+                if let Some(error) = worker.runtime_error() {
+                    self.status = format!("Erro no runtime: {error}");
+                } else if was_running && !self.running {
+                    self.status = "Execução interrompida pelo runtime".into();
+                }
             }
             Err(error) => self.status = format!("Falha ao obter snapshot: {error}"),
         }
