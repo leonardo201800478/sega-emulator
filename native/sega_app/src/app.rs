@@ -1574,7 +1574,7 @@ impl SegaApp {
         let refresh_due = self
             .native_viewport
             .last_hud_refresh
-            .is_none_or(|last| now.saturating_duration_since(last)  >= SMS_HUD_REFRESH_INTERVAL);
+            .is_none_or(|last| now.saturating_duration_since(last) >= SMS_HUD_REFRESH_INTERVAL);
         if refresh_due {
             let metrics = self
                 .native_viewport
