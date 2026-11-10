@@ -49,8 +49,12 @@ window.
 The child is created on the parent HWND's owning GUI thread. Its bounds are
 computed from the egui video viewport in parent-client coordinates and
 converted from points to physical pixels using `Context::pixels_per_point()`.
-Bounds are recalculated when the video viewport, window size, or DPI scale
-changes. Fullscreen uses the same parent-client geometry path.
+Bounds and GDI font height are recalculated when the video viewport, window
+size, selected HUD size, or DPI scale changes. Font height is derived from the
+selected logical point size multiplied by egui's `pixels_per_point()`. Grayscale
+font antialiasing is used with the black color key to avoid ClearType subpixel
+fringing on the transparent surface. Fullscreen uses the same parent-client
+geometry path.
 
 The transparent layered child uses `WS_EX_TRANSPARENT` and explicit transparent
 hit testing so mouse input reaches the underlying video child. It does not take
