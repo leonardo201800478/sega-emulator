@@ -147,7 +147,7 @@ impl D3d12HudOverlay {
     }
 
     /// Report whether the HWND has the required child/layered/pass-through styles.
-    pub fn composition_contract(&self) -> (bool, bool, bool, bool, bool) {
+    pub fn composition_contract(&self) -> (bool, bool, bool, bool, bool, bool) {
         let style = unsafe { GetWindowLongPtrW(self.hwnd, GWL_STYLE) };
         let ex_style = unsafe { GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE) };
         (
@@ -155,6 +155,7 @@ impl D3d12HudOverlay {
             ex_style & (WS_EX_LAYERED.0 as isize) != 0,
             ex_style & (WS_EX_TRANSPARENT.0 as isize) != 0,
             ex_style & (WS_EX_NOACTIVATE.0 as isize) != 0,
+            style & (WS_CLIPSIBLINGS.0 as isize) != 0,
             ex_style & (windows::Win32::UI::WindowsAndMessaging::WS_EX_TOPMOST.0 as isize) == 0,
         )
     }
@@ -276,7 +277,7 @@ mod tests {
         assert_eq!(client_rect.bottom - client_rect.top, 90);
 
         assert!(hud.is_child_of(parent.handle()));
-        assert_eq!(hud.composition_contract(), (true, true, true, true, true));
+        assert_eq!(hud.composition_contract(), (true, true, true, true, true, true));
 
         let parent_style = unsafe {
             windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
