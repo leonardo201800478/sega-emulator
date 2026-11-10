@@ -822,9 +822,15 @@ impl SegaApp {
                 }
 
                 render_debugger_contents(debugger_ui, worker.as_ref(), &mut state);
-                if let Some(rect) = debugger_ui.input(|input| input.viewport().outer_rect) {
-                    state.window_position = Some(rect.min);
-                    state.window_size = Some(rect.size());
+                if let Some(position) =
+                    debugger_ui.input(|input| input.viewport().outer_rect.map(|rect| rect.min))
+                {
+                    state.window_position = Some(position);
+                }
+                if let Some(size) =
+                    debugger_ui.input(|input| input.viewport().inner_rect.map(|rect| rect.size()))
+                {
+                    state.window_size = Some(size);
                 }
             },
         );
