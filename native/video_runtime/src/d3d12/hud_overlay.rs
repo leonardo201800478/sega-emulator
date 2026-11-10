@@ -12,8 +12,8 @@ use windows::Win32::Foundation::{
     ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, COLORREF, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, HGDIOBJ,
-    PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT, DT_LEFT, DT_NOPREFIX, DT_TOP,
+    BeginPaint, COLORREF, CreateSolidBrush, DT_LEFT, DT_NOPREFIX, DT_TOP, DeleteObject, DrawTextW,
+    EndPaint, FillRect, HGDIOBJ, PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
