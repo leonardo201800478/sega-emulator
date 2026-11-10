@@ -5,11 +5,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::icons::{IconKind, icon_button};
 use crate::debugger_window::{
     DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
     parse_saved_size, render_debugger_contents,
 };
+use crate::icons::{IconKind, icon_button};
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
@@ -1547,11 +1547,7 @@ impl SegaApp {
 
         let scale = context.pixels_per_point();
         let overlay_size = self.fps_overlay_size.dimensions();
-        let position = fps_overlay_position(
-            viewport_rect,
-            overlay_size,
-            self.fps_overlay_position,
-        );
+        let position = fps_overlay_position(viewport_rect, overlay_size, self.fps_overlay_position);
         let bounds = (
             to_win32_pixel(position.x * scale),
             to_win32_pixel(position.y * scale),
@@ -2840,8 +2836,7 @@ fn add_machine_button(
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
-    let button =
-        egui::Button::new(label).min_size(egui::vec2(38.0, 30.0));
+    let button = egui::Button::new(label).min_size(egui::vec2(38.0, 30.0));
     if ui
         .add_enabled(enabled, button)
         .on_hover_text(description)
@@ -3313,8 +3308,7 @@ mod tests {
 
     #[test]
     fn fps_overlay_positions_stay_inside_each_viewport_corner() {
-        let viewport =
-            egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
+        let viewport = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
         let size = FpsOverlaySize::Medium.dimensions();
         for anchor in [
             FpsOverlayPosition::TopLeft,
