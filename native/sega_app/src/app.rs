@@ -2051,19 +2051,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::File => render_file_menu(ui, state),
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
-        TopLevelMenu::Controls => {
-            render_controls_menu(
-                ui,
-                state.devices,
-                state.selected_gamepad,
-                state.input_error,
-                state.keyboard_bindings,
-                state.pending_key_binding,
-                state.gamepad_bindings,
-                state.pending_gamepad_binding,
-                state.input_mapping_error,
-            );
-        }
+        TopLevelMenu::Controls => render_controls_menu(ui, state),
         TopLevelMenu::Options => render_options_menu(ui, state),
         TopLevelMenu::Debug => render_runtime_status(
             ui,
@@ -2214,20 +2202,10 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.small("Contagem baseada nos frames apresentados pelo D3D12.");
 }
 
-fn render_controls_menu(
-    ui: &mut egui::Ui,
-    devices: &[DeviceDescriptor],
-    selected: &mut Option<DeviceId>,
-    error: Option<&str>,
-    keyboard: &KeyboardBindings,
-    pending_key: &mut Option<KeyboardAction>,
-    gamepad: &GamepadBindings,
-    pending_gamepad: &mut Option<GamepadAction>,
-    mapping_error: Option<&str>,
-) {
+fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.heading("Dispositivo de entrada");
-    render_input_controls(ui, devices, selected, error);
-    if let Some(error) = mapping_error {
+    render_input_controls(ui, state.devices, state.selected_gamepad, state.input_error);
+    if let Some(error) = state.input_mapping_error {
         ui.colored_label(egui::Color32::YELLOW, error);
     }
 
@@ -2252,18 +2230,18 @@ fn render_controls_menu(
                 (KeyboardAction::Fullscreen, "Tela cheia"),
             ] {
                 ui.label(label);
-                ui.monospace(keyboard.key(action).name());
-                if *pending_key == Some(action) {
+                ui.monospace(state.keyboard_bindings.key(action).name());
+                if *state.pending_key_binding == Some(action) {
                     ui.weak("Pressione uma tecla...");
                 } else if ui.small_button("Remapear").clicked() {
-                    *pending_key = Some(action);
-                    *pending_gamepad = None;
+                    *state.pending_key_binding = Some(action);
+                    *state.pending_gamepad_binding = None;
                 }
                 ui.end_row();
             }
         });
-    if pending_key.is_some() && ui.small_button("Cancelar captura de tecla").clicked() {
-        *pending_key = None;
+    if state.pending_key_binding.is_some() && ui.small_button("Cancelar captura de tecla").clicked() {
+        *state.pending_key_binding = None;
     }
 
     ui.separator();
@@ -2273,27 +2251,27 @@ fn render_controls_menu(
         .num_columns(3)
         .show(ui, |ui| {
             for (action, label, button) in [
-                (GamepadAction::Up, "Cima", gamepad.up),
-                (GamepadAction::Down, "Baixo", gamepad.down),
-                (GamepadAction::Left, "Esquerda", gamepad.left),
-                (GamepadAction::Right, "Direita", gamepad.right),
-                (GamepadAction::Button1, "Botão 1", gamepad.button_1),
-                (GamepadAction::Button2, "Botão 2", gamepad.button_2),
-                (GamepadAction::Pause, "Solicitar NMI", gamepad.pause),
+                (GamepadAction::Up, "Cima", state.gamepad_bindings.up),
+                (GamepadAction::Down, "Baixo", state.gamepad_bindings.down),
+                (GamepadAction::Left, "Esquerda", state.gamepad_bindings.left),
+                (GamepadAction::Right, "Direita", state.gamepad_bindings.right),
+                (GamepadAction::Button1, "Botão 1", state.gamepad_bindings.button_1),
+                (GamepadAction::Button2, "Botão 2", state.gamepad_bindings.button_2),
+                (GamepadAction::Pause, "Solicitar NMI", state.gamepad_bindings.pause),
             ] {
                 ui.label(label);
                 ui.monospace(format!("Botão {button}"));
-                if *pending_gamepad == Some(action) {
+                if *state.pending_gamepad_binding == Some(action) {
                     ui.weak("Pressione o botão...");
                 } else if ui.small_button("Remapear").clicked() {
-                    *pending_gamepad = Some(action);
-                    *pending_key = None;
+                    *state.pending_gamepad_binding = Some(action);
+                    *state.pending_key_binding = None;
                 }
                 ui.end_row();
             }
         });
-    if pending_gamepad.is_some() && ui.small_button("Cancelar captura do controle").clicked() {
-        *pending_gamepad = None;
+    if state.pending_gamepad_binding.is_some() && ui.small_button("Cancelar captura do controle").clicked() {
+        *state.pending_gamepad_binding = None;
     }
 }
 
