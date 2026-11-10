@@ -2794,50 +2794,47 @@ fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
 }
 
 #[allow(clippy::too_many_lines, reason = "The debugger viewport is a single cohesive diagnostic presentation.")]
-fn render_debugger_contents(ui: &mut egui::Ui, worker: Option<&SmsTemporalWorker>, state: &mut DebuggerWindowState) {
+fn render_debugger_contents(
+    ui: &mut egui::Ui,
+    worker: Option<&SmsTemporalWorker>,
+    state: &mut DebuggerWindowState,
+) {
     if let Some(worker) = worker {
         if state.last_refresh.elapsed() >= Duration::from_millis(100) {
             match worker.debug_snapshot() {
                 Ok(snapshot) => {
                     state.snapshot = Some(snapshot);
-                    state.status = if worker.is_running() { "Máquina em execução" } else { "Máquina pausada" }.to_owned();
+                    state.status = if worker.is_running() {
+                        "Máquina em execução"
+                    } else {
+                        "Máquina pausada"
+                    }
+                    .to_owned();
                 }
-                Err(error) => state.status = format!("Falha ao consultar runtime: {error}"),
+                Err(error) => {
+                    state.status = format!("Falha ao consultar runtime: {error}");
+                }
             }
             state.last_refresh = Instant::now();
         }
         ui.ctx().request_repaint_after(Duration::from_millis(100));
     }
-    ui.horizontal_wrapped(|ui| { ui.heading("SMS Debugger"); ui.separator(); ui.label(&state.status); });
+
+    ui.horizontal_wrapped(|ui| {
+        ui.heading("SMS Debugger");
+        ui.separator();
+        ui.label(&state.status);
+    });
+
     let Some(worker) = worker else {
-        ui.centered_and_justified(|ui| ui.label("Carregue uma ROM do Master System para habilitar o debugger."));
+        ui.centered_and_justified(|ui| {
+            ui.label("Carregue uma ROM do Master System para habilitar o debugger.");
+        });
         return;
     };
-    ui.horizontal_wrapped(|ui| {
-        if ui.button(if worker.is_running() { "Pausar" } else { "Executar" }).clicked() {
-            let result = if worker.is_running() { worker.pause() } else { worker.start() };
-            if let Err(error) = result { state.status = format!("Falha ao alterar execução: {error}"); }
-        }
-        if ui.add_enabled(!worker.is_running(), egui::Button::new("Step instruction")).clicked() {
-            match worker.step_instruction() {
-                Ok(()) => {
-                    if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); }
-                    state.status = "Instrução concluída no worker".to_owned();
-                }
-                Err(error) => state.status = format!("Falha no step: {error}"),
-            }
-        }
-        let trace = state.trace_capture_enabled;
-        if ui.button(if trace { "Desativar trace" } else { "Ativar trace" }).clicked() {
-            match worker.set_trace_enabled(!trace) {
-                Ok(()) => {
-                    state.trace_capture_enabled = !trace;
-                    if let Ok(snapshot) = worker.debug_snapshot() { state.snapshot = Some(snapshot); }
-                },
-                Err(error) => state.status = format!("Falha ao configurar trace: {error}"),
-            }
-        }
-    });
+
+    render_debugger_toolbar(ui, worker, state);
+
     if let Some(snapshot) = state.snapshot.as_ref() {
         ui.separator();
         ui.horizontal_wrapped(|ui| {
@@ -2846,81 +2843,276 @@ fn render_debugger_contents(ui: &mut egui::Ui, worker: Option<&SmsTemporalWorker
             ui.label(format!("T-states: {}", snapshot.instruction_tstates));
             ui.label(format!("HALT: {}", snapshot.halted));
         });
-        egui::CollapsingHeader::new("Z80 — registradores").default_open(true).show(ui, |ui| {
-            egui::Grid::new("sms_debugger_registers").num_columns(4).show(ui, |ui| {
-                for (name, value) in [
-                    ("AF", snapshot.af), ("BC", snapshot.bc), ("DE", snapshot.de), ("HL", snapshot.hl),
-                    ("AF'", snapshot.af_alt), ("BC'", snapshot.bc_alt), ("DE'", snapshot.de_alt), ("HL'", snapshot.hl_alt),
-                    ("IX", snapshot.ix), ("IY", snapshot.iy), ("SP", snapshot.sp), ("PC", snapshot.pc),
-                    ("WZ", snapshot.wz), ("I", u16::from(snapshot.i)), ("R", u16::from(snapshot.r)), ("IM", u16::from(snapshot.interrupt_mode)),
-                ] {
-                    ui.strong(name); ui.monospace(format!("{value:04X}"));
-                    if matches!(name, "HL" | "HL'" | "PC" | "IM") { ui.end_row(); }
-                }
-            });
-            ui.label(format!("IFF1: {} | IFF2: {}", snapshot.iff1, snapshot.iff2));
-        });
-        egui::CollapsingHeader::new("VDP / mapper").default_open(true).show(ui, |ui| {
-            ui.label(format!("VDP status: {:02X} | Scanline: {} | Cycles/line: {}", snapshot.vdp_status, snapshot.vdp_scanline, snapshot.vdp_cycles_into_line));
-            ui.label(format!("Mapper banks: {:02X} / {:02X} / {:02X} | Control: {:02X} | Memory: {:02X}", snapshot.mapper_banks[0], snapshot.mapper_banks[1], snapshot.mapper_banks[2], snapshot.mapper_control, snapshot.memory_control));
-        });
+        render_debugger_registers(ui, snapshot);
+        render_debugger_video_state(ui, snapshot);
     }
+
     ui.separator();
     ui.columns(2, |columns| {
-        columns[0].heading("Breakpoints");
-        columns[0].horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut state.breakpoint_input).desired_width(72.0));
-            if ui.button("Adicionar").clicked() {
-                if let Some(address) = parse_debug_address(&state.breakpoint_input) {
-                    if !state.breakpoints.contains(&address) && state.breakpoints.len() < 64 {
-                        match worker.set_breakpoint(address, true) {
-                            Ok(()) => state.breakpoints.push(address),
-                            Err(error) => state.status = format!("Falha no breakpoint: {error}"),
+        render_debugger_breakpoints(&mut columns[0], worker, state);
+        render_debugger_memory(&mut columns[1], worker, state);
+    });
+    render_debugger_trace(ui, state.snapshot.as_ref());
+}
+
+fn render_debugger_toolbar(
+    ui: &mut egui::Ui,
+    worker: &SmsTemporalWorker,
+    state: &mut DebuggerWindowState,
+) {
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .button(if worker.is_running() {
+                "Pausar"
+            } else {
+                "Executar"
+            })
+            .clicked()
+        {
+            let result = if worker.is_running() {
+                worker.pause()
+            } else {
+                worker.start()
+            };
+            if let Err(error) = result {
+                state.status = format!("Falha ao alterar execução: {error}");
+            }
+        }
+
+        if ui
+            .add_enabled(
+                !worker.is_running(),
+                egui::Button::new("Step instruction"),
+            )
+            .clicked()
+        {
+            match worker.step_instruction() {
+                Ok(()) => {
+                    if let Ok(snapshot) = worker.debug_snapshot() {
+                        state.snapshot = Some(snapshot);
+                    }
+                    state.status = "Instrução concluída no worker".to_owned();
+                }
+                Err(error) => {
+                    state.status = format!("Falha no step: {error}");
+                }
+            }
+        }
+
+        let trace_enabled = state.trace_capture_enabled;
+        if ui
+            .button(if trace_enabled {
+                "Desativar trace"
+            } else {
+                "Ativar trace"
+            })
+            .clicked()
+        {
+            match worker.set_trace_enabled(!trace_enabled) {
+                Ok(()) => {
+                    state.trace_capture_enabled = !trace_enabled;
+                    if let Ok(snapshot) = worker.debug_snapshot() {
+                        state.snapshot = Some(snapshot);
+                    }
+                }
+                Err(error) => {
+                    state.status = format!("Falha ao configurar trace: {error}");
+                }
+            }
+        }
+    });
+}
+
+fn render_debugger_registers(ui: &mut egui::Ui, snapshot: &SmsDebugSnapshot) {
+    egui::CollapsingHeader::new("Z80 — registradores")
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::Grid::new("sms_debugger_registers")
+                .num_columns(4)
+                .show(ui, |ui| {
+                    for (name, value) in [
+                        ("AF", snapshot.af),
+                        ("BC", snapshot.bc),
+                        ("DE", snapshot.de),
+                        ("HL", snapshot.hl),
+                        ("AF'", snapshot.af_alt),
+                        ("BC'", snapshot.bc_alt),
+                        ("DE'", snapshot.de_alt),
+                        ("HL'", snapshot.hl_alt),
+                        ("IX", snapshot.ix),
+                        ("IY", snapshot.iy),
+                        ("SP", snapshot.sp),
+                        ("PC", snapshot.pc),
+                        ("WZ", snapshot.wz),
+                        ("I", u16::from(snapshot.i)),
+                        ("R", u16::from(snapshot.r)),
+                        ("IM", u16::from(snapshot.interrupt_mode)),
+                    ] {
+                        ui.strong(name);
+                        ui.monospace(format!("{value:04X}"));
+                        if matches!(name, "HL" | "HL'" | "PC" | "IM") {
+                            ui.end_row();
                         }
                     }
-                } else { state.status = "Endereço de breakpoint inválido".to_owned(); }
-            }
+                });
+            ui.label(format!(
+                "IFF1: {} | IFF2: {}",
+                snapshot.iff1, snapshot.iff2
+            ));
         });
-        let mut remove = None;
-        for address in &state.breakpoints {
-            columns[0].horizontal(|ui| { ui.monospace(format!("{address:04X}")); if ui.small_button("Remover").clicked() { remove = Some(*address); } });
-        }
-        if let Some(address) = remove {
-            match worker.set_breakpoint(address, false) {
-                Ok(()) => state.breakpoints.retain(|item| *item != address),
-                Err(error) => state.status = format!("Falha ao remover breakpoint: {error}"),
-            }
-        }
-        columns[1].heading("Inspeção de memória");
-        columns[1].horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut state.memory_address).desired_width(72.0));
-            if ui.button("Ler 64 bytes").clicked() {
-                if let Some(address) = parse_debug_address(&state.memory_address) {
-                    match worker.inspect_memory(address, 64) {
-                        Ok(bytes) => state.memory_bytes = bytes,
-                        Err(error) => state.status = format!("Falha ao ler memória: {error}"),
+}
+
+fn render_debugger_video_state(ui: &mut egui::Ui, snapshot: &SmsDebugSnapshot) {
+    egui::CollapsingHeader::new("VDP / mapper")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.label(format!(
+                "VDP status: {:02X} | Scanline: {} | Cycles/line: {}",
+                snapshot.vdp_status, snapshot.vdp_scanline, snapshot.vdp_cycles_into_line
+            ));
+            ui.label(format!(
+                "Mapper banks: {:02X} / {:02X} / {:02X} | Control: {:02X} | Memory: {:02X}",
+                snapshot.mapper_banks[0],
+                snapshot.mapper_banks[1],
+                snapshot.mapper_banks[2],
+                snapshot.mapper_control,
+                snapshot.memory_control
+            ));
+        });
+}
+
+fn render_debugger_breakpoints(
+    ui: &mut egui::Ui,
+    worker: &SmsTemporalWorker,
+    state: &mut DebuggerWindowState,
+) {
+    ui.heading("Breakpoints");
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(&mut state.breakpoint_input).desired_width(72.0));
+        if ui.button("Adicionar").clicked() {
+            if let Some(address) = parse_debug_address(&state.breakpoint_input) {
+                if !state.breakpoints.contains(&address) && state.breakpoints.len() < 64 {
+                    match worker.set_breakpoint(address, true) {
+                        Ok(()) => state.breakpoints.push(address),
+                        Err(error) => {
+                            state.status = format!("Falha no breakpoint: {error}");
+                        }
                     }
-                } else { state.status = "Endereço de memória inválido".to_owned(); }
+                }
+            } else {
+                state.status = "Endereço de breakpoint inválido".to_owned();
+            }
+        }
+    });
+
+    let mut remove = None;
+    for address in &state.breakpoints {
+        ui.horizontal(|ui| {
+            ui.monospace(format!("{address:04X}"));
+            if ui.small_button("Remover").clicked() {
+                remove = Some(*address);
             }
         });
-        egui::ScrollArea::vertical().max_height(180.0).show(&mut columns[1], |ui| {
+    }
+
+    if let Some(address) = remove {
+        match worker.set_breakpoint(address, false) {
+            Ok(()) => state.breakpoints.retain(|item| *item != address),
+            Err(error) => {
+                state.status = format!("Falha ao remover breakpoint: {error}");
+            }
+        }
+    }
+
+    if ui
+        .add_enabled(!state.breakpoints.is_empty(), egui::Button::new("Limpar todos"))
+        .clicked()
+    {
+        for address in state.breakpoints.clone() {
+            if let Err(error) = worker.set_breakpoint(address, false) {
+                state.status = format!("Falha ao limpar breakpoints: {error}");
+                return;
+            }
+        }
+        state.breakpoints.clear();
+    }
+}
+
+fn render_debugger_memory(
+    ui: &mut egui::Ui,
+    worker: &SmsTemporalWorker,
+    state: &mut DebuggerWindowState,
+) {
+    ui.heading("Inspeção de memória");
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(&mut state.memory_address).desired_width(72.0));
+        if ui.button("Ler 64 bytes").clicked() {
+            if let Some(address) = parse_debug_address(&state.memory_address) {
+                match worker.inspect_memory(address, 64) {
+                    Ok(bytes) => state.memory_bytes = bytes,
+                    Err(error) => {
+                        state.status = format!("Falha ao ler memória: {error}");
+                    }
+                }
+            } else {
+                state.status = "Endereço de memória inválido".to_owned();
+            }
+        }
+    });
+
+    egui::ScrollArea::vertical()
+        .max_height(180.0)
+        .show(ui, |ui| {
             for (row, bytes) in state.memory_bytes.chunks(16).enumerate() {
-                let address = parse_debug_address(&state.memory_address).unwrap_or_default().wrapping_add(u16::try_from(row * 16).unwrap_or(0));
-                let hex = bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ");
-                let ascii = bytes.iter().map(|byte| if (0x20..=0x7e).contains(byte) { char::from(*byte) } else { '.' }).collect::<String>();
+                let address = parse_debug_address(&state.memory_address)
+                    .unwrap_or_default()
+                    .wrapping_add(u16::try_from(row * 16).unwrap_or(0));
+                let hex = bytes
+                    .iter()
+                    .map(|byte| format!("{byte:02X}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let ascii = bytes
+                    .iter()
+                    .map(|byte| {
+                        if (0x20..=0x7e).contains(byte) {
+                            char::from(*byte)
+                        } else {
+                            '.'
+                        }
+                    })
+                    .collect::<String>();
                 ui.monospace(format!("{address:04X}: {hex:<47} {ascii}"));
             }
         });
-    });
+}
+
+fn render_debugger_trace(ui: &mut egui::Ui, snapshot: Option<&SmsDebugSnapshot>) {
     ui.separator();
-    egui::CollapsingHeader::new("Trace do Scheduler / barramento").default_open(false).show(ui, |ui| {
-        if let Some(snapshot) = state.snapshot.as_ref() {
-            ui.label(format!("{} eventos retidos | {} descartados | captura {}", snapshot.trace_events.len(), snapshot.trace_dropped, if snapshot.trace_enabled { "ativa" } else { "inativa" }));
-            egui::ScrollArea::vertical().max_height(220.0).stick_to_bottom(true).show(ui, |ui| {
-                for event in &snapshot.trace_events { ui.monospace(format!("{event:?}")); }
-            });
-        }
-    });
+    egui::CollapsingHeader::new("Trace do Scheduler / barramento")
+        .default_open(false)
+        .show(ui, |ui| {
+            if let Some(snapshot) = snapshot {
+                ui.label(format!(
+                    "{} eventos retidos | {} descartados | captura {}",
+                    snapshot.trace_events.len(),
+                    snapshot.trace_dropped,
+                    if snapshot.trace_enabled {
+                        "ativa"
+                    } else {
+                        "inativa"
+                    }
+                ));
+                egui::ScrollArea::vertical()
+                    .max_height(220.0)
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        for event in &snapshot.trace_events {
+                            ui.monospace(format!("{event:?}"));
+                        }
+                    });
+            }
+        });
 }
 
 fn render_runtime_status(
