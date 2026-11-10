@@ -532,7 +532,7 @@ impl SegaApp {
         context.show_viewport_immediate(
             egui::ViewportId::from_hash_of("sega-menu-popup"),
             builder,
-            |menu_ui, class| {
+            |menu_ui, _class| {
                 popup_focused = menu_ui.input(|input| input.viewport().focused.unwrap_or(false));
                 measured_size =
                     self.render_menu_popup_contents(menu_ui, context, menu, &mut actions);
@@ -1319,7 +1319,9 @@ impl eframe::App for SegaApp {
         let viewport_rect = self.render(ui);
 
         if self.active_menu.is_some() && ui.input(|input| input.key_pressed(egui::Key::Escape)) {
-            record_ui_diagnostic("menu.popup.closed", menu.title());
+            if let Some(menu) = self.active_menu {
+                record_ui_diagnostic("menu.popup.closed", menu.title());
+            }
             self.active_menu = None;
             self.menu_last_focused = None;
         }
