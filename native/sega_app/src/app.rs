@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::icons::{IconKind, icon_button};
 use crate::debugger_window::{
     DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
     parse_saved_size, render_debugger_contents,
@@ -2796,34 +2797,41 @@ fn render_machine_controls(
     command: &mut Option<UiCommand>,
 ) {
     let worker = viewport.worker.as_ref();
-    add_machine_button(
+    add_machine_icon_button(
         ui,
-        "▶",
+        IconKind::Play,
         "Iniciar",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::Start,
         command,
     );
-    add_machine_button(
+    add_machine_icon_button(
         ui,
-        "Ⅱ",
+        IconKind::Pause,
         "Pausar",
         worker.is_some_and(SmsTemporalWorker::is_running),
         UiCommand::Pause,
         command,
     );
-    add_machine_button(ui, "■", "Parar", worker.is_some(), UiCommand::Stop, command);
-    add_machine_button(
+    add_machine_icon_button(
         ui,
-        "↻",
+        IconKind::Stop,
+        "Parar",
+        worker.is_some(),
+        UiCommand::Stop,
+        command,
+    );
+    add_machine_icon_button(
+        ui,
+        IconKind::Reset,
         "Reset",
         worker.is_some(),
         UiCommand::Reset,
         command,
     );
-    add_machine_button(
+    add_machine_icon_button(
         ui,
-        "⏭",
+        IconKind::Step,
         "Avançar um quadro",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::StepFrame,
@@ -2846,6 +2854,19 @@ fn add_machine_button(
         .on_hover_text(description)
         .clicked()
     {
+        *command = Some(value);
+    }
+}
+
+fn add_machine_icon_button(
+    ui: &mut egui::Ui,
+    icon: IconKind,
+    description: &str,
+    enabled: bool,
+    value: UiCommand,
+    command: &mut Option<UiCommand>,
+) {
+    if icon_button(ui, icon, description, enabled).clicked() {
         *command = Some(value);
     }
 }
