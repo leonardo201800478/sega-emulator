@@ -352,9 +352,9 @@ impl SmsTemporalWorkerDebugHandle {
         self.commands
             .send(WorkerCommand::DebugSnapshot(reply_sender))
             .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not return a debug snapshot: {error}"))?
+        reply_receiver.recv().map_err(|error| {
+            format!("SMS machine worker did not return a debug snapshot: {error}")
+        })?
     }
 
     /// Read at most 256 bytes from the active mapper without advancing emulated time.
@@ -373,7 +373,6 @@ impl SmsTemporalWorkerDebugHandle {
             .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
     }
 }
-
 
 impl SmsTemporalWorker {
     /// Create a cloneable debugger client without transferring machine ownership.
