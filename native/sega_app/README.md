@@ -24,8 +24,8 @@
 
 ```powershell
 cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
-cargo check --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-cargo test --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+cargo test --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 ```
 
 ## Dependências nativas Windows — versões verificadas em 2026-11-07
