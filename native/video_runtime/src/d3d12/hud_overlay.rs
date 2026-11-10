@@ -321,10 +321,18 @@ mod tests {
         let video = D3d12ChildWindow::create(parent.handle()).unwrap();
         video.set_bounds(0, 0, 320, 240).unwrap();
 
-        let hud = D3d12HudOverlay::create(parent.handle()).unwrap();
+        let mut hud = D3d12HudOverlay::create(parent.handle()).unwrap();
         hud.set_bounds(8, 8, 160, 60).unwrap();
         hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
             .unwrap();
+        hud.set_font_size_pixels(22).unwrap();
+        assert_eq!(
+            unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
+                hud.hwnd,
+                windows::Win32::UI::WindowsAndMessaging::GWLP_USERDATA,
+            ) },
+            22
+        );
 
         let mut client_rect = windows::Win32::Foundation::RECT::default();
         unsafe {
