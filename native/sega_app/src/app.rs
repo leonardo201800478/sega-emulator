@@ -10,7 +10,8 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
 use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
 use sega_input_runtime::{
-    DeviceClass, DeviceDescriptor, DeviceId, DeviceState, InputBackend, InputBuffers,
+    ActionBinding, ActionId, ActionState, AxisDirection, DeviceClass, DeviceDescriptor, DeviceId,
+    DeviceState, InputBackend, InputBuffers, InputProfile, PhysicalControl,
     sdl3_backend::Sdl3Backend,
 };
 use sega_observability::{
@@ -64,6 +65,7 @@ pub struct SegaApp {
     keyboard_bindings: KeyboardBindings,
     pending_key_binding: Option<KeyboardAction>,
     gamepad_bindings: GamepadBindings,
+    gamepad_profile: InputProfile,
     pending_gamepad_binding: Option<GamepadAction>,
     input_mapping_error: Option<String>,
     active_menu: Option<TopLevelMenu>,
@@ -84,6 +86,8 @@ pub struct SegaApp {
 
 impl Default for SegaApp {
     fn default() -> Self {
+        let gamepad_bindings = load_gamepad_bindings();
+        let gamepad_profile = gamepad_bindings.to_profile();
         Self {
             rom_path: String::new(),
             region: "usa".to_owned(),
@@ -104,7 +108,8 @@ impl Default for SegaApp {
             selected_gamepad: None,
             keyboard_bindings: load_keyboard_bindings(),
             pending_key_binding: None,
-            gamepad_bindings: load_gamepad_bindings(),
+            gamepad_bindings,
+            gamepad_profile,
             pending_gamepad_binding: None,
             input_mapping_error: None,
             active_menu: None,
@@ -1005,6 +1010,7 @@ fn should_reveal_fullscreen_menu(
                 (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
             {
                 self.gamepad_bindings.set(action, button as u8);
+                self.gamepad_profile = self.gamepad_bindings.to_profile();
                 self.pending_gamepad_binding = None;
                 self.input_mapping_error = save_gamepad_bindings(&self.gamepad_bindings)
                     .err()
@@ -1013,7 +1019,7 @@ fn should_reveal_fullscreen_menu(
             return (ControllerButtons::default(), false);
         }
 
-        map_sdl3_gamepad(reading.state, &self.gamepad_bindings)
+        map_sdl3_gamepad(reading.state, &self.gamepad_profile)
     }
 
     /// Poll gameplay input and dispatch edge-triggered emulator shortcuts.
@@ -1760,6 +1766,51 @@ impl GamepadBindings {
             GamepadAction::Pause => self.pause = button,
         }
     }
+
+    fn to_profile(self) -> InputProfile {
+        let action = |index| ActionId::new(index).expect("built-in gamepad action is in range");
+        let button = |action_id, index| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Button(index),
+        };
+        let axis = |action_id, index, direction| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Axis {
+                index,
+                direction,
+                threshold: 16_000,
+            },
+        };
+        let hat = |action_id, direction_mask| ActionBinding {
+            action: action(action_id),
+            control: PhysicalControl::Hat {
+                index: 0,
+                direction_mask,
+            },
+        };
+
+        InputProfile::new(
+            vec![
+                button(0, self.up),
+                axis(0, 1, AxisDirection::Negative),
+                hat(0, 0x01),
+                button(1, self.down),
+                axis(1, 1, AxisDirection::Positive),
+                hat(1, 0x04),
+                button(2, self.left),
+                axis(2, 0, AxisDirection::Negative),
+                hat(2, 0x08),
+                button(3, self.right),
+                axis(3, 0, AxisDirection::Positive),
+                hat(3, 0x02),
+                button(4, self.button_1),
+                button(5, self.button_2),
+                button(6, self.pause),
+            ],
+            0,
+        )
+        .expect("built-in gamepad profile is valid")
+    }
 }
 
 fn key_from_name(name: &str) -> Option<egui::Key> {
@@ -2385,30 +2436,23 @@ fn add_machine_button(
 
 fn map_sdl3_gamepad(
     state: DeviceState,
-    bindings: &GamepadBindings,
+    profile: &InputProfile,
 ) -> (ControllerButtons, bool) {
-    let up = state.buttons.is_pressed(bindings.up as usize)
-        || state.hat(0) & 0x01 != 0
-        || state.axis(1) < -16_000;
-    let down = state.buttons.is_pressed(bindings.down as usize)
-        || state.hat(0) & 0x04 != 0
-        || state.axis(1) > 16_000;
-    let left = state.buttons.is_pressed(bindings.left as usize)
-        || state.hat(0) & 0x08 != 0
-        || state.axis(0) < -16_000;
-    let right = state.buttons.is_pressed(bindings.right as usize)
-        || state.hat(0) & 0x02 != 0
-        || state.axis(0) > 16_000;
+    let mut actions = ActionState::default();
+    profile.evaluate(&state, &mut actions);
+    let is_active = |index| {
+        ActionId::new(index).is_some_and(|action| actions.is_active(action))
+    };
     (
         ControllerButtons {
-            up,
-            down,
-            left,
-            right,
-            button_1: state.buttons.is_pressed(bindings.button_1 as usize),
-            button_2: state.buttons.is_pressed(bindings.button_2 as usize),
+            up: is_active(0),
+            down: is_active(1),
+            left: is_active(2),
+            right: is_active(3),
+            button_1: is_active(4),
+            button_2: is_active(5),
         },
-        state.buttons.is_pressed(bindings.pause as usize),
+        is_active(6),
     )
 }
 
@@ -2756,7 +2800,8 @@ mod tests {
         state.buttons.set(4, true).unwrap();
         let mut bindings = super::GamepadBindings::default();
         bindings.set(super::GamepadAction::Button1, 4);
-        let (mapped, _) = super::map_sdl3_gamepad(state, &bindings);
+        let profile = bindings.to_profile();
+        let (mapped, _) = super::map_sdl3_gamepad(state, &profile);
         assert!(mapped.button_1);
         assert!(!mapped.button_2);
     }
@@ -2957,8 +3002,8 @@ mod tests {
             .unwrap();
         state.set_hat(0, 0x01).unwrap();
 
-        let (buttons, pause) =
-            super::map_sdl3_gamepad(state, &super::GamepadBindings::default());
+        let profile = super::GamepadBindings::default().to_profile();
+        let (buttons, pause) = super::map_sdl3_gamepad(state, &profile);
         assert!(buttons.up);
         assert!(buttons.left);
         assert!(buttons.button_1);
@@ -2972,8 +3017,8 @@ mod tests {
         state.set_axis(0, 20_000, AxisSemantic::LeftStickX).unwrap();
         state.set_axis(1, 20_000, AxisSemantic::LeftStickY).unwrap();
 
-        let (buttons, pause) =
-            super::map_sdl3_gamepad(state, &super::GamepadBindings::default());
+        let profile = super::GamepadBindings::default().to_profile();
+        let (buttons, pause) = super::map_sdl3_gamepad(state, &profile);
         assert!(buttons.right);
         assert!(buttons.down);
         assert!(!buttons.button_1);
