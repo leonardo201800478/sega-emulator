@@ -4,7 +4,11 @@
 use eframe::egui;
 use rfd::FileDialog;
 use sega_sms_runtime::{SmsDebugSnapshot, SmsTemporalWorker};
-use std::{fs, path::PathBuf, time::{Duration, Instant}};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 const MEMORY_WINDOW: usize = 64;
 const MAX_BREAKPOINTS: usize = 64;
@@ -450,7 +454,11 @@ impl eframe::App for DebuggerApp {
                     if let Some(snapshot) = self.snapshot.as_ref() {
                         ui.label(format!(
                             "Captura: {} | Eventos retidos: {} | Descartados: {}",
-                            if snapshot.trace_enabled { "ativa" } else { "inativa" },
+                            if snapshot.trace_enabled {
+                                "ativa"
+                            } else {
+                                "inativa"
+                            },
                             snapshot.trace_events.len(),
                             snapshot.trace_dropped
                         ));
