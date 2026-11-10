@@ -142,6 +142,20 @@ impl DebuggerApp {
         }
     }
 
+    fn clear_breakpoints(&mut self) {
+        let Some(worker) = self.worker.as_ref() else {
+            return;
+        };
+        for address in self.breakpoints.clone() {
+            if let Err(error) = worker.set_breakpoint(address, false) {
+                self.status = format!("Falha ao limpar breakpoints: {error}");
+                return;
+            }
+        }
+        self.breakpoints.clear();
+        self.status = "Todos os breakpoints foram removidos".into();
+    }
+
     fn remove_breakpoint(&mut self, address: u16) {
         let Some(worker) = self.worker.as_ref() else {
             return;
@@ -396,6 +410,12 @@ impl eframe::App for DebuggerApp {
                 ui.separator();
                 ui.heading("Breakpoints");
                 ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(!self.breakpoints.is_empty(), egui::Button::new("Limpar"))
+                        .clicked()
+                    {
+                        self.clear_breakpoints();
+                    }
                     ui.text_edit_singleline(&mut self.breakpoint_input);
                     if ui
                         .add_enabled(self.worker.is_some(), egui::Button::new("Adicionar"))
@@ -470,6 +490,18 @@ impl eframe::App for DebuggerApp {
                             ui.monospace(format!("{byte:02X}"));
                         }
                     });
+                let ascii = self
+                    .memory_bytes
+                    .iter()
+                    .map(|byte| {
+                        if (0x20..=0x7e).contains(byte) {
+                            char::from(*byte)
+                        } else {
+                            '.'
+                        }
+                    })
+                    .collect::<String>();
+                ui.monospace(format!("ASCII: {ascii}"));
             });
         });
 
