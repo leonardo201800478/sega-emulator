@@ -237,9 +237,7 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
         } && existing.hInstance == instance
             && existing
                 .lpfnWndProc
-                .is_some_and(|registered| {
-                    std::ptr::fn_addr_eq(registered, expected_window_proc)
-                });
+                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, expected_window_proc));
         if !class_matches {
             return Err(registration_error);
         }
