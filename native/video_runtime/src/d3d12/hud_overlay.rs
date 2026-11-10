@@ -12,17 +12,17 @@ use windows::Win32::Foundation::{
     ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, COLORREF, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect,
-    HGDIOBJ, PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT, DT_LEFT, DT_NOPREFIX, DT_TOP,
+    BeginPaint, COLORREF, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, HGDIOBJ,
+    PAINTSTRUCT, SetBkMode, SetTextColor, TRANSPARENT, DT_LEFT, DT_NOPREFIX, DT_TOP,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect,
-    GetWindowLongPtrW, GetWindowTextW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
-    SetWindowTextW, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, WINDOW_EX_STYLE,
+    CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GWL_STYLE,
+    GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT, HWND_TOP, LWA_COLORKEY,
+    MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
+    SetLayeredWindowAttributes, SetWindowPos, SetWindowTextW, ShowWindow, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, GWL_EXSTYLE,
-    GWL_STYLE, HWND_TOP, HTTRANSPARENT, LWA_COLORKEY, MA_NOACTIVATE,
+    WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
 };
 use windows::core::{Error, PCWSTR, Result, w};
 
@@ -47,9 +47,7 @@ impl D3d12HudOverlay {
         let parent = HWND(parent_handle as *mut c_void);
         let hwnd = unsafe {
             CreateWindowExW(
-                WINDOW_EX_STYLE(
-                    WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0,
-                ),
+                WINDOW_EX_STYLE(WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0),
                 w!("SegaEmulatorTelemetryHud"),
                 w!(""),
                 WINDOW_STYLE(WS_CHILD.0 | WS_CLIPSIBLINGS.0),
@@ -64,9 +62,9 @@ impl D3d12HudOverlay {
             )?
         };
 
-        if let Err(error) = unsafe {
-            SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_COLORKEY)
-        } {
+        if let Err(error) =
+            unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_COLORKEY) }
+        {
             unsafe {
                 let _ = DestroyWindow(hwnd);
             }
@@ -96,7 +94,10 @@ impl D3d12HudOverlay {
     /// Replace the displayed text and invalidate the layered child surface.
     pub fn set_text(&self, text: &str) -> Result<()> {
         let safe_text = text.replace('\0', " ").replace('\n', "\r\n");
-        let wide = safe_text.encode_utf16().chain(std::iter::once(0)).collect::<Vec<_>>();
+        let wide = safe_text
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
         unsafe {
             SetWindowTextW(self.hwnd, PCWSTR(wide.as_ptr()))?;
         }
@@ -241,8 +242,8 @@ unsafe extern "system" fn hud_window_proc(
 
 #[cfg(test)]
 mod tests {
-    use super::D3d12HudOverlay;
     use super::super::{D3d12ChildWindow, NativeVideoWindow};
+    use super::D3d12HudOverlay;
     use super::{LPARAM, LRESULT, WPARAM};
     use core::ffi::c_void;
     use windows::Win32::Foundation::HWND;
@@ -269,11 +270,8 @@ mod tests {
 
         hud.set_bounds(12, 12, 240, 90).unwrap();
         unsafe {
-            windows::Win32::UI::WindowsAndMessaging::GetClientRect(
-                hud.hwnd,
-                &mut client_rect,
-            )
-            .unwrap();
+            windows::Win32::UI::WindowsAndMessaging::GetClientRect(hud.hwnd, &mut client_rect)
+                .unwrap();
         }
         assert_eq!(client_rect.right - client_rect.left, 240);
         assert_eq!(client_rect.bottom - client_rect.top, 90);
