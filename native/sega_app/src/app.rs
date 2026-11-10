@@ -475,6 +475,13 @@ fn should_reveal_fullscreen_menu(
     !fullscreen || menu_open || pointer_y.is_some_and(|y| y <= root_top + 88.0)
 }
 
+fn saved_ui_setting<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
+    contents.lines().find_map(|line| {
+        let (candidate, value) = line.split_once('=')?;
+        (candidate == key).then_some(value)
+    })
+}
+
 impl SegaApp {
     /// Restore the user's UI preferences from the per-user settings file.
     fn restore_ui_settings(&mut self) {
@@ -484,29 +491,30 @@ impl SegaApp {
         let Ok(contents) = fs::read_to_string(directory.join(UI_SETTINGS_FILE)) else {
             return;
         };
-        let value = |key: &str| {
-            contents.lines().find_map(|line| {
-                let (candidate, value) = line.split_once('=')?;
-                (candidate == key).then_some(value)
-            })
-        };
+
+        self.restore_debugger_settings(&contents);
+        self.restore_audio_settings(&contents);
+        self.restore_display_settings(&contents);
+    }
+
+    fn restore_debugger_settings(&mut self, contents: &str) {
+        if let Some(rom_path) = saved_ui_setting(contents, "rom_path") {
+            rom_path.clone_into(&mut self.rom_path);
+        }
 
         let Ok(mut debugger_window) = self.debugger_window.lock() else {
             return;
         };
-        if let Some(rom_path) = value("rom_path") {
-            self.rom_path = rom_path.to_owned();
+        if let Some(memory_address) = saved_ui_setting(contents, "debugger_memory_address") {
+            memory_address.clone_into(&mut debugger_window.memory_address);
         }
-        if let Some(memory_address) = value("debugger_memory_address") {
-            debugger_window.memory_address = memory_address.to_owned();
+        if let Some(breakpoint_input) = saved_ui_setting(contents, "debugger_breakpoint_input") {
+            breakpoint_input.clone_into(&mut debugger_window.breakpoint_input);
         }
-        if let Some(breakpoint_input) = value("debugger_breakpoint_input") {
-            debugger_window.breakpoint_input = breakpoint_input.to_owned();
+        if let Some(rom_path) = saved_ui_setting(contents, "debugger_breakpoints_rom") {
+            rom_path.clone_into(&mut debugger_window.breakpoint_rom_path);
         }
-        if let Some(rom_path) = value("debugger_breakpoints_rom") {
-            debugger_window.breakpoint_rom_path = rom_path.to_owned();
-        }
-        if let Some(breakpoints) = value("debugger_breakpoints") {
+        if let Some(breakpoints) = saved_ui_setting(contents, "debugger_breakpoints") {
             debugger_window.breakpoints = breakpoints
                 .split(',')
                 .filter_map(parse_debug_address)
@@ -519,60 +527,88 @@ impl SegaApp {
         {
             debugger_window.breakpoints.clear();
         }
-        if let Some(enabled) = value("debugger_trace_enabled").and_then(|value| value.parse().ok())
+        if let Some(enabled) = saved_ui_setting(contents, "debugger_trace_enabled")
+            .and_then(|value| value.parse().ok())
         {
             debugger_window.trace_capture_enabled = enabled;
         }
-        if let Some(region) =
-            value("region").filter(|value| matches!(*value, "usa" | "brazil" | "europe" | "japan"))
+        if let Some(open) =
+            saved_ui_setting(contents, "debugger_open").and_then(|value| value.parse().ok())
         {
-            self.region = region.to_owned();
+            self.debugger_window_open.store(open, Ordering::Release);
         }
-        if let Some(mode) = value("aspect_ratio") {
-            self.aspect_ratio = match mode {
-                "1:1" => AspectRatioMode::OneToOne,
-                "16:9" => AspectRatioMode::SixteenNine,
-                _ => AspectRatioMode::FourThree,
-            };
+        if let Some(position) =
+            saved_ui_setting(contents, "debugger_position").and_then(parse_saved_position)
+        {
+            debugger_window.window_position = Some(position);
         }
-        if let Some(mode) = value("footer") {
+        if let Some(size) =
+            saved_ui_setting(contents, "debugger_size").and_then(parse_saved_size)
+        {
+            debugger_window.window_size = Some(size);
+        }
+    }
+
+    fn restore_audio_settings(&mut self, contents: &str) {
+        if let Some(region) = saved_ui_setting(contents, "region")
+            .filter(|value| matches!(*value, "usa" | "brazil" | "europe" | "japan"))
+        {
+            region.clone_into(&mut self.region);
+        }
+        if let Some(mode) = saved_ui_setting(contents, "footer") {
             self.footer_mode = if mode == "hidden" {
                 FooterMode::Hidden
             } else {
                 FooterMode::Visible
             };
         }
-        if let Some(mode) = value("audio_state") {
+        if let Some(mode) = saved_ui_setting(contents, "audio_state") {
             self.audio_state = if mode == "disabled" {
                 AudioState::Disabled
             } else {
                 AudioState::Enabled
             };
         }
-        if let Some(backend) = value("audio_backend") {
+        if let Some(backend) = saved_ui_setting(contents, "audio_backend") {
             self.audio_backend = if backend == "xaudio2" {
                 AudioBackend::XAudio2
             } else {
                 AudioBackend::Wasapi
             };
         }
-        if let Some(volume) = value("audio_volume").and_then(|value| value.parse::<u8>().ok()) {
+        if let Some(volume) =
+            saved_ui_setting(contents, "audio_volume").and_then(|value| value.parse::<u8>().ok())
+        {
             self.audio_volume = volume.min(100);
         }
-        if let Some(enabled) = value("diagnostics_enabled").and_then(|value| value.parse().ok()) {
+        if let Some(enabled) =
+            saved_ui_setting(contents, "diagnostics_enabled").and_then(|value| value.parse().ok())
+        {
             self.diagnostics_enabled = enabled;
         }
-        if let Some(enabled) = value("fps_overlay_enabled").and_then(|value| value.parse().ok()) {
+    }
+
+    fn restore_display_settings(&mut self, contents: &str) {
+        if let Some(mode) = saved_ui_setting(contents, "aspect_ratio") {
+            self.aspect_ratio = match mode {
+                "1:1" => AspectRatioMode::OneToOne,
+                "16:9" => AspectRatioMode::SixteenNine,
+                _ => AspectRatioMode::FourThree,
+            };
+        }
+        if let Some(enabled) =
+            saved_ui_setting(contents, "fps_overlay_enabled").and_then(|value| value.parse().ok())
+        {
             self.fps_overlay_enabled = enabled;
         }
-        if let Some(size) = value("fps_overlay_size") {
+        if let Some(size) = saved_ui_setting(contents, "fps_overlay_size") {
             self.fps_overlay_size = match size {
                 "small" => FpsOverlaySize::Small,
                 "large" => FpsOverlaySize::Large,
                 _ => FpsOverlaySize::Medium,
             };
         }
-        if let Some(position) = value("fps_overlay_position") {
+        if let Some(position) = saved_ui_setting(contents, "fps_overlay_position") {
             self.fps_overlay_position = match position {
                 "top_left" => FpsOverlayPosition::TopLeft,
                 "top_right" => FpsOverlayPosition::TopRight,
@@ -580,29 +616,25 @@ impl SegaApp {
                 _ => FpsOverlayPosition::BottomRight,
             };
         }
-        if let Some(position) = value("main_window_position").and_then(parse_saved_position) {
+        if let Some(position) =
+            saved_ui_setting(contents, "main_window_position").and_then(parse_saved_position)
+        {
             self.main_window_position = Some(position);
         }
-        if let Some(size) = value("main_window_size").and_then(parse_saved_root_size) {
+        if let Some(size) =
+            saved_ui_setting(contents, "main_window_size").and_then(parse_saved_root_size)
+        {
             self.main_window_size = Some(size);
         }
-        if let Some(maximized) = value("main_window_maximized").and_then(|value| value.parse().ok())
+        if let Some(maximized) = saved_ui_setting(contents, "main_window_maximized")
+            .and_then(|value| value.parse().ok())
         {
             self.main_window_maximized = maximized;
         }
-        if let Some(fullscreen) =
-            value("main_window_fullscreen").and_then(|value| value.parse().ok())
+        if let Some(fullscreen) = saved_ui_setting(contents, "main_window_fullscreen")
+            .and_then(|value| value.parse().ok())
         {
             self.main_window_fullscreen = fullscreen;
-        }
-        if let Some(open) = value("debugger_open").and_then(|value| value.parse().ok()) {
-            self.debugger_window_open.store(open, Ordering::Release);
-        }
-        if let Some(position) = value("debugger_position").and_then(parse_saved_position) {
-            debugger_window.window_position = Some(position);
-        }
-        if let Some(size) = value("debugger_size").and_then(parse_saved_size) {
-            debugger_window.window_size = Some(size);
         }
     }
 
@@ -1181,11 +1213,11 @@ impl SegaApp {
                             break;
                         }
                     }
-                    if trace_capture_enabled {
-                        if let Err(error) = worker.set_trace_enabled(true) {
-                            self.native_viewport.error =
-                                Some(format!("Falha ao restaurar trace do debugger: {error}"));
-                        }
+                    if trace_capture_enabled
+                        && let Err(error) = worker.set_trace_enabled(true)
+                    {
+                        self.native_viewport.error =
+                            Some(format!("Falha ao restaurar trace do debugger: {error}"));
                     }
                 }
                 if self.diagnostics_enabled
