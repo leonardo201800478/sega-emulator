@@ -316,30 +316,37 @@ impl SmsTemporalWorkerDebugHandle {
             .map_err(|error| format!("SMS machine worker did not acknowledge command: {error}"))?
     }
 
+    /// Return whether the shared machine worker is currently running.
     pub fn is_running(&self) -> bool {
         self.telemetry.running.load(Ordering::Acquire)
     }
 
+    /// Resume the machine through the shared worker command queue.
     pub fn start(&self) -> Result<(), String> {
         self.request_unit(WorkerCommand::Start)
     }
 
+    /// Pause the machine at the worker's supported command boundary.
     pub fn pause(&self) -> Result<(), String> {
         self.request_unit(WorkerCommand::Pause)
     }
 
+    /// Execute one complete instruction while the machine is paused.
     pub fn step_instruction(&self) -> Result<(), String> {
         self.request_unit(WorkerCommand::StepInstruction)
     }
 
+    /// Add or remove a program-counter breakpoint.
     pub fn set_breakpoint(&self, address: u16, enabled: bool) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
     }
 
+    /// Enable or disable bounded scheduler and bus trace capture.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
     }
 
+    /// Capture an immutable, owned machine snapshot.
     pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
         self.commands
@@ -350,6 +357,7 @@ impl SmsTemporalWorkerDebugHandle {
             .map_err(|error| format!("SMS machine worker did not return a debug snapshot: {error}"))?
     }
 
+    /// Read at most 256 bytes from the active mapper without advancing emulated time.
     pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
         if length > DEBUG_MEMORY_READ_LIMIT {
             return Err(format!(
@@ -1620,6 +1628,23 @@ mod tests {
         assert_eq!(worker.inspect_memory(0, 4).unwrap(), [0, 0, 0, 0]);
         assert!(worker.inspect_memory(0, 257).is_err());
         assert_eq!(worker.machine_time_ticks(), initial_ticks);
+    }
+
+    #[test]
+    fn cloneable_debug_handle_controls_the_same_worker_instance() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let handle = worker.debug_handle();
+
+        assert_eq!(
+            handle.debug_snapshot().unwrap(),
+            worker.debug_snapshot().unwrap()
+        );
+        handle.set_breakpoint(0x0000, true).unwrap();
+        handle.set_trace_enabled(true).unwrap();
+        assert!(handle.debug_snapshot().unwrap().trace_enabled);
+
+        handle.set_trace_enabled(false).unwrap();
+        assert!(!worker.debug_snapshot().unwrap().trace_enabled);
     }
 
     #[test]
