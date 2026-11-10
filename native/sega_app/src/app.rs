@@ -811,7 +811,7 @@ impl SegaApp {
         context.show_viewport_deferred(
             egui::ViewportId::from_hash_of("sega-sms-debugger-window"),
             builder,
-            move |debugger_ui, _class| {
+            move |debugger_ui| {
                 let Ok(mut state) = state.lock() else {
                     open.store(false, Ordering::Release);
                     return;
