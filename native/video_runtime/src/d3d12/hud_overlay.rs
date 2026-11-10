@@ -40,11 +40,10 @@ pub struct D3d12HudOverlay {
 impl D3d12HudOverlay {
     /// Create the transparent HUD child under an existing GUI-owned parent HWND.
     pub fn create(parent_handle: usize) -> Result<Self> {
-        super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
+        let parent = super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
         let instance = unsafe { GetModuleHandleW(None)? };
         register_hud_window_class(HINSTANCE(instance.0))?;
 
-        let parent = HWND(parent_handle as *mut c_void);
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0),
