@@ -1130,9 +1130,9 @@ impl SegaApp {
         if !self.fps_overlay_was_active {
             let presented_sequence = self
                 .native_viewport
-                .worker
+                .session
                 .as_ref()
-                .map_or(0, SmsTemporalWorker::video_last_presented_sequence);
+                .map_or(0, D3d12MailboxSession::last_presented_sequence);
             self.fps_counter.reset(presented_sequence, now);
             self.fps_shared_value
                 .store(0.0_f32.to_bits(), Ordering::Relaxed);
@@ -1141,9 +1141,9 @@ impl SegaApp {
         {
             let presented_sequence = self
                 .native_viewport
-                .worker
+                .session
                 .as_ref()
-                .map_or(0, SmsTemporalWorker::video_last_presented_sequence);
+                .map_or(0, D3d12MailboxSession::last_presented_sequence);
             if self.fps_counter.update(presented_sequence, now) {
                 self.fps_shared_value
                     .store(self.fps_counter.fps.to_bits(), Ordering::Relaxed);
@@ -2198,9 +2198,6 @@ fn render_video_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     );
     ui.radio_value(state.aspect_ratio, AspectRatioMode::OneToOne, "1:1");
     ui.radio_value(state.aspect_ratio, AspectRatioMode::SixteenNine, "16:9");
-    ui.separator();
-    ui.checkbox(state.fps_overlay_enabled, "Exibir FPS no canto da tela");
-    ui.small("Contagem baseada nos frames apresentados pelo D3D12.");
 }
 
 fn render_controls_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
