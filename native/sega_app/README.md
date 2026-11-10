@@ -12,6 +12,8 @@
 - Exposes coarse-grained start, pause, stop, reset and single-frame commands.
 - Connects completed RGB888 VDP frames through the external `FrameMailbox` to the D3D12 child-window presenter.
 - Shows frame/instruction/video telemetry and runtime errors.
+- Opens a separate, movable and resizable SMS Debugger native window attached to the same running machine worker.
+- Auto-saves frontend preferences every five seconds and on shutdown to `%APPDATA%\\Sega Emulator\\ui_settings.txt`; restores the main/debugger window geometry and user choices on startup.
 - Stops and joins the machine worker, detaches its mailbox, then shuts down D3D12 before destroying the child HWND.
 
 ## Current limitations
