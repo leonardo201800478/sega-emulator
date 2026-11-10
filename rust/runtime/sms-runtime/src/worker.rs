@@ -81,25 +81,13 @@ pub struct SmsPerformanceMetrics {
     pub completed_frames: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct FrameTimingState {
     last_completed: Option<Instant>,
     sample_started: Option<Instant>,
     sample_frames: u64,
     metrics: SmsPerformanceMetrics,
     pending_input: Option<Instant>,
-}
-
-impl Default for FrameTimingState {
-    fn default() -> Self {
-        Self {
-            last_completed: None,
-            sample_started: None,
-            sample_frames: 0,
-            metrics: SmsPerformanceMetrics::default(),
-            pending_input: None,
-        }
-    }
 }
 
 impl FrameTimingState {
@@ -116,11 +104,11 @@ impl FrameTimingState {
                     .as_secs_f32()
                     * 1_000.0,
             );
+            self.sample_frames = self.sample_frames.saturating_add(1);
         }
         self.last_completed = Some(completed_at);
 
         let sample_started = *self.sample_started.get_or_insert(completed_at);
-        self.sample_frames = self.sample_frames.saturating_add(1);
         let elapsed = completed_at.saturating_duration_since(sample_started);
         if elapsed >= Duration::from_millis(500) {
             let sample_frames = u16::try_from(self.sample_frames).unwrap_or(u16::MAX);
@@ -1565,7 +1553,7 @@ mod tests {
         assert_eq!(timing.metrics.frame_time_ms, Some(20.0));
         assert_eq!(timing.metrics.emulation_fps, 0.0);
         timing.record_frame_completed(start + Duration::from_millis(520));
-        assert!((timing.metrics.emulation_fps - 5.769231).abs() < 0.0001);
+        assert!((timing.metrics.emulation_fps - 3.846154).abs() < 0.0001);
     }
 
     #[test]
