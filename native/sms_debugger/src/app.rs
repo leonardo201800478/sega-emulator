@@ -267,155 +267,155 @@ impl eframe::App for DebuggerApp {
             if !self.running {
                 self.refresh_memory_if_idle();
             }
-            self.update_video(context);
+            self.update_video(&context);
         }
 
         ui.horizontal_wrapped(|ui| {
-                if ui.button("Abrir ROM").clicked() {
-                    self.open_rom();
-                }
-                if ui
-                    .add_enabled(self.worker.is_some(), egui::Button::new("Run / Pause"))
-                    .clicked()
-                {
-                    self.toggle_run();
-                }
-                if ui
-                    .add_enabled(
-                        self.worker.is_some() && !self.running,
-                        egui::Button::new("Step"),
-                    )
-                    .clicked()
-                {
-                    self.step();
-                }
-                if ui
-                    .add_enabled(
-                        self.snapshot.is_some(),
-                        egui::Button::new("Exportar diagnóstico"),
-                    )
-                    .clicked()
-                {
-                    self.export_diagnostic();
-                }
-            });
-            ui.label(&self.status);
-            ui.separator();
+            if ui.button("Abrir ROM").clicked() {
+                self.open_rom();
+            }
+            if ui
+                .add_enabled(self.worker.is_some(), egui::Button::new("Run / Pause"))
+                .clicked()
+            {
+                self.toggle_run();
+            }
+            if ui
+                .add_enabled(
+                    self.worker.is_some() && !self.running,
+                    egui::Button::new("Step"),
+                )
+                .clicked()
+            {
+                self.step();
+            }
+            if ui
+                .add_enabled(
+                    self.snapshot.is_some(),
+                    egui::Button::new("Exportar diagnóstico"),
+                )
+                .clicked()
+            {
+                self.export_diagnostic();
+            }
+        });
+        ui.label(&self.status);
+        ui.separator();
 
-            ui.columns(2, |columns| {
-                columns[0].vertical(|ui| {
-                    ui.heading("CPU / Z80");
-                    if let Some(snapshot) = self.snapshot.as_ref() {
-                        for (name, value) in [
-                            ("PC", u32::from(snapshot.pc)),
-                            ("SP", u32::from(snapshot.sp)),
-                            ("AF", u32::from(snapshot.af)),
-                            ("BC", u32::from(snapshot.bc)),
-                            ("DE", u32::from(snapshot.de)),
-                            ("HL", u32::from(snapshot.hl)),
-                            ("AF'", u32::from(snapshot.af_alt)),
-                            ("BC'", u32::from(snapshot.bc_alt)),
-                            ("DE'", u32::from(snapshot.de_alt)),
-                            ("HL'", u32::from(snapshot.hl_alt)),
-                            ("IX", u32::from(snapshot.ix)),
-                            ("IY", u32::from(snapshot.iy)),
-                            ("WZ", u32::from(snapshot.wz)),
-                        ] {
-                            ui.monospace(format!("{name:>4}  {value:04X}"));
-                        }
-                        ui.label(format!("I: {:02X}  R: {:02X}", snapshot.i, snapshot.r));
-                        ui.label(format!(
-                            "IFF1: {}  IFF2: {}  IM: {}  HALT: {}",
-                            snapshot.iff1, snapshot.iff2, snapshot.interrupt_mode, snapshot.halted
-                        ));
-                        ui.label(format!(
-                            "Instruction T-states: {}",
-                            snapshot.instruction_tstates
-                        ));
-                        ui.label(format!("Machine ticks: {}", snapshot.machine_time_ticks));
-                        ui.separator();
-                        ui.heading("Hardware");
-                        ui.label(format!("Frame: {}", snapshot.frame_number));
-                        ui.label(format!(
-                            "VDP status: {:02X}  scanline: {}  cycles: {}",
-                            snapshot.vdp_status,
-                            snapshot.vdp_scanline,
-                            snapshot.vdp_cycles_into_line
-                        ));
-                        ui.label(format!(
-                            "Mapper banks: {:02X}/{:02X}/{:02X}",
-                            snapshot.mapper_banks[0],
-                            snapshot.mapper_banks[1],
-                            snapshot.mapper_banks[2]
-                        ));
-                        ui.label(format!(
-                            "Mapper control: {:02X}  Memory control: {:02X}",
-                            snapshot.mapper_control, snapshot.memory_control
-                        ));
-                    } else {
-                        ui.label("Aguardando ROM");
+        ui.columns(2, |columns| {
+            columns[0].vertical(|ui| {
+                ui.heading("CPU / Z80");
+                if let Some(snapshot) = self.snapshot.as_ref() {
+                    for (name, value) in [
+                        ("PC", u32::from(snapshot.pc)),
+                        ("SP", u32::from(snapshot.sp)),
+                        ("AF", u32::from(snapshot.af)),
+                        ("BC", u32::from(snapshot.bc)),
+                        ("DE", u32::from(snapshot.de)),
+                        ("HL", u32::from(snapshot.hl)),
+                        ("AF'", u32::from(snapshot.af_alt)),
+                        ("BC'", u32::from(snapshot.bc_alt)),
+                        ("DE'", u32::from(snapshot.de_alt)),
+                        ("HL'", u32::from(snapshot.hl_alt)),
+                        ("IX", u32::from(snapshot.ix)),
+                        ("IY", u32::from(snapshot.iy)),
+                        ("WZ", u32::from(snapshot.wz)),
+                    ] {
+                        ui.monospace(format!("{name:>4}  {value:04X}"));
                     }
+                    ui.label(format!("I: {:02X}  R: {:02X}", snapshot.i, snapshot.r));
+                    ui.label(format!(
+                        "IFF1: {}  IFF2: {}  IM: {}  HALT: {}",
+                        snapshot.iff1, snapshot.iff2, snapshot.interrupt_mode, snapshot.halted
+                    ));
+                    ui.label(format!(
+                        "Instruction T-states: {}",
+                        snapshot.instruction_tstates
+                    ));
+                    ui.label(format!("Machine ticks: {}", snapshot.machine_time_ticks));
                     ui.separator();
-                    ui.heading("Breakpoints");
-                    ui.horizontal(|ui| {
-                        ui.text_edit_singleline(&mut self.breakpoint_input);
-                        if ui
-                            .add_enabled(self.worker.is_some(), egui::Button::new("Adicionar"))
-                            .clicked()
-                        {
-                            self.add_breakpoint();
-                        }
-                    });
-                    let mut remove = None;
-                    for address in &self.breakpoints {
-                        ui.horizontal(|ui| {
-                            ui.monospace(format!("0x{address:04X}"));
-                            if ui.small_button("Remover").clicked() {
-                                remove = Some(*address);
-                            }
-                        });
-                    }
-                    if let Some(address) = remove {
-                        self.remove_breakpoint(address);
+                    ui.heading("Hardware");
+                    ui.label(format!("Frame: {}", snapshot.frame_number));
+                    ui.label(format!(
+                        "VDP status: {:02X}  scanline: {}  cycles: {}",
+                        snapshot.vdp_status,
+                        snapshot.vdp_scanline,
+                        snapshot.vdp_cycles_into_line
+                    ));
+                    ui.label(format!(
+                        "Mapper banks: {:02X}/{:02X}/{:02X}",
+                        snapshot.mapper_banks[0],
+                        snapshot.mapper_banks[1],
+                        snapshot.mapper_banks[2]
+                    ));
+                    ui.label(format!(
+                        "Mapper control: {:02X}  Memory control: {:02X}",
+                        snapshot.mapper_control, snapshot.memory_control
+                    ));
+                } else {
+                    ui.label("Aguardando ROM");
+                }
+                ui.separator();
+                ui.heading("Breakpoints");
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.breakpoint_input);
+                    if ui
+                        .add_enabled(self.worker.is_some(), egui::Button::new("Adicionar"))
+                        .clicked()
+                    {
+                        self.add_breakpoint();
                     }
                 });
-
-                columns[1].vertical(|ui| {
-                    ui.heading("Vídeo");
-                    if let Some(texture) = self.texture.as_ref() {
-                        ui.image((texture.id(), texture.size_vec2()));
-                    } else {
-                        ui.label("Aguardando primeiro frame");
-                    }
-                    ui.separator();
-                    ui.heading("Memória");
+                let mut remove = None;
+                for address in &self.breakpoints {
                     ui.horizontal(|ui| {
-                        ui.label("Endereço hexadecimal");
-                        ui.text_edit_singleline(&mut self.memory_address);
-                        if ui.button("Ler").clicked() {
-                            self.refresh_memory();
+                        ui.monospace(format!("0x{address:04X}"));
+                        if ui.small_button("Remover").clicked() {
+                            remove = Some(*address);
                         }
                     });
-                    egui::Grid::new("sms-memory")
-                        .striped(true)
-                        .num_columns(9)
-                        .show(ui, |ui| {
-                            for (index, byte) in self.memory_bytes.iter().enumerate() {
-                                if index % 8 == 0 {
-                                    if index > 0 {
-                                        ui.end_row();
-                                    }
-                                    let start = parse_address(&self.memory_address).unwrap_or(0);
-                                    ui.monospace(format!(
-                                        "{:04X}",
-                                        start.wrapping_add(index as u16)
-                                    ));
+                }
+                if let Some(address) = remove {
+                    self.remove_breakpoint(address);
+                }
+            });
+
+            columns[1].vertical(|ui| {
+                ui.heading("Vídeo");
+                if let Some(texture) = self.texture.as_ref() {
+                    ui.image((texture.id(), texture.size_vec2()));
+                } else {
+                    ui.label("Aguardando primeiro frame");
+                }
+                ui.separator();
+                ui.heading("Memória");
+                ui.horizontal(|ui| {
+                    ui.label("Endereço hexadecimal");
+                    ui.text_edit_singleline(&mut self.memory_address);
+                    if ui.button("Ler").clicked() {
+                        self.refresh_memory();
+                    }
+                });
+                egui::Grid::new("sms-memory")
+                    .striped(true)
+                    .num_columns(9)
+                    .show(ui, |ui| {
+                        for (index, byte) in self.memory_bytes.iter().enumerate() {
+                            if index % 8 == 0 {
+                                if index > 0 {
+                                    ui.end_row();
                                 }
-                                ui.monospace(format!("{byte:02X}"));
+                                let start = parse_address(&self.memory_address).unwrap_or(0);
+                                ui.monospace(format!(
+                                    "{:04X}",
+                                    start.wrapping_add(index as u16)
+                                ));
                             }
-                        });
-                });
+                            ui.monospace(format!("{byte:02X}"));
+                        }
+                    });
             });
+        });
 
         if self.running {
             context.request_repaint();
