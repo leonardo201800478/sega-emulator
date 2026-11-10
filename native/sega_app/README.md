@@ -26,6 +26,7 @@
 
 ```powershell
 cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
+cargo clippy --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
 cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 cargo test --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 ```
