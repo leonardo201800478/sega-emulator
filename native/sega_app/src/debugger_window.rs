@@ -18,6 +18,7 @@ pub(crate) struct DebuggerWindowState {
     pub(crate) trace_capture_enabled: bool,
     pub(crate) window_position: Option<egui::Pos2>,
     pub(crate) window_size: Option<egui::Vec2>,
+    pub(crate) window_initialized: bool,
 }
 
 impl Default for DebuggerWindowState {
@@ -34,6 +35,7 @@ impl Default for DebuggerWindowState {
             trace_capture_enabled: false,
             window_position: None,
             window_size: None,
+            window_initialized: false,
         }
     }
 }
