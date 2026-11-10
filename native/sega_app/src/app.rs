@@ -1061,7 +1061,7 @@ impl SegaApp {
                                     diagnostics_enabled: self.diagnostics_enabled,
                                     diagnostics_command: &mut actions.diagnostics_command,
                                     diagnostics_error: self.diagnostics_error.as_deref(),
-                                    debugger_window_open: &mut self.debugger_window_open,
+                                    debugger_window_open: self.debugger_window_open.as_ref(),
                                     fps_overlay_enabled: &mut self.fps_overlay_enabled,
                                     fps_overlay_size: &mut self.fps_overlay_size,
                                     fps_overlay_position: &mut self.fps_overlay_position,
@@ -2940,7 +2940,7 @@ fn parse_saved_size(value: &str) -> Option<egui::Vec2> {
 
 fn render_debugger_contents(
     ui: &mut egui::Ui,
-    worker: Option<&SmsTemporalWorker>,
+    worker: Option<&SmsTemporalWorkerDebugHandle>,
     state: &mut DebuggerWindowState,
 ) {
     if let Some(worker) = worker {
@@ -3127,7 +3127,7 @@ fn render_debugger_video_state(ui: &mut egui::Ui, snapshot: &SmsDebugSnapshot) {
 
 fn render_debugger_breakpoints(
     ui: &mut egui::Ui,
-    worker: &SmsTemporalWorker,
+    worker: &SmsTemporalWorkerDebugHandle,
     state: &mut DebuggerWindowState,
 ) {
     ui.heading("Breakpoints");
