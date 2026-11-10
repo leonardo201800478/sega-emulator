@@ -7,7 +7,7 @@
 #[cfg(test)]
 use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -27,6 +27,10 @@ const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
+const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
+const WORKER_REPLY_TIMEOUT: Duration = Duration::from_millis(100);
+const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 pub fn sms_temporal_region_profile(
     region: &str,
@@ -52,6 +56,32 @@ pub fn sms_temporal_region_profile(
         )),
         _ => Err("region deve ser usa, brazil, europe ou japan"),
     }
+}
+
+fn enqueue_worker_command(
+    commands: &SyncSender<WorkerCommand>,
+    command: WorkerCommand,
+) -> Result<(), String> {
+    match commands.try_send(command) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(_)) => {
+            Err("SMS machine worker command queue is full; retry shortly".to_owned())
+        }
+        Err(TrySendError::Disconnected(_)) => Err("SMS machine worker is unavailable".to_owned()),
+    }
+}
+
+fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
+    receiver
+        .recv_timeout(WORKER_REPLY_TIMEOUT)
+        .map_err(|error| match error {
+            RecvTimeoutError::Timeout => {
+                format!("SMS machine worker timed out while {operation}")
+            }
+            RecvTimeoutError::Disconnected => {
+                format!("SMS machine worker stopped while {operation}")
+            }
+        })
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
@@ -92,6 +122,8 @@ struct FrameTimingState {
 
 impl FrameTimingState {
     fn record_input(&mut self, detected_at: Instant) {
+        // Controller commands carry a complete button state. The latest accepted
+        // state is the one that the next completed frame can incorporate.
         self.pending_input = Some(detected_at);
     }
 
@@ -127,6 +159,17 @@ impl FrameTimingState {
         }
     }
 
+    fn metrics_at(&self, now: Instant) -> SmsPerformanceMetrics {
+        let mut metrics = self.metrics;
+        if self
+            .last_completed
+            .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_millis(500))
+        {
+            metrics.emulation_fps = 0.0;
+        }
+        metrics
+    }
+
     fn reset(&mut self) {
         *self = Self::default();
     }
@@ -136,6 +179,7 @@ impl FrameTimingState {
 struct WorkerTelemetry {
     frame_timing: Mutex<FrameTimingState>,
     running: AtomicBool,
+    shutdown: AtomicBool,
     diagnostics_enabled: AtomicBool,
     frame_number: AtomicU64,
     machine_time_ticks: AtomicU64,
@@ -179,7 +223,7 @@ impl WorkerTelemetry {
     fn performance_metrics(&self) -> SmsPerformanceMetrics {
         self.frame_timing.lock().map_or_else(
             |_| SmsPerformanceMetrics::default(),
-            |timing| timing.metrics,
+            |timing| timing.metrics_at(Instant::now()),
         )
     }
 
@@ -325,12 +369,7 @@ enum WorkerCommand {
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
-    SetController(
-        u8,
-        ControllerButtons,
-        Instant,
-        SyncSender<Result<(), String>>,
-    ),
+    SetController(u8, ControllerButtons, Instant),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
@@ -384,7 +423,7 @@ const DEBUG_MEMORY_READ_LIMIT: usize = 256;
 
 /// Handle to the thread that exclusively owns the temporal SMS machine.
 pub struct SmsTemporalWorker {
-    commands: Sender<WorkerCommand>,
+    commands: SyncSender<WorkerCommand>,
     worker: Option<JoinHandle<()>>,
     telemetry: Arc<WorkerTelemetry>,
     #[cfg(windows)]
@@ -394,7 +433,7 @@ pub struct SmsTemporalWorker {
 /// Cloneable, lightweight command handle for debugger viewports.
 #[derive(Clone)]
 pub struct SmsTemporalWorkerDebugHandle {
-    commands: Sender<WorkerCommand>,
+    commands: SyncSender<WorkerCommand>,
     telemetry: Arc<WorkerTelemetry>,
 }
 
@@ -404,12 +443,8 @@ impl SmsTemporalWorkerDebugHandle {
         command: impl FnOnce(SyncSender<Result<(), String>>) -> WorkerCommand,
     ) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(command(reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not acknowledge command: {error}"))?
+        enqueue_worker_command(&self.commands, command(reply_sender))?;
+        receive_worker_reply(reply_receiver, "acknowledging a command")?
     }
 
     /// Return whether the shared machine worker is currently running.
@@ -445,12 +480,8 @@ impl SmsTemporalWorkerDebugHandle {
     /// Capture an immutable, owned machine snapshot.
     pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::DebugSnapshot(reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver.recv().map_err(|error| {
-            format!("SMS machine worker did not return a debug snapshot: {error}")
-        })?
+        enqueue_worker_command(&self.commands, WorkerCommand::DebugSnapshot(reply_sender))?;
+        receive_worker_reply(reply_receiver, "returning a debugger snapshot")?
     }
 
     /// Read at most 256 bytes from the active mapper without advancing emulated time.
@@ -461,12 +492,11 @@ impl SmsTemporalWorkerDebugHandle {
             ));
         }
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::ReadMemory(start, length, reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "returning memory inspection data")?
     }
 }
 
@@ -489,7 +519,7 @@ impl SmsTemporalWorker {
                 .store(clock_hz, Ordering::Release);
         }
         let worker_telemetry = Arc::clone(&telemetry);
-        let (commands, receiver) = mpsc::channel();
+        let (commands, receiver) = mpsc::sync_channel(WORKER_COMMAND_QUEUE_CAPACITY);
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
         let worker_region = region.clone();
 
@@ -510,7 +540,7 @@ impl SmsTemporalWorker {
             })
             .map_err(|error| format!("could not start SMS machine worker: {error}"))?;
 
-        match ready_receiver.recv() {
+        match ready_receiver.recv_timeout(WORKER_STARTUP_TIMEOUT) {
             Ok(Ok(())) => Ok(Self {
                 commands,
                 worker: Some(worker),
@@ -522,11 +552,15 @@ impl SmsTemporalWorker {
                 let _ = worker.join();
                 Err(error)
             }
-            Err(error) => {
+            Err(RecvTimeoutError::Timeout) => {
+                // The command sender is dropped on return; the detached startup
+                // thread then observes a disconnected command receiver and exits.
+                drop(worker);
+                Err("SMS machine worker startup timed out after 5 seconds".to_owned())
+            }
+            Err(RecvTimeoutError::Disconnected) => {
                 let _ = worker.join();
-                Err(format!(
-                    "SMS machine worker startup channel closed: {error}"
-                ))
+                Err("SMS machine worker startup channel closed".to_owned())
             }
         }
     }
@@ -536,12 +570,8 @@ impl SmsTemporalWorker {
         command: impl FnOnce(SyncSender<Result<(), String>>) -> WorkerCommand,
     ) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(command(reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not acknowledge command: {error}"))?
+        enqueue_worker_command(&self.commands, command(reply_sender))?;
+        receive_worker_reply(reply_receiver, "acknowledging a command")?
     }
 
     pub fn load_rom(&self, rom: Vec<u8>) -> Result<(), String> {
@@ -584,12 +614,8 @@ impl SmsTemporalWorker {
     /// Capture a coherent, owned debugger snapshot at a worker command boundary.
     pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::DebugSnapshot(reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver.recv().map_err(|error| {
-            format!("SMS machine worker did not return a debug snapshot: {error}")
-        })?
+        enqueue_worker_command(&self.commands, WorkerCommand::DebugSnapshot(reply_sender))?;
+        receive_worker_reply(reply_receiver, "returning a debugger snapshot")?
     }
 
     /// Enable or disable bounded scheduler/bus trace capture.
@@ -605,22 +631,20 @@ impl SmsTemporalWorker {
             ));
         }
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::ReadMemory(start, length, reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "returning memory inspection data")?
     }
 
     pub fn step_frame(&self, max_instructions: usize) -> Result<usize, String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::StepFrame(max_instructions, reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not return a frame: {error}"))?
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::StepFrame(max_instructions, reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "completing a frame step")?
     }
 
     pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
@@ -634,7 +658,10 @@ impl SmsTemporalWorker {
         buttons: ControllerButtons,
         detected_at: Instant,
     ) -> Result<(), String> {
-        self.request_unit(|reply| WorkerCommand::SetController(player, buttons, detected_at, reply))
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::SetController(player, buttons, detected_at),
+        )
     }
 
     /// Return frame-completion and input-to-frame measurements from the SMS worker.
@@ -643,9 +670,7 @@ impl SmsTemporalWorker {
     }
 
     pub fn request_nmi(&self) -> Result<(), String> {
-        self.commands
-            .send(WorkerCommand::RequestNmi)
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))
+        enqueue_worker_command(&self.commands, WorkerCommand::RequestNmi)
     }
 
     /// Configure host audio on the worker thread using an application-supplied factory.
@@ -666,23 +691,18 @@ impl SmsTemporalWorker {
 
     pub fn close_audio_output(&self) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::CloseAudio(reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not close audio: {error}"))
+        enqueue_worker_command(&self.commands, WorkerCommand::CloseAudio(reply_sender))?;
+        receive_worker_reply(reply_receiver, "closing audio output")
     }
 
     #[cfg(any(windows, test))]
     fn set_video_mailbox(&self, mailbox: Option<FrameMailbox>) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-        self.commands
-            .send(WorkerCommand::SetVideoMailbox(mailbox, reply_sender))
-            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
-        reply_receiver
-            .recv()
-            .map_err(|error| format!("SMS machine worker did not configure video: {error}"))?
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::SetVideoMailbox(mailbox, reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "configuring video output")?
     }
 
     /// Attach an externally owned presentation mailbox to the SMS worker.
@@ -916,10 +936,12 @@ impl SmsTemporalWorker {
 impl Drop for SmsTemporalWorker {
     fn drop(&mut self) {
         let _ = self.close_video_output();
-        let _ = self.commands.send(WorkerCommand::Shutdown);
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        self.telemetry.shutdown.store(true, Ordering::Release);
+        let _ = enqueue_worker_command(&self.commands, WorkerCommand::Shutdown);
+        // The worker observes the shutdown flag at its next safe event-loop
+        // boundary and performs audio/mailbox cleanup on its owning thread.
+        // Detach here so dropping the host handle cannot stall the GUI on join.
+        drop(self.worker.take());
     }
 }
 
@@ -944,60 +966,72 @@ fn execute_frame(
     let step_frame_elapsed =
         diagnostic_step_start.map_or(Duration::ZERO, |started| started.elapsed());
     let diagnostic_machine_end = diagnostic_machine_start.map(|_| machine.now().ticks());
+    let frame_completed = !breakpoint_hit;
+
     if diagnostics_enabled {
         telemetry
             .total_instructions
             .fetch_add(instructions as u64, Ordering::AcqRel);
     }
-    telemetry.record_frame_completed(Instant::now());
+
+    // A breakpoint may stop this call at an instruction boundary before the
+    // VDP advances to the next frame. Such a partial execution is not a frame:
+    // do not increment frame telemetry or publish its incomplete framebuffer.
+    if frame_completed {
+        telemetry.record_frame_completed(Instant::now());
+    }
     telemetry.set_frame_number(machine.frame_number());
     telemetry.machine_time_ticks.store(
         u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
         Ordering::Release,
     );
 
-    *video_sequence = video_sequence
-        .checked_add(1)
-        .ok_or_else(|| "SMS video frame sequence exhausted".to_owned())?;
-    let mut video_error = None;
-    if let Some(mailbox) = video_mailbox.as_ref() {
-        let frame = VideoFrame::new(
-            *video_sequence,
-            256,
-            192,
-            PixelFormat::Rgb888,
-            256 * 3,
-            machine.framebuffer().to_vec(),
-        )
-        .map_err(|error| error.to_string())
-        .and_then(|frame| mailbox.publish(frame).map_err(|error| error.to_string()));
+    if frame_completed {
+        *video_sequence = video_sequence
+            .checked_add(1)
+            .ok_or_else(|| "SMS video frame sequence exhausted".to_owned())?;
+        let mut video_error = None;
+        if let Some(mailbox) = video_mailbox.as_ref() {
+            let frame = VideoFrame::new(
+                *video_sequence,
+                256,
+                192,
+                PixelFormat::Rgb888,
+                256 * 3,
+                machine.framebuffer().to_vec(),
+            )
+            .map_err(|error| error.to_string())
+            .and_then(|frame| mailbox.publish(frame).map_err(|error| error.to_string()));
 
-        match frame {
-            Ok(()) => {
-                telemetry
-                    .video_last_published_sequence
-                    .store(*video_sequence, Ordering::Release);
-                if diagnostics_enabled {
-                    match mailbox.replaced_frames() {
-                        Ok(replaced) => telemetry
-                            .video_replaced_frames
-                            .store(replaced, Ordering::Release),
-                        Err(error) => video_error = Some(error.to_string()),
+            match frame {
+                Ok(()) => {
+                    telemetry
+                        .video_last_published_sequence
+                        .store(*video_sequence, Ordering::Release);
+                    if diagnostics_enabled {
+                        match mailbox.replaced_frames() {
+                            Ok(replaced) => telemetry
+                                .video_replaced_frames
+                                .store(replaced, Ordering::Release),
+                            Err(error) => video_error = Some(error.to_string()),
+                        }
                     }
                 }
+                Err(error) => video_error = Some(error),
             }
-            Err(error) => video_error = Some(error),
+        }
+        if let Some(error) = video_error {
+            telemetry.set_video_error(Some(error));
+            *video_mailbox = None;
         }
     }
-    if let Some(error) = video_error {
-        telemetry.set_video_error(Some(error));
-        *video_mailbox = None;
-    }
 
+    // Do not send audio generated by a partial frame stopped at a breakpoint.
+    // Drain it through the discard path so paused single-step state stays bounded.
     let samples = machine.drain_audio_samples(None);
     let diagnostic_audio_start = diagnostics_enabled.then(Instant::now);
     let audio_result = audio_session.as_mut().map(|session| {
-        if publish_audio {
+        if publish_audio && frame_completed {
             session.process_samples(&samples)
         } else {
             session.process_samples_discarding_output(&samples)
@@ -1030,9 +1064,11 @@ fn execute_frame(
     let processing_elapsed = frame_started.elapsed();
     let frame_wait = frame_duration.saturating_sub(processing_elapsed);
 
-    // Per-frame timing instrumentation is sampled and emitted only in DEBUG.
-    if let (Some(machine_time_start), Some(machine_time_end)) =
-        (diagnostic_machine_start, diagnostic_machine_end)
+    // Per-frame timing instrumentation is sampled and emitted only for a
+    // completed SMS frame, never for a breakpoint-truncated execution.
+    if frame_completed
+        && let (Some(machine_time_start), Some(machine_time_end)) =
+            (diagnostic_machine_start, diagnostic_machine_end)
     {
         sega_observability::tracing::trace!(
             target: "sega::audio::pacing",
@@ -1071,6 +1107,9 @@ fn worker_loop(
     let mut video_sequence = 0_u64;
 
     loop {
+        if telemetry.shutdown.load(Ordering::Acquire) {
+            break;
+        }
         let command = if running {
             match commands.recv_timeout(Duration::from_millis(0)) {
                 Ok(command) => Some(command),
@@ -1078,9 +1117,10 @@ fn worker_loop(
                 Err(RecvTimeoutError::Disconnected) => break,
             }
         } else {
-            match commands.recv() {
+            match commands.recv_timeout(WORKER_IDLE_POLL_INTERVAL) {
                 Ok(command) => Some(command),
-                Err(_) => break,
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         };
 
@@ -1421,14 +1461,11 @@ fn handle_command(
             };
             let _ = reply.send(result);
         }
-        WorkerCommand::SetController(player, buttons, detected_at, reply) => {
-            let result = machine
-                .set_controller(player, buttons)
-                .map_err(|error| error.to_string());
-            if result.is_ok() {
-                telemetry.record_input_detected(detected_at);
+        WorkerCommand::SetController(player, buttons, detected_at) => {
+            match machine.set_controller(player, buttons) {
+                Ok(()) => telemetry.record_input_detected(detected_at),
+                Err(error) => telemetry.set_runtime_error(Some(error.to_string())),
             }
-            let _ = reply.send(result);
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
         WorkerCommand::ConfigureAudio(factory, reply) => match factory() {
@@ -1567,6 +1604,139 @@ mod tests {
         timing.record_frame_completed(start + Duration::from_millis(19));
         assert_eq!(timing.metrics.input_to_frame_ms, Some(16.0));
         assert!(timing.pending_input.is_none());
+    }
+
+    #[test]
+    fn bounded_command_queue_rejects_overflow_without_waiting() {
+        let (commands, _receiver) = super::mpsc::sync_channel(1);
+        super::enqueue_worker_command(&commands, super::WorkerCommand::RequestNmi).unwrap();
+        let error = super::enqueue_worker_command(&commands, super::WorkerCommand::RequestNmi)
+            .expect_err("a full queue must reject commands immediately");
+        assert!(error.contains("queue is full"));
+    }
+
+    #[test]
+    fn input_latency_uses_the_latest_controller_state_applied_before_frame() {
+        use super::FrameTimingState;
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let mut timing = FrameTimingState::default();
+        timing.record_input(start + Duration::from_millis(3));
+        timing.record_input(start + Duration::from_millis(10));
+        timing.record_frame_completed(start + Duration::from_millis(19));
+        assert_eq!(timing.metrics.input_to_frame_ms, Some(9.0));
+    }
+
+    #[test]
+    fn emulation_fps_expires_when_no_sms_frame_completes() {
+        use super::FrameTimingState;
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let mut timing = FrameTimingState::default();
+        timing.record_frame_completed(start);
+        timing.record_frame_completed(start + Duration::from_millis(500));
+        assert!(
+            timing
+                .metrics_at(start + Duration::from_millis(999))
+                .emulation_fps
+                > 0.0
+        );
+        assert_eq!(
+            timing
+                .metrics_at(start + Duration::from_secs(1))
+                .emulation_fps,
+            0.0
+        );
+    }
+
+    #[test]
+    fn breakpoint_before_frame_completion_does_not_count_or_publish_a_frame() {
+        let mut machine = build_sms_temporal_machine(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let mut breakpoints = BreakpointSet::default();
+        breakpoints.insert(0);
+        let mut video_sequence = 0;
+        let telemetry = WorkerTelemetry::default();
+        let mut audio_session = None;
+        let mailbox = FrameMailbox::new();
+        let mut video_mailbox = Some(mailbox.clone());
+
+        let (instructions, _, breakpoint_hit) = execute_frame(
+            &mut machine,
+            &breakpoints,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert_eq!(instructions, 0);
+        assert!(breakpoint_hit);
+        assert_eq!(machine.frame_number(), 0);
+        assert_eq!(telemetry.performance_metrics().completed_frames, 0);
+        assert_eq!(telemetry.frame_number.load(Ordering::Acquire), 0);
+        assert_eq!(video_sequence, 0);
+        assert!(mailbox.take_latest().unwrap().is_none());
+    }
+
+    #[test]
+    fn input_latency_remains_pending_across_breakpoint_until_a_complete_frame() {
+        use std::time::Instant;
+
+        let mut machine = build_sms_temporal_machine(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let telemetry = WorkerTelemetry::default();
+        telemetry.record_input_detected(Instant::now());
+
+        let mut breakpoint = BreakpointSet::default();
+        breakpoint.insert(0);
+        let mut video_sequence = 0;
+        let mut audio_session = None;
+        let mut video_mailbox = None;
+
+        let (_, _, breakpoint_hit) = execute_frame(
+            &mut machine,
+            &breakpoint,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+        assert!(breakpoint_hit);
+        assert_eq!(telemetry.performance_metrics().completed_frames, 0);
+        assert!(
+            telemetry
+                .frame_timing
+                .lock()
+                .unwrap()
+                .pending_input
+                .is_some()
+        );
+
+        let no_breakpoints = BreakpointSet::default();
+        let (_, _, breakpoint_hit) = execute_frame(
+            &mut machine,
+            &no_breakpoints,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert!(!breakpoint_hit);
+        let metrics = telemetry.performance_metrics();
+        assert_eq!(metrics.completed_frames, 1);
+        assert!(metrics.input_to_frame_ms.is_some());
+        assert_eq!(video_sequence, 1);
     }
 
     #[test]
