@@ -5,6 +5,10 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::debugger_window::{
+    DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
+    parse_saved_size, render_debugger_contents,
+};
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
@@ -19,10 +23,6 @@ use sega_observability::{
 };
 use sega_sms_core::ControllerButtons;
 use sega_sms_runtime::SmsTemporalWorker;
-use crate::debugger_window::{
-    DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
-    parse_saved_size, render_debugger_contents,
-};
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
 
@@ -3222,21 +3222,21 @@ mod tests {
             crate::debugger_window::parse_saved_position("120.5,240.0"),
             Some(egui::pos2(120.5, 240.0))
         );
-        assert!(super::parse_saved_position("NaN,20").is_none());
-        assert!(super::parse_saved_position("invalid").is_none());
+        assert!(crate::debugger_window::parse_saved_position("NaN,20").is_none());
+        assert!(crate::debugger_window::parse_saved_position("invalid").is_none());
         assert_eq!(crate::debugger_window::parse_debug_address("0x00AF"), Some(0x00AF));
-        assert_eq!(super::parse_debug_address("invalid"), None);
+        assert_eq!(crate::debugger_window::parse_debug_address("invalid"), None);
         assert_eq!(
             crate::debugger_window::parse_saved_size("980,760"),
             Some(egui::vec2(980.0, 760.0))
         );
-        assert!(super::parse_saved_size("400,300").is_none());
-        assert!(super::parse_saved_size("NaN,760").is_none());
+        assert!(crate::debugger_window::parse_saved_size("400,300").is_none());
+        assert!(crate::debugger_window::parse_saved_size("NaN,760").is_none());
         assert_eq!(
             crate::debugger_window::parse_saved_root_size("1440,900"),
             Some(egui::vec2(1440.0, 900.0))
         );
-        assert!(super::parse_saved_root_size("900,600").is_none());
+        assert!(crate::debugger_window::parse_saved_root_size("900,600").is_none());
     }
 
     #[test]
