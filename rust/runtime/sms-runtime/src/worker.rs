@@ -1708,7 +1708,14 @@ mod tests {
         .unwrap();
         assert!(breakpoint_hit);
         assert_eq!(telemetry.performance_metrics().completed_frames, 0);
-        assert!(telemetry.frame_timing.lock().unwrap().pending_input.is_some());
+        assert!(
+            telemetry
+                .frame_timing
+                .lock()
+                .unwrap()
+                .pending_input
+                .is_some()
+        );
 
         let no_breakpoints = BreakpointSet::default();
         let (_, _, breakpoint_hit) = execute_frame(
