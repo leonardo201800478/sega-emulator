@@ -261,11 +261,8 @@ mod tests {
 
         let mut client_rect = windows::Win32::Foundation::RECT::default();
         unsafe {
-            windows::Win32::UI::WindowsAndMessaging::GetClientRect(
-                hud.hwnd,
-                &mut client_rect,
-            )
-            .unwrap();
+            windows::Win32::UI::WindowsAndMessaging::GetClientRect(hud.hwnd, &mut client_rect)
+                .unwrap();
         }
         assert_eq!(client_rect.right - client_rect.left, 160);
         assert_eq!(client_rect.bottom - client_rect.top, 60);
@@ -284,7 +281,9 @@ mod tests {
         assert!(hud.is_child_of(parent.handle()));
         assert_eq!(hud.composition_contract(), (true, true, true, true, true));
         assert_eq!(
-            unsafe { super::hud_window_proc(hud.hwnd, super::WM_MOUSEACTIVATE, WPARAM(0), LPARAM(0)) },
+            unsafe {
+                super::hud_window_proc(hud.hwnd, super::WM_MOUSEACTIVATE, WPARAM(0), LPARAM(0))
+            },
             LRESULT(super::MA_NOACTIVATE as isize)
         );
         assert_eq!(
@@ -292,9 +291,7 @@ mod tests {
             LRESULT(super::HTTRANSPARENT as isize)
         );
 
-        let first_child = unsafe {
-            GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD)
-        };
+        let first_child = unsafe { GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD) };
         assert_eq!(first_child, HWND(hud.handle() as *mut c_void));
     }
 }
