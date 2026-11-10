@@ -225,9 +225,9 @@ enum FpsOverlaySize {
 impl FpsOverlaySize {
     const fn dimensions(self) -> egui::Vec2 {
         match self {
-            Self::Small => egui::vec2(148.0, 60.0),
-            Self::Medium => egui::vec2(176.0, 68.0),
-            Self::Large => egui::vec2(208.0, 76.0),
+            Self::Small => egui::vec2(176.0, 60.0),
+            Self::Medium => egui::vec2(200.0, 68.0),
+            Self::Large => egui::vec2(224.0, 76.0),
         }
     }
     const fn label(self) -> &'static str {
