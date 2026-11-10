@@ -1516,7 +1516,9 @@ impl SegaApp {
         };
         let pause_down = keyboard_pause || gamepad_pause;
         if let Some(worker) = self.native_viewport.worker.as_ref() {
-            if self.last_controller != Some(buttons) && worker.set_controller(1, buttons).is_ok() {
+            if self.last_controller != Some(buttons)
+                && worker.set_controller_at(1, buttons, Instant::now()).is_ok()
+            {
                 self.last_controller = Some(buttons);
             }
             if pause_down && !self.pause_key_down {
