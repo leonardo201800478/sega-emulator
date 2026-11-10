@@ -24,7 +24,7 @@ FPS is calculated from the D3D12 session's presented-frame sequence, sampled at 
 
 ## Fullscreen behavior
 
-F11 toggles borderless fullscreen. In fullscreen, the menu and execution toolbar are hidden by default and reappear when the pointer enters the top 56 logical points or while a menu popup remains open. The video viewport receives the reclaimed vertical space. Leaving fullscreen restores the normal persistent menu layout.
+F11 toggles borderless fullscreen. In fullscreen, the menu and execution toolbar are hidden by default and reappear when the pointer enters the top 88 logical points or while a menu popup remains open. The video viewport receives the reclaimed vertical space. Leaving fullscreen restores the normal persistent menu layout.
 
 ## Input mapping
 
