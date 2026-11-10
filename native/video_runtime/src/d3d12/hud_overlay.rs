@@ -20,8 +20,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GWL_STYLE,
-    GWLP_USERDATA, GetClassInfoW, GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT, HWND_TOP,
-    LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
+    GWLP_USERDATA, GetClassInfoW, GetClientRect, GetWindowLongPtrW, GetWindowTextW, HTTRANSPARENT,
+    HWND_TOP, LWA_COLORKEY, MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
     SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
     WINDOW_EX_STYLE, WINDOW_STYLE, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT,
     WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
@@ -343,6 +343,8 @@ mod tests {
         video.set_bounds(0, 0, 320, 240).unwrap();
 
         let mut hud = D3d12HudOverlay::create(parent.hwnd().0 as usize).unwrap();
+        let instance = unsafe { super::GetModuleHandleW(None).unwrap() };
+        super::register_hud_window_class(super::HINSTANCE(instance.0)).unwrap();
         hud.set_bounds(8, 8, 160, 60).unwrap();
         hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
             .unwrap();
