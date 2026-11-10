@@ -8,7 +8,6 @@ on:
       - "native/sms_core/**"
       - "native/z80_cpu/**"
       - "rust/runtime/sms-runtime/**"
-      - "native/sms_debugger/**"
       - ".github/workflows/sms-debugger-runtime.yml"
   push:
     branches: [main]
