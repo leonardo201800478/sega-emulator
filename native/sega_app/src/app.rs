@@ -1566,7 +1566,8 @@ impl SegaApp {
             to_win32_pixel(overlay_size.x * scale),
             to_win32_pixel(overlay_size.y * scale),
         );
-        let font_size_pixels = to_win32_pixel(self.fps_overlay_size.font_size() * scale).clamp(8, 48);
+        let font_size_pixels =
+            to_win32_pixel(self.fps_overlay_size.font_size() * scale).clamp(8, 48);
 
         if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
             if let Err(error) = overlay.set_font_size_pixels(font_size_pixels) {
