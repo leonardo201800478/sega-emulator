@@ -1,6 +1,6 @@
 # Shared Debugger MVP — Architecture and Delivery Plan
 
-Status: SMS debugger is integrated into the application as a separate native viewport; user-settings persistence and Release validation are in progress
+Status: SMS debugger is integrated into the application as a separate native viewport; user-settings persistence is implemented; final Release validation is pending
 Scope owner: emulator runtime; GUI is a presentation and command surface only.
 
 ## Objective
