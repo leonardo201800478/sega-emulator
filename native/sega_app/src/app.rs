@@ -351,7 +351,6 @@ struct NativeViewportState {
     last_hud_bounds: Option<(i32, i32, i32, i32)>,
     last_hud_text: Option<String>,
     last_hud_refresh: Option<Instant>,
-    hud_visible: bool,
     hud_error: Option<String>,
     ready: bool,
     video_attached: bool,
@@ -402,7 +401,6 @@ impl NativeViewportState {
         self.last_hud_bounds = None;
         self.last_hud_text = None;
         self.last_hud_refresh = None;
-        self.hud_visible = false;
         self.hud_error = None;
         self.ready = false;
         self.start_requested = false;
@@ -1516,12 +1514,9 @@ impl SegaApp {
 
     fn update_hud_overlay(&mut self, context: &egui::Context, viewport_rect: egui::Rect) {
         if !self.fps_overlay_enabled || !self.native_viewport.video_attached {
-            if self.native_viewport.hud_visible
-                && let Some(overlay) = self.native_viewport.hud_overlay.as_ref()
-            {
+            if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
                 overlay.set_visible(false);
             }
-            self.native_viewport.hud_visible = false;
             self.native_viewport.last_hud_refresh = None;
             return;
         }
@@ -1601,11 +1596,8 @@ impl SegaApp {
             self.native_viewport.last_hud_refresh = Some(now);
         }
 
-        if !self.native_viewport.hud_visible {
-            if let Some(overlay) = self.native_viewport.hud_overlay.as_ref() {
-                overlay.set_visible(true);
-                self.native_viewport.hud_visible = true;
-            }
+        if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
+            overlay.set_visible(true);
         }
         context.request_repaint_after(Duration::from_millis(250));
     }
