@@ -542,7 +542,11 @@ impl SegaApp {
         if self.menu_last_focused != Some(popup_focused) {
             record_ui_diagnostic(
                 "menu.viewport.focus_changed",
-                if popup_focused { "focused" } else { "unfocused" },
+                if popup_focused {
+                    "focused"
+                } else {
+                    "unfocused"
+                },
             );
             self.menu_last_focused = Some(popup_focused);
         }
@@ -653,7 +657,10 @@ impl SegaApp {
                                     || action_selected
                                     || header_state.diagnostics_command.is_some()
                                 {
-                                    record_ui_diagnostic("menu.popup.close_requested", menu.title());
+                                    record_ui_diagnostic(
+                                        "menu.popup.close_requested",
+                                        menu.title(),
+                                    );
                                 }
                                 (
                                     close_requested || action_selected,
