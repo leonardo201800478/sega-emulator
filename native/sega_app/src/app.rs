@@ -450,7 +450,7 @@ fn should_reveal_fullscreen_menu(
 }
 
 impl SegaApp {
-/// Render the complete shell in the root window for native and headless use.
+    /// Render the complete shell in the root window for native and headless use.
     pub fn render(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let mut viewport_rect = egui::Rect::NOTHING;
         egui::Frame::new()
@@ -1011,7 +1011,9 @@ impl SegaApp {
             if let Some(button) =
                 (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
             {
-                self.gamepad_bindings.set(action, button as u8);
+                let button = u8::try_from(button)
+                    .expect("gamepad button index is bounded by MAX_BUTTONS");
+                self.gamepad_bindings.set(action, button);
                 self.gamepad_profile = self.gamepad_bindings.to_profile();
                 self.pending_gamepad_binding = None;
                 self.input_mapping_error = save_gamepad_bindings(&self.gamepad_bindings)
