@@ -2834,14 +2834,14 @@ fn render_machine_controls(
 
 fn add_machine_button(
     ui: &mut egui::Ui,
-    icon: &str,
+    label: &str,
     description: &str,
     enabled: bool,
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
     let button =
-        egui::Button::new(egui::RichText::new(icon).size(18.0)).min_size(egui::vec2(38.0, 30.0));
+        egui::Button::new(label).min_size(egui::vec2(38.0, 30.0));
     if ui
         .add_enabled(enabled, button)
         .on_hover_text(description)
