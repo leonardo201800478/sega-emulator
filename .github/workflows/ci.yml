@@ -216,13 +216,13 @@ jobs:
       - name: Format root Rust workspace
         run: cargo fmt --all -- --check
       - name: Clippy workspace
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --release --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit and integration tests
-        run: cargo test --workspace --locked
+        run: cargo test --release --workspace --locked
       - name: Clippy observability runtime feature
-        run: cargo clippy --manifest-path native/observability/Cargo.toml --features runtime --all-targets --locked -- -D warnings
+        run: cargo clippy --release --manifest-path native/observability/Cargo.toml --features runtime --all-targets --locked -- -D warnings
       - name: Test observability runtime feature
-        run: cargo test --manifest-path native/observability/Cargo.toml --features runtime --locked
+        run: cargo test --release --manifest-path native/observability/Cargo.toml --features runtime --locked
 
   z80-focused:
     name: Z80 focused validation
@@ -288,13 +288,13 @@ jobs:
       - name: Format Z80 and console integration packages
         run: cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy Z80 and console integration packages
-        run: cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test Z80, SMS and SG-1000 integration packages
-        run: cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
+        run: cargo test --release --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core
       - name: Run all pinned SingleStepTests DD/FD indexed ALU vectors
         env:
           SINGLESTEP_Z80_DIR: ${{ github.workspace }}/vendor/SingleStepTests-z80/v1
-        run: cargo test --locked -p sega-z80-cpu --test singlestep_indexed_alu -- --ignored
+        run: cargo test --release --locked -p sega-z80-cpu --test singlestep_indexed_alu -- --ignored
 
   psg-focused:
     name: PSG core and console integration validation
@@ -312,9 +312,9 @@ jobs:
       - name: Format PSG and console audio integration packages
         run: cargo fmt --manifest-path Cargo.toml --package sega-sn76489 --package sega-audio-runtime --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy PSG and console audio integration
-        run: cargo clippy --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test PSG and console audio integration
-        run: cargo test --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
+        run: cargo test --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
 
   vdp-focused:
     name: VDP core and console integration validation
@@ -332,9 +332,9 @@ jobs:
       - name: Format VDP and console integration packages
         run: cargo fmt --manifest-path Cargo.toml --package sega-video --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy VDP and console integration
-        run: cargo clippy --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test VDP and console integration
-        run: cargo test --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core
+        run: cargo test --release --locked --all-targets -p sega-video -p sega-sms-core -p sega-sg1000-core
 
   input-focused:
     name: Input core and console integration validation
@@ -352,9 +352,9 @@ jobs:
       - name: Format input and console integration packages
         run: cargo fmt --manifest-path Cargo.toml --package sega-input-runtime --package sega-sms-core --package sega-sg1000-core -- --check
       - name: Clippy input and console integration
-        run: cargo clippy --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test input and console integration
-        run: cargo test --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core
+        run: cargo test --release --locked --all-targets -p sega-input-runtime -p sega-sms-core -p sega-sg1000-core
 
   docs-format:
     name: Documentation patch hygiene
@@ -410,16 +410,16 @@ jobs:
         run: cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
       - name: Clippy native egui application and Windows dependencies
         if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
-        run: cargo clippy --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
       - name: Test native egui application
         if: needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
-        run: cargo test --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Clippy native D3D12 and DXGI runtime
         if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
-        run: cargo clippy --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc -- -D warnings
       - name: Test native D3D12 and DXGI runtime
         if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
-        run: cargo test --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
 
   windows-audio:
     name: Windows WASAPI and XAudio2 validation
@@ -440,9 +440,9 @@ jobs:
       - name: Format standalone audio-output workspace
         run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
       - name: Clippy WASAPI and XAudio2 output
-        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
       - name: Test WASAPI and XAudio2 output
-        run: cargo test --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
   linux-audio:
     name: Linux audio-output host validation
@@ -462,9 +462,9 @@ jobs:
       - name: Format standalone audio-output workspace
         run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
       - name: Clippy non-Windows audio-output host
-        run: cargo clippy --locked --all-targets --manifest-path native/audio_output/Cargo.toml -- -D warnings
+        run: cargo clippy --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml -- -D warnings
       - name: Test non-Windows audio-output host
-        run: cargo test --locked --all-targets --manifest-path native/audio_output/Cargo.toml
+        run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml
 
   windows-input:
     name: Windows SDL3 input validation
@@ -483,9 +483,9 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Clippy native SDL3 input runtime
-        run: cargo clippy --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc -- -D warnings
       - name: Test native SDL3 input runtime
-        run: cargo test --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc
+        run: cargo test --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc
 
   windows-tooling:
     name: Windows PowerShell tooling syntax
@@ -560,7 +560,7 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Compile deterministic stress replay
-        run: cargo test --locked -p sega-machine-scheduler --test stress_replay --no-run
+        run: cargo test --release --locked -p sega-machine-scheduler --test stress_replay --no-run
       - name: Run deterministic stress replay with bounded memory
         shell: bash
         run: |
