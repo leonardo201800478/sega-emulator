@@ -30,12 +30,16 @@ const MAX_RECENT_ROMS: usize = 10;
 const MENU_BAR_HEIGHT: f32 = 32.0;
 
 fn record_ui_diagnostic(event: &'static str, details: impl std::fmt::Display) {
-    if current_logging().is_some_and(|logging| logging.is_enabled()) {
+    if current_logging().is_some_and(sega_observability::LoggingHandle::is_enabled) {
         sega_observability::tracing::debug!(target: "sega::ui::menu", event, details = %details);
     }
 }
 
 /// Native eframe application shell connected to the Rust SMS temporal runtime.
+///
+/// The independent flags represent orthogonal UI preferences and lifecycle states;
+/// consolidating them would obscure rather than clarify their ownership.
+#[allow(clippy::struct_excessive_bools, reason = "Independent UI preferences and lifecycle flags are intentionally orthogonal.")]
 pub struct SegaApp {
     rom_path: String,
     region: String,
@@ -1609,7 +1613,7 @@ fn render_menu_content(ui: &mut egui::Ui, menu: TopLevelMenu, state: &mut Header
         TopLevelMenu::Video => render_video_menu(ui, state),
         TopLevelMenu::Audio => render_audio_menu(ui, state),
         TopLevelMenu::Controls => {
-            render_controls_menu(ui, state.devices, state.selected_gamepad, state.input_error)
+            render_controls_menu(ui, state.devices, state.selected_gamepad, state.input_error);
         }
         TopLevelMenu::Options => render_options_menu(ui, state),
         TopLevelMenu::Debug => render_runtime_status(
