@@ -514,7 +514,10 @@ impl SegaApp {
                 .take(64)
                 .collect();
         }
-        if debugger_window.breakpoint_rom_path != self.rom_path {
+        if !debugger_window
+            .breakpoint_rom_path
+            .eq_ignore_ascii_case(&self.rom_path)
+        {
             debugger_window.breakpoints.clear();
         }
         if let Some(enabled) = value("debugger_trace_enabled")
@@ -1161,7 +1164,10 @@ impl SegaApp {
             .debugger_window
             .lock()
             .map(|mut state| {
-                if state.breakpoint_rom_path != self.rom_path {
+                if !state
+                    .breakpoint_rom_path
+                    .eq_ignore_ascii_case(&self.rom_path)
+                {
                     state.breakpoints.clear();
                     state.breakpoint_rom_path.clone_from(&self.rom_path);
                 }
