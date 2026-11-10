@@ -646,14 +646,12 @@ impl SegaApp {
             FpsOverlayPosition::BottomLeft => "bottom_left",
             FpsOverlayPosition::BottomRight => "bottom_right",
         };
-        let debugger_position = self
-            .debugger_window
+        let debugger_position = debugger_window
             .window_position
             .map_or_else(String::new, |position| {
                 format!("{:.1},{:.1}", position.x, position.y)
             });
-        let debugger_size = self
-            .debugger_window
+        let debugger_size = debugger_window
             .window_size
             .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
         let main_position = self
@@ -664,8 +662,7 @@ impl SegaApp {
         let main_size = self
             .main_window_size
             .map_or_else(String::new, |size| format!("{:.1},{:.1}", size.x, size.y));
-        let breakpoints = self
-            .debugger_window
+        let breakpoints = debugger_window
             .breakpoints
             .iter()
             .map(|address| format!("{address:04X}"))
@@ -783,7 +780,7 @@ impl SegaApp {
         context.show_viewport_deferred(
             egui::ViewportId::from_hash_of("sega-sms-debugger-window"),
             builder,
-            move |debugger_ui| {
+            move |debugger_ui, _viewport_class| {
                 let Ok(mut state) = state.lock() else {
                     open.store(false, Ordering::Release);
                     return;
