@@ -668,6 +668,11 @@ fn should_reveal_fullscreen_menu(
                                         .as_ref()
                                         .and_then(|state| state.as_ref().err())
                                         .map(String::as_str),
+                                    keyboard_bindings: &self.keyboard_bindings,
+                                    pending_key_binding: &mut self.pending_key_binding,
+                                    gamepad_bindings: &self.gamepad_bindings,
+                                    pending_gamepad_binding: &mut self.pending_gamepad_binding,
+                                    input_mapping_error: self.input_mapping_error.as_deref(),
                                     active_menu: &mut self.active_menu,
                                     menu_anchor: &mut self.menu_anchor,
                                     menu_popup_size: &mut self.menu_popup_size,
@@ -2681,13 +2686,7 @@ mod tests {
     #[test]
     fn gamepad_bindings_are_used_for_physical_button_mapping() {
         let mut state = DeviceState::default();
-        let mut buttons = sega_input_runtime::ButtonSet::default();
-        buttons.set(4, true).unwrap();
-        state = {
-            let mut state = DeviceState::default();
-            state.buttons = buttons;
-            state
-        };
+        state.buttons.set(4, true).unwrap();
         let mut bindings = super::GamepadBindings::default();
         bindings.set(super::GamepadAction::Button1, 4);
         let (mapped, _) = super::map_sdl3_gamepad(state, &bindings);
@@ -2891,7 +2890,8 @@ mod tests {
             .unwrap();
         state.set_hat(0, 0x01).unwrap();
 
-        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        let (buttons, pause) =
+            super::map_sdl3_gamepad(state, &super::GamepadBindings::default());
         assert!(buttons.up);
         assert!(buttons.left);
         assert!(buttons.button_1);
@@ -2905,7 +2905,8 @@ mod tests {
         state.set_axis(0, 20_000, AxisSemantic::LeftStickX).unwrap();
         state.set_axis(1, 20_000, AxisSemantic::LeftStickY).unwrap();
 
-        let (buttons, pause) = super::map_sdl3_gamepad(state);
+        let (buttons, pause) =
+            super::map_sdl3_gamepad(state, &super::GamepadBindings::default());
         assert!(buttons.right);
         assert!(buttons.down);
         assert!(!buttons.button_1);
