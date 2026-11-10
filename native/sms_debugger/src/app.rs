@@ -338,9 +338,7 @@ impl eframe::App for DebuggerApp {
                     ui.label(format!("Frame: {}", snapshot.frame_number));
                     ui.label(format!(
                         "VDP status: {:02X}  scanline: {}  cycles: {}",
-                        snapshot.vdp_status,
-                        snapshot.vdp_scanline,
-                        snapshot.vdp_cycles_into_line
+                        snapshot.vdp_status, snapshot.vdp_scanline, snapshot.vdp_cycles_into_line
                     ));
                     ui.label(format!(
                         "Mapper banks: {:02X}/{:02X}/{:02X}",
@@ -406,10 +404,7 @@ impl eframe::App for DebuggerApp {
                                     ui.end_row();
                                 }
                                 let start = parse_address(&self.memory_address).unwrap_or(0);
-                                ui.monospace(format!(
-                                    "{:04X}",
-                                    start.wrapping_add(index as u16)
-                                ));
+                                ui.monospace(format!("{:04X}", start.wrapping_add(index as u16)));
                             }
                             ui.monospace(format!("{byte:02X}"));
                         }
