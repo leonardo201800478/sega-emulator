@@ -523,7 +523,7 @@ impl SegaApp {
             debugger_window.trace_capture_enabled = enabled;
         }
         if let Some(region) =
-            value("region").filter(|value| matches!(*value, "usa" | "europe" | "japan"))
+            value("region").filter(|value| matches!(*value, "usa" | "brazil" | "europe" | "japan"))
         {
             self.region = region.to_owned();
         }
