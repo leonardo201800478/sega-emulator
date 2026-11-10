@@ -68,8 +68,80 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
     .map_err(|error| error.to_string())
 }
 
+/// Host-clock measurements taken only when the SMS worker completes a full frame.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SmsPerformanceMetrics {
+    /// Completed SMS frames per wall-clock second, sampled over a rolling interval.
+    pub emulation_fps: f32,
+    /// Wall-clock milliseconds between consecutive completed SMS frames.
+    pub frame_time_ms: Option<f32>,
+    /// Milliseconds from host input detection to the first completed frame after it.
+    pub input_to_frame_ms: Option<f32>,
+    /// Monotonic SMS frame counter observed by this telemetry instance.
+    pub completed_frames: u64,
+}
+
+#[derive(Debug)]
+struct FrameTimingState {
+    last_completed: Option<Instant>,
+    sample_started: Option<Instant>,
+    sample_frames: u64,
+    metrics: SmsPerformanceMetrics,
+    pending_input: Option<Instant>,
+}
+
+impl Default for FrameTimingState {
+    fn default() -> Self {
+        Self {
+            last_completed: None,
+            sample_started: None,
+            sample_frames: 0,
+            metrics: SmsPerformanceMetrics::default(),
+            pending_input: None,
+        }
+    }
+}
+
+impl FrameTimingState {
+    fn record_input(&mut self, detected_at: Instant) {
+        self.pending_input = Some(detected_at);
+    }
+
+    fn record_frame_completed(&mut self, completed_at: Instant) {
+        self.metrics.completed_frames = self.metrics.completed_frames.saturating_add(1);
+        if let Some(previous) = self.last_completed {
+            self.metrics.frame_time_ms =
+                Some(completed_at.saturating_duration_since(previous).as_secs_f32() * 1_000.0);
+        }
+        self.last_completed = Some(completed_at);
+
+        let sample_started = *self.sample_started.get_or_insert(completed_at);
+        self.sample_frames = self.sample_frames.saturating_add(1);
+        let elapsed = completed_at.saturating_duration_since(sample_started);
+        if elapsed >= Duration::from_millis(500) {
+            self.metrics.emulation_fps = self.sample_frames as f32 / elapsed.as_secs_f32();
+            self.sample_frames = 0;
+            self.sample_started = Some(completed_at);
+        }
+
+        if let Some(input_detected_at) = self.pending_input.take() {
+            self.metrics.input_to_frame_ms = Some(
+                completed_at
+                    .saturating_duration_since(input_detected_at)
+                    .as_secs_f32()
+                    * 1_000.0,
+            );
+        }
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Debug, Default)]
 struct WorkerTelemetry {
+    frame_timing: Mutex<FrameTimingState>,
     running: AtomicBool,
     diagnostics_enabled: AtomicBool,
     frame_number: AtomicU64,
@@ -99,6 +171,30 @@ struct WorkerTelemetry {
 }
 
 impl WorkerTelemetry {
+    fn record_input_detected(&self, detected_at: Instant) {
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.record_input(detected_at);
+        }
+    }
+
+    fn record_frame_completed(&self, completed_at: Instant) {
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.record_frame_completed(completed_at);
+        }
+    }
+
+    fn performance_metrics(&self) -> SmsPerformanceMetrics {
+        self.frame_timing
+            .lock()
+            .map_or_else(|_| SmsPerformanceMetrics::default(), |timing| timing.metrics)
+    }
+
+    fn reset_frame_timing(&self) {
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.reset();
+        }
+    }
+
     fn set_frame_number(&self, frame_number: u64) {
         self.frame_number.store(frame_number, Ordering::Release);
         #[cfg(test)]
@@ -216,6 +312,7 @@ impl WorkerTelemetry {
         self.total_instructions.store(0, Ordering::Release);
         self.set_frame_number(0);
         self.machine_time_ticks.store(0, Ordering::Release);
+        self.reset_frame_timing();
         self.set_runtime_error(None);
     }
 }
@@ -234,7 +331,7 @@ enum WorkerCommand {
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
-    SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
+    SetController(u8, ControllerButtons, Instant, SyncSender<Result<(), String>>),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
@@ -528,7 +625,24 @@ impl SmsTemporalWorker {
     }
 
     pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
-        self.request_unit(|reply| WorkerCommand::SetController(player, buttons, reply))
+        self.set_controller_at(player, buttons, Instant::now())
+    }
+
+    /// Apply controller input with the host-detection timestamp used by latency telemetry.
+    pub fn set_controller_at(
+        &self,
+        player: u8,
+        buttons: ControllerButtons,
+        detected_at: Instant,
+    ) -> Result<(), String> {
+        self.request_unit(|reply| {
+            WorkerCommand::SetController(player, buttons, detected_at, reply)
+        })
+    }
+
+    /// Return frame-completion and input-to-frame measurements from the SMS worker.
+    pub fn performance_metrics(&self) -> SmsPerformanceMetrics {
+        self.telemetry.performance_metrics()
     }
 
     pub fn request_nmi(&self) -> Result<(), String> {
@@ -838,6 +952,7 @@ fn execute_frame(
             .total_instructions
             .fetch_add(instructions as u64, Ordering::AcqRel);
     }
+    telemetry.record_frame_completed(Instant::now());
     telemetry.set_frame_number(machine.frame_number());
     telemetry.machine_time_ticks.store(
         u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
@@ -1309,10 +1424,13 @@ fn handle_command(
             };
             let _ = reply.send(result);
         }
-        WorkerCommand::SetController(player, buttons, reply) => {
+        WorkerCommand::SetController(player, buttons, detected_at, reply) => {
             let result = machine
                 .set_controller(player, buttons)
                 .map_err(|error| error.to_string());
+            if result.is_ok() {
+                telemetry.record_input_detected(detected_at);
+            }
             let _ = reply.send(result);
         }
         WorkerCommand::RequestNmi => machine.request_nmi(),
@@ -1424,6 +1542,35 @@ mod tests {
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[test]
+    fn frame_timing_uses_worker_completion_timestamps_not_video_presentation() {
+        use super::FrameTimingState;
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let mut timing = FrameTimingState::default();
+        timing.record_frame_completed(start);
+        timing.record_frame_completed(start + Duration::from_millis(20));
+        assert_eq!(timing.metrics.completed_frames, 2);
+        assert_eq!(timing.metrics.frame_time_ms, Some(20.0));
+        assert_eq!(timing.metrics.emulation_fps, 0.0);
+        timing.record_frame_completed(start + Duration::from_millis(520));
+        assert_eq!(timing.metrics.emulation_fps, 5.769231);
+    }
+
+    #[test]
+    fn input_latency_ends_at_the_first_completed_sms_frame() {
+        use super::FrameTimingState;
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let mut timing = FrameTimingState::default();
+        timing.record_input(start + Duration::from_millis(3));
+        timing.record_frame_completed(start + Duration::from_millis(19));
+        assert_eq!(timing.metrics.input_to_frame_ms, Some(16.0));
+        assert!(timing.pending_input.is_none());
+    }
 
     #[test]
     fn worker_telemetry_round_trips_all_audio_output_metrics() {
