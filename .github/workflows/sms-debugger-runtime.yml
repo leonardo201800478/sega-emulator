@@ -1,0 +1,52 @@
+name: SMS Debugger Runtime
+
+on:
+  pull_request:
+    paths:
+      - "native/debugger_core/**"
+      - "native/sms_debugger/**"
+      - "native/sms_core/**"
+      - "native/z80_cpu/**"
+      - "rust/runtime/sms-runtime/**"
+      - ".github/workflows/sms-debugger-runtime.yml"
+  push:
+    branches: [main]
+    paths:
+      - "native/debugger_core/**"
+      - "native/sms_debugger/**"
+      - "native/sms_core/**"
+      - "native/z80_cpu/**"
+      - "rust/runtime/sms-runtime/**"
+      - ".github/workflows/sms-debugger-runtime.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sms-debugger-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sms-runtime-release:
+    name: SMS runtime Release format, Clippy and tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.99.1
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy SMS runtime (Release)
+        run: cargo clippy --release --manifest-path rust/runtime/sms-runtime/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Test SMS runtime (Release)
+        run: cargo test --release --manifest-path rust/runtime/sms-runtime/Cargo.toml --all-targets --locked
