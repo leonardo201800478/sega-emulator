@@ -110,8 +110,12 @@ impl FrameTimingState {
     fn record_frame_completed(&mut self, completed_at: Instant) {
         self.metrics.completed_frames = self.metrics.completed_frames.saturating_add(1);
         if let Some(previous) = self.last_completed {
-            self.metrics.frame_time_ms =
-                Some(completed_at.saturating_duration_since(previous).as_secs_f32() * 1_000.0);
+            self.metrics.frame_time_ms = Some(
+                completed_at
+                    .saturating_duration_since(previous)
+                    .as_secs_f32()
+                    * 1_000.0,
+            );
         }
         self.last_completed = Some(completed_at);
 
@@ -185,9 +189,10 @@ impl WorkerTelemetry {
     }
 
     fn performance_metrics(&self) -> SmsPerformanceMetrics {
-        self.frame_timing
-            .lock()
-            .map_or_else(|_| SmsPerformanceMetrics::default(), |timing| timing.metrics)
+        self.frame_timing.lock().map_or_else(
+            |_| SmsPerformanceMetrics::default(),
+            |timing| timing.metrics,
+        )
     }
 
     fn reset_frame_timing(&self) {
@@ -332,7 +337,12 @@ enum WorkerCommand {
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
-    SetController(u8, ControllerButtons, Instant, SyncSender<Result<(), String>>),
+    SetController(
+        u8,
+        ControllerButtons,
+        Instant,
+        SyncSender<Result<(), String>>,
+    ),
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
@@ -636,9 +646,7 @@ impl SmsTemporalWorker {
         buttons: ControllerButtons,
         detected_at: Instant,
     ) -> Result<(), String> {
-        self.request_unit(|reply| {
-            WorkerCommand::SetController(player, buttons, detected_at, reply)
-        })
+        self.request_unit(|reply| WorkerCommand::SetController(player, buttons, detected_at, reply))
     }
 
     /// Return frame-completion and input-to-frame measurements from the SMS worker.
