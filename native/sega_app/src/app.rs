@@ -1,8 +1,8 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -18,7 +18,9 @@ use sega_observability::{
     LogConfig, SessionMetadata, current as current_logging, init as init_logging,
 };
 use sega_sms_core::ControllerButtons;
-use sega_sms_runtime::{SmsDebugSnapshot, SmsTemporalWorker};
+use sega_sms_runtime::{
+    SmsDebugSnapshot, SmsTemporalWorker, SmsTemporalWorkerDebugHandle,
+};
 use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
 
@@ -83,8 +85,8 @@ pub struct SegaApp {
     fps_counter: FpsCounter,
     fps_shared_value: Arc<AtomicU32>,
     theme_initialized: bool,
-    debugger_window_open: bool,
-    debugger_window: DebuggerWindowState,
+    debugger_window_open: Arc<AtomicBool>,
+    debugger_window: Arc<Mutex<DebuggerWindowState>>,
     last_settings_save: Instant,
     main_window_position: Option<egui::Pos2>,
     main_window_size: Option<egui::Vec2>,
@@ -167,8 +169,8 @@ impl Default for SegaApp {
             fps_counter: FpsCounter::default(),
             fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             theme_initialized: false,
-            debugger_window_open: false,
-            debugger_window: DebuggerWindowState::default(),
+            debugger_window_open: Arc::new(AtomicBool::new(false)),
+            debugger_window: Arc::new(Mutex::new(DebuggerWindowState::default())),
             last_settings_save: Instant::now(),
             main_window_position: None,
             main_window_size: None,
@@ -519,17 +521,20 @@ impl SegaApp {
             })
         };
 
+        let Ok(mut debugger_window) = debugger_window.lock() else {
+            return;
+        };
         if let Some(rom_path) = value("rom_path") {
             self.rom_path = rom_path.to_owned();
         }
         if let Some(memory_address) = value("debugger_memory_address") {
-            self.debugger_window.memory_address = memory_address.to_owned();
+            debugger_window.memory_address = memory_address.to_owned();
         }
         if let Some(breakpoint_input) = value("debugger_breakpoint_input") {
-            self.debugger_window.breakpoint_input = breakpoint_input.to_owned();
+            debugger_window.breakpoint_input = breakpoint_input.to_owned();
         }
         if let Some(breakpoints) = value("debugger_breakpoints") {
-            self.debugger_window.breakpoints = breakpoints
+            debugger_window.breakpoints = breakpoints
                 .split(',')
                 .filter_map(parse_debug_address)
                 .take(64)
@@ -538,7 +543,7 @@ impl SegaApp {
         if let Some(enabled) = value("debugger_trace_enabled")
             .and_then(|value| value.parse().ok())
         {
-            self.debugger_window.trace_capture_enabled = enabled;
+            debugger_window.trace_capture_enabled = enabled;
         }
         if let Some(region) =
             value("region").filter(|value| matches!(*value, "usa" | "europe" | "japan"))
@@ -614,13 +619,13 @@ impl SegaApp {
             self.main_window_fullscreen = fullscreen;
         }
         if let Some(open) = value("debugger_open").and_then(|value| value.parse().ok()) {
-            self.debugger_window_open = open;
+            self.debugger_window_open.store(open, Ordering::Release);
         }
         if let Some(position) = value("debugger_position").and_then(parse_saved_position) {
-            self.debugger_window.window_position = Some(position);
+            debugger_window.window_position = Some(position);
         }
         if let Some(size) = value("debugger_size").and_then(parse_saved_size) {
-            self.debugger_window.window_size = Some(size);
+            debugger_window.window_size = Some(size);
         }
     }
 
@@ -629,6 +634,10 @@ impl SegaApp {
         let directory = rom_settings_directory()
             .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
         fs::create_dir_all(&directory)?;
+        let debugger_window = self
+            .debugger_window
+            .lock()
+            .map_err(|_| std::io::Error::other("debugger settings lock poisoned"))?;
 
         let aspect_ratio = match self.aspect_ratio {
             AspectRatioMode::OneToOne => "1:1",
@@ -689,10 +698,10 @@ impl SegaApp {
         let contents = format!(
             "rom_path={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
             self.rom_path,
-            self.debugger_window.memory_address,
-            self.debugger_window.breakpoint_input,
+            debugger_window.memory_address,
+            debugger_window.breakpoint_input,
             breakpoints,
-            self.debugger_window.trace_capture_enabled,
+            debugger_window.trace_capture_enabled,
             self.region,
             aspect_ratio,
             footer,
@@ -703,7 +712,7 @@ impl SegaApp {
             self.fps_overlay_enabled,
             fps_size,
             fps_position,
-            self.debugger_window_open,
+            self.debugger_window_open.load(Ordering::Acquire),
             debugger_position,
             debugger_size,
             main_position,
