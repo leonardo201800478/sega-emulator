@@ -9,7 +9,7 @@ use crate::debugger_window::{
     DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
     parse_saved_size, render_debugger_contents,
 };
-use crate::icons::{IconKind, icon_button};
+use crate::icons::{IconKind, icon_button, small_icon_button};
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
@@ -1011,7 +1011,9 @@ impl SegaApp {
                         menu_ui.vertical(|menu_ui| {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
-                                if menu_ui.small_button("×").clicked() {
+                                if small_icon_button(menu_ui, IconKind::Close, "Fechar menu", true)
+                                    .clicked()
+                                {
                                     record_ui_diagnostic("menu.popup.closed", menu.title());
                                     self.active_menu = None;
                                 }
