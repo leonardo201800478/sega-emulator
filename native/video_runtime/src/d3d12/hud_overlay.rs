@@ -277,6 +277,29 @@ mod tests {
 
         assert!(hud.is_child_of(parent.handle()));
         assert_eq!(hud.composition_contract(), (true, true, true, true, true));
+
+        let parent_style = unsafe {
+            windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
+                HWND(parent.handle() as *mut c_void),
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+            )
+        };
+        assert_ne!(
+            parent_style
+                & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPCHILDREN.0 as isize),
+            0
+        );
+        let video_style = unsafe {
+            windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(
+                video.hwnd,
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+            )
+        };
+        assert_ne!(
+            video_style
+                & (windows::Win32::UI::WindowsAndMessaging::WS_CLIPSIBLINGS.0 as isize),
+            0
+        );
         assert_eq!(
             unsafe {
                 super::hud_window_proc(hud.hwnd, super::WM_MOUSEACTIVATE, WPARAM(0), LPARAM(0))
