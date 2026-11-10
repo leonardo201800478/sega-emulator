@@ -119,7 +119,8 @@ impl FrameTimingState {
         self.sample_frames = self.sample_frames.saturating_add(1);
         let elapsed = completed_at.saturating_duration_since(sample_started);
         if elapsed >= Duration::from_millis(500) {
-            self.metrics.emulation_fps = self.sample_frames as f32 / elapsed.as_secs_f32();
+            let sample_frames = u16::try_from(self.sample_frames).unwrap_or(u16::MAX);
+            self.metrics.emulation_fps = f32::from(sample_frames) / elapsed.as_secs_f32();
             self.sample_frames = 0;
             self.sample_started = Some(completed_at);
         }
@@ -1556,7 +1557,7 @@ mod tests {
         assert_eq!(timing.metrics.frame_time_ms, Some(20.0));
         assert_eq!(timing.metrics.emulation_fps, 0.0);
         timing.record_frame_completed(start + Duration::from_millis(520));
-        assert_eq!(timing.metrics.emulation_fps, 5.769231);
+        assert!((timing.metrics.emulation_fps - 5.769231).abs() < 0.0001);
     }
 
     #[test]
