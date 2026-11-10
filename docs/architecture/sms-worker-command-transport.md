@@ -44,3 +44,17 @@ worker-owned state before retrying non-idempotent operations.
 The Release workflows for the root workspace and SMS runtime must pass on the
 exact PR head. Formatting is checked by the pinned Windows workflow. No local
 Release validation is claimed when the Rust toolchain is unavailable.
+
+## Frame completion semantics
+
+A debugger breakpoint may stop the worker's frame-step operation at an instruction
+boundary before the VDP completes the next frame. That partial execution must not:
+
+- increment completed-frame telemetry or affect SMS emulation FPS/frame time;
+- publish an incomplete framebuffer to the presentation mailbox;
+- consume a pending input-to-frame sample.
+
+The worker still updates machine-time diagnostics and drains generated audio
+through the discard path while stopping at the breakpoint. Input latency remains
+pending until the first subsequent complete SMS frame.
+
