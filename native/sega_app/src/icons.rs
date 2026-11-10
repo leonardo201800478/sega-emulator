@@ -118,11 +118,17 @@ fn paint_reset(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) 
     let stroke = egui::Stroke::new(2.0, color);
     painter.circle_stroke(center, rect.height() * 0.36, stroke);
     painter.line_segment(
-        [egui::pos2(center.x + 1.0, top + 1.0), egui::pos2(right, top + 1.0)],
+        [
+            egui::pos2(center.x + 1.0, top + 1.0),
+            egui::pos2(right, top + 1.0),
+        ],
         stroke,
     );
     painter.line_segment(
-        [egui::pos2(right, top + 1.0), egui::pos2(right - 1.0, top + 6.0)],
+        [
+            egui::pos2(right, top + 1.0),
+            egui::pos2(right - 1.0, top + 6.0),
+        ],
         stroke,
     );
 }
