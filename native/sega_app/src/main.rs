@@ -9,7 +9,8 @@ fn main() -> eframe::Result {
         .map(std::path::PathBuf::from)
         .map(|directory| directory.join("Sega Emulator"));
     if let Some(directory) = persistence_path.as_ref() {
-        std::fs::create_dir_all(directory).map_err(eframe::Error::AppCreation)?;
+        std::fs::create_dir_all(directory)
+            .map_err(|error| eframe::Error::AppCreation(Box::new(error)))?;
     }
     let options = eframe::NativeOptions {
         persistence_path,
