@@ -9,6 +9,10 @@ use std::{fs, path::PathBuf};
 const MEMORY_WINDOW: usize = 64;
 const MAX_BREAKPOINTS: usize = 64;
 
+/// Native egui application for the Master System debugger.
+///
+/// The application owns presentation state and communicates with the emulation
+/// runtime only through `SmsTemporalWorker`.
 pub struct DebuggerApp {
     worker: Option<SmsTemporalWorker>,
     rom_path: Option<PathBuf>,
