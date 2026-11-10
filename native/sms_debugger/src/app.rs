@@ -260,7 +260,8 @@ fn parse_address(value: &str) -> Option<u16> {
 }
 
 impl eframe::App for DebuggerApp {
-    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let context = ui.ctx().clone();
         if self.worker.is_some() {
             self.refresh_snapshot();
             if !self.running {
@@ -269,8 +270,7 @@ impl eframe::App for DebuggerApp {
             self.update_video(context);
         }
 
-        egui::CentralPanel::default().show(context, |ui| {
-            ui.horizontal_wrapped(|ui| {
+        ui.horizontal_wrapped(|ui| {
                 if ui.button("Abrir ROM").clicked() {
                     self.open_rom();
                 }
@@ -415,8 +415,6 @@ impl eframe::App for DebuggerApp {
                             }
                         });
                 });
-            });
-        });
 
         if self.running {
             context.request_repaint();
