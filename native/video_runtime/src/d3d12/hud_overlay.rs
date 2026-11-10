@@ -134,6 +134,12 @@ impl D3d12HudOverlay {
         }
     }
 
+    /// Return whether this HWND is a direct child of the supplied parent.
+    pub fn is_child_of(&self, parent_handle: usize) -> bool {
+        let parent = HWND(parent_handle as *mut c_void);
+        unsafe { windows::Win32::UI::WindowsAndMessaging::GetParent(self.hwnd) == parent }
+    }
+
     /// Report whether the HWND has the required child/layered/pass-through styles.
     pub fn composition_contract(&self) -> (bool, bool, bool, bool) {
         let style = unsafe { GetWindowLongPtrW(self.hwnd, GWL_STYLE) };
@@ -245,5 +251,34 @@ impl NativeVideoWindowValidation {
                 "HUD parent HWND is not a valid window",
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::D3d12HudOverlay;
+    use super::super::{D3d12ChildWindow, NativeVideoWindow};
+    use core::ffi::c_void;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{GW_CHILD, GetWindow};
+
+    #[test]
+    fn hud_is_a_transparent_non_topmost_child_above_the_d3d12_sibling() {
+        let parent = NativeVideoWindow::create(320, 240).unwrap();
+        let video = D3d12ChildWindow::create(parent.handle()).unwrap();
+        video.set_bounds(0, 0, 320, 240).unwrap();
+
+        let hud = D3d12HudOverlay::create(parent.handle()).unwrap();
+        hud.set_bounds(8, 8, 160, 60).unwrap();
+        hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
+            .unwrap();
+
+        assert!(hud.is_child_of(parent.handle()));
+        assert_eq!(hud.composition_contract(), (true, true, true, true));
+
+        let first_child = unsafe {
+            GetWindow(HWND(parent.handle() as *mut c_void), GW_CHILD)
+        };
+        assert_eq!(first_child, HWND(hud.handle() as *mut c_void));
     }
 }
