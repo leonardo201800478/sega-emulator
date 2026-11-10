@@ -216,6 +216,8 @@ impl TopLevelMenu {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+const SMS_HUD_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+
 enum FpsOverlaySize {
     Small,
     Medium,
@@ -1572,7 +1574,7 @@ impl SegaApp {
         let refresh_due = self
             .native_viewport
             .last_hud_refresh
-            .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_millis(250));
+            .is_none_or(|last| now.saturating_duration_since(last)  >= SMS_HUD_REFRESH_INTERVAL);
         if refresh_due {
             let metrics = self
                 .native_viewport
@@ -1598,7 +1600,7 @@ impl SegaApp {
         if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
             overlay.set_visible(true);
         }
-        context.request_repaint_after(Duration::from_millis(250));
+        context.request_repaint_after(SMS_HUD_REFRESH_INTERVAL);
     }
 
     fn update_native_viewport(
