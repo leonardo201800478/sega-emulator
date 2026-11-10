@@ -167,6 +167,27 @@ impl DebuggerApp {
         }
     }
 
+    fn toggle_trace(&mut self) {
+        let Some(worker) = self.worker.as_ref() else {
+            return;
+        };
+        let enabled = !self
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.trace_enabled);
+        match worker.set_trace_enabled(enabled) {
+            Ok(()) => {
+                self.refresh_snapshot();
+                self.status = if enabled {
+                    "Captura de trace habilitada (histórico limitado)".into()
+                } else {
+                    "Captura de trace desabilitada".into()
+                };
+            }
+            Err(error) => self.status = format!("Falha ao configurar trace: {error}"),
+        }
+    }
+
     fn toggle_run(&mut self) {
         let Some(worker) = self.worker.as_ref() else {
             return;
@@ -298,6 +319,12 @@ impl eframe::App for DebuggerApp {
                 self.step();
             }
             if ui
+                .add_enabled(self.worker.is_some(), egui::Button::new("Trace"))
+                .clicked()
+            {
+                self.toggle_trace();
+            }
+            if ui
                 .add_enabled(
                     self.snapshot.is_some(),
                     egui::Button::new("Exportar diagnóstico"),
@@ -393,6 +420,27 @@ impl eframe::App for DebuggerApp {
                 } else {
                     ui.label("Aguardando primeiro frame");
                 }
+                ui.separator();
+                ui.collapsing("Trace do Scheduler / barramento", |ui| {
+                    if let Some(snapshot) = self.snapshot.as_ref() {
+                        ui.label(format!(
+                            "Captura: {} | Eventos retidos: {} | Descartados: {}",
+                            if snapshot.trace_enabled { "ativa" } else { "inativa" },
+                            snapshot.trace_events.len(),
+                            snapshot.trace_dropped
+                        ));
+                        egui::ScrollArea::vertical()
+                            .max_height(180.0)
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                for event in &snapshot.trace_events {
+                                    ui.monospace(format!("{event:?}"));
+                                }
+                            });
+                    } else {
+                        ui.label("Aguardando snapshot");
+                    }
+                });
                 ui.separator();
                 ui.heading("Memória");
                 ui.horizontal(|ui| {
