@@ -2787,6 +2787,9 @@ mod tests {
         );
         assert_eq!(super::key_from_name("F9"), Some(egui::Key::F9));
         assert_eq!(super::key_from_name("not-a-key"), None);
+        for key in egui::Key::ALL {
+            assert_eq!(super::key_from_name(key.name()), Some(*key));
+        }
     }
 
     #[test]
