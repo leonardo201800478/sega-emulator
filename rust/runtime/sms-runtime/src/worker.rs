@@ -229,6 +229,8 @@ enum WorkerCommand {
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
     StepInstruction(SyncSender<Result<(), String>>),
+    DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
+    ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, SyncSender<Result<(), String>>),
     RequestNmi,
@@ -239,6 +241,39 @@ enum WorkerCommand {
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
 }
+
+/// Owned, immutable SMS/Z80 state captured on the machine worker thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmsDebugSnapshot {
+    pub pc: u16,
+    pub sp: u16,
+    pub af: u16,
+    pub bc: u16,
+    pub de: u16,
+    pub hl: u16,
+    pub af_alt: u16,
+    pub bc_alt: u16,
+    pub de_alt: u16,
+    pub hl_alt: u16,
+    pub ix: u16,
+    pub iy: u16,
+    pub i: u8,
+    pub r: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub halted: bool,
+    pub machine_time_ticks: u128,
+    pub frame_number: u64,
+    pub vdp_status: u8,
+    pub vdp_scanline: u16,
+    pub vdp_cycles_into_line: u16,
+    pub mapper_banks: [u8; 3],
+    pub mapper_control: u8,
+    pub memory_control: u8,
+}
+
+const DEBUG_MEMORY_READ_LIMIT: usize = 256;
 
 /// Handle to the thread that exclusively owns the temporal SMS machine.
 pub struct SmsTemporalWorker {
@@ -350,6 +385,31 @@ impl SmsTemporalWorker {
     /// CPU and Scheduler access remain exclusively on the machine-owning thread.
     pub fn step_instruction(&self) -> Result<(), String> {
         self.request_unit(WorkerCommand::StepInstruction)
+    }
+
+    /// Capture a coherent, owned debugger snapshot at a worker command boundary.
+    pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::DebugSnapshot(reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return a debug snapshot: {error}"))?
+    }
+
+    /// Read at most 256 bytes through the active mapper without advancing time.
+    pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
+        if length > DEBUG_MEMORY_READ_LIMIT {
+            return Err(format!("memory inspection is limited to {DEBUG_MEMORY_READ_LIMIT} bytes per request"));
+        }
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        self.commands
+            .send(WorkerCommand::ReadMemory(start, length, reply_sender))
+            .map_err(|error| format!("SMS machine worker is unavailable: {error}"))?;
+        reply_receiver
+            .recv()
+            .map_err(|error| format!("SMS machine worker did not return memory: {error}"))?
     }
 
     pub fn step_frame(&self, max_instructions: usize) -> Result<usize, String> {
@@ -1027,6 +1087,46 @@ fn handle_command(
                     }
                 }
             }
+        }
+        WorkerCommand::DebugSnapshot(reply) => {
+            let cpu = machine.cpu().export_architectural_state();
+            let registers = cpu.registers;
+            let alternate = cpu.alternate;
+            let snapshot = SmsDebugSnapshot {
+                pc: registers.pc,
+                sp: registers.sp,
+                af: u16::from_be_bytes([registers.a, registers.f]),
+                bc: registers.bc(),
+                de: registers.de(),
+                hl: registers.hl(),
+                af_alt: u16::from_be_bytes([alternate.a, alternate.f]),
+                bc_alt: u16::from_be_bytes([alternate.b, alternate.c]),
+                de_alt: u16::from_be_bytes([alternate.d, alternate.e]),
+                hl_alt: u16::from_be_bytes([alternate.h, alternate.l]),
+                ix: cpu.ix,
+                iy: cpu.iy,
+                i: cpu.i,
+                r: cpu.r,
+                iff1: cpu.iff1,
+                iff2: cpu.iff2,
+                interrupt_mode: cpu.interrupt_mode,
+                halted: cpu.halted,
+                machine_time_ticks: machine.now().ticks(),
+                frame_number: machine.frame_number(),
+                vdp_status: machine.vdp().status(),
+                vdp_scanline: machine.vdp().scanline(),
+                vdp_cycles_into_line: machine.vdp().cycles_into_line(),
+                mapper_banks: machine.selected_mapper_banks(),
+                mapper_control: machine.export_state().bus.memory.mapper_control(),
+                memory_control: machine.memory_control(),
+            };
+            let _ = reply.send(Ok(snapshot));
+        }
+        WorkerCommand::ReadMemory(start, length, reply) => {
+            let bytes = (0..length)
+                .map(|offset| machine.inspect_memory(start.wrapping_add(offset as u16)))
+                .collect();
+            let _ = reply.send(Ok(bytes));
         }
         WorkerCommand::StepFrame(max_instructions, reply) => {
             if *running {

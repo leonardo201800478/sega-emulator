@@ -748,6 +748,22 @@ impl SmsTemporalMachine {
         self.bus.vdp().framebuffer()
     }
 
+    /// Read one byte through the active SMS mapper and memory-control state.
+    /// This is a diagnostic read and does not advance Scheduler time.
+    pub fn inspect_memory(&self, address: u16) -> u8 {
+        self.bus.memory().read(address)
+    }
+
+    /// Return the three active Sega mapper bank registers.
+    pub fn selected_mapper_banks(&self) -> [u8; 3] {
+        self.bus.memory().selected_banks()
+    }
+
+    /// Return the SMS memory-control latch written through I/O port $3E.
+    pub fn memory_control(&self) -> u8 {
+        self.bus.memory().control_port()
+    }
+
     /// Advance the machine until one VDP frame completes.
     ///
     /// The instruction limit is a safety bound, not a timing source. Hardware
