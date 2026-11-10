@@ -1007,7 +1007,7 @@ impl SegaApp {
                 .iter()
                 .find(|device| Some(device.id) == self.selected_gamepad)
                 .map_or(0, |device| device.capabilities.button_count)
-                .min(sega_input_runtime::MAX_BUTTONS as u16);
+                .min(u16::try_from(sega_input_runtime::MAX_BUTTONS).unwrap_or(u16::MAX));
             if let Some(button) =
                 (0..button_count).find(|index| reading.state.buttons.is_pressed(*index as usize))
             {
@@ -1016,7 +1016,7 @@ impl SegaApp {
                 self.gamepad_bindings.set(action, button);
                 self.gamepad_profile = self.gamepad_bindings.to_profile();
                 self.pending_gamepad_binding = None;
-                self.input_mapping_error = save_gamepad_bindings(&self.gamepad_bindings)
+                self.input_mapping_error = save_gamepad_bindings(self.gamepad_bindings)
                     .err()
                     .map(|error| format!("Falha ao salvar mapeamento do controle: {error}"));
             }
@@ -1919,7 +1919,7 @@ fn load_gamepad_bindings() -> GamepadBindings {
     bindings
 }
 
-fn save_gamepad_bindings(bindings: &GamepadBindings) -> std::io::Result<()> {
+fn save_gamepad_bindings(bindings: GamepadBindings) -> std::io::Result<()> {
     let directory = rom_settings_directory()
         .ok_or_else(|| std::io::Error::other("APPDATA não está definido"))?;
     fs::create_dir_all(&directory)?;
@@ -2143,6 +2143,7 @@ fn render_file_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     add_machine_button(
         ui,
         "Fechar ROM",
+        "Fechar a ROM atualmente carregada",
         state.viewport.worker.is_some(),
         UiCommand::CloseMachine,
         state.machine_command,
