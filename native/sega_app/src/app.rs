@@ -1805,6 +1805,16 @@ fn key_from_name(name: &str) -> Option<egui::Key> {
         "X" => egui::Key::X,
         "Y" => egui::Key::Y,
         "Z" => egui::Key::Z,
+        "Num0" => egui::Key::Num0,
+        "Num1" => egui::Key::Num1,
+        "Num2" => egui::Key::Num2,
+        "Num3" => egui::Key::Num3,
+        "Num4" => egui::Key::Num4,
+        "Num5" => egui::Key::Num5,
+        "Num6" => egui::Key::Num6,
+        "Num7" => egui::Key::Num7,
+        "Num8" => egui::Key::Num8,
+        "Num9" => egui::Key::Num9,
         "F1" => egui::Key::F1,
         "F2" => egui::Key::F2,
         "F3" => egui::Key::F3,
@@ -1817,6 +1827,29 @@ fn key_from_name(name: &str) -> Option<egui::Key> {
         "F10" => egui::Key::F10,
         "F11" => egui::Key::F11,
         "F12" => egui::Key::F12,
+        "F13" => egui::Key::F13,
+        "F14" => egui::Key::F14,
+        "F15" => egui::Key::F15,
+        "F16" => egui::Key::F16,
+        "F17" => egui::Key::F17,
+        "F18" => egui::Key::F18,
+        "F19" => egui::Key::F19,
+        "F20" => egui::Key::F20,
+        "F21" => egui::Key::F21,
+        "F22" => egui::Key::F22,
+        "F23" => egui::Key::F23,
+        "F24" => egui::Key::F24,
+        "F25" => egui::Key::F25,
+        "F26" => egui::Key::F26,
+        "F27" => egui::Key::F27,
+        "F28" => egui::Key::F28,
+        "F29" => egui::Key::F29,
+        "F30" => egui::Key::F30,
+        "F31" => egui::Key::F31,
+        "F32" => egui::Key::F32,
+        "F33" => egui::Key::F33,
+        "F34" => egui::Key::F34,
+        "F35" => egui::Key::F35,
         _ => return None,
     })
 }
@@ -2183,7 +2216,9 @@ fn render_system_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         egui::RadioButton::new(false, "Automática (não integrada ao runtime Rust)"),
     );
     ui.small("A região selecionada será aplicada ao carregar a próxima ROM.");
-    ui.small("A seleção automática ainda não está integrada nesta interface; não é inferida pelo nome do arquivo.");
+    ui.small(
+        "A seleção automática ainda não está integrada nesta interface; não é inferida pelo nome do arquivo.",
+    );
     ui.separator();
     ui.label("Outros sistemas");
     for system in [
