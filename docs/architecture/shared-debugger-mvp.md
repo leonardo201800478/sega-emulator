@@ -1,6 +1,6 @@
 # Shared Debugger MVP — Architecture and Delivery Plan
 
-Status: implementation foundation in progress
+Status: SMS adapter implementation in progress; runtime trace capture and native UI are wired on the feature branch, pending final Release validation
 Scope owner: emulator runtime; GUI is a presentation and command surface only.
 
 ## Objective
@@ -36,13 +36,13 @@ The snapshot should contain only fields supported by that console: CPU architect
 The SMS adapter should expose:
 
 - Z80 PC, SP, AF, BC, DE, HL, IX, IY, I, R, IFF1/IFF2, interrupt mode and HALT state;
-- a small memory inspector with a bounded address range per request;
+- a small memory inspector with a bounded address range per request (maximum 256 bytes);
 - Sega/Codemasters mapper kind, selected banks and memory-control latch when available;
 - VDP registers and status;
 - recent bus events with machine timestamp, operation, address, data, base T-states and WAIT states;
 - an instruction breakpoint and single-instruction command.
 
-The existing `SmsTemporalMachine::set_trace_enabled` / `take_trace` API is the event source. The runtime worker must drain it incrementally into bounded history; it must never leave the current unbounded vector enabled indefinitely.
+The existing `SmsTemporalMachine::set_trace_enabled` / `take_trace` API is the event source. The runtime worker drains it after each frame or paused command into a 2,048-event FIFO history. Overflow discards the oldest event and increments the dropped counter. Capture is opt-in and disabling it clears both pending and retained events; the underlying machine trace vector is drained at each worker boundary.
 
 ## GUI
 
@@ -52,7 +52,7 @@ A compact Diagnostics window should expose:
 - a hexadecimal PC breakpoint field with Add / Remove / Clear;
 - CPU and hardware summary;
 - memory address + short hex/ASCII view;
-- recent events and dropped-event count;
+- recent events and dropped-event count (trace capture is opt-in; the GUI refreshes live snapshots at 10 Hz while running);
 - export report to a user-selected local file.
 
 The GUI sends commands and renders snapshots only. It must not execute instructions, advance machine time, decode hardware state or own hardware timing.
@@ -74,7 +74,8 @@ A new console adds an adapter that maps its native CPU/machine state into the sh
 
 - Unit tests for breakpoint uniqueness, capacity, ordering and removal.
 - Unit tests proving bounded history never exceeds capacity and counts discarded entries.
-- SMS integration tests for step, breakpoint stop/resume, snapshots and bounded trace draining.
+- SMS integration tests for step, breakpoint stop/resume, snapshots and bounded trace draining;
+- runtime trace test proving capture is disabled by default, events are exposed in order, and disabling clears the history.
 - GUI tests for command wiring where practical.
 - Required repository gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`.
 - Classify every suite as PASS, FAIL, BLOCKED or NOT RUN; skipped suites are not PASS.
