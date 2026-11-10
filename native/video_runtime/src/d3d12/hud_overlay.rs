@@ -224,6 +224,8 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
         // from them. Verify an existing registration instead of relying only on
         // GetLastError: another subsystem may already have registered this name.
         let registration_error = Error::from_thread();
+        let expected_window_proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT =
+            hud_window_proc;
         let mut existing = WNDCLASSW::default();
         let class_matches = unsafe {
             GetClassInfoW(
@@ -235,7 +237,9 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
         } && existing.hInstance == instance
             && existing
                 .lpfnWndProc
-                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, hud_window_proc));
+                .is_some_and(|registered| {
+                    std::ptr::fn_addr_eq(registered, expected_window_proc)
+                });
         if !class_matches {
             return Err(registration_error);
         }
