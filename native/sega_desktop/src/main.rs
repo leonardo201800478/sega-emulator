@@ -15,6 +15,7 @@ mod windows_host {
 
     use sega_sms_runtime::{SmsTemporalWorker, SpriteLimitMode};
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
+    use zip::ZipArchive;
     use std::os::windows::process::CommandExt;
 
     use slint::{
