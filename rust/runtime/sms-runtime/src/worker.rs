@@ -1309,7 +1309,7 @@ fn handle_command(
             let sprite_limit_mode = machine.vdp().sprite_limit_mode();
             let result = build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
                 powered_off.set_sprite_limit_mode(sprite_limit_mode);
-                audio_session.as_mut().map_or(Ok(()), |session| {
+                audio_session.as_mut().map_or(Ok::<(), String>(()), |session| {
                     session.suspend_and_flush()?;
                     session.reset_dsp();
                     Ok(())
