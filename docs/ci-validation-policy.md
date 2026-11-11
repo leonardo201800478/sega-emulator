@@ -1,45 +1,134 @@
-# CI Validation Policy
+# Política de CI e validação
 
-**Scope:** all project phases and platforms (P0–P9).
+**Baseline de auditoria:** `main` em `82ccad8eb9cd11d78dfddd168f307f90012426b5` (2026-11-11).  
+**Escopo:** runtime Rust, hardware, hosts transitórios e migração Slint/WGPU/CPAL/SDL3.
 
-The CI pipeline is impact-based: it runs the smallest validation set that covers the changed code and its real dependencies. A change must not trigger unrelated host, graphics, or audio builds merely because those components exist in the repository. The path classifier uses `predicate-quantifier: some-with-excludes` whenever a filter combines positive and negated patterns; without that mode, negated patterns can match unrelated files and cause false-positive jobs. PSG, VDP, and SDL3 input paths have dedicated package-level jobs; these jobs replace root-workspace regression for isolated changes in those components.
+Esta política é subordinada aos ADRs vigentes e ao código integrado na `main`. PRs Draft, branches e validações parciais não alteram o estado integrado.
 
-## Validation matrix
+## 1. Princípios
 
-| Change area | Required automated validation |
-| --- | --- |
-| Z80 CPU, ALU, bus, SMS/SG-1000 CPU integration | Package-scoped rustfmt, Clippy, unit and integration tests for `sega-z80-cpu`, `sega-z80-alu`, `sega-z80-bus`, `sega-sms-core`, and `sega-sg1000-core`. CPU/ALU/bus integration sources in both console cores and Z80-specific SMS tests are classified into this focused path. The job also checks out SingleStepTests/Z80 at pinned revision `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` and executes the 32,000 DD/FD half-register ALU vectors and 2,000 DD/FD SCF/CCF Q-latch vectors against the resumable Z80 (34,000 vectors total); it compares architectural state and aggregate T-states, not electrical pin traces. The upstream corpus is Ares-derived and is not a silicon oracle. Do not run unrelated workspace or host-platform builds for Z80-only changes.
-| Other root-workspace Rust components | Root workspace formatting, Clippy, unit and integration tests |
-| PSG / audio integration | Package-scoped rustfmt, Clippy, and tests for `sega-sn76489`, `sega-audio-runtime`, `sega-sms-core`, and `sega-sg1000-core`; Windows WASAPI/XAudio2 and Linux audio-output validation for the host/dependency fan-out. |
-| VDP / video integration | Package-scoped rustfmt, Clippy, and tests for `sega-video`, `sega-sms-core`, and `sega-sg1000-core`; Windows D3D12/DXGI validation for video-core/runtime changes. |
-| SDL3 input integration | Package-scoped rustfmt, Clippy, and tests for `sega-input-runtime`, `sega-sms-core`, and `sega-sg1000-core`; Windows SDL3 input validation for input-runtime changes. |
-| Machine Scheduler / temporal core | Root workspace validation plus deterministic Scheduler stress replay when `native/machine_scheduler` or `native/temporal_core` changes; audio and application consumers are validated when their dependency graph is affected. |
-| Native egui application and SMS worker integration | Windows-targeted application format, Clippy, and tests run for the application and its non-Z80 runtime dependencies: SMS runtime/core, video, audio, input, Scheduler/temporal core, and observability. Z80-only CPU/ALU/bus integration sources and Z80-specific tests in SMS core are excluded from this app fan-out so a CPU-only correction does not start the Windows host build. |
-| PowerShell tooling | Parse only the changed `.ps1` scripts |
-| Documentation text (Markdown, MDX, RST, TXT) | `git diff --check` for whitespace and patch hygiene only; no Rust build, Clippy, or tests |
+1. A CI seleciona a menor suíte que cubra o código alterado e seus consumidores reais.
+2. A seleção por caminhos nunca pode ocultar uma regressão: dependências compartilhadas acionam a união dos gates dos consumidores.
+3. Testes de hardware/runtime permanecem obrigatórios nas alterações pertinentes.
+4. Hosts legados são preservados por validação condicional ou opt-in; não são destino arquitetural.
+5. Um job `SKIPPED` nunca é `PASS`. O gate agregado exige `success` para jobs aplicáveis e `skipped` para jobs não aplicáveis.
+6. Cada resultado deve ser associado ao SHA exato avaliado.
+7. Builds de aplicação são Release e usam lockfiles versionados com `--locked`.
+8. Execução física em GPU, dispositivos de áudio ou gamepads é registrada separadamente; compilação e testes headless não comprovam operação física.
 
+## 2. Workflows ativos
 
-## Dependency fan-out
+| Workflow | Responsabilidade |
+|---|---|
+| `.github/workflows/ci.yml` | Classificação de impacto, regressão Rust, hosts condicionais, desktop Slint/WGPU, higiene documental e lint de workflows |
+| `.github/workflows/sms-debugger-runtime.yml` | Compatibilidade do SMS runtime com o host/debugger independente |
 
-1. Shared contracts and libraries must trigger validation for their actual consumers. In particular, `native/observability` fans out to video, audio, input, and application consumers; `native/machine_scheduler` and `native/temporal_core` fan out to scheduler stress, audio runtime, and application consumers. PSG, VDP, and input console-integration source files are excluded from the generic workspace classifier only when their dedicated focused job covers them.
-2. A change spanning multiple components runs the union of those components' required suites.
-3. Changes to global Cargo configuration, the root workspace manifest/lockfile, root `build.rs`, Rust toolchain configuration, common build scripts, or CI workflows trigger broad regression.
-4. A component-local manifest or lockfile change triggers that component and its real dependents, not every unrelated Windows host validation by default.
-5. A Z80-only change runs the focused Z80/SMS/SG-1000 package suite (format, Clippy, unit and integration tests). It does not trigger root-workspace regression, D3D12, audio, SDL3, or tooling jobs unless the changed paths independently require them. If the patch also changes shared root-workspace code, manifests, lockfiles, toolchain/configuration, or CI workflows, run the broader validations selected by those paths.
-6. D3D12, WASAPI/XAudio2, and SDL3 checks are independent. They run only when their code or an affected integration requires them.
+As alterações em `.github/workflows/**`, `.github/actions/**` ou `.github/scripts/**` acionam o gate `workflow-lint` e a regressão do workspace Rust. A análise estática dos workflows utiliza actionlint v1.7.12, instalado por release versionada e SHA-256 verificado.
 
-## Determinism and hardware validation
+## 3. Matriz de rastreabilidade
 
-- Scheduler stress replay is required for Scheduler/temporal-core changes and may be explicitly requested with the `scheduler-stress-short` or `scheduler-stress-long` PR label.
-- Physical hardware checks (GPU presentation, audible WASAPI/XAudio2 output, and real gamepad behavior) are recorded separately. A successful compile or headless test is not evidence of physical operation.
-- Do not add unrelated platform builds as a substitute for targeted tests.
+| Componente | Validação obrigatória | Workflow | Condição |
+|---|---|---|---|
+| Runtime Rust | fmt, Clippy Release, testes unitários e integração | CI / Rust workspace | Crates Rust gerais, manifests, lockfiles e configuração global |
+| Z80 CPU/ALU/bus | fmt, Clippy, testes semânticos e integração SMS/SG-1000 | CI / Z80 focused | Alterações nos módulos Z80 e integrações classificadas |
+| Z80 vetores externos | SingleStepTests DD/FD indexados, revisão de estado arquitetural e T-states | CI / Z80 focused | Alterações Z80 |
+| PSG | fmt, Clippy e testes do PSG e consoles | CI / PSG focused | Alterações PSG |
+| VDP | fmt, Clippy e testes do VDP e consoles | CI / VDP focused | Alterações VDP |
+| MachineScheduler/temporal core | Regressão do workspace e replay determinístico | CI / Scheduler stress | Alterações temporais ou opt-in por label |
+| Input portátil | fmt, Clippy e testes do runtime de entrada e consoles | CI / Input focused | Alterações input |
+| Slint/WGPU 30 | fmt, Clippy, testes e build Windows x64 Release | CI / Slint WGPU | Alterações em `native/sega_desktop` ou dependências do workspace |
+| Vulkan físico | Janela, device/queue, textura externa, composição, resize e teardown em GPU real | Validação manual R1 | Antes de declarar R1 concluída |
+| Áudio legado | fmt, Clippy e testes Windows/Linux do host | CI / Legacy audio | Alterações no host ou dependências afetadas; também opt-in |
+| Aplicação egui legada | fmt, Clippy, testes e build Windows x64 Release | CI / Legacy Windows host | Alterações na aplicação ou dependências transitórias afetadas; também opt-in |
+| D3D12 legado | Clippy e testes Windows do runtime gráfico | CI / Legacy Windows host | Alterações no runtime gráfico/VDP ou opt-in |
+| CPAL | Dispositivos, formatos, streams, callback e underruns | Gate futuro R3 | Somente após implementação |
+| SDL3 | Teclado, gamepads e mapeamento de controles | Gate futuro R4 | Somente após integração |
+| Documentação | `git diff --check` | CI / Documentation | Alterações Markdown, MDX, RST ou TXT |
+| Workflows | actionlint e validação do gate agregado | CI / Workflow lint | Alterações nos workflows e arquivos auxiliares |
+| PowerShell tooling | Parser PowerShell nos scripts alterados | CI / Windows tooling | Alterações em `scripts/**/*.ps1` |
+| Lockfiles | `cargo metadata --locked` e existência dos lockfiles | CI / Rust workspace e lockfile artifact | Alterações de manifests, lockfiles ou refresh manual |
 
-## Retained project-specific gates
+## 4. Regras de impacto e dependências
 
-The standalone `native/audio_output` and `native/sega_app` workspaces retain their own lockfiles and receive targeted Windows x64 checks. The ZEXDOC/ZEXALL external conformance suites remain **NOT RUN** until their independent Rust harness is completed; existing semantic, bus, microsequencing and temporal tests do not replace them.
+- Z80-only executa a suíte focada Z80, incluindo os testes integrados SMS/SG-1000 e vetores externos pertinentes. Não exige compilar hosts gráficos ou de áudio sem relação com a alteração.
+- PSG, VDP e input têm jobs de pacote com integração de console. Eles substituem a regressão genérica do workspace somente quando a alteração está isolada nesses domínios.
+- MachineScheduler e temporal core executam a regressão do workspace e o stress replay determinístico. Consumidores legados afetados também são validados quando necessário.
+- Alterações em `native/observability` acionam os consumidores pertinentes.
+- Alterações em `rust/runtime/sms-runtime` acionam a regressão Rust, o host legado dependente quando aplicável e o workflow do debugger.
+- Alterações no host de áudio legado executam os testes Windows e Linux; não significam que CPAL esteja integrado.
+- Alterações de workflow executam actionlint e a regressão do workspace, mas não forçam compilações de hosts legados sem relação com a alteração.
+- Alterações de documentação executam higiene de diff, sem build Rust indiscriminado.
 
-## Result classification and merge gate
+Os filtros que combinam inclusões e exclusões usam `predicate-quantifier: some-with-excludes`. O gate agregado compara explicitamente o resultado real de cada job com sua aplicabilidade esperada.
 
-Every applicable suite is classified as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A skipped suite is never reported as a pass.
+## 5. Hosts transitórios e funcionalidades ainda não integradas
 
-The aggregate `Rust quality and unit regression` check explicitly verifies expected applicability: required jobs must conclude `success`, while non-applicable jobs must conclude `skipped`. Unexpected executions and missing required executions both fail the aggregate gate. For Z80-only changes, the focused package job is required and the root workspace job is explicitly not applicable. Manual dispatch runs the classifier job successfully with the path-filter step omitted, so dependent manual jobs are not blocked by a skipped prerequisite. A PR is eligible for merge only when all required checks pass on the exact final HEAD, with no unresolved correctness findings or merge conflicts.
+### egui/eframe, D3D12 e WASAPI/XAudio2
+
+São hosts de transição. Permanecem disponíveis para preservação e regressão quando suas dependências são afetadas, ou por execução manual opt-in. Não devem bloquear alterações exclusivas da nova camada Slint/WGPU por APIs sem relação com o patch.
+
+### CPAL
+
+CPAL ainda não possui integração funcional nesta baseline. Não criar testes que afirmem enumerar dispositivos, criar streams ou tratar underruns antes de existir a implementação R3. A saída de áudio emulada e o host físico são responsabilidades distintas.
+
+### SDL3
+
+SDL3 ainda não está integrado. O runtime portátil de input existente continua testado como núcleo, mas isso não é validação SDL3. Não chamar os testes atuais de testes SDL3 nem testar APIs inexistentes.
+
+## 6. Testes que devem permanecer protegidos
+
+Inventário de arquivos de integração encontrado na baseline:
+
+| Domínio | Arquivos |
+|---|---:|
+| Z80 CPU | 30 |
+| Z80 integrado ao SMS | 48 |
+| SMS temporal/estado/interrupções | 4 |
+| MachineScheduler | 3 |
+| VDP | 1 |
+| SMS runtime API | 1 |
+| **Total** | **87** |
+
+Esse inventário conta arquivos de integração versionados; não inclui testes unitários internos aos módulos Rust.
+
+O teste `native/machine_scheduler/tests/stress_replay.rs` é executado como teste ignorado por um job dedicado, com limite de memória. Não remover o gate nem classificar a ausência de execução como aprovação.
+
+A validação externa DD/FD existente é um conjunto de vetores SingleStepTests específico. Ela não é ZEXDOC/ZEXALL e não altera a regra de que E8 só começa após o fechamento demonstrável de E7.
+
+Não foram encontrados arquivos de testes Python na árvore desta baseline. Caso ferramentas Python voltem a fazer parte do backend, deverão receber gates próprios, sem substituir os testes Rust.
+
+## 7. Lockfiles e workspaces
+
+Workspaces com lockfile independente devem ser auditados individualmente:
+
+- `Cargo.lock` — workspace Rust raiz, incluindo `native/sega_desktop` quando integrado.
+- `native/audio_output/Cargo.lock` — host de áudio legado.
+- `native/sega_app/Cargo.lock` — aplicação egui/eframe legada.
+- `native/sms_debugger/Cargo.lock` — host/debugger independente.
+
+O lockfile do SMS debugger deve ser versionado; gerar um lockfile novo durante cada execução de CI não é validação reprodutível.
+
+O refresh de lockfiles é uma operação manual/opt-in que produz artefato temporário para revisão. O workflow não recebe permissão `contents: write`, não faz commit e não executa push automático.
+
+`scripts/project.ps1` deve descobrir os membros do workspace raiz via `cargo metadata` e auditar cada workspace independente explicitamente. Manifests fora dos workspaces reconhecidos são classificados como `NOT RUN`, nunca como validados.
+
+## 8. Segurança e permissões
+
+- Permissões padrão mínimas; jobs de validação usam `contents: read`.
+- Checkout com `persist-credentials: false`.
+- Actions externas referenciadas por SHA imutável e com versão anotada.
+- Downloads de ferramentas são versionados e verificados por checksum.
+- Nenhum workflow de CI de rotina recebe permissão de escrita para atualizar branches.
+- Alterações de workflows devem ser revisadas como código executável, incluindo filtros, expressões, permissões e scripts inline.
+
+## 9. Classificação de resultados
+
+| Estado | Significado |
+|---|---|
+| PASS | Gate aplicável executado e concluído com sucesso no SHA registrado |
+| FAIL | Gate aplicável executado e falhou |
+| BLOCKED | Gate não pôde ser executado por pré-requisito ausente |
+| NOT RUN | Validação não executada; sem evidência de aprovação |
+| SKIPPED | Job não executado por condição de impacto; não equivale a PASS |
+
+A PR só pode ser integrada quando todos os gates aplicáveis ao diff estiverem em `success`, os não aplicáveis estiverem realmente `skipped`, e não houver bloqueios técnicos pendentes. A autorização de merge não substitui os critérios de aceitação.
