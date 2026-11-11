@@ -166,8 +166,7 @@ impl FramePacingWindow {
         if self.len == 0 {
             return;
         }
-        let last = (self.next + FRAME_PACING_WINDOW_CAPACITY - 1)
-            % FRAME_PACING_WINDOW_CAPACITY;
+        let last = (self.next + FRAME_PACING_WINDOW_CAPACITY - 1) % FRAME_PACING_WINDOW_CAPACITY;
         self.samples[last].pacing_wait_elapsed_ns =
             elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
     }
@@ -200,8 +199,14 @@ impl FramePacingWindow {
             .map(|sample| sample.machine_ticks_per_frame)
             .collect();
         let mut steps: Vec<_> = samples.iter().map(|sample| sample.step_frame_ns).collect();
-        let mut publishes: Vec<_> = samples.iter().map(|sample| sample.video_publish_ns).collect();
-        let mut audio: Vec<_> = samples.iter().map(|sample| sample.audio_submit_ns).collect();
+        let mut publishes: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.video_publish_ns)
+            .collect();
+        let mut audio: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.audio_submit_ns)
+            .collect();
         let mut processing: Vec<_> = samples
             .iter()
             .map(|sample| sample.frame_processing_ns)
@@ -1852,9 +1857,9 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FramePacingSample, FramePacingWindow,
-        FRAME_PACING_WINDOW_CAPACITY, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
-        SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
+        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
+        FramePacingSample, FramePacingWindow, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
+        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
         execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
@@ -2602,10 +2607,7 @@ mod tests {
         window.push(FramePacingSample::default());
         window.record_actual_wait(Duration::from_millis(21));
 
-        assert_eq!(
-            window.snapshot().pacing_wait_elapsed_p50_ns,
-            21_000_000
-        );
+        assert_eq!(window.snapshot().pacing_wait_elapsed_p50_ns, 21_000_000);
     }
 
     #[test]
@@ -2622,12 +2624,14 @@ mod tests {
 
         let metrics = window.snapshot();
         assert_eq!(metrics.sample_count, FRAME_PACING_WINDOW_CAPACITY as u64);
-        assert_eq!(metrics.total_samples, FRAME_PACING_WINDOW_CAPACITY as u64 + 1);
+        assert_eq!(
+            metrics.total_samples,
+            FRAME_PACING_WINDOW_CAPACITY as u64 + 1
+        );
         assert_eq!(metrics.frame_interval_p50_ns, 257);
         assert_eq!(metrics.frame_interval_p95_ns, 488);
         assert_eq!(metrics.frame_interval_p99_ns, 508);
         assert_eq!(metrics.machine_ticks_per_frame_min, 2);
         assert_eq!(metrics.machine_ticks_per_frame_max, 513);
     }
-
 }
