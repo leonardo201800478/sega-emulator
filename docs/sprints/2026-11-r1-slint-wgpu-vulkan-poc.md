@@ -163,3 +163,29 @@ A API `Timer::single_shot` está documentada no Slint 1.18.1. Esta correção ev
 | Correção diferida do notifier | Implementada; CI e reteste pendentes |
 
 Não declarar R1 concluída até a CI desta revisão passar e o usuário confirmar encerramento repetido sem panic na nova build.
+
+
+## Reteste físico após correção do callback — Windows x64 / 2026-11-11
+
+O usuário executou cinco inicializações independentes da Release corrigida e forneceu os cinco pares de eventos:
+
+```text
+R1_LIFECYCLE event=RenderingSetup count=1 backend=Vulkan adapter=NVIDIA GeForce RTX 5070
+R1_LIFECYCLE event=RenderingTeardown count=1
+```
+
+Resultado observado em todas as cinco execuções:
+- `RenderingSetup` executado uma vez e identificando Vulkan / NVIDIA GeForce RTX 5070.
+- `RenderingTeardown` executado uma vez.
+- Nenhum panic, erro ou travamento nos cinco encerramentos.
+- A versão corrigida também foi observada com a textura expandindo junto com a janela, mantendo a proporção.
+- O usuário relatou renderização fluida.
+
+CI do commit `b5275dd5c095794d44c260719627c77424c81175` concluída com sucesso: Rust workspace regression, Windows x64 Slint/WGPU 30/Vulkan POC, documentation patch hygiene e Rust quality/unit regression. Jobs não aplicáveis foram SKIPPED e não são contados como PASS.
+
+Atualização de classificação:
+- R1-07: PASS para resize responsivo e estabilidade observada em Windows x64.
+- R1-10: PASS para teardown no encerramento e ausência de panic em cinco execuções independentes.
+- Recriação do renderer dentro do mesmo processo: NOT RUN; os cinco pares setup/teardown correspondem a cinco processos independentes e não comprovam reconfiguração/recriação in-process.
+
+A validação física confirma o caminho de execução e encerramento no hardware do usuário. Não há evidência de teste de perda/recriação de superfície ou de renderer no mesmo processo; não declarar esse cenário validado.
