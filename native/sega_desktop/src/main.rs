@@ -1043,6 +1043,16 @@ mod windows_host {
             }
         });
 
+        let video_click_worker = Rc::clone(&worker);
+        app.on_video_area_clicked(move || {
+            if let Some(worker) = video_click_worker.borrow().as_ref()
+                && !worker.is_running()
+                && let Err(error) = worker.start()
+            {
+                eprintln!("R2_CONTROL action=video_click_resume error={error}");
+            }
+        });
+
         let trace_worker = Rc::clone(&worker);
         app.on_trace_toggle_requested(move |enabled| {
             if let Some(worker) = trace_worker.borrow().as_ref()
