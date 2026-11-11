@@ -171,3 +171,20 @@ Repetir cenários críticos com janela em foco e fora de foco. Registrar taxa de
 3. Captura Windows/Vulkan correlacionando worker e apresentação.
 4. Conclusão causal com evidências, ou lista explícita das hipóteses ainda não resolvidas.
 5. Se necessário, proposta de correção mínima e separada para revisão.
+
+## Atualização de execução — 2026-11-11
+
+**PR de implementação relacionada:** #762 — preservação do deadline absoluto do worker SMS.
+
+A PR #762 introduz um deadline monotônico de host ancorado em `frame_started + frame_duration`. Comandos não-pausantes consomem o orçamento restante, em vez de reiniciar uma espera relativa. Transições que alteram o estado de execução invalidam o deadline anterior.
+
+Testes determinísticos adicionados ao helper de deadline verificam:
+- consumo do orçamento por um handler de comando;
+- consumo acumulado por múltiplos comandos;
+- limpeza entre épocas de execução;
+- deadline expirado sem espera residual.
+
+**Limite da evidência:** esses testes validam a política de deadline implementada, mas não demonstram ainda a melhoria de FPS no Windows nem substituem o benchmark físico de cinco minutos. A PR #762 permanece sujeita às gates Release do SMS Runtime e à regressão geral.
+
+O critério T1 só poderá ser marcado integralmente concluído após revisão do fluxo integrado e aprovação dos testes no HEAD final da PR #762. T3, T4 e T6 continuam pendentes de captura real.
+
