@@ -231,10 +231,10 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
         }
 
         // A class may have been registered before this module's first call.
-        // Reuse it only when its module and window procedure match ours.
+        // Rust does not guarantee stable function-pointer address equality,
+        // even for the same function. The private class name, owning module,
+        // and registration attributes identify the class we own.
         let registration_error = Error::from_thread();
-        let expected_window_proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT =
-            hud_window_proc;
         let mut existing = WNDCLASSW::default();
         let class_matches = unsafe {
             GetClassInfoW(
@@ -244,9 +244,10 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
             )
             .is_ok()
         } && existing.hInstance == instance
-            && existing
-                .lpfnWndProc
-                .is_some_and(|registered| std::ptr::fn_addr_eq(registered, expected_window_proc));
+            && existing.style == class.style
+            && existing.cbClsExtra == class.cbClsExtra
+            && existing.cbWndExtra == class.cbWndExtra
+            && existing.lpfnWndProc.is_some();
 
         if class_matches {
             Ok(())
