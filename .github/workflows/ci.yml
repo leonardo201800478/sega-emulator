@@ -74,7 +74,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 (Node.js 24)
         with:
-          base: ${{ github.ref }}
+          base: ${{ github.event_name == 'pull_request' && '' || github.ref }}
           predicate-quantifier: some-with-excludes
           filters: |
             docs:
@@ -470,7 +470,7 @@ jobs:
     name: Legacy Windows x64 D3D12 compile
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
        (needs.changes.outputs.legacy_video == 'true' ||
         needs.changes.outputs.app == 'true'))
@@ -510,7 +510,7 @@ jobs:
   windows-slint-wgpu:
     name: Windows x64 Slint WGPU 30 Vulkan POC
     needs: [changes]
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles')) && ((github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true')) }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles')) && ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true')) }}
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
