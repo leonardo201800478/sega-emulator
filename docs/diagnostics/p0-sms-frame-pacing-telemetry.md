@@ -30,7 +30,7 @@ SmsFramePacingMetrics reports a rolling window of at most 512 completed frames:
 - VideoFrame construction + FrameMailbox::publish duration p50/p95/p99;
 - physical audio-session submission duration p50/p95/p99 (zero when no session exists);
 - total execute_frame processing duration p50/p95/p99;
-- calculated worker pacing wait p50/p95/p99.
+- calculated worker pacing-wait budget p50/p95/p99;\n- actual time spent in the worker's command-queue wait p50/p95/p99.
 
 The window is fixed-capacity and overwritten in place. Percentiles are calculated only when a host requests a snapshot, not on every frame. The first frame has no preceding interval and is excluded from interval percentiles.
 
@@ -38,7 +38,7 @@ The machine-tick delta is recorded independently of host duration. For PAL and N
 
 ## Host metrics
 
-The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second:
+The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second. It reports both pacing_wait_budget (the requested timeout computed by the worker) and pacing_wait_elapsed (the actual monotonic duration until timeout or command arrival):
 
 - timer callback count and empty mailbox polls;
 - average/max timer polling interval;
@@ -52,7 +52,7 @@ The host report is deliberately explicit that physical present timestamps are un
 
 ## Existing pacing policy — audit target, not changed here
 
-The current worker computes a wall-time frame budget from the number of drained PSG samples (sample_count / SMS_TEMPORAL_SAMPLE_RATE) and waits for the remainder after processing. This is an existing pacing policy and is now measured through pacing_wait; this PR does not assume it is correct or incorrect. In particular, it must not be replaced by a guessed PAL/NTSC sleep, GUI timer, VSync callback, or audio-device callback before comparing measured virtual ticks, generated sample counts, processing cost, and host intervals.
+The current worker computes a wall-time frame budget from the number of drained PSG samples (sample_count / SMS_TEMPORAL_SAMPLE_RATE) and waits for the remainder after processing. This is an existing pacing policy and is now measured separately as pacing_wait_budget (requested timeout) and pacing_wait_elapsed (actual time spent in recv_timeout, including early command wake-up or host wake-up overshoot); this PR does not assume it is correct or incorrect. In particular, it must not be replaced by a guessed PAL/NTSC sleep, GUI timer, VSync callback, or audio-device callback before comparing measured virtual ticks, generated sample counts, processing cost, and host intervals.
 
 The desktop's PRESENT_INTERVAL remains a mailbox polling interval, not the emulated frame period or a guarantee of physical display cadence.
 
@@ -62,7 +62,7 @@ The desktop's PRESENT_INTERVAL remains a mailbox polling interval, not the emula
 2. Keep the same driver/G-SYNC/V-Sync configuration across comparison runs. Do not use a frame limiter or alter Scheduler settings during the baseline.
 3. Run a representative NTSC ROM for at least five minutes; repeat with a representative Europe/PAL ROM for at least five minutes.
 4. Save stdout/stderr containing R2_FRAME_PACING_HOST records. Keep the initial startup interval separate from steady state.
-5. Compare worker frame interval, virtual ticks/frame, step duration, publish duration, pacing wait, mailbox replacements, host consumed intervals, and queue-write duration.
+5. Compare worker frame interval, virtual ticks/frame, step duration, publish duration, requested/actual pacing wait, mailbox replacements, host consumed intervals, and queue-write duration.
 6. Repeat with the presentation window minimized/occluded only as a separate experiment; do not combine those results with the normal visible baseline.
 7. Only after locating the stage, propose a narrowly scoped correction and add deterministic regression tests.
 
