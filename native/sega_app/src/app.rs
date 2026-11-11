@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -9,7 +9,6 @@ use crate::debugger_window::{
     DebuggerWindowState, parse_debug_address, parse_saved_position, parse_saved_root_size,
     parse_saved_size, render_debugger_contents,
 };
-use crate::icons::{IconKind, icon_button, small_icon_button};
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
@@ -23,8 +22,8 @@ use sega_observability::{
     LogConfig, SessionMetadata, current as current_logging, init as init_logging,
 };
 use sega_sms_core::ControllerButtons;
-use sega_sms_runtime::{SmsPerformanceMetrics, SmsTemporalWorker};
-use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12HudOverlay, D3d12MailboxSession};
+use sega_sms_runtime::SmsTemporalWorker;
+use sega_video_runtime::d3d12::{D3d12ChildWindow, D3d12MailboxSession};
 use zip::ZipArchive;
 
 const MAX_ROM_SIZE_BYTES: usize = 16 * 1024 * 1024;
@@ -82,8 +81,11 @@ pub struct SegaApp {
     diagnostics_enabled: bool,
     diagnostics_error: Option<String>,
     fps_overlay_enabled: bool,
+    fps_overlay_was_active: bool,
     fps_overlay_size: FpsOverlaySize,
     fps_overlay_position: FpsOverlayPosition,
+    fps_counter: FpsCounter,
+    fps_shared_value: Arc<AtomicU32>,
     theme_initialized: bool,
     debugger_window_open: Arc<AtomicBool>,
     debugger_window: Arc<Mutex<DebuggerWindowState>>,
@@ -131,8 +133,11 @@ impl Default for SegaApp {
             diagnostics_enabled: false,
             diagnostics_error: None,
             fps_overlay_enabled: true,
+            fps_overlay_was_active: false,
             fps_overlay_size: FpsOverlaySize::Medium,
             fps_overlay_position: FpsOverlayPosition::BottomRight,
+            fps_counter: FpsCounter::default(),
+            fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             theme_initialized: false,
             debugger_window_open: Arc::new(AtomicBool::new(false)),
             debugger_window: Arc::new(Mutex::new(DebuggerWindowState::default())),
@@ -215,7 +220,44 @@ impl TopLevelMenu {
     }
 }
 
-const SMS_HUD_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+const FPS_SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
+
+#[derive(Debug)]
+struct FpsCounter {
+    last_sequence: u64,
+    last_sample: Instant,
+    fps: f32,
+}
+
+impl Default for FpsCounter {
+    fn default() -> Self {
+        Self {
+            last_sequence: 0,
+            last_sample: Instant::now(),
+            fps: 0.0,
+        }
+    }
+}
+
+impl FpsCounter {
+    fn reset(&mut self, sequence: u64, now: Instant) {
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        self.fps = 0.0;
+    }
+
+    fn update(&mut self, sequence: u64, now: Instant) -> bool {
+        let elapsed = now.saturating_duration_since(self.last_sample);
+        if elapsed < FPS_SAMPLE_INTERVAL {
+            return false;
+        }
+        let frames = u16::try_from(sequence.saturating_sub(self.last_sequence)).unwrap_or(u16::MAX);
+        self.fps = f32::from(frames) / elapsed.as_secs_f32();
+        self.last_sequence = sequence;
+        self.last_sample = now;
+        true
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FpsOverlaySize {
@@ -227,12 +269,11 @@ enum FpsOverlaySize {
 impl FpsOverlaySize {
     const fn dimensions(self) -> egui::Vec2 {
         match self {
-            Self::Small => egui::vec2(176.0, 60.0),
-            Self::Medium => egui::vec2(200.0, 68.0),
-            Self::Large => egui::vec2(224.0, 76.0),
+            Self::Small => egui::vec2(88.0, 26.0),
+            Self::Medium => egui::vec2(104.0, 30.0),
+            Self::Large => egui::vec2(128.0, 36.0),
         }
     }
-
     const fn font_size(self) -> f32 {
         match self {
             Self::Small => 14.0,
@@ -269,35 +310,20 @@ impl FpsOverlayPosition {
 }
 
 fn fps_overlay_position(
+    root_min: egui::Pos2,
     viewport: egui::Rect,
     size: egui::Vec2,
     anchor: FpsOverlayPosition,
 ) -> egui::Pos2 {
     let margin = egui::vec2(12.0, 12.0);
-    let min = viewport.min;
-    let max = viewport.max;
+    let min = root_min + viewport.min.to_vec2();
+    let max = root_min + viewport.max.to_vec2();
     match anchor {
         FpsOverlayPosition::TopLeft => min + margin,
         FpsOverlayPosition::TopRight => egui::pos2(max.x - size.x - margin.x, min.y + margin.y),
         FpsOverlayPosition::BottomLeft => egui::pos2(min.x + margin.x, max.y - size.y - margin.y),
         FpsOverlayPosition::BottomRight => max - size - margin,
     }
-}
-
-fn format_sms_hud_text(metrics: Option<SmsPerformanceMetrics>) -> String {
-    let Some(metrics) = metrics else {
-        return "SMS aguardando ROM\nFrame --\nInput -> emulated frame --".to_owned();
-    };
-    let frame_time = metrics
-        .frame_time_ms
-        .map_or_else(|| "--".to_owned(), |value| format!("{value:.2} ms"));
-    let input_latency = metrics
-        .input_to_frame_ms
-        .map_or_else(|| "--".to_owned(), |value| format!("{value:.1} ms"));
-    format!(
-        "SMS {:.1} FPS\nFrame interval {frame_time}\nInput -> emulated frame {input_latency}",
-        metrics.emulation_fps
-    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -349,20 +375,14 @@ struct MenuPopupActions {
 /// Owns the UI-thread HWND child, SMS worker and D3D12 presentation session.
 ///
 /// Shutdown order is deliberate: stop the machine, detach its borrowed mailbox,
-/// signal worker shutdown without joining on the GUI thread, close/join D3D12
-/// presentation, then destroy the HUD and video child HWNDs.
+/// join the machine worker, close/join D3D12 presentation, then destroy the HWND.
 #[derive(Default)]
 struct NativeViewportState {
     parent_hwnd: Option<usize>,
     session: Option<D3d12MailboxSession>,
     child: Option<D3d12ChildWindow>,
-    hud_overlay: Option<D3d12HudOverlay>,
     worker: Option<SmsTemporalWorker>,
     last_bounds: Option<(i32, i32, i32, i32)>,
-    last_hud_bounds: Option<(i32, i32, i32, i32)>,
-    last_hud_text: Option<String>,
-    last_hud_refresh: Option<Instant>,
-    hud_error: Option<String>,
     ready: bool,
     video_attached: bool,
     start_requested: bool,
@@ -404,15 +424,9 @@ impl NativeViewportState {
             // The presentation worker is joined while its borrowed HWND is alive.
             let _ = session.shutdown();
         }
-        // Destroy the HUD sibling before the D3D12 child restores parent styles.
-        self.hud_overlay = None;
         self.child = None;
         self.parent_hwnd = None;
         self.last_bounds = None;
-        self.last_hud_bounds = None;
-        self.last_hud_text = None;
-        self.last_hud_refresh = None;
-        self.hud_error = None;
         self.ready = false;
         self.start_requested = false;
     }
@@ -1021,9 +1035,7 @@ impl SegaApp {
                         menu_ui.vertical(|menu_ui| {
                             menu_ui.horizontal(|menu_ui| {
                                 menu_ui.strong(menu.title());
-                                if small_icon_button(menu_ui, IconKind::Close, "Fechar menu", true)
-                                    .clicked()
-                                {
+                                if menu_ui.small_button("×").clicked() {
                                     record_ui_diagnostic("menu.popup.closed", menu.title());
                                     self.active_menu = None;
                                 }
@@ -1113,7 +1125,7 @@ impl SegaApp {
         let show_status = self.footer_mode.is_visible();
         let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
         if show_status {
-            render_footer(ui, &self.native_viewport, &self.rom_path);
+            render_footer(ui, &self.native_viewport, &self.rom_path, self.fps_overlay_enabled.then_some(self.fps_counter.fps));
         }
         viewport_rect
     }
@@ -1209,6 +1221,9 @@ impl SegaApp {
                 {
                     worker.set_diagnostics_enabled(true);
                 }
+                self.fps_counter.reset(0, Instant::now());
+                self.fps_shared_value
+                    .store(0.0_f32.to_bits(), Ordering::Relaxed);
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
@@ -1525,104 +1540,21 @@ impl SegaApp {
         }
     }
 
-    fn update_hud_overlay(&mut self, context: &egui::Context, viewport_rect: egui::Rect) {
+    /// Update the presented-frame counter used by the bottom status footer.
+    fn update_fps_counter(&mut self) {
         if !self.fps_overlay_enabled || !self.native_viewport.video_attached {
-            if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
-                overlay.set_visible(false);
-            }
-            self.native_viewport.last_hud_refresh = None;
+            self.fps_overlay_was_active = false;
             return;
         }
-
-        if self.native_viewport.hud_error.is_some() {
-            return;
-        }
-
-        if self.native_viewport.hud_overlay.is_none() {
-            if let Some(parent_hwnd) = self.native_viewport.parent_hwnd {
-                match D3d12HudOverlay::create(parent_hwnd) {
-                    Ok(overlay) => {
-                        self.native_viewport.hud_overlay = Some(overlay);
-                        record_ui_diagnostic("native.hud.created", "child HWND");
-                    }
-                    Err(error) => {
-                        let message = format!("Falha ao criar HUD nativo: {error}");
-                        record_ui_diagnostic("native.hud.create_error", &message);
-                        self.native_viewport.hud_error = Some(message);
-                        return;
-                    }
-                }
-            } else {
-                return;
-            }
-        }
-
-        let scale = context.pixels_per_point();
-        let overlay_size = self.fps_overlay_size.dimensions();
-        let position = fps_overlay_position(viewport_rect, overlay_size, self.fps_overlay_position);
-        let bounds = (
-            to_win32_pixel(position.x * scale),
-            to_win32_pixel(position.y * scale),
-            to_win32_pixel(overlay_size.x * scale),
-            to_win32_pixel(overlay_size.y * scale),
-        );
-        let font_size_pixels =
-            to_win32_pixel(self.fps_overlay_size.font_size() * scale).clamp(8, 48);
-
-        if let Some(overlay) = self.native_viewport.hud_overlay.as_mut()
-            && let Err(error) = overlay.set_font_size_pixels(font_size_pixels)
-        {
-            overlay.set_visible(false);
-            let message = format!("Falha ao dimensionar fonte do HUD: {error}");
-            record_ui_diagnostic("native.hud.font_error", &message);
-            self.native_viewport.hud_error = Some(message);
-            return;
-        }
-
-        if self.native_viewport.last_hud_bounds != Some(bounds) {
-            if let Some(overlay) = self.native_viewport.hud_overlay.as_mut()
-                && let Err(error) = overlay.set_bounds(bounds.0, bounds.1, bounds.2, bounds.3)
-            {
-                overlay.set_visible(false);
-                let message = format!("Falha ao posicionar HUD nativo: {error}");
-                record_ui_diagnostic("native.hud.bounds_error", &message);
-                self.native_viewport.hud_error = Some(message);
-                return;
-            }
-            self.native_viewport.last_hud_bounds = Some(bounds);
-        }
-
         let now = Instant::now();
-        let refresh_due = self
-            .native_viewport
-            .last_hud_refresh
-            .is_none_or(|last| now.saturating_duration_since(last) >= SMS_HUD_REFRESH_INTERVAL);
-        if refresh_due {
-            let metrics = self
-                .native_viewport
-                .worker
-                .as_ref()
-                .map(SmsTemporalWorker::performance_metrics);
-            let text = format_sms_hud_text(metrics);
-            if self.native_viewport.last_hud_text.as_deref() != Some(&text) {
-                if let Some(overlay) = self.native_viewport.hud_overlay.as_mut()
-                    && let Err(error) = overlay.set_text(&text)
-                {
-                    overlay.set_visible(false);
-                    let message = format!("Falha ao atualizar HUD nativo: {error}");
-                    record_ui_diagnostic("native.hud.text_error", &message);
-                    self.native_viewport.hud_error = Some(message);
-                    return;
-                }
-                self.native_viewport.last_hud_text = Some(text);
-            }
-            self.native_viewport.last_hud_refresh = Some(now);
+        let presented_sequence = self.native_viewport.session.as_ref()
+            .map_or(0, D3d12MailboxSession::last_presented_sequence);
+        if !self.fps_overlay_was_active {
+            self.fps_counter.reset(presented_sequence, now);
+            self.fps_overlay_was_active = true;
+        } else {
+            self.fps_counter.update(presented_sequence, now);
         }
-
-        if let Some(overlay) = self.native_viewport.hud_overlay.as_mut() {
-            overlay.set_visible(true);
-        }
-        context.request_repaint_after(SMS_HUD_REFRESH_INTERVAL);
     }
 
     fn update_native_viewport(
@@ -1645,7 +1577,6 @@ impl SegaApp {
         self.poll_native_startup(context);
         self.connect_worker_video(context);
         self.monitor_native_state(context);
-        self.update_hud_overlay(context, viewport_rect);
     }
 
     fn ensure_native_child(&mut self, parent_hwnd: usize) -> bool {
@@ -1876,6 +1807,10 @@ impl eframe::App for SegaApp {
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
         self.render_debugger_window(&context);
+                self.update_fps_counter();
+        if self.fps_overlay_enabled && self.native_viewport.video_attached {
+            context.request_repaint_after(FPS_SAMPLE_INTERVAL);
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -2752,41 +2687,8 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 
 /// Render less frequently used machine and input options.
 fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
-    ui.strong("HUD de telemetria SMS");
-    ui.checkbox(state.fps_overlay_enabled, "Exibir HUD de telemetria");
-    ui.add_enabled_ui(*state.fps_overlay_enabled, |ui| {
-        egui::ComboBox::from_id_salt("fps_overlay_size")
-            .selected_text(state.fps_overlay_size.label())
-            .show_ui(ui, |ui| {
-                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
-                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Medium, "Médio");
-                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
-            });
-        egui::ComboBox::from_id_salt("fps_overlay_position")
-            .selected_text(state.fps_overlay_position.label())
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    state.fps_overlay_position,
-                    FpsOverlayPosition::TopLeft,
-                    "Superior esquerdo",
-                );
-                ui.selectable_value(
-                    state.fps_overlay_position,
-                    FpsOverlayPosition::TopRight,
-                    "Superior direito",
-                );
-                ui.selectable_value(
-                    state.fps_overlay_position,
-                    FpsOverlayPosition::BottomLeft,
-                    "Inferior esquerdo",
-                );
-                ui.selectable_value(
-                    state.fps_overlay_position,
-                    FpsOverlayPosition::BottomRight,
-                    "Inferior direito",
-                );
-            });
-    });
+    ui.strong("FPS no rodapé");
+    ui.checkbox(state.fps_overlay_enabled, "Exibir FPS na barra inferior");
     ui.separator();
     let mut show_status = state.footer_mode.is_visible();
     if ui
@@ -2812,41 +2714,34 @@ fn render_machine_controls(
     command: &mut Option<UiCommand>,
 ) {
     let worker = viewport.worker.as_ref();
-    add_machine_icon_button(
+    add_machine_button(
         ui,
-        IconKind::Play,
+        "▶",
         "Iniciar",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::Start,
         command,
     );
-    add_machine_icon_button(
+    add_machine_button(
         ui,
-        IconKind::Pause,
+        "Ⅱ",
         "Pausar",
         worker.is_some_and(SmsTemporalWorker::is_running),
         UiCommand::Pause,
         command,
     );
-    add_machine_icon_button(
+    add_machine_button(ui, "■", "Parar", worker.is_some(), UiCommand::Stop, command);
+    add_machine_button(
         ui,
-        IconKind::Stop,
-        "Parar",
-        worker.is_some(),
-        UiCommand::Stop,
-        command,
-    );
-    add_machine_icon_button(
-        ui,
-        IconKind::Reset,
+        "↻",
         "Reset",
         worker.is_some(),
         UiCommand::Reset,
         command,
     );
-    add_machine_icon_button(
+    add_machine_button(
         ui,
-        IconKind::Step,
+        "⏭",
         "Avançar um quadro",
         worker.is_some_and(|worker| !worker.is_running()),
         UiCommand::StepFrame,
@@ -2856,31 +2751,19 @@ fn render_machine_controls(
 
 fn add_machine_button(
     ui: &mut egui::Ui,
-    label: &str,
+    icon: &str,
     description: &str,
     enabled: bool,
     value: UiCommand,
     command: &mut Option<UiCommand>,
 ) {
-    let button = egui::Button::new(label).min_size(egui::vec2(38.0, 30.0));
+    let button =
+        egui::Button::new(egui::RichText::new(icon).size(18.0)).min_size(egui::vec2(38.0, 30.0));
     if ui
         .add_enabled(enabled, button)
         .on_hover_text(description)
         .clicked()
     {
-        *command = Some(value);
-    }
-}
-
-fn add_machine_icon_button(
-    ui: &mut egui::Ui,
-    icon: IconKind,
-    description: &str,
-    enabled: bool,
-    value: UiCommand,
-    command: &mut Option<UiCommand>,
-) {
-    if icon_button(ui, icon, description, enabled).clicked() {
         *command = Some(value);
     }
 }
@@ -3148,10 +3031,19 @@ fn fit_viewport_size(available: egui::Vec2, aspect_ratio: f32) -> egui::Vec2 {
     egui::vec2(width, height)
 }
 
-fn render_footer(ui: &mut egui::Ui, viewport: &NativeViewportState, rom_path: &str) {
+fn render_footer(
+    ui: &mut egui::Ui,
+    viewport: &NativeViewportState,
+    rom_path: &str,
+    fps: Option<f32>,
+) {
     ui.horizontal(|ui| {
         ui.small(viewport.status());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if let Some(fps) = fps {
+                ui.strong(format!("{fps:.0} FPS"));
+                ui.separator();
+            }
             let rom_name = Path::new(rom_path)
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -3211,11 +3103,12 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FpsOverlayPosition, FpsOverlaySize, SegaApp};
+    use super::{FpsCounter, FpsOverlayPosition, FpsOverlaySize, SegaApp};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn fullscreen_menu_is_hidden_until_pointer_reaches_top_edge() {
@@ -3303,39 +3196,44 @@ mod tests {
     }
 
     #[test]
-    fn sms_hud_formats_worker_metrics_without_a_fixed_refresh_rate() {
-        let text = super::format_sms_hud_text(Some(super::SmsPerformanceMetrics {
-            emulation_fps: 49.8,
-            frame_time_ms: Some(20.1),
-            input_to_frame_ms: Some(7.5),
-            completed_frames: 250,
-        }));
-
-        assert!(text.contains("49.8 FPS"));
-        assert!(text.contains("Frame interval 20.10 ms"));
-        assert!(text.contains("Input -> emulated frame 7.5 ms"));
-        assert!(!text.contains("60 FPS"));
+    fn fps_counter_ignores_short_sampling_windows() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(10, now);
+        assert!(!counter.update(20, now + Duration::from_millis(250)));
+        assert_eq!(counter.fps, 0.0);
     }
 
     #[test]
-    fn sms_hud_shows_unavailable_values_before_the_first_completed_frame() {
-        let text = super::format_sms_hud_text(Some(super::SmsPerformanceMetrics::default()));
+    fn fps_counter_uses_presented_frame_delta() {
+        let now = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, now);
+        assert!(counter.update(160, now + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
+    }
 
-        assert!(text.contains("0.0 FPS"));
-        assert!(text.contains("Frame interval --"));
-        assert!(text.contains("Input -> emulated frame --"));
+    #[test]
+    fn fps_counter_restarts_from_the_presented_sequence_when_overlay_is_reenabled() {
+        let hidden_since = Instant::now();
+        let mut counter = FpsCounter::default();
+        counter.reset(100, hidden_since);
+
+        let reenabled_at = hidden_since + Duration::from_secs(30);
+        counter.reset(1_900, reenabled_at);
+        assert!(counter.update(1_960, reenabled_at + Duration::from_secs(1)));
+        assert!((counter.fps - 60.0).abs() < 0.01);
     }
 
     #[test]
     fn fps_overlay_sizes_are_monotonic() {
         assert!(FpsOverlaySize::Small.dimensions().x < FpsOverlaySize::Medium.dimensions().x);
         assert!(FpsOverlaySize::Medium.dimensions().x < FpsOverlaySize::Large.dimensions().x);
-        assert!(FpsOverlaySize::Small.font_size() < FpsOverlaySize::Medium.font_size());
-        assert!(FpsOverlaySize::Medium.font_size() < FpsOverlaySize::Large.font_size());
     }
 
     #[test]
     fn fps_overlay_positions_stay_inside_each_viewport_corner() {
+        let root = egui::pos2(100.0, 50.0);
         let viewport = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
         let size = FpsOverlaySize::Medium.dimensions();
         for anchor in [
@@ -3344,11 +3242,11 @@ mod tests {
             FpsOverlayPosition::BottomLeft,
             FpsOverlayPosition::BottomRight,
         ] {
-            let point = super::fps_overlay_position(viewport, size, anchor);
-            assert!(point.x >= viewport.left() + 12.0);
-            assert!(point.y >= viewport.top() + 12.0);
-            assert!(point.x + size.x <= viewport.right() - 12.0);
-            assert!(point.y + size.y <= viewport.bottom() - 12.0);
+            let point = super::fps_overlay_position(root, viewport, size, anchor);
+            assert!(point.x >= root.x + viewport.left() + 12.0);
+            assert!(point.y >= root.y + viewport.top() + 12.0);
+            assert!(point.x + size.x <= root.x + viewport.right() - 12.0);
+            assert!(point.y + size.y <= root.y + viewport.bottom() - 12.0);
         }
     }
 
