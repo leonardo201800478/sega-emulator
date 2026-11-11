@@ -15,8 +15,8 @@ mod windows_host {
 
     use sega_sms_runtime::{SmsTemporalWorker, SpriteLimitMode};
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
-    use zip::ZipArchive;
     use std::os::windows::process::CommandExt;
+    use zip::ZipArchive;
 
     use slint::{
         GraphicsAPI, RenderingState, Timer, TimerMode,
@@ -733,8 +733,8 @@ mod windows_host {
     /// ZIP data is decompressed in memory only. No archive path is ever written to disk,
     /// and entry count, archive size and uncompressed ROM size are bounded.
     fn read_rom_image(path: &PathBuf) -> Result<Vec<u8>, String> {
-        let bytes = fs::read(path)
-            .map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        let bytes =
+            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
         let is_zip = path
             .extension()
             .and_then(|extension| extension.to_str())
@@ -742,9 +742,7 @@ mod windows_host {
         if is_zip {
             extract_rom_from_zip(&bytes)
         } else if bytes.len() > MAX_ROM_BYTES as usize {
-            Err(format!(
-                "ROM excede o limite de {MAX_ROM_BYTES} bytes"
-            ))
+            Err(format!("ROM excede o limite de {MAX_ROM_BYTES} bytes"))
         } else {
             Ok(bytes)
         }
@@ -779,8 +777,7 @@ mod windows_host {
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| {
-                    extension.eq_ignore_ascii_case("sms")
-                        || extension.eq_ignore_ascii_case("bin")
+                    extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin")
                 });
             if is_rom {
                 candidates.push((index, name, entry.size()));
@@ -792,8 +789,7 @@ mod windows_host {
         }
         if candidates.len() != 1 {
             return Err(
-                "ZIP contém múltiplas ROMs; mantenha somente uma entrada .sms ou .bin."
-                    .to_owned(),
+                "ZIP contém múltiplas ROMs; mantenha somente uma entrada .sms ou .bin.".to_owned(),
             );
         }
 
@@ -1012,7 +1008,9 @@ mod windows_host {
             let path = PathBuf::from(path.as_str());
             if path.as_os_str().is_empty() {
                 if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status("Informe o caminho completo da ROM (.sms, .bin ou .zip).".into());
+                    app.set_rom_status(
+                        "Informe o caminho completo da ROM (.sms, .bin ou .zip).".into(),
+                    );
                 }
                 return;
             }
@@ -1303,8 +1301,8 @@ mod windows_host {
             use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
             let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-            let options = SimpleFileOptions::default()
-                .compression_method(CompressionMethod::Stored);
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
             for (name, contents) in entries {
                 writer.start_file(*name, options).unwrap();
                 writer.write_all(contents).unwrap();
@@ -1323,10 +1321,7 @@ mod windows_host {
             let no_rom = zip_archive(&[("readme.txt", b"not a rom")]);
             assert!(extract_rom_from_zip(&no_rom).is_err());
 
-            let multiple = zip_archive(&[
-                ("sonic.sms", b"first"),
-                ("alex-kidd.bin", b"second"),
-            ]);
+            let multiple = zip_archive(&[("sonic.sms", b"first"), ("alex-kidd.bin", b"second")]);
             assert!(extract_rom_from_zip(&multiple).is_err());
         }
 
