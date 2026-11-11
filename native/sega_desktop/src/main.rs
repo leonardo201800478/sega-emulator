@@ -33,9 +33,29 @@ mod windows_host {
     const MAX_ZIP_ENTRIES: usize = 4_096;
 
     slint::slint! {
-        import { Button, LineEdit } from "std-widgets.slint";
+        import { Button, LineEdit, ScrollView } from "std-widgets.slint";
         component CompactButton inherits Button {
             height: 28px;
+        }
+        component RecentRomEntry inherits Rectangle {
+            in property <string> rom-path;
+            callback activated();
+            width: 100%;
+            height: path-label.preferred-height + 12px;
+            background: #263541;
+            border-radius: 3px;
+            Text {
+                x: 6px; y: 6px;
+                width: parent.width - 12px;
+                text: root.rom-path;
+                color: #f2f5f7;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+            TouchArea {
+                width: 100%; height: 100%;
+                clicked => { root.activated(); }
+            }
         }
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
@@ -151,27 +171,32 @@ mod windows_host {
         }
         if root.active-menu != "none": Rectangle {
             x: min(max(root.active-menu == "system" ? 12px : root.active-menu == "file" ? 81px : root.active-menu == "video" ? 146px : root.active-menu == "audio" ? 207px : root.active-menu == "controls" ? 268px : root.active-menu == "options" ? 347px : 416px, 8px), parent.width - self.width - 8px);
-            y: 88px; width: min(parent.width - 16px, 420px);
-            height: min(parent.height - 104px, root.active-menu == "file" ? 360px : root.active-menu == "controls" ? 280px : root.active-menu == "video" ? 190px : root.active-menu == "options" ? 220px : root.active-menu == "system" ? 220px : root.active-menu == "debug" ? 190px : 160px);
+            y: 88px;
+            width: min(parent.width - 16px, root.active-menu == "file" ? 560px : 480px);
+            height: min(parent.height - 104px, root.active-menu == "file" ? 480px : root.active-menu == "controls" ? 300px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "system" ? 250px : root.active-menu == "debug" ? 210px : 180px);
             z: 100;
             background: #1b2834; border-radius: 5px; border-width: 1px;
-            border-color: #405365; min-height: 120px; max-height: 360px; max-width: 420px;
-            clip: true;
-            VerticalLayout {
-                alignment: start;
-                width: 100%;
-                padding: 8px; spacing: 4px;
+            border-color: #405365; min-height: 120px; max-height: 480px; max-width: 560px;
+            ScrollView {
+                width: 100%; height: 100%;
+                content-width: self.width;
+                VerticalLayout {
+                    alignment: start;
+                    width: 100%;
+                    padding: 8px; spacing: 6px;
                         if root.active-menu == "system": VerticalLayout {
                             Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
                             Text { font-size: 12px; text: "Região / padrão de vídeo"; color: #b9c5ce; }
-                            HorizontalLayout {
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
                                 CompactButton { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; root.preferences-changed(); } }
                                 CompactButton { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; root.preferences-changed(); } }
                                 CompactButton { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; root.preferences-changed(); } }
                                 CompactButton { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; root.preferences-changed(); } }
                             }
                             Text { font-size: 12px; text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
-                            HorizontalLayout {
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
                                 CompactButton { text: "SG-1000"; enabled: false; }
                                 CompactButton { text: "Game Gear"; enabled: false; }
                                 CompactButton { text: "Mega Drive / Genesis"; enabled: false; }
@@ -189,15 +214,15 @@ mod windows_host {
                             }
                             Text { font-size: 12px; text: "Recentes"; color: #b9c5ce; }
                             if root.recent-roms.length == 0: Text { font-size: 12px; text: "Nenhuma ROM recente."; color: #9baab6; }
-                            for rom in root.recent-roms: CompactButton {
-                                text: rom;
-                                width: 100%;
-                                clicked => { root.load-rom-requested(rom); root.active-menu = "none"; }
+                            for rom in root.recent-roms: RecentRomEntry {
+                                rom-path: rom;
+                                activated => { root.load-rom-requested(rom); root.active-menu = "none"; }
                             }
                         }
                         if root.active-menu == "video": VerticalLayout {
                             Text { font-size: 12px; text: "Proporção da imagem"; color: #b9c5ce; }
-                            HorizontalLayout {
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
                                 CompactButton { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; root.preferences-changed(); } }
                                 CompactButton { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
                                 CompactButton { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
@@ -209,7 +234,8 @@ mod windows_host {
                         if root.active-menu == "audio": VerticalLayout {
                             Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
                             CompactButton { text: "Áudio ativo"; enabled: false; }
-                            HorizontalLayout {
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
                                 CompactButton { text: "WASAPI Shared"; enabled: false; }
                                 CompactButton { text: "XAudio2"; enabled: false; }
                             }
@@ -231,7 +257,8 @@ mod windows_host {
                             Text { font-size: 12px; text: "Overlay de FPS"; color: #f2f5f7; }
                             CompactButton { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; root.preferences-changed(); } }
                             CompactButton { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; root.preferences-changed(); } }
-                            HorizontalLayout {
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
                                 CompactButton { text: root.fps-size == "small" ? "✓ Pequeno" : "Pequeno"; clicked => { root.fps-size = "small"; root.fps-font-size = 13px; root.preferences-changed(); } }
                                 CompactButton { text: root.fps-size == "medium" ? "✓ Médio" : "Médio"; clicked => { root.fps-size = "medium"; root.fps-font-size = 18px; root.preferences-changed(); } }
                                 CompactButton { text: root.fps-size == "large" ? "✓ Grande" : "Grande"; clicked => { root.fps-size = "large"; root.fps-font-size = 24px; root.preferences-changed(); } }
@@ -248,7 +275,7 @@ mod windows_host {
                         }
                     }
                 }
-
+                }
             }
         }
     }
