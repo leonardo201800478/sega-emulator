@@ -1451,3 +1451,10 @@ mod windows_host {
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    windows_host::run()
+}
+
+#[cfg(not(windows))]
+fn main() {
+    println!("sega-desktop R2 currently targets Windows x64 with Vulkan.");
+}
