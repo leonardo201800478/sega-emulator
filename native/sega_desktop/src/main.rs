@@ -698,7 +698,7 @@ mod windows_host {
         app.set_show_status_footer(preferences.show_status_footer);
         app.set_fps_size(preferences.fps_size.clone().into());
         app.set_fps_font_size(match preferences.fps_size.as_str() { "small" => 13, "large" => 24, _ => 18 });
-        app.set_recent_roms(recent_roms_model(&recent_roms.borrow()).into());
+        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(recent_roms_model(&recent_roms.borrow()))));
         match preferences.aspect.as_str() {
             "1:1" => { app.set_selected_aspect("1:1".into()); app.set_video_width(576.0.into()); app.set_video_height(576.0.into()); }
             "16:9" => { app.set_selected_aspect("16:9".into()); app.set_video_width(768.0.into()); app.set_video_height(432.0.into()); }
@@ -784,7 +784,7 @@ mod windows_host {
                     *open_recent.borrow_mut() = Some(path.clone());
                     record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
-                        app.set_recent_roms(recent_roms_model(&open_recent_list.borrow()).into());
+                        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(recent_roms_model(&open_recent_list.borrow()))));
                         app.set_has_rom(true);
                         app.set_rom_status(
                             format!("ROM: {} | região: {region}", path.display()).into(),
