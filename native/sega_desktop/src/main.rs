@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 #[cfg(windows)]
 mod windows_poc {
@@ -108,7 +108,7 @@ mod windows_poc {
             for x in 0..TEXTURE_WIDTH {
                 let bar = (x * 8 / TEXTURE_WIDTH) as u8;
                 let gradient = ((y + (frame as u32 & 0xff)) & 0xff) as u8;
-                let mut rgba = match bar {
+                let mut rgba: [u8; 4] = match bar {
                     0 => [230, 55, 65, 255],
                     1 => [235, 145, 45, 255],
                     2 => [230, 215, 65, 255],
