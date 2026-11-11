@@ -226,7 +226,7 @@ jobs:
     name: Rust workspace regression
     needs: [changes]
     if: |
-      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && ((github.event.label.name == 'refresh-cargo-lockfiles' || github.event.label.name == 'bootstrap-sms-debugger-lockfile'))) &&
+      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && ((github.event.label.name == 'refresh-cargo-lockfiles'))) &&
       ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
        (github.event_name != 'workflow_dispatch' &&
         (needs.changes.outputs.other_rust == 'true' ||
@@ -562,8 +562,7 @@ jobs:
     name: Windows PowerShell tooling syntax
     needs: [changes]
     if: |
-      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile') &&
-      ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true'))
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true')
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -693,52 +692,6 @@ jobs:
           retention-days: 1
 
 
-  bootstrap-sms-debugger-lockfile:
-    name: Bootstrap SMS debugger lockfile on isolated branch
-    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout exact PR head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: true
-
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-
-      - name: Generate standalone SMS debugger lockfile
-        run: cargo generate-lockfile --manifest-path native/sms_debugger/Cargo.toml
-
-      - name: Verify lockfile resolution
-        run: cargo metadata --locked --no-deps --format-version 1 --manifest-path native/sms_debugger/Cargo.toml
-
-      - name: Commit only the lockfile to a dedicated branch
-        shell: bash
-        env:
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          git add native/sms_debugger/Cargo.lock
-          if git diff --cached --quiet; then
-            echo "No lockfile change was generated."
-            exit 1
-          fi
-          changed="$(git diff --cached --name-only)"
-          if [ "$changed" != "native/sms_debugger/Cargo.lock" ]; then
-            echo "Unexpected staged paths: $changed"
-            exit 1
-          fi
-          branch="ci/sms-debugger-lockfile-${RUN_ID}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch --create "$branch"
-          git commit -m "build: add standalone SMS debugger lockfile"
-          git push origin "HEAD:$branch"
-
 
   quality-gate:
     name: Rust quality and unit regression
@@ -758,7 +711,6 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
-      - bootstrap-sms-debugger-lockfile
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
@@ -780,8 +732,6 @@ jobs:
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WORKFLOW_LINT: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' }}
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
-          EXPECT_BOOTSTRAP: ${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile' }}
-          BOOTSTRAP: ${{ needs.bootstrap-sms-debugger-lockfile.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
           EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true') }}
@@ -825,7 +775,6 @@ jobs:
           check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Workflow lint" "$EXPECT_WORKFLOW_LINT" "$WORKFLOW_LINT"
-          check_job "SMS debugger lockfile bootstrap" "$EXPECT_BOOTSTRAP" "$BOOTSTRAP"
           check_job "Legacy Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
           check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
           check_job "Legacy Windows WASAPI/XAudio2" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
