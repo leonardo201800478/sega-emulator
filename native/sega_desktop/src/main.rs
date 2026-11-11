@@ -936,15 +936,12 @@ mod windows_host {
                     } else {
                         SpriteLimitMode::UnlockedCompatibility
                     };
-                    let start_result = open_worker
-                        .borrow()
-                        .as_ref()
-                        .map(|worker| {
-                            worker
-                                .set_sprite_limit_mode(sprite_mode)
-                                .and_then(|()| worker.reset())
-                                .and_then(|()| worker.start())
-                        });
+                    let start_result = open_worker.borrow().as_ref().map(|worker| {
+                        worker
+                            .set_sprite_limit_mode(sprite_mode)
+                            .and_then(|()| worker.reset())
+                            .and_then(|()| worker.start())
+                    });
                     *open_recent.borrow_mut() = Some(path.clone());
                     record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
@@ -1127,7 +1124,9 @@ mod windows_host {
                 eprintln!("R2_VIDEO action=sprite_limit_toggle error={error}");
                 if let Some(app) = sprite_app.upgrade() {
                     app.set_sprite_limit_enabled(!enabled);
-                    app.set_rom_status(format!("Falha ao alterar limite de sprites: {error}").into());
+                    app.set_rom_status(
+                        format!("Falha ao alterar limite de sprites: {error}").into(),
+                    );
                 }
             }
         });
