@@ -1304,7 +1304,7 @@ fn execute_frame(
             .map_or(0, |(start, end)| end.saturating_sub(start));
         telemetry.record_frame_pacing_sample(FramePacingSample {
             frame_interval_ns: frame_interval_ns.unwrap_or_default(),
-            machine_ticks_per_frame,
+            machine_ticks_per_frame: u64::try_from(machine_ticks_per_frame).unwrap_or(u64::MAX),
             step_frame_ns: step_frame_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
             video_publish_ns: video_publish_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
             audio_submit_ns: audio_submit_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
