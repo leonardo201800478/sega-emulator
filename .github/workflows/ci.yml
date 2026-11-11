@@ -190,7 +190,7 @@ jobs:
     name: Rust workspace regression
     needs: [changes]
     if: |
-      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') &&
+      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles' || github.event.label.name == 'refresh-r1-cargo-lockfile')) &&
       ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
        (github.event_name != 'workflow_dispatch' &&
         (needs.changes.outputs.other_rust == 'true' ||
@@ -368,7 +368,7 @@ jobs:
   docs-format:
     name: Documentation patch hygiene
     needs: [changes]
-    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' && !(github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' && !(github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles' || github.event.label.name == 'refresh-r1-cargo-lockfile'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -435,7 +435,7 @@ jobs:
   windows-slint-wgpu:
     name: Windows x64 Slint WGPU 30 Vulkan POC
     needs: [changes]
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') && ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true')) }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles' || github.event.label.name == 'refresh-r1-cargo-lockfile')) && ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true')) }}
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -623,6 +623,40 @@ jobs:
           path: Cargo.lock
           if-no-files-found: error
           retention-days: 1
+
+  refresh-r1-lockfile:
+    name: Refresh root Cargo.lock on the isolated R1 branch
+    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-r1-cargo-lockfile' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'feat/r1-')
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - name: Resolve root workspace dependencies
+        run: cargo update --workspace
+      - name: Verify root lockfile metadata
+        run: cargo metadata --locked --format-version 1 --no-deps
+      - name: Commit updated root lockfile to this same-repository R1 branch
+        shell: bash
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Cargo.lock is already current."
+            exit 0
+          fi
+          git commit -m "chore: refresh root Cargo.lock for Slint WGPU R1"
+          git push origin "HEAD:${PR_BRANCH}"
 
   quality-gate:
     name: Rust quality and unit regression
