@@ -5,11 +5,11 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 ## Menu migration
 
 - Sistema: SMS region selection (USA, Brasil, Europa, Japão); other Sega systems remain visible but disabled until their runtimes are integrated.
-- Arquivo: load ROM by absolute path (.sms / .bin), reopen the most recent ROM in this session, close ROM and exit.
-- Vídeo: original 4:3, 1:1 and 16:9 presentation modes. The source frame remains 256×192.
+- Arquivo: load raw `.sms` / `.bin` ROMs or a `.zip` containing exactly one supported ROM entry; reopen recent ROMs, close ROM and exit.
+- Vídeo: 4:3, 1:1 and 16:9 presentation modes preserve the selected ratio while the window is resized; unused viewport space is letterboxed. The source frame remains 256×192. The optional sprite-limit compatibility mode is persisted separately from hardware state.
 - Áudio: menu retained; physical output, backend selection and volume remain disabled until R3 (CPAL 0.18.2).
 - Controles: keyboard/gamepad entries retained; physical input and remapping remain disabled until R4 (SDL3).
-- Opções: status-footer visibility. FPS size/position remain pending; fullscreen and FPS visibility are implemented.
+- Opções: status-footer visibility. FPS size/position remain pending. Fullscreen is available from the UI and F11.
 - DEBUG: request an immutable Z80/runtime snapshot and enable/disable bounded scheduler/bus trace capture. Full debugger viewport remains a follow-up.
 
 ## Runtime contract
@@ -31,7 +31,7 @@ From the repository root on Windows x64:
 cargo run --release --locked --manifest-path native/sega_desktop/Cargo.toml -- [path\to\game.sms] [usa|brazil|europe|japan]
 ```
 
-The ROM argument is optional. Without it, enter the absolute path in Arquivo > Carregar ROM. The selected region is applied when a ROM is loaded. The File > Browse command opens the native Windows file-selection dialog and filters `.sms` / `.bin` ROMs. The path field remains available for manual entry. Recent ROMs are persisted in the desktop settings directory.
+The ROM argument is optional. Without it, use Arquivo > Procurar or enter an absolute path manually. The native Windows file-selection dialog filters `.sms`, `.bin` and `.zip`. A ZIP must contain exactly one non-directory `.sms` / `.bin` entry; archives are read in memory, with limits on archive size, entry count and decompressed ROM size. No archive-controlled path is extracted to disk. The selected region and sprite compatibility preference are applied to each newly loaded machine. Recent ROMs are persisted in the desktop settings directory. Clicking the video viewport resumes a paused machine; F11 toggles fullscreen.
 
 ## Validation
 
@@ -42,7 +42,7 @@ cargo test --release --locked --all-targets --manifest-path native/sega_desktop/
 cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
 ```
 
-A successful build does not prove physical Vulkan presentation. Run on Windows x64 and verify real VDP output, all enabled menu commands, ROM replacement/close, pause/resume/reset/step-frame, aspect-ratio modes, trace capture, and clean shutdown.
+A successful build does not prove physical Vulkan presentation. Run on Windows x64 and verify real VDP output, all enabled menu commands, ROM replacement/close, pause/resume/reset/step-frame, aspect-ratio modes during continuous resize, video-click resume from pause, F11 fullscreen toggle, ZIP ROM selection and rejection cases, sprite-limit toggling, trace capture, and clean shutdown.
 
 
 ## R2.3 — persistent frontend preferences
