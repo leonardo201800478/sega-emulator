@@ -408,6 +408,7 @@ pub struct SmsDebugSnapshot {
     pub vdp_status: u8,
     pub vdp_scanline: u16,
     pub vdp_cycles_into_line: u16,
+    pub sprite_limit_mode: SpriteLimitMode,
     pub mapper_banks: [u8; 3],
     pub mapper_control: u8,
     pub memory_control: u8,
@@ -1412,6 +1413,7 @@ fn handle_command(
                 vdp_status: machine.vdp().status(),
                 vdp_scanline: machine.vdp().scanline(),
                 vdp_cycles_into_line: machine.vdp().cycles_into_line(),
+                sprite_limit_mode: machine.vdp().sprite_limit_mode(),
                 mapper_banks: machine.selected_mapper_banks(),
                 mapper_control: machine.mapper_control(),
                 memory_control: machine.memory_control(),
@@ -1897,6 +1899,31 @@ mod tests {
         ]);
         rom[..program.len()].copy_from_slice(&program);
         rom
+    }
+
+    #[test]
+    fn sprite_limit_mode_changes_only_through_worker_command_queue() {
+        let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::HardwareLimit
+        );
+
+        worker
+            .set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)
+            .unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::UnlockedCompatibility
+        );
+
+        worker
+            .set_sprite_limit_mode(SpriteLimitMode::HardwareLimit)
+            .unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::HardwareLimit
+        );
     }
 
     #[test]
