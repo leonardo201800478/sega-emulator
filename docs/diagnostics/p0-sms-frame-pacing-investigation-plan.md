@@ -1,8 +1,11 @@
 # P0 — Plano de testes e investigação do frame pacing SMS
 
-**Issue:** #755 — investigação prioritária de frame pacing e gerenciamento temporal  
-**PR relacionada:** #759 — telemetria diagnóstica do worker SMS  
-**Prioridade:** P0  
+**Issue:** #755 — investigação prioritária de frame pacing e gerenciamento temporal
+
+**PR relacionada:** #759 — telemetria diagnóstica do worker SMS
+
+**Prioridade:** P0
+
 **Estado:** plano de investigação; nenhum resultado de execução é presumido.
 
 ## Objetivo
