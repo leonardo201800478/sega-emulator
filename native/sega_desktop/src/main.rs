@@ -847,6 +847,23 @@ mod windows_host {
             }
         });
 
+        let browse_app = app.as_weak();
+        app.on_browse_rom_requested(move || {
+            let selected = rfd::FileDialog::new()
+                .set_title("Selecionar ROM do Sega Master System")
+                .add_filter("ROM Sega 8-bit", &["sms", "bin"])
+                .pick_file();
+
+            if let Some(path) = selected {
+                if let Some(app) = browse_app.upgrade() {
+                    let selected_path = path.to_string_lossy().into_owned();
+                    app.set_rom_path_input(selected_path.clone().into());
+                    app.set_active_menu("none".into());
+                    app.invoke_load_rom_requested(selected_path.into());
+                }
+            }
+        });
+
         let close_app = app.as_weak();
         let close_worker = Rc::clone(&worker);
         app.on_close_rom_requested(move || {
