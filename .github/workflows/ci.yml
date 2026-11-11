@@ -190,10 +190,11 @@ jobs:
     name: Rust workspace regression
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.other_rust == 'true' ||
-        needs.changes.outputs.full == 'true'))
+      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') &&
+      ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+       (github.event_name != 'workflow_dispatch' &&
+        (needs.changes.outputs.other_rust == 'true' ||
+         needs.changes.outputs.full == 'true')))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -367,7 +368,7 @@ jobs:
   docs-format:
     name: Documentation patch hygiene
     needs: [changes]
-    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' && !(github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -434,7 +435,7 @@ jobs:
   windows-slint-wgpu:
     name: Windows x64 Slint WGPU 30 Vulkan POC
     needs: [changes]
-    if: (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true')
+    if: !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') && ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true'))
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
