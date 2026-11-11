@@ -2545,4 +2545,27 @@ mod tests {
         assert!(worker.video_output_error().is_some());
         assert_eq!(worker.runtime_error(), None);
     }
+
+    #[test]
+    fn frame_pacing_window_is_bounded_and_reports_rolling_percentiles() {
+        let mut window = FramePacingWindow::default();
+        for value in 1..=(FRAME_PACING_WINDOW_CAPACITY as u64 + 1) {
+            window.push(FramePacingSample {
+                frame_interval_ns: value,
+                machine_ticks_per_frame: value,
+                step_frame_ns: value * 10,
+                ..FramePacingSample::default()
+            });
+        }
+
+        let metrics = window.snapshot();
+        assert_eq!(metrics.sample_count, FRAME_PACING_WINDOW_CAPACITY as u64);
+        assert_eq!(metrics.total_samples, FRAME_PACING_WINDOW_CAPACITY as u64 + 1);
+        assert_eq!(metrics.frame_interval_p50_ns, 257);
+        assert_eq!(metrics.frame_interval_p95_ns, 488);
+        assert_eq!(metrics.frame_interval_p99_ns, 508);
+        assert_eq!(metrics.machine_ticks_per_frame_min, 2);
+        assert_eq!(metrics.machine_ticks_per_frame_max, 513);
+    }
+
 }
