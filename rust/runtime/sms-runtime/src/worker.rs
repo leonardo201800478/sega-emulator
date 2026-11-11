@@ -374,7 +374,6 @@ enum WorkerCommand {
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
-    #[cfg(any(windows, test))]
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
 }
@@ -695,7 +694,6 @@ impl SmsTemporalWorker {
         receive_worker_reply(reply_receiver, "closing audio output")
     }
 
-    #[cfg(any(windows, test))]
     fn set_video_mailbox(&self, mailbox: Option<FrameMailbox>) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
         enqueue_worker_command(
@@ -707,11 +705,10 @@ impl SmsTemporalWorker {
 
     /// Attach an externally owned presentation mailbox to the SMS worker.
     ///
-    /// The application may own the D3D12 session and HWND while the machine
-    /// worker publishes completed frames through a clone of its mailbox.
+    /// A host-owned presentation backend consumes completed frames through a
+    /// clone of this mailbox; graphics objects never cross into the machine worker.
     /// Attaching or detaching the mailbox is a coarse-grained worker command;
     /// it never advances MachineTime.
-    #[cfg(any(windows, test))]
     pub fn attach_video_mailbox(&self, mailbox: FrameMailbox) -> Result<(), String> {
         self.set_video_mailbox(Some(mailbox))
     }
@@ -720,7 +717,6 @@ impl SmsTemporalWorker {
     ///
     /// The caller remains responsible for shutting down the presentation
     /// session after this command has been acknowledged.
-    #[cfg(any(windows, test))]
     pub fn detach_video_mailbox(&self) -> Result<(), String> {
         self.set_video_mailbox(None)
     }
@@ -1528,8 +1524,7 @@ fn handle_command(
             telemetry.set_audio_metrics(AudioOutputMetrics::default());
             let _ = reply.send(());
         }
-        #[cfg(any(windows, test))]
-        WorkerCommand::SetVideoMailbox(mailbox, reply) => {
+            WorkerCommand::SetVideoMailbox(mailbox, reply) => {
             if let Some(attached_mailbox) = mailbox.as_ref() {
                 match attached_mailbox.last_sequence() {
                     Ok(Some(last_sequence)) => {
