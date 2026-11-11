@@ -1,54 +1,47 @@
-# Escopo do projeto — Rust-only
+# Escopo do projeto — Sega Emulator
 
-**Baseline documental:** main `3ad1781f84b7824b5aa889a583ae6d4545987ec1` (2026-11-07).  
-**Normas:** ADR 0010, ADR-0016 e [roadmap mestre](project-roadmap.md).
+**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).  
+**Arquitetura desktop alvo:** ADR 0011 — Slint + WGPU + CPAL.  
+**Runtime:** ADR 0010 e ADR-0016 permanecem vigentes.
 
 ## Objetivo
 
-Construir um emulador Sega modular, determinístico e temporalmente fiel, com backend e aplicação integralmente em Rust. O primeiro runtime de produto é o Master System temporal. A interface desktop é egui/eframe.
+Construir um emulador Sega multissistema em Rust, modular, determinístico e temporalmente fiel. A replataforma desktop substitui gradualmente GUI e adaptadores host, preservando runtime e componentes de hardware validados.
+
+## Arquitetura
+
+| Camada | Tecnologia/responsabilidade |
+|---|---|
+| Runtime | Rust: CPU, memória, barramentos, mappers, VDP, áudio, interrupções, Scheduler, timing e estados |
+| GUI alvo | Slint 1.18.x |
+| Renderização | WGPU 30.x; Vulkan preferencial no Windows x64 |
+| Saída física | CPAL 0.18.2 |
+| Input futuro | SDL3 após auditoria |
+| Baseline transitória | egui/eframe + D3D12 + WASAPI/XAudio2 até paridade e corte |
+
+Estrutura de referência: native/sega_desktop, native/video_output_wgpu e native/audio_output. A estrutura real do repositório prevalece.
 
 ## Escopo ativo
 
-- Z80 compartilhado em Rust, sem cópias por console.
-- SMS temporal usando MachineScheduler, barramento/memória/mapper SMS, VDP temporal e SN76489 temporal.
-- Worker SMS em `rust/runtime/sms-runtime`, com ownership exclusivo da máquina e comandos coarse-grained.
-- Hosts nativos Rust para vídeo D3D12, áudio WASAPI/XAudio2 e input.
-- Shell egui/eframe responsável pela apresentação e envio de comandos de sessão.
-- Testes Rust semânticos, temporais, diferenciais e de integração; testes físicos classificados separadamente.
-- Evidências vinculadas a SHA, ambiente, comando e escopo em `docs/evidence/`.
+- Preservar Z80 compartilhado, MachineScheduler, runtime SMS e SG-1000, VDPs, áudio, barramentos, memórias, mappers e testes.
+- Construir POC isolada Slint/WGPU/Vulkan.
+- Manter integração coarse-grained.
+- Transferir frames/áudio sem conceder à GUI propriedade sobre hardware.
+- Validar nova stack em Release e Windows x64.
+- Manter ADRs, roadmap, sprint e evidências sincronizados.
 
-## Fora do escopo nesta etapa
+## Fora do escopo da R1
 
-- SG-1000, Game Gear, Mega Drive, Sega CD e 32X como novos runtimes de produto executáveis antes da conclusão de P1.
-- Biblioteca visual completa de ROMs, scraper, catálogo online, frontend rico e painéis extensos de configuração.
-- Python, PySide6/Qt, PyO3, Maturin ou fallback para qualquer runtime legado.
-- JIT, frame skipping, hacks de timing e otimizações especulativas.
-- Simulação elétrica/transistores/pinos sem relação comprovada com comportamento observável.
+Não integrar SmsTemporalWorker, FrameMailbox ou ROM real. Não alterar CPU, VDP, PSG, barramento, Scheduler ou timing. Não implementar menus completos, HUD, debugger, biblioteca, CPAL, SDL3, HDR ou VRR. Não remover egui/eframe nem hosts antigos. Não ampliar a POC para antecipar fases.
 
-## Estado integrado
+## Trilha de replataforma
 
-- Shell nativo egui/eframe integrado na main.
-- Worker SMS temporal Rust disponível.
-- Z80 compartilhado, Scheduler e componentes de hardware reutilizados.
-- PR #615 integrou melhoria de filtragem de saída SN76489 e reset do ruído.
-- A campanha longa do Scheduler está documentada como PASS para os testes executados; não é prova de integração temporal sistêmica.
+- **R1:** janela Slint, WGPU 30, Vulkan explícito, device/queue compartilhados, textura externa animada e composição na mesma janela.
+- **R2:** frames SMS reais, preservando SmsTemporalWorker, FrameMailbox e Scheduler.
+- **R3:** CPAL 0.18.2, dispositivos, formatos, streams, reprodução e underruns.
+- **R4:** auditar/integrar SDL3 para teclado e gamepads.
+- **R5:** consolidar launcher, biblioteca, configurações, menus, HUD, logs e telemetria; remover baseline somente após paridade e validação.
 
-## Integração em andamento — não integrada
+Uma janela que abre não comprova device/queue compartilhados; compilação não comprova execução Vulkan; textura de teste não comprova integração SMS. UI, renderização e áudio físico não podem alterar clocks ou ordem causal do runtime.
 
-- PR #613: ligação do shell ao runtime SMS temporal, ROM e viewport D3D12.
-- PR #614: áudio WASAPI/XAudio2 e input teclado/SDL3; branch empilhada sobre #613.
-- PR #616: auditoria documental de boot/cartuchos.
-
-Consultar o [status atual](project-status-2026-11-07.md) antes de assumir que qualquer PR foi integrada.
-
-## Limites conhecidos
-
-A implementação temporal ainda é parcial. A campanha isolada do Scheduler não comprova VDP raster/fetch, WAIT real em todos os caminhos, Save States persistentes completos, compatibilidade ampla, saída física de áudio/vídeo ou gameplay. Essas lacunas devem permanecer explícitas até haver evidência própria.
-
-## Prioridades de implementação
-
-1. Integrar e validar a fatia SMS do shell/runtime/vídeo/áudio/input por PRs empilhadas, sem duplicar worker ou Scheduler.
-2. Executar gates Rust e validação física Windows no HEAD final.
-3. Validar ROM sintética/homebrew, lifecycle, determinismo e restauração de estado.
-4. Fechar auditoria semântica Z80 E7; E8 permanece bloqueada até o fechamento.
-5. Avançar para SG-1000 (P2) somente após P1.
+Não usar JIT, frame skipping, hacks temporais ou otimizações especulativas. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
