@@ -9,6 +9,8 @@ name = "sega_sms_runtime"
 path = "src/lib.rs"
 
 [dependencies]
+sega-observability.workspace = true
+sega-debugger-core.workspace = true
 sega-audio-runtime = { path = "../../../native/audio_runtime" }
 sega-sms-core = { path = "../../../native/sms_core" }
 sega-video-runtime = { path = "../../../native/video_runtime" }

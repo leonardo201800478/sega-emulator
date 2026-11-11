@@ -247,10 +247,23 @@ impl<T> MachineScheduler<T> {
         phase: u128,
     ) -> Result<(), SchedulerError> {
         if self.clocks.contains_key(&id) {
+            sega_observability::tracing::warn!(
+                target: "sega::scheduler",
+                clock_domain_id = id.0,
+                "duplicate clock domain registration rejected"
+            );
             return Err(SchedulerError::DuplicateClockDomain(id));
         }
         let domain = ClockDomain::with_phase(ratio, self.now, phase)?;
         self.clocks.insert(id, domain);
+        sega_observability::tracing::debug!(
+            target: "sega::scheduler",
+            clock_domain_id = id.0,
+            ratio = ?ratio,
+            phase,
+            now = ?self.now,
+            "clock domain registered"
+        );
         Ok(())
     }
 
@@ -418,11 +431,28 @@ impl<T> MachineScheduler<T> {
         payload: T,
     ) -> Result<u64, SchedulerError> {
         if timestamp < self.now {
+            sega_observability::tracing::warn!(
+                target: "sega::scheduler",
+                timestamp = ?timestamp,
+                now = ?self.now,
+                "event scheduling rejected because timestamp is in the past"
+            );
             return Err(SchedulerError::TimeWentBackwards);
         }
-        self.events
+        let event_id = self
+            .events
             .schedule_with_phase(timestamp, hardware_phase, priority, payload)
-            .map_err(SchedulerError::from)
+            .map_err(SchedulerError::from)?;
+        sega_observability::tracing::trace!(
+            target: "sega::scheduler",
+            event_id,
+            timestamp = ?timestamp,
+            hardware_phase = ?hardware_phase,
+            priority = ?priority,
+            pending_events = self.events.len(),
+            "machine event scheduled"
+        );
+        Ok(event_id)
     }
 
     /// Dispatch the next event after advancing every registered clock domain.
@@ -438,6 +468,13 @@ impl<T> MachineScheduler<T> {
 
         let next_dispatch_count = if self.last_dispatch_timestamp == Some(timestamp) {
             if self.dispatched_at_timestamp >= self.delta_event_policy.max_events_per_timestamp {
+                sega_observability::tracing::error!(
+                    target: "sega::scheduler",
+                    timestamp = ?timestamp,
+                    dispatched = self.dispatched_at_timestamp,
+                    limit = self.delta_event_policy.max_events_per_timestamp,
+                    "same-timestamp event budget exhausted"
+                );
                 return Err(SchedulerError::DeltaEventLimitExceeded {
                     timestamp,
                     limit: self.delta_event_policy.max_events_per_timestamp,
@@ -453,14 +490,41 @@ impl<T> MachineScheduler<T> {
             1
         };
 
-        let advances = self.calculate_advances(timestamp)?;
-        self.apply_advances(timestamp, &advances)?;
+        let advances = match self.calculate_advances(timestamp) {
+            Ok(advances) => advances,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::scheduler",
+                    timestamp = ?timestamp,
+                    error = %error,
+                    "clock-domain preflight failed before event dispatch"
+                );
+                return Err(error);
+            }
+        };
+        if let Err(error) = self.apply_advances(timestamp, &advances) {
+            sega_observability::tracing::error!(
+                target: "sega::scheduler",
+                timestamp = ?timestamp,
+                error = %error,
+                "clock-domain advance failed before event dispatch"
+            );
+            return Err(error);
+        }
         let event = self
             .events
             .pop_next()
             .expect("next_timestamp guarantees a queued event");
         self.last_dispatch_timestamp = Some(timestamp);
         self.dispatched_at_timestamp = next_dispatch_count;
+        sega_observability::tracing::trace!(
+            target: "sega::scheduler",
+            timestamp = ?timestamp,
+            dispatch_count_at_timestamp = next_dispatch_count,
+            clock_domains_advanced = advances.len(),
+            pending_events = self.events.len(),
+            "machine event dispatched"
+        );
         Ok(Some(MachineDispatch {
             event,
             clock_advances: advances,
@@ -474,6 +538,12 @@ impl<T> MachineScheduler<T> {
         target: MachineTime,
     ) -> Result<Vec<ClockAdvance>, SchedulerError> {
         if target < self.now {
+            sega_observability::tracing::warn!(
+                target: "sega::scheduler",
+                target = ?target,
+                now = ?self.now,
+                "idle advance rejected because target is in the past"
+            );
             return Err(SchedulerError::TimeWentBackwards);
         }
         if self
@@ -481,10 +551,22 @@ impl<T> MachineScheduler<T> {
             .next_timestamp()
             .is_some_and(|next| next <= target)
         {
+            sega_observability::tracing::warn!(
+                target: "sega::scheduler",
+                target = ?target,
+                next_event = ?self.events.next_timestamp(),
+                "idle advance rejected because it would skip a pending event"
+            );
             return Err(SchedulerError::EventPendingBeforeTarget);
         }
         let advances = self.calculate_advances(target)?;
         self.apply_advances(target, &advances)?;
+        sega_observability::tracing::trace!(
+            target: "sega::scheduler",
+            target = ?target,
+            clock_domains_advanced = advances.len(),
+            "scheduler advanced through idle interval"
+        );
         Ok(advances)
     }
 

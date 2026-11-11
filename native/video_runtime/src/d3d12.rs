@@ -63,10 +63,10 @@ use windows::Win32::UI::HiDpi::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, GA_ROOT, GWL_STYLE, GetAncestor, GetWindowLongPtrW, GetWindowThreadProcessId,
-    IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
-    WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    HWND_BOTTOM, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
+    WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -314,6 +314,13 @@ impl D3d12ChildWindow {
             }
         }
 
+        sega_observability::tracing::debug!(
+            target: "sega::video::d3d12",
+            parent_hwnd = parent_handle,
+            child_hwnd = hwnd.0 as usize,
+            added_parent_clip_children,
+            "D3D12 child presentation window created"
+        );
         Ok(Self {
             hwnd,
             parent_hwnd: parent,
@@ -336,16 +343,39 @@ impl D3d12ChildWindow {
             ));
         }
 
-        unsafe {
+        sega_observability::tracing::trace!(
+            target: "sega::video::d3d12",
+            child_hwnd = self.hwnd.0 as usize,
+            x,
+            y,
+            width,
+            height,
+            "D3D12 child viewport bounds updated"
+        );
+        if let Err(error) = unsafe {
+            // Keep the D3D12 child at the bottom of its sibling z-order so
+            // opaque native egui menu viewports remain visible above the game.
             SetWindowPos(
                 self.hwnd,
-                None,
+                Some(HWND_BOTTOM),
                 x,
                 y,
                 width,
                 height,
-                SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
-            )?;
+                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            )
+        } {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                child_hwnd = self.hwnd.0 as usize,
+                x,
+                y,
+                width,
+                height,
+                error = %error,
+                "D3D12 child viewport positioning failed"
+            );
+            return Err(error);
         }
         Ok(())
     }
@@ -594,13 +624,40 @@ impl D3d12Host {
         window: NativeVideoWindow,
     ) -> Result<Self> {
         let factory: IDXGIFactory2 =
-            unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
+            match unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default()) } {
+                Ok(factory) => factory,
+                Err(error) => {
+                    sega_observability::tracing::error!(
+                        target: "sega::video::d3d12",
+                        error = %error,
+                        "DXGI factory creation failed"
+                    );
+                    return Err(error);
+                }
+            };
 
         let mut device: Option<ID3D12Device> = None;
-        unsafe {
-            D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
+        if let Err(error) = unsafe { D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device) }
+        {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                feature_level = "11_0",
+                error = %error,
+                "D3D12 device creation failed"
+            );
+            return Err(error);
         }
         let device: ID3D12Device = device.ok_or_else(Error::from_thread)?;
+        let adapter_luid = unsafe { device.GetAdapterLuid() };
+        sega_observability::tracing::info!(
+            target: "sega::video::d3d12",
+            adapter_luid_low = adapter_luid.LowPart,
+            adapter_luid_high = adapter_luid.HighPart,
+            feature_level = "11_0",
+            render_width,
+            render_height,
+            "D3D12 device initialized on default adapter"
+        );
 
         let queue_desc = D3D12_COMMAND_QUEUE_DESC {
             Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -608,7 +665,17 @@ impl D3d12Host {
             Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
             NodeMask: 0,
         };
-        let queue: ID3D12CommandQueue = unsafe { device.CreateCommandQueue(&queue_desc)? };
+        let queue: ID3D12CommandQueue = match unsafe { device.CreateCommandQueue(&queue_desc) } {
+            Ok(queue) => queue,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    error = %error,
+                    "D3D12 command queue creation failed"
+                );
+                return Err(error);
+            }
+        };
 
         let swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
             Width: render_width,
@@ -627,9 +694,32 @@ impl D3d12Host {
             ..Default::default()
         };
 
-        let swap_chain1 = unsafe {
-            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)?
+        let swap_chain1 = match unsafe {
+            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)
+        } {
+            Ok(swap_chain) => swap_chain,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    render_width,
+                    render_height,
+                    format = "R8G8B8A8_UNORM",
+                    buffer_count = SWAP_CHAIN_BUFFER_COUNT,
+                    error = %error,
+                    "D3D12 swap chain creation failed"
+                );
+                return Err(error);
+            }
         };
+        sega_observability::tracing::info!(
+            target: "sega::video::d3d12",
+            render_width,
+            render_height,
+            format = "R8G8B8A8_UNORM",
+            buffer_count = SWAP_CHAIN_BUFFER_COUNT,
+            maximum_frame_latency = 1,
+            "D3D12 swap chain created"
+        );
         unsafe {
             factory.MakeWindowAssociation(
                 window.hwnd(),
@@ -935,7 +1025,16 @@ impl D3d12Host {
             })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
-            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+            let present_result = self.swap_chain.Present(1, DXGI_PRESENT(0)).ok();
+            if let Err(error) = &present_result {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    error = %error,
+                    device_removed_reason = ?self.device_removed_reason().err(),
+                    "D3D12 Present failed"
+                );
+            }
+            present_result?;
         }
 
         Ok(())
@@ -974,6 +1073,14 @@ impl D3d12Host {
     /// GPU-aligned.
     pub fn present_frame(&mut self, frame: &VideoFrame) -> Result<()> {
         if frame.width() != self.width || frame.height() != self.height {
+            sega_observability::tracing::error!(
+                target: "sega::video::d3d12",
+                frame_width = frame.width(),
+                frame_height = frame.height(),
+                swap_chain_width = self.width,
+                swap_chain_height = self.height,
+                "video frame dimensions do not match D3D12 swap chain"
+            );
             return Err(Error::new(
                 windows::core::HRESULT(0x8007_0057_u32 as i32),
                 "VideoFrame dimensions must match the initialized DXGI swap chain",
@@ -1053,7 +1160,17 @@ impl D3d12Host {
             })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
-            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+            let present_result = self.swap_chain.Present(1, DXGI_PRESENT(0)).ok();
+            if let Err(error) = &present_result {
+                sega_observability::tracing::error!(
+                    target: "sega::video::d3d12",
+                    frame_sequence = frame.sequence(),
+                    error = %error,
+                    device_removed_reason = ?self.device_removed_reason().err(),
+                    "D3D12 mailbox frame presentation failed"
+                );
+            }
+            present_result?;
         }
 
         Ok(())
@@ -1278,7 +1395,8 @@ mod tests {
         D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_STYLE, GetWindowLongPtrW, IsWindow, SW_MINIMIZE, ShowWindow, WS_CLIPCHILDREN,
+        CreateWindowExW, GWL_STYLE, GetTopWindow, GetWindowLongPtrW, IsWindow, SW_MINIMIZE,
+        ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_VISIBLE,
     };
 
     #[test]
@@ -1288,6 +1406,34 @@ mod tests {
 
         assert!(unsafe { IsWindow(Some(child.hwnd)).as_bool() });
         child.set_bounds(8, 12, 256, 192).unwrap();
+    }
+
+    #[test]
+    fn child_viewport_stays_below_native_egui_popup_siblings() {
+        let parent = NativeVideoWindow::create(640, 480).unwrap();
+        let parent_hwnd = parent.hwnd();
+        let overlay = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                windows::core::w!("STATIC"),
+                windows::core::w!("egui-overlay-test"),
+                WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+                0,
+                0,
+                200,
+                160,
+                Some(parent_hwnd),
+                None,
+                None,
+                None,
+            )
+        }
+        .unwrap();
+
+        let child = D3d12ChildWindow::create(parent_hwnd.0 as usize).unwrap();
+        child.set_bounds(0, 0, 320, 240).unwrap();
+
+        assert_eq!(unsafe { GetTopWindow(Some(parent_hwnd)) }.unwrap(), overlay);
     }
 
     #[test]

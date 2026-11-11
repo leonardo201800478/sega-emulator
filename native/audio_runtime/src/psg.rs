@@ -49,6 +49,14 @@ impl ScheduledPsg {
         clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, PsgError> {
+        sega_observability::tracing::info!(
+            target: "sega::audio::psg",
+            clock_domain_id = domain.0,
+            profile = ?profile,
+            clock_hz,
+            sample_rate,
+            "scheduled PSG created"
+        );
         Ok(Self {
             domain,
             core: Sn76489Core::new_with_profile(clock_hz, sample_rate, profile)?,
@@ -118,7 +126,7 @@ impl ScheduledPsg {
 #[cfg(test)]
 mod tests {
     use super::{PsgClockError, ScheduledPsg};
-    use crate::{NativeAudioSession, PcmSink};
+    use crate::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_machine_scheduler::{
         ClockDomainId, ClockRatio, EventPriority, MachineScheduler, MachineTime,
     };
@@ -135,8 +143,14 @@ mod tests {
             self.blocks.lock().unwrap().push(pcm);
             Ok(())
         }
-        fn metrics(&self) -> (u64, u64) {
-            (0, 0)
+        fn suspend_and_flush(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+        fn resume(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+        fn metrics(&self) -> AudioOutputMetrics {
+            AudioOutputMetrics::default()
         }
         fn close(&mut self) {}
     }

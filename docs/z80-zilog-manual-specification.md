@@ -2,8 +2,8 @@
 
 # Especificação documental do Z80 — manuais ZiLOG
 
-**Projeto:** Sega Emulator — Emulação de Alta Precisão  
-**Status:** síntese documental inicial, orientada à implementação e aos testes; não representa certificação do núcleo.  
+**Projeto:** Sega Emulator — Emulação de Alta Precisão
+**Status:** síntese documental inicial, orientada à implementação e aos testes; não representa certificação do núcleo.
 **Data:** 23/10/2026.
 
 ## 1. Objetivo e método
@@ -238,3 +238,17 @@ Não assumir que timings de Master System/Game Gear se aplicam automaticamente a
 ## 13. Próxima ação
 
 Usar este documento para atualizar, em etapas pequenas, docs/z80-coverage.md, docs/z80-code-audit-2026-10-22.md e os testes do núcleo. Não copiar tabelas inteiras dos manuais: manter matriz de conformidade própria com opcode, requisito, página-fonte, estado de implementação, teste, resultado e variante.
+
+
+## 8. Observações da tabela ED no UM0080 (edição UM008011-0816)
+
+Conferência direta do PDF fornecido no projeto:
+
+- A tabela de IN r,(C) inclui o seletor r=110 com a observação “Undefined op code; set the flag”; corresponde ao byte ED70 e não deve ser descrito como uma instrução oficialmente definida comum.
+- A tabela de OUT (C),r não inclui r=110; ED71 (OUT (C),0) não está especificado nessa tabela.
+- A tabela de modos de interrupção lista IM 0 = ED46, IM 1 = ED56 e IM 2 = ED5E. Os demais bytes tratados como aliases por emuladores não são listados como formas oficiais nessa tabela.
+- As formas documentadas de NEG, RETN e RETI são ED44, ED45 e ED4D, respectivamente.
+- O texto de RETI distingue o reconhecimento da instrução por periféricos daisy-chain; RETN não fornece essa notificação. A interface CpuBus atual não modela tal evento. Para SMS/SG-1000, sem periférico daisy-chain, essa saída é NOT_APPLICABLE.
+- O UM0080 não documenta o latch Q nem o efeito de DD/FD antes de SCF/CCF. Essa semântica permanece sustentada por pesquisa externa de hardware, não por este manual.
+
+Referência de páginas impressas: tabelas de I/O e modos de interrupção nas seções de instruções ED; descrição de RETI/RETN nas páginas impressas 52 e seguintes. A numeração impressa difere da página física do PDF.

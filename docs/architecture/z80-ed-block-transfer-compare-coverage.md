@@ -103,3 +103,13 @@ Critérios atendidos para fechar a fatia de regressão funcional neste SHA/PR:
 - [SingleStepTests/Z80, commit fixado](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7) — licença MIT; o README declara a tradução a partir do núcleo Z80 do Ares.
 - `docs/z80-ed-opcode-audit.md` — inventário das codificações ED explícitas e do fallback.
 - `docs/architecture/z80-sms-reference-coverage.md` — matriz de evidência e limitações dos vetores.
+
+
+## 7. Observação IM2 durante repetição — PR #712 integrada
+
+A candidata `test/z80-f022-repeat-im2-observation-20261109` acrescenta um teste de integração do microsequenciador para as quatro instruções repetitivas LDIR/LDDR/CPIR/CPDR. O teste afirma INT no último T-state do ciclo interno de repetição, atende IM2, executa `PUSH AF; POP AF; EI; RETI` e confirma a retomada da instrução ED. A inspeção de F ocorre no handler, e o estado do microsequenciador é serializado/restaurado em cada fronteira de barramento e ciclo interno.
+
+A expectativa de X/Y usa o contrato observado no Z80 Block Flags Test v5.0: YF=PC.13 e XF=PC.11 quando a interrupção é aceita em lugar da próxima repetição. O teste não converte essa observação NMOS em especificação universal, nem fecha F-022. Flags das iterações simples, cobertura ampla de fronteiras, WZ independente, hardware SMS e variantes CMOS/clones permanecem fora do resultado desta candidata.
+
+
+**Integração e CI:** PR #712 MERGED em `5e4a703daefdebe62fb7f8d220752359df59f8e3`; HEAD validado `7390744d9d6dc61ef2db3786f75fc9073dabdc12`; CI #6045 e pós-merge #6046 PASS. F-022 permanece AUDIT_PARTIAL; esta fixture não fecha a família inteira.

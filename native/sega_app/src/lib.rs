@@ -6,4 +6,7 @@
 mod app;
 
 #[cfg(windows)]
+mod debugger_window;
+
+#[cfg(windows)]
 pub use app::SegaApp;

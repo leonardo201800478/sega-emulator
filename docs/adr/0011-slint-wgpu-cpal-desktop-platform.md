@@ -1,0 +1,95 @@
+# ADR 0011 — Replataforma desktop com Slint, WGPU e CPAL
+
+- **Status:** ACCEPTED FOR POC; produção condicionada aos gates.
+- **Revisão:** 2026-11-11.
+- **Baseline:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784.
+- **Escopo:** substituir gradualmente GUI e adaptadores host; preservar runtime Rust.
+- **Precedência:** complementa ADR 0010 para frontend/hosts. Não altera CPU, VDP, PSG, barramentos, Scheduler, ownership ou determinismo.
+
+## 1. Decisão
+
+A replataforma ocorre no repositório existente. Não criar outro repositório nem reescrever hardware.
+
+| Responsabilidade | Tecnologia |
+|---|---|
+| GUI | Slint 1.18.x |
+| API gráfica | WGPU 30.x |
+| Backend inicial | Vulkan via WGPU, Windows x64 |
+| Saída física de áudio | CPAL 0.18.2 |
+| Entrada/gamepads | SDL3 após auditoria |
+| Runtime/hardware | Rust existente |
+
+WGPU é a única API gráfica do produto; Vulkan é backend WGPU, não API paralela. R1 deve selecionar e registrar Vulkan explicitamente, sem fallback silencioso. CPAL é a API de saída de áudio; WASAPI pode ser backend interno no Windows.
+
+egui/eframe, D3D12 e WASAPI/XAudio2 permanecem baseline até paridade, regressão e aceite Release. Não remover prematuramente.
+
+## 2. Fronteiras
+
+Slint cuida de janelas, menus, diálogos, biblioteca, configurações e interação. WGPU cuida de device/queue/surface, texturas, composição e apresentação. CPAL cuida do stream físico. SDL3 coleta input.
+
+Essas camadas não executam instruções, avançam clocks, implementam VDP/PSG, possuem estado mutável da máquina ou usam callbacks por instrução. O runtime permanece proprietário da máquina SMS, CPU, Scheduler, VDP, PSG e estado temporal. A UI usa comandos coarse-grained como load_rom, start, pause, stop, reset e step_frame.
+
+## 3. Versões e compatibilidade
+
+Versões de referência:
+- Slint 1.18.x; integração WGPU 30 exposta como API/feature instável.
+- WGPU 30.x.
+- CPAL 0.18.2.
+
+Fixar versões reproduzíveis no Cargo.lock. Fixar a série Slint 1.18 durante a POC e revalidar antes de atualizar. Verificar documentação oficial, changelog, MSRV, licença e compatibilidade.
+
+Referências:
+- https://docs.slint.dev/latest/docs/rust/slint/wgpu_30/
+- https://docs.slint.dev/latest/docs/rust/slint/wgpu_30/enum.WGPUConfiguration
+- https://docs.slint.dev/latest/docs/rust/slint/wgpu_30/struct.WGPUSettings
+- https://wgpu.rs/doc/wgpu/
+- https://docs.rs/cpal/0.18.2/cpal/
+
+## 4. R1 — POC gráfica mínima
+
+R1 verifica as possibilidades reais das APIs. Não integra o runtime SMS nem constitui frontend de produto.
+
+Critérios:
+1. Aplicação mínima Slint 1.18.
+2. Inicialização WGPU 30.
+3. Vulkan explicitamente selecionado no Windows x64 e adapter/backend registrados.
+4. Mesmo wgpu::Device e wgpu::Queue compartilhados com a integração Slint.
+5. Textura externa produzida por WGPU e atualizada continuamente.
+6. Composição da textura na mesma janela Slint.
+7. Resize, recriação de surface e shutdown limpo.
+8. Build e execução Release no Windows x64.
+
+Avaliar os caminhos oficiais de integração Slint/WGPU 30, incluindo configuração manual, rendering notifier e importação de textura. Não presumir compatibilidade apenas pela documentação.
+
+**Fora de R1:** SmsTemporalWorker, ROM real, FrameMailbox, menu de jogo, pausa do Scheduler, HUD, CPAL, SDL3, HDR, VRR e paridade do frontend. Não alterar runtime, CPU, VDP, PSG ou Scheduler. Não exigir zero-copy físico; evitar cópias redundantes e demonstrar ownership correto.
+
+**Gate:** execução real com Vulkan confirmado, textura atualizada e composição Slint/WGPU na mesma janela. Análise documental ou CI de jobs não relacionados não é PASS de integração.
+
+## 5. R2–R5
+
+- **R2 — vídeo real:** integrar frames SMS pelo FrameMailbox/contrato portátil, preservando SmsTemporalWorker e Scheduler; validar formato, ownership, sincronização e lifecycle sem alterar timing.
+- **R3 — CPAL:** enumerar dispositivos/formatos; criar, executar e encerrar streams; reproduzir PCM real; tratar remoção/reconexão, erros e underruns. Callback eficiente; thread de áudio não controla Scheduler.
+- **R4 — SDL3:** auditar e integrar teclado/gamepads, hotplug e mapeamentos.
+- **R5 — frontend:** consolidar launcher, biblioteca, configurações, menus, HUD, logs e telemetria. Demonstrar paridade antes de remover egui/eframe e hosts antigos.
+
+Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores.
+
+## 6. Preservação
+
+MachineScheduler permanece autoridade de clocks/eventos. UI, renderização, áudio físico e input não comandam tempo virtual. Preservar ordem causal, WAIT states, operações retomáveis e estado necessário à restauração. Execução contínua e em blocos deve ser equivalente. Não duplicar worker, CPU, PSG, VDP ou Scheduler.
+
+## 7. Licenças
+
+Antes de distribuir binários, revisar licenças/notices de Slint, WGPU, CPAL e dependências transitivas. Registrar obrigações em THIRD_PARTY_NOTICES.md; confirmar termos oficiais vigentes para o uso pretendido.
+
+## 8. Estado
+
+- Arquitetura e capacidades documentadas justificam a POC.
+- POC integrada compilada/executada: NOT RUN.
+- Vulkan em hardware Windows: NOT RUN.
+- Textura externa e composição: NOT RUN.
+- Frames reais SMS: NOT RUN.
+- CPAL/SDL3 na nova arquitetura: NOT RUN.
+- egui/eframe e hosts antigos continuam na baseline.
+
+Esta ADR autoriza a POC, não declara migração implementada. Conclusões exigem evidência no HEAD final da PR.

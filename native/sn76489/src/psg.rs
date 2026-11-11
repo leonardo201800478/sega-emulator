@@ -31,6 +31,28 @@ fn advance_output_phase(phase: u64, sample_rate: u64, clock_hz: u64) -> (u64, u6
         u64::try_from(total % divisor).expect("remainder is smaller than the u64 clock frequency");
     (samples, remainder)
 }
+
+/// Interpolate a filtered PSG signal at the exact fractional output-clock edge.
+///
+/// The phase is the output-rate accumulator immediately before the current
+/// internal PSG tick. Each output sample crosses one clock_hz boundary inside
+/// the interval between the previous and current filtered samples.
+fn interpolate_output_sample(
+    previous: f64,
+    current: f64,
+    phase: u64,
+    sample_rate: u64,
+    clock_hz: u64,
+    sample_index: u64,
+) -> f64 {
+    debug_assert!(phase < clock_hz);
+    let increment = u128::from(sample_rate) * u128::from(CLOCK_DIVIDER);
+    let crossing = u128::from(clock_hz - phase) + u128::from(sample_index) * u128::from(clock_hz);
+    let fraction = crossing as f64 / increment as f64;
+    debug_assert!((0.0..=1.0).contains(&fraction));
+    previous + (current - previous) * fraction
+}
+
 const TONE_CHANNELS: usize = 3;
 const NOISE_CHANNEL: usize = 3;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
@@ -200,9 +222,12 @@ impl Sn76489Core {
         if sample_rate == 0 {
             return Err(PsgError::ZeroSampleRate);
         }
-        sample_rate
+        let output_clock_numerator = sample_rate
             .checked_mul(CLOCK_DIVIDER)
             .ok_or(PsgError::SampleRateTooLarge)?;
+        if output_clock_numerator > clock_hz {
+            return Err(PsgError::SampleRateTooLarge);
+        }
         let capacity = sample_rate
             .checked_mul(SAMPLE_BUFFER_SECONDS)
             .ok_or(PsgError::SampleRateTooLarge)?;
@@ -210,6 +235,14 @@ impl Sn76489Core {
             usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let filter_history = vec![0.0; filter_coefficients.len()];
+        sega_observability::tracing::info!(
+            target: "sega::psg",
+            clock_hz,
+            sample_rate,
+            profile = ?profile,
+            sample_buffer_capacity,
+            "SN76489 PSG initialized"
+        );
         let mut device = Self {
             profile,
             clock_hz,
@@ -316,10 +349,19 @@ impl Sn76489Core {
     }
 
     pub fn reset(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::psg",
+            "SN76489 PSG reset"
+        );
         self.reset_inner();
     }
 
     pub fn write(&mut self, value: u8) {
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            value,
+            "SN76489 register write"
+        );
         self.write_inner(value);
     }
 
@@ -328,12 +370,21 @@ impl Sn76489Core {
     }
 
     pub fn drain_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        let available_samples = self.pending_samples.len();
         let count = max_samples
-            .unwrap_or(self.pending_samples.len())
-            .min(self.pending_samples.len());
-        (0..count)
+            .unwrap_or(available_samples)
+            .min(available_samples);
+        let samples = (0..count)
             .filter_map(|_| self.pending_samples.pop_front())
-            .collect()
+            .collect::<Vec<_>>();
+        sega_observability::tracing::trace!(
+            target: "sega::psg",
+            available_samples,
+            drained_samples = samples.len(),
+            remaining_samples = self.pending_samples.len(),
+            "SN76489 sample queue drained"
+        );
+        samples
     }
 
     pub fn render(&mut self, sample_count: usize) -> Vec<f64> {
@@ -473,18 +524,39 @@ impl Sn76489Core {
         let (internal_clocks, phase) = split_clock_advance(clocks, self.clock_divider_phase);
         self.clock_divider_phase = phase;
         for _ in 0..internal_clocks {
+            let previous_phase = self.output_phase;
+            let (sample_count, next_phase) =
+                advance_output_phase(previous_phase, self.sample_rate, self.clock_hz);
+            let previous_filtered = if sample_count > 0 {
+                self.filtered_output()
+            } else {
+                0.0
+            };
+
             self.tick_internal_clock();
             self.push_filter_sample();
-            let (sample_count, phase) =
-                advance_output_phase(self.output_phase, self.sample_rate, self.clock_hz);
-            self.output_phase = phase;
+            self.output_phase = next_phase;
+
             if sample_count > 0 {
-                let sample = self.filtered_output();
-                for _ in 0..sample_count {
+                let current_filtered = self.filtered_output();
+                for sample_index in 0..sample_count {
+                    let sample = interpolate_output_sample(
+                        previous_filtered,
+                        current_filtered,
+                        previous_phase,
+                        self.sample_rate,
+                        self.clock_hz,
+                        sample_index,
+                    );
                     if render_sink {
                         self.render_pending.push_back(sample);
                     } else {
                         if self.pending_samples.len() == self.sample_buffer_capacity {
+                            sega_observability::tracing::trace!(
+                                target: "sega::psg",
+                                capacity = self.sample_buffer_capacity,
+                                "PSG sample queue overflow; oldest pending sample discarded"
+                            );
                             self.pending_samples.pop_front();
                             self.dropped_samples += 1;
                         }
@@ -549,6 +621,143 @@ mod tests {
             },
         );
         real.hypot(imaginary)
+    }
+
+    #[test]
+    fn output_samples_are_invariant_to_scheduler_clock_chunking() {
+        let clock_hz = 3_579_545_u64;
+        let sample_rate = 44_100_u64;
+        let total_clocks = 1_000_000_u64;
+        let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+        let mut chunked =
+            Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+
+        for device in [&mut whole, &mut chunked] {
+            device.write_inner(0x85);
+            device.write_inner(0x12);
+            device.write_inner(0x90);
+            device.write_inner(0xE4);
+        }
+
+        whole.advance_clocks(total_clocks);
+        let chunk_sizes = [1_u64, 7, 15, 16, 17, 113, 257, 4_096];
+        let mut remaining = total_clocks;
+        let mut chunk_index = 0;
+        while remaining > 0 {
+            let clocks = chunk_sizes[chunk_index % chunk_sizes.len()].min(remaining);
+            chunked.advance_clocks(clocks);
+            remaining -= clocks;
+            chunk_index += 1;
+        }
+
+        let expected_internal_ticks = total_clocks / super::CLOCK_DIVIDER;
+        let expected_samples = (u128::from(expected_internal_ticks)
+            * u128::from(sample_rate)
+            * u128::from(super::CLOCK_DIVIDER)
+            / u128::from(clock_hz)) as usize;
+        let whole_samples = whole.drain_samples(None);
+        let chunked_samples = chunked.drain_samples(None);
+
+        assert_eq!(whole_samples.len(), expected_samples);
+        assert_eq!(chunked_samples, whole_samples);
+        assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
+        assert_eq!(chunked.output_phase, whole.output_phase);
+        assert_eq!(chunked.filter_history, whole.filter_history);
+        assert_eq!(chunked.filter_position, whole.filter_position);
+        assert_eq!(chunked.tone_counters, whole.tone_counters);
+        assert_eq!(chunked.lfsr, whole.lfsr);
+    }
+
+    #[test]
+    fn fractional_output_sampling_reduces_clock_quantization_error() {
+        let clock_hz = 3_579_545_u64;
+        let sample_rate = 44_100_u64;
+        let frequency_hz = 10_000.0_f64;
+        let internal_rate = clock_hz as f64 / super::CLOCK_DIVIDER as f64;
+        let coefficients = super::design_lowpass(clock_hz, sample_rate);
+        let taps = coefficients.len();
+        let mut history = vec![0.0_f64; taps];
+        let mut filter_position = 0_usize;
+        let mut output_phase = 0_u64;
+        let mut previous_filtered = 0.0_f64;
+        let mut output_index = 0_u64;
+        let mut nearest_error_squared = 0.0_f64;
+        let mut interpolated_error_squared = 0.0_f64;
+        let mut reference_squared = 0.0_f64;
+        let mut measured_samples = 0_u64;
+        let internal_ticks = (internal_rate * 0.25) as u64;
+        let angular_frequency = std::f64::consts::TAU * frequency_hz / internal_rate;
+
+        for tick in 0..internal_ticks {
+            // The first FIR sample is captured after the first internal clock edge.
+            let input = (angular_frequency * (tick as f64 + 1.0)).sin();
+            history[filter_position] = input;
+            filter_position = (filter_position + 1) % taps;
+
+            let current_filtered = coefficients
+                .iter()
+                .enumerate()
+                .map(|(index, coefficient)| {
+                    let history_index = (filter_position + taps - 1 - index) % taps;
+                    coefficient * history[history_index]
+                })
+                .sum::<f64>();
+
+            let previous_phase = output_phase;
+            let (sample_count, next_phase) =
+                super::advance_output_phase(previous_phase, sample_rate, clock_hz);
+            for sample_index in 0..sample_count {
+                let quantized_tick_sample = current_filtered;
+                let interpolated_sample = super::interpolate_output_sample(
+                    previous_filtered,
+                    current_filtered,
+                    previous_phase,
+                    sample_rate,
+                    clock_hz,
+                    sample_index,
+                );
+                let target_tick = (output_index + 1) as f64 * internal_rate / sample_rate as f64;
+                let reference = coefficients
+                    .iter()
+                    .enumerate()
+                    .map(|(index, coefficient)| {
+                        coefficient * (angular_frequency * (target_tick - index as f64)).sin()
+                    })
+                    .sum::<f64>();
+
+                if tick > (taps * 2) as u64 {
+                    nearest_error_squared += (quantized_tick_sample - reference).powi(2);
+                    interpolated_error_squared += (interpolated_sample - reference).powi(2);
+                    reference_squared += reference.powi(2);
+                    measured_samples += 1;
+                }
+                output_index += 1;
+            }
+            previous_filtered = current_filtered;
+            output_phase = next_phase;
+        }
+
+        let expected_samples = (u128::from(internal_ticks)
+            * u128::from(sample_rate)
+            * u128::from(super::CLOCK_DIVIDER)
+            / u128::from(clock_hz)) as u64;
+        assert_eq!(output_index, expected_samples);
+        assert!(measured_samples > 0);
+
+        let reference_rms = (reference_squared / measured_samples as f64).sqrt();
+        let nearest_error_rms =
+            (nearest_error_squared / measured_samples as f64).sqrt() / reference_rms;
+        let interpolated_error_rms =
+            (interpolated_error_squared / measured_samples as f64).sqrt() / reference_rms;
+
+        assert!(
+            nearest_error_rms > 0.05,
+            "test must reproduce material tick-quantization error, got {nearest_error_rms:.4}"
+        );
+        assert!(
+            interpolated_error_rms < 0.01,
+            "fractional sampling error remains too high: {interpolated_error_rms:.4}"
+        );
     }
 
     #[test]
@@ -793,7 +1002,7 @@ mod tests {
 
     #[test]
     fn rendered_tone_frequency_matches_clock_and_divider() {
-        for period in [127_u16, 254, 511] {
+        for period in [11_u16, 12, 127, 254, 511] {
             let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
             device.write_inner(0x90);
             device.write_inner(0x80 | (period as u8 & 0x0F));
@@ -876,6 +1085,15 @@ mod tests {
         let (samples, phase) = super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
         assert_eq!(samples, 1);
         assert_eq!(phase, u64::MAX - 16);
+    }
+
+    #[test]
+    fn constructor_rejects_output_rate_above_internal_psg_rate() {
+        assert!(Sn76489::new(1_600, 100).is_ok());
+        assert_eq!(
+            Sn76489::new(1_600, 101).unwrap_err(),
+            super::PsgError::SampleRateTooLarge
+        );
     }
 
     #[test]

@@ -1,63 +1,43 @@
 # Documentação do Sega Emulator
 
-Este diretório reúne decisões normativas, contratos arquiteturais, estado operacional, auditorias técnicas e evidências de validação.
+Este diretório reúne decisões normativas, contratos arquiteturais, roadmap, sprints, estado operacional, auditorias e evidências.
 
-## Como interpretar a documentação
+## Precedência
 
-A documentação tem níveis distintos de autoridade. Em caso de conflito, aplicar esta ordem:
+1. ADRs vigentes: ADR 0010 (runtime/hardware), ADR 0011 (desktop/hosts) e ADR-0016 (fidelidade temporal).
+2. Escopo, roadmap e políticas permanentes.
+3. Código/testes integrados na main.
+4. Status datados vinculados a SHA.
+5. PRs não integradas e documentos históricos.
 
-1. **ADRs normativas vigentes** — decisões arquiteturais aceitas.
-2. **Roadmap mestre e políticas permanentes** — sequência de execução, gates e processo.
-3. **Código e testes na `main`** — estado efetivamente integrado.
-4. **Status e auditorias datadas** — fotografias vinculadas a um SHA específico.
-5. **Documentos históricos, propostas e PRs não integradas** — contexto, não estado atual nem autorização para copiar código.
+PR Draft, branch, documentação ou CI parcial não alteram o estado integrado da main.
 
-Uma PR aberta, Draft, branch local, teste em branch ou documentação proposta não altera o estado integrado da `main`.
+## Documentos principais
 
-## Documentos de entrada
-
-| Documento | Finalidade |
-|---|---|
-| [Status atual do projeto](project-status-2026-11-07.md) | Fotografia de estado em 2026-11-07, PRs, validações e bloqueios |
-| [Roadmap mestre](project-roadmap.md) | Sequência normativa das fases e critérios de avanço |
-| [Escopo do produto](project-scope.md) | O que pertence ao produto ativo e o que está fora da fase atual |
-| [Política de desenvolvimento e validação](development-and-validation-policy.md) | Método de engenharia, fidelidade e gates |
-| [Política de CI](ci-validation-policy.md) | Checks obrigatórios e classificação de resultados |
-| [Status dos componentes](component-status.md) | Estado por subsistema, distinguindo main de PRs abertas |
-| [Auditoria do código](codebase-audit.md) | Auditoria histórica; não usar como fotografia operacional atual |
-
-## Arquitetura e decisões
-
-- [ADRs normativas do produto](adr/README.md)
-- [Arquitetura — visão geral](architecture.md)
-- [ADRs de arquitetura](architecture/adr/README.md)
-- [Scheduler — contratos, integração e validação](architecture/scheduler/README.md)
-- [Runtime SMS e fronteiras nativas](architecture/native-rust-crates.md)
-- [Autoridade temporal Rust](architecture/rust-temporal-authority.md)
-- [Política de fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
+- [README do projeto](../README.md)
+- [Escopo](project-scope.md)
+- [Roadmap mestre](project-roadmap.md)
+- [Sprint R1](sprints/2026-11-r1-slint-wgpu-vulkan-poc.md)
+- [Status 2026-11-11](project-status-2026-11-11.md)
+- [Instruções permanentes](project-instructions-prompt.md)
+- [ADR 0011 — Slint/WGPU/CPAL](adr/0011-slint-wgpu-cpal-desktop-platform.md)
+- [ADRs normativas](adr/README.md)
+- [Arquitetura geral](architecture.md)
+- [Scheduler](architecture/scheduler/README.md)
+- [Fidelidade temporal](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
 
 ## Z80
 
-- [Scorecard de conclusão](z80-completion-scorecard.md)
-- [Matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md)
-- [Auditoria de opcodes ED](z80-ed-opcode-audit.md)
+- [Scorecard](z80-completion-scorecard.md)
+- [Checklist mestre](z80-master-audit-checklist.md)
+- [Matriz DD/FD](z80-dd-fd-semantic-matrix.md)
+- [Auditoria ED](z80-ed-opcode-audit.md)
 - [Comportamentos não documentados](z80-undocumented-behavior-research.md)
-- [Especificação do manual Zilog](z80-zilog-manual-specification.md)
 
-O fechamento semântico E7 precede E8. ZEXDOC/ZEXALL não podem ser marcados como PASS sem execução de um harness Rust completo e evidência no SHA correspondente.
+E7 deve estar demonstravelmente fechado antes de E8/ZEXDOC/ZEXALL.
 
-## Evidências e auditorias
+## Evidências e histórico
 
-- `evidence/`: resultados reproduzíveis de testes, com SHA, comando, ambiente, resultado e limitações.
-- `audits/`: investigações de bugs, compatibilidade, PRs e subsistemas.
-- `hardware/`: modelos e referências técnicas de chips e plataformas.
-- `milestones/`: marcos históricos.
-- `releases/`: notas de release.
+evidence/ contém resultados reproduzíveis; audits/ investigações; hardware/ referências; milestones/ marcos históricos; releases/ notas; sprints/ objetivos e critérios temporários.
 
-Consulte [evidências de validação](evidence/README.md) e [auditorias](audits/README.md).
-
-## Documentação histórica e obsoleta
-
-Documentos sobre Python, PySide6/Qt, PyO3, Maturin, workspaces antigos ou fotografias anteriores à migração foram preservados quando registram decisões, evidências ou contexto útil. Eles não descrevem a arquitetura ativa. Não excluir evidência histórica apenas por estar obsoleta; marque-a como histórica e remova-a somente quando for duplicada, sem referências e sem valor de auditoria.
-
-A arquitetura de produto vigente é Rust + egui/eframe, com SMS temporal como primeiro runtime. Consulte ADR 0010 e ADR-0016 antes de propor mudanças.
+Documentos sobre Qt, egui/eframe, D3D12 ou WASAPI/XAudio2 podem permanecer como registros históricos da baseline. Não os tratar como arquitetura-alvo quando conflitarem com ADR 0011. Não apagar evidências históricas sem verificar referências e valor de auditoria.

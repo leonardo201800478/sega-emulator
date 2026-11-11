@@ -6,7 +6,7 @@ mod session;
 
 pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
 pub use psg::{PsgClockError, ScheduledPsg};
-pub use session::{NativeAudioSession, PcmSink};
+pub use session::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
 use std::f64::consts::PI;
 
@@ -81,6 +81,14 @@ impl PcmResampler {
             coefficients.push(weights);
         }
 
+        sega_observability::tracing::info!(
+            target: "sega::audio::dsp",
+            input_rate = INPUT_RATE,
+            output_rate = rate,
+            volume,
+            filter_taps = coefficients.len(),
+            "PCM resampler initialized"
+        );
         Ok(Self {
             rate,
             step: INPUT_RATE as f64 / rate as f64,
@@ -99,7 +107,14 @@ impl PcmResampler {
         if volume > 100 {
             return Err(AudioError::InvalidVolume);
         }
+        let previous = self.volume;
         self.volume = volume;
+        sega_observability::tracing::debug!(
+            target: "sega::audio::dsp",
+            previous,
+            volume,
+            "PCM output volume changed"
+        );
         Ok(())
     }
 
@@ -124,15 +139,26 @@ impl PcmResampler {
         if input.is_empty() {
             return Vec::new();
         }
-        if self.rate == INPUT_RATE {
-            return self.encode(input.iter().copied());
-        }
 
-        self.buffer.extend_from_slice(input);
-        self.available += input.len();
-        self.real += input.len();
-        let output = self.emit(false);
-        self.discard_old();
+        let output = if self.rate == INPUT_RATE {
+            self.encode(input.iter().copied())
+        } else {
+            self.buffer.extend_from_slice(input);
+            self.available += input.len();
+            self.real += input.len();
+            let output = self.emit(false);
+            self.discard_old();
+            output
+        };
+        sega_observability::tracing::trace!(
+            target: "sega::audio::dsp",
+            input_samples = input.len(),
+            output_pcm_bytes = output.len(),
+            output_samples = output.len() / 2,
+            output_rate = self.rate,
+            buffered_samples = self.available.saturating_sub(self.start),
+            "PCM resampler processed sample batch"
+        );
         output
     }
 
@@ -145,6 +171,12 @@ impl PcmResampler {
         self.buffer.extend(std::iter::repeat_n(0.0, TAPS / 2 + 1));
         self.available += TAPS / 2 + 1;
         let output = self.emit(true);
+        sega_observability::tracing::trace!(
+            target: "sega::audio::dsp",
+            flushed_pcm_bytes = output.len(),
+            flushed_samples = output.len() / 2,
+            "PCM resampler flushed pending samples"
+        );
         self.reset();
         output
     }
@@ -238,6 +270,31 @@ mod tests {
         }
         actual.extend(chunked.flush());
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resampling_is_invariant_across_rates_and_input_chunk_sizes() {
+        let input: Vec<f64> = (0..4096)
+            .map(|index| 0.6 * (index as f64 * 0.017).sin())
+            .collect();
+
+        for rate in [22_050, 44_100, 48_000, 96_000] {
+            let mut whole = PcmResampler::new(rate, 100).unwrap();
+            let expected = [whole.process(&input), whole.flush()].concat();
+
+            for chunk_size in [1, 17, 113, 1024] {
+                let mut chunked = PcmResampler::new(rate, 100).unwrap();
+                let mut actual = Vec::new();
+                for block in input.chunks(chunk_size) {
+                    actual.extend(chunked.process(block));
+                }
+                actual.extend(chunked.flush());
+                assert_eq!(
+                    actual, expected,
+                    "PCM output changed with chunk size {chunk_size} at {rate} Hz"
+                );
+            }
+        }
     }
 
     #[test]

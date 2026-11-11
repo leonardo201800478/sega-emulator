@@ -5,15 +5,15 @@
 
 #[cfg(windows)]
 fn main() -> eframe::Result {
-    use eframe::egui;
-
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([960.0, 600.0]),
+        viewport: eframe::egui::ViewportBuilder::default()
+            .with_inner_size([1440.0, 900.0])
+            .with_min_inner_size([1024.0, 720.0]),
         ..Default::default()
     };
 
+    // Diagnostics are deliberately not initialized here. The user must
+    // explicitly enable collection from Options > Diagnostics.
     eframe::run_native(
         "Sega Emulator",
         options,

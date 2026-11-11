@@ -11,8 +11,20 @@ impl CartridgeImage {
     pub fn new(bytes: impl Into<Vec<u8>>) -> Result<Self, SmsCoreError> {
         let bytes = bytes.into();
         if bytes.is_empty() {
+            sega_observability::tracing::error!(
+                target: "sega::rom",
+                format = "raw cartridge image",
+                size_bytes = 0,
+                "empty cartridge image rejected"
+            );
             return Err(SmsCoreError::EmptyCartridge);
         }
+        sega_observability::tracing::info!(
+            target: "sega::rom",
+            format = "raw cartridge image",
+            size_bytes = bytes.len(),
+            "cartridge image accepted"
+        );
         Ok(Self { bytes })
     }
 

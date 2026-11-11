@@ -748,6 +748,27 @@ impl SmsTemporalMachine {
         self.bus.vdp().framebuffer()
     }
 
+    /// Read one byte through the active SMS mapper and memory-control state.
+    /// This is a diagnostic read and does not advance Scheduler time.
+    pub fn inspect_memory(&self, address: u16) -> u8 {
+        self.bus.memory().read(address)
+    }
+
+    /// Return the three active Sega mapper bank registers.
+    pub fn selected_mapper_banks(&self) -> [u8; 3] {
+        self.bus.memory().selected_banks()
+    }
+
+    /// Return the active mapper control register.
+    pub fn mapper_control(&self) -> u8 {
+        self.bus.memory().mapper_control()
+    }
+
+    /// Return the SMS memory-control latch written through I/O port $3E.
+    pub fn memory_control(&self) -> u8 {
+        self.bus.memory().control_port()
+    }
+
     /// Advance the machine until one VDP frame completes.
     ///
     /// The instruction limit is a safety bound, not a timing source. Hardware
@@ -756,17 +777,34 @@ impl SmsTemporalMachine {
         &mut self,
         max_instructions: usize,
     ) -> Result<usize, SmsTemporalMachineError> {
+        self.step_frame_until(max_instructions, |_| false)
+            .map(|(instructions, _)| instructions)
+    }
+
+    /// Advance until a frame completes or the supplied PC predicate requests a stop.
+    ///
+    /// The predicate is checked only at instruction boundaries. A breakpoint
+    /// therefore never suspends a partially completed M-cycle or bus transaction.
+    pub fn step_frame_until(
+        &mut self,
+        max_instructions: usize,
+        mut should_break: impl FnMut(u16) -> bool,
+    ) -> Result<(usize, bool), SmsTemporalMachineError> {
         if max_instructions == 0 {
             return Err(SmsTemporalMachineError::FrameStepLimitReached);
         }
         let initial_frame = self.frame_number();
-        for instructions in 1..=max_instructions {
+        for completed in 0..max_instructions {
+            let pc = self.cpu.export_architectural_state().registers.pc;
+            if should_break(pc) {
+                return Ok((completed, true));
+            }
             let step = self.step_instruction(0)?;
             if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
                 let _ = self.resume_instruction(0)?;
             }
             if self.frame_number() != initial_frame {
-                return Ok(instructions);
+                return Ok((completed + 1, false));
             }
         }
         Err(SmsTemporalMachineError::FrameStepLimitReached)
@@ -795,6 +833,21 @@ impl SmsTemporalMachine {
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
+    }
+
+    /// Execute exactly one complete CPU instruction through the machine scheduler.
+    ///
+    /// Interrupt acknowledge is a resumable boundary in the Z80 microsequencer;
+    /// finish its continuation before returning so callers always observe an
+    /// instruction boundary. Generated audio is drained to keep diagnostic
+    /// single-stepping from accumulating an unbounded host sample buffer.
+    pub fn step_complete_instruction(&mut self) -> Result<(), SmsTemporalMachineError> {
+        let step = self.step_instruction(0)?;
+        if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+            self.resume_instruction(0)?;
+        }
+        self.drain_audio_samples(None);
+        Ok(())
     }
 
     /// Resume an already active instruction from its current safe point.
@@ -1437,7 +1490,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_ed_decode_resumes_after_prefix_snapshot_and_retries_deterministically() {
+    fn reserved_ed_nop_retires_after_prefix_snapshot_and_retries_deterministically() {
         let mut rom = vec![0; 0x4000];
         rom[..2].copy_from_slice(&[0xED, 0x00]);
         let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
@@ -1462,18 +1515,16 @@ mod tests {
         );
 
         let mut restored = SmsTemporalMachine::restore_state(prefix_snapshot.clone()).unwrap();
-        let first_error = restored.resume_instruction(0).unwrap_err();
-        assert!(matches!(
-            first_error,
-            SmsTemporalMachineError::Cpu(Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: 0x00,
-                ..
-            })
-        ));
+        let first_retirement = restored.resume_instruction(0).unwrap();
+        retired(first_retirement, 0x00, 8);
+        assert_eq!(restored.now(), MachineTime::from_ticks(24));
+        assert_eq!(restored.cpu().registers.pc, 2);
+        assert_eq!(restored.cpu().refresh & 0x7F, 2);
 
         let mut retried = SmsTemporalMachine::restore_state(prefix_snapshot).unwrap();
-        let retry_error = retried.resume_instruction(0).unwrap_err();
-        assert_eq!(retry_error, first_error);
+        let retry_retirement = retried.resume_instruction(0).unwrap();
+        assert_eq!(retry_retirement, first_retirement);
+        assert_eq!(retried.export_state(), restored.export_state());
     }
 
     #[test]
@@ -2638,6 +2689,35 @@ mod base_call_rst_temporal_tests {
     }
 
     #[test]
+    fn direct_boot_default_sp_call_overwrites_sega_mapper_registers() {
+        let mut rom = vec![0x00; 0x1_0000];
+        rom[0..3].copy_from_slice(&[0xCD, 0x06, 0x00]); // CALL $0006
+
+        let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
+        assert_eq!(machine.cpu().registers.pc, 0x0000);
+        assert_eq!(machine.cpu().registers.sp, 0x0000);
+        assert_eq!(machine.memory().control_port(), 0xAB);
+        assert_eq!(machine.memory().selected_banks(), [0, 1, 2]);
+
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCD,
+                tstates: 17,
+            }
+        );
+
+        // CALL pushes return address $0003: high byte to $FFFF, then low
+        // byte to $FFFE. With the no-BIOS $AB memory-control profile, the
+        // Sega mapper is enabled and those addresses are its slot registers.
+        assert_eq!(machine.cpu().registers.pc, 0x0006);
+        assert_eq!(machine.cpu().registers.sp, 0xFFFE);
+        assert_eq!(machine.memory().selected_banks(), [0, 3, 0]);
+        assert_eq!(machine.memory().read(0xFFFE), 0x03);
+        assert_eq!(machine.memory().read(0xFFFF), 0x00);
+    }
+
+    #[test]
     fn call_and_rst_internal_safe_points_restore_with_scheduler_state() {
         let mut call = SmsTemporalMachine::new(vec![0xCD, 0x03, 0x00], 3).unwrap();
         call.cpu_mut().registers.sp = 0xC100;
@@ -3238,5 +3318,21 @@ mod temporal_frame_tests {
         let samples = machine.drain_audio_samples(None);
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
+    }
+
+    #[test]
+    fn breakpoint_stops_before_instruction_at_safe_boundary() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x8000], 1).unwrap();
+
+        let (instructions, breakpoint_hit) =
+            machine.step_frame_until(4, |pc| pc == 0x0001).unwrap();
+
+        assert_eq!(instructions, 1);
+        assert!(breakpoint_hit);
+        assert_eq!(
+            machine.cpu().export_architectural_state().registers.pc,
+            0x0001
+        );
+        assert_eq!(machine.now().ticks(), 4);
     }
 }

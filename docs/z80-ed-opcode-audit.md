@@ -1,7 +1,8 @@
 # Auditoria completa do espaço de opcodes ED do Z80
 
-**Escopo:** auditoria estática do despachante Rust ativo em `native/sms_core/src/cpu.rs`, método `execute_ed()`, e dos testes presentes no mesmo arquivo.  
-**Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.  
+**Baseline remota reconciliada:** `main` = `c2dae949d24b6a41899b0335ae2dd7f35b89ef26` (2026-11-09; inclui a reconciliação documental da PR #729; PRs #724/#726/#728 não alteraram runtime ED).
+**Baseline histórica após PR #692:** main `1304bc0438e3ea333719d0ba3a495e2db9089da3` (2026-11-09).
+**Alvo de referência:** Zilog Z80 clássico (NMOS como hipótese de compatibilidade inicial do projeto); não generalizar para Z180, R800 ou clones.
 **Resultado:** os 256 segundos bytes ED têm caminho de execução, mas isso não significa que 256 instruções semânticas estejam implementadas ou validadas.
 
 ## 1. Resumo executivo
@@ -28,8 +29,8 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 | `47` | LD I,A | Copia A para I | 9 | Vetor dirigido para LD I,A e LD R,A; faltam valores de fronteira adicionais |
 | `4F` | LD R,A | Copia A para R | 9 | Vetor dirigido confirma cópia dos oito bits de A; faltam casos adicionais |
 | `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; o latch `p` aplica o erratum NMOS quando INT é aceito na fronteira seguinte | 9 | Executor atômico e microsequenciador cobertos para INT imediato, NMI, instrução intermediária e snapshot/restore; ver auditoria complementar E7.7 |
-| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap de endereço ainda pendente |
-| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap de endereço ainda pendente |
+| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap FFFF→0000 coberto por `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` (PR #673, CI PASS) |
+| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap FFFF→0000 coberto por `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` (PR #673, CI PASS) |
 | `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; overflow, half-carry e carry de entrada têm casos específicos, mas não é varredura combinatória |
 | `42, 52, 62, 72` | SBC HL,BC/DE/HL/SP | Usa borrow/carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; borrow e fronteiras aritméticas têm casos específicos, mas não é varredura combinatória |
 | `40,48,50,58,60,68,70,78` | IN r,(C) | Lê porta BC; destino código 6 descarta o valor; atualiza S/Z/PV/X/Y e preserva C; WZ=BC+1 | 12 | Teste com bus de I/O verifica os oito destinos, endereço BC e flags para valor 0xA5; falta varredura de valores/estados |
@@ -43,8 +44,8 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 | `6F` | RLD | Troca nibbles entre A e (HL) segundo a operação RLD | 18 | Vetor dirigido verifica A, memória, flags e WZ |
 | `A0,A8,B0,B8` | LDI/LDD/LDIR/LDDR | Transfere byte (HL)→(DE), ajusta HL/DE/BC e flags; formas repetitivas recuam PC e retornam 21 T quando continuam | 16 / 21 | Vetores dirigidos cobrem as quatro formas, direção, contador, flags selecionadas, repetição e término; limites e todas as flags ainda pendentes |
 | `A1,A9,B1,B9` | CPI/CPD/CPIR/CPDR | Compara A com (HL), ajusta HL/BC e flags; formas repetitivas continuam enquanto BC≠0 e A≠valor | 16 / 21 | Vetores dirigidos cobrem as quatro formas, decremento, match e continuação; flags X/Y/WZ e fronteiras de BC ainda pendentes |
-| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço de porta, memória, decremento/incremento e repetição; flags não documentadas exigem validação de hardware |
-| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço/valor de saída, direção e repetição; flags não documentadas exigem validação de hardware |
+| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas; para INIR/INDR, `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` cobre o B-loop e a fórmula de repetição derivada de teste em hardware NMOS. A iteração simples ainda requer diferencial mais amplo |
+| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas; para OTIR/OTDR, `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop` cobre o B-loop, incluindo L pós-atualização e a fórmula de repetição derivada de teste em hardware NMOS. A iteração simples ainda requer diferencial mais amplo |
 
 **Nota sobre aliases:** os padrões de NEG e RETN/RETI reconhecem oito bytes cada e executam um mesmo corpo. Para RETI, o núcleo não distingue a semântica externa de sinalização de fim de interrupção usada por controladores com daisy chain. A equivalência interna de retorno não prova equivalência do comportamento externo.
 
@@ -104,7 +105,7 @@ IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa f
 
 ### 4.4 Flags, WZ e estado de interrupção
 
-- `LD A,I`/`LD A,R`: PV usa IFF2; o manual ZiLOG determina P/V=0 quando INT é aceito durante a instrução. Executor atômico e microsequenciador devem aplicar o latch somente na fronteira imediatamente seguinte; NMI não aplica a exceção de INT. Ver `docs/audits/z80-e7-ld-a-i-r-nmos-interrupt-erratum-2026-11-05.md`. 
+- `LD A,I`/`LD A,R`: PV usa IFF2; o manual ZiLOG determina P/V=0 quando INT é aceito durante a instrução. Executor atômico e microsequenciador devem aplicar o latch somente na fronteira imediatamente seguinte; NMI não aplica a exceção de INT. Ver `docs/audits/z80-e7-ld-a-i-r-nmos-interrupt-erratum-2026-11-05.md`.
 - `ADC/SBC HL,rr`: conferir exaustivamente carry/borrow, H, overflow, S/Z e bits X/Y do byte alto.
 - `RRD/RLD`: validar os dois nibbles, memória, A, S/Z/PV, preservação de C, WZ e ciclos.
 - `NEG`: testar A=00, 01, 7F, 80, FF e todos os aliases.
@@ -118,7 +119,7 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 
 ## 5. Matriz de testes e evidência no SHA candidato
 
-**SHA de código validado:** `e9776e705d0ff55bfc701a933ff7bea2d70c1974` (branch `test/exhaustive-z80-ed-opcodes`, PR #183).  
+**SHA de código validado:** `e9776e705d0ff55bfc701a933ff7bea2d70c1974` (branch `test/exhaustive-z80-ed-opcodes`, PR #183).
 **Escopo do resultado:** regressão determinística em CI; sem hardware físico, ROM de teste externa executada, nem comparação automatizada diferencial.
 
 | Área | Teste/evidência | Resultado |
@@ -225,3 +226,154 @@ O README do corpus SingleStepTests/Z80 no commit fixado `ebe1875d48f374bcfd4b505
 - A implementação atual segue essa fórmula secundária para flags de I/O em bloco. Os vetores SingleStepTests existentes passam, mas sua ancestralidade em Ares impede tratá-los como confirmação independente dessa mesma fórmula.
 
 **Conclusão de engenharia:** manter o comportamento atual para não introduzir uma regressão especulativa, mas rotular as fórmulas como hipótese de compatibilidade para a variante-alvo, não como comportamento universal demonstrado. Para resolver a questão, precisamos de um exercitador de hardware/ROM independente com procedência verificável, ou de um segundo oráculo sem ancestralidade comum conhecida, e vetores discriminantes para C/H/PV em INI/IND/OUTI/OUTD e suas variantes repetidas. Nenhum teste atual prova a resposta do silício físico.
+
+
+---
+
+## Atualização E7.7 — wrap de transferências absolutas (2026-11-09)
+
+Baseline de origem: `main` `0011eb41cee2352d2aaea71cae568e2c4d3a21e1`.
+
+A lacuna histórica de teste para `nn = 0xFFFF` nas famílias ED 43/53/63/73 e ED 4B/5B/6B/7B recebeu cobertura no teste `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff`, dentro do módulo de testes que contém o `TestBus`.
+
+A matriz cobre BC, DE, HL e SP:
+- store little-endian em FFFF/0000;
+- load little-endian de FFFF/0000;
+- WZ = 0000 após wrap;
+- PC = início + 4;
+- 20 T-states;
+- flags F preservadas.
+
+A implementação de runtime já usava aritmética de 16 bits com wrap; esta alteração adiciona evidência de borda e não altera código de produção. O teste compara resultados arquiteturais explícitos e não usa o executor como oráculo.
+
+A execução focada e os gates Rust devem passar no HEAD exato desta PR. Diferencial de hardware: NOT RUN. E7.7 global permanece IN_PROGRESS; E8 permanece BLOCKED.
+
+
+---
+
+## Reconciliação da baseline — main 2026-11-09
+
+**SHA atual:** `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+
+- PR #673 adicionou o teste de fronteira `ed_absolute_word_transfers_wrap_address_and_wz_at_ffff` para os oito opcodes de transferência absoluta de palavras. O teste foi executado no CI #42568163213 (HEAD `b6f94ff010782a5dd18e6c684e625c2eec9d7a6e`) com sucesso; merge SHA `ca1b26089bd649a9248fab4ecbe47b78bc2eb49d`.
+- A cobertura verifica store/load de BC, DE, HL e SP, segundo byte em `0x0000` após endereço `0xFFFF`, WZ=0000, PC, flags preservadas e 20 T-states.
+- A subquestão de flags de repetição em I/O de bloco recebeu uma fonte adicional de hardware: `Z80 Block Flags Test v5.0`, documentada por Peter Helcmanovsky e testada em hardware Z80 NMOS. A auditoria específica separa o escopo confirmado do que ainda não foi executado ou provado: [auditoria de evidência de hardware](audits/z80-e7-block-io-hardware-evidence-2026-11-09.md).
+- O teste de hardware citado é limitado à interrupção IM2 durante repetição de instruções de bloco; não substitui uma validação exaustiva nem comprova diretamente o Master System.
+- E7.7 global permanece IN_PROGRESS. E8 permanece BLOCKED.
+
+
+---
+
+## Atualização E7.7 — fixture de B-loop derivado de hardware (PR #675)
+
+**Baseline:** `main` = `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+A PR #675 integrou `block_io_repeat_flags_match_hardware_banks_formula_across_b_loop`; PR #677 integrou observação IM2 no último T-state; PR #678 integrou o retorno RETI e retomada do bloco.
+
+- B inicial: `0x10..=0xD0`, passo 3 (65 valores).
+- Endereços de instrução: `0x8002`, `0x8802`, `0xA002`, `0xA802`, cobrindo as combinações de XY vindas de PC.13/PC.11.
+- Casos: INIR, INDR, OTIR e OTDR, com valores e condições de carry documentados pelo ROM v5.0.
+- Fórmula independente: `Balu = Bo + (NF ? -CF : CF)`, `H=(Balu XOR Bo).4`, `PV=parity((T&7) XOR Bo XOR (Balu&7))`. Para OUTI/OUTD, `L` é o valor pós-incremento/decremento; para INI/IND, usa-se `C±1`.
+- Verificações: flags, B, PC, WZ, 21 T-states e transações de porta; executor atômico e microsequenciador são comparados ao resultado algébrico independente.
+- CI #42568885363: SUCCESS no HEAD `33d3dcf8d41f2f18d0826a1401013e9e1582503e`; merge SHA `1e14d32d5871326cc7f904cef7c5ad4feb1cd86c`.
+
+Este fixture não executa o ROM v5.0 no core e não é uma nova medição em hardware. A evidência física segue parcial e limitada ao perfil NMOS. E7.7 continua IN_PROGRESS; E8 continua BLOCKED.
+
+
+## Atualização IM2/RETI — PRs #677 e #678
+
+Baseline: `043ecb61d8d1cc77245fa72639d7f210d88cab26`.
+
+O teste `block_io_repeat_flags_are_observable_in_im2_handler_after_final_repeat_tstate` foi estendido para o handler `PUSH AF; POP AF; EI; RETI`. Após o RETI, a CPU retorna ao endereço ED e executa a iteração repetitiva seguinte. O teste verifica F no stack, A/F restaurados, SP, PC, IFF1/IFF2, EI delay, B, WZ, transações e tempos.
+
+A INT é assertada no último T-state do ciclo interno de repetição. O microsequenciador mantém a linha level-sensitive até o teste desassertá-la após o serviço; o executor atômico usa a solicitação one-shot equivalente. O teste cobre INIR/INDR/OTIR/OTDR.
+
+Isso conclui o fixture adaptado de IM2/RETI/retomada no core. O ROM v5.0 completo continua NOT_RUN; SMS físico continua NOT_RUN; CMOS/clones continuam NOT_VERIFIED. E7.7 permanece IN_PROGRESS e E8 permanece BLOCKED.
+
+
+## 11. Reconciliação do microsequenciador — 2026-11-09
+
+A contagem 78 explícitas / 178 fallback continua descrevendo o despachante atômico em `native/z80_cpu/src/cpu.rs`. Ela não pode ser transferida automaticamente ao caminho retomável.
+
+### Divergência identificada
+
+- Executor atômico: os 78 bytes explícitos são tratados por famílias; o braço `_ => 8` final faz os outros 178 retornarem 8 T-states. Os testes `all_256_ed_encodings_match_nominal_cycle_vectors` e `every_ed_fallback_encoding_is_an_eight_tstate_no_op` pertencem a esse caminho.
+- Microsequenciador: `execute_ed_register_control` em `native/z80_cpu/src/sequencer.rs` retorna `UnsupportedOpcode` no braço `_`. A chamada ocorre após a leitura do segundo byte ED; não existe fallback equivalente de aposentadoria de 8T para os 178 bytes.
+- Portanto, os testes atômicos existentes não comprovam o caminho retomável. F-033 permanece GAP_CONFIRMED até teste dirigido de todos os 178 bytes no microsequenciador e implementação validada.
+
+### Confronto documental e de referência
+
+- UM0080 (Zilog Z80 CPU User Manual, edição UM008011-0816) documenta as instruções ED oficiais, mas não define o comportamento de todos os bytes reservados.
+- MAME `z80.lst`, revisão `c7541016a35d83a3eb5db5db5d20a5cb79a17a43`, lista 178 bytes `DB ED` encaminhados a `illegal_2()`. Isso é comportamento de implementação de referência, não prova de silício.
+- Referências secundárias descrevem esses bytes reservados como operações sem efeito no Z80 clássico. A hipótese de 8T NOP é adequada ao perfil NMOS-alvo, mas deve permanecer delimitada e testável.
+- A matriz byte a byte foi criada em `docs/z80-ed-opcode-matrix.md`.
+
+### Aceite pendente
+
+1. Testar os 178 bytes no microsequenciador, com estado inicial discriminante e PC/R/WZ/flags/Q/P/memória.
+2. Confirmar aposentadoria de 8T e ausência de efeitos colaterais.
+3. Comparar com o executor atômico apenas como diferencial interno.
+4. Manter a classificação de variante explícita; não inferir comportamento CMOS ou de clones.
+
+
+## 12. Reconciliação após PR #702
+
+A PR #702 corrigiu Q/previous-Q para DD/FD→SCF/CCF e validou 34.000 vetores externos. Não alterou decoder, despachante, sequenciador ou fallback ED. A divergência permanece inalterada: 178 bytes reservados são NOP de 8T no executor atômico e `UnsupportedOpcode` no microsequenciador. F-033 permanece GAP_CONFIRMED; não inferir que a integração Q resolveu qualquer parte do fallback ED.
+
+
+## 13. Candidata F-033 — PR #706 — 2026-11-09
+
+**Main de entrada:** `9d5d83d0df16a1c6fa9fb82bdd953af54369c613`
+**HEAD candidato:** `cab1603e9699e44b5f2edd418186f63410cad65a`
+**Estado integrado:** PR #706 MERGED; HEAD validado `b2291a83848e236d2354d8f03e22b831f9030b72`; CI #42635309051 SUCCESS. A PR #709/#710 não alterou o comportamento de F-033.
+
+O fallback residual em `execute_ed_register_control()` aposenta via `retire(opcode)` após os dois M1 já consumidos. Não adiciona M-cycles/T-states internos nem acesso extra de barramento; duração nominal de 8T, acrescida dos WAIT efetivamente inseridos nos dois fetches.
+
+A suíte `native/z80_cpu/tests/ed_reserved_f033.rs` percorre os 178 segundos bytes não cobertos pelas 78 codificações explícitas e verifica PC/wrap, R, F, Q/previous-Q, WZ, P, IFF1/IFF2, IM, fase Ready e ausência de request pendente. Também valida WAIT e snapshot/restore com retomada entre prefixo e byte terminal.
+
+**Limite da evidência:** CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 não especifica universalmente todos os bytes reservados. MAME e fontes secundárias sustentam a hipótese de compatibilidade, mas não constituem prova de silício. Nenhuma afirmação é feita para CMOS, R800, Z80N ou clones. F-034 foi posteriormente fechada pela PR #709; E7 continua IN_PROGRESS e E8 BLOCKED.
+
+
+## Reconciliação pós-PR #710 — 2026-11-09
+
+A baseline remota é `56d75cc79803494e9fd8a54e8930871c9101fc84`. F-033 está CLOSED para o perfil Zilog NMOS clássico, com a cobertura dos 178 bytes reservados e os limites acima. F-034 está CLOSED para o perfil de compatibilidade NMOS clássico SMS/SG-1000, conforme PR #709 (CI #6034 no HEAD exato) e reconciliação documental #710 (CI #6036). Essas classificações não representam compatibilidade universal de variantes nem validação física. E7 permanece IN_PROGRESS por auditoria semântica global; E8 permanece BLOCKED.
+
+
+## 7. F-023 — RRD/RLD: expansão exaustiva de evidência integrada PR #714
+
+A candidata amplia a validação de RRD/RLD sem alterar runtime. No executor atômico, 262.144 casos percorrem ambos os opcodes, todos os valores de A e (HL) e ambos os estados iniciais de Carry. O oracle calcula diretamente a rotação de nibbles e as flags documentadas: S/Z/PV derivados do novo A; H/N zerados; C preservado. Também verifica HL, PC, R, WZ e a escrita de memória.
+
+O teste microsequenciado acrescenta 16 casos dirigidos, com WAIT em cada pedido de barramento e snapshot encode/decode + restore após cada ciclo. Confere a sequência dos dois fetches M1, leitura e escrita de (HL), 18T nominais/22T com WAIT.
+
+**Distinção de evidência:** UM0080 documenta as transformações, 5 M-cycles, 18 T-states (4,4,3,4,3) e as flags S/Z/H/PV/N/C. Não documenta explicitamente X/Y nem WZ. MAME (`src/devices/cpu/z80/z80.lst`, macros `rrd`/`rld`, commit `df58101a63890084c249119566c97bd849ca28ac`) e ares (`ares/component/processor/z80/instructions.cpp`, `instructionRLD`/`instructionRRD`, commit `19d051721bb14c46be92a713216421447dec91b7`) concordam em X/Y derivados de A e WZ=HL+1. Essa concordância é referência comparativa, não evidência de silício.
+
+F-023 permanece AUDIT_PARTIAL até prova independente de X/Y/WZ e validação temporal/hardware adicional. Nenhuma afirmação de validação física SMS, CMOS ou clones.
+
+
+## 8. Integração e CI — PR #714
+
+PR #714 MERGED em `3a81437362dad79577058852b5f469381d3bde2c`; HEAD validado `bb15e672f30d8aae3777761f1545347fc3d520ea`; CI #6056 PASS e pós-merge #6057 PASS. A suíte Z80 focada executou fmt, Clippy, testes Z80/SMS/SG-1000 e vetores externos DD/FD. O teste exaustivo `ed_rrd_rld_exhaustive_nibble_transform_and_flag_contract` passou com 262.144 vetores em 2,88 s. A fixture microsequenciada `rrd_rld_boundary_vectors_preserve_wait_snapshot_and_bus_order` também passou.
+
+O primeiro ensaio da fixture exaustiva revelou apenas um defeito no próprio teste: o byte fonte não era restaurado entre as duas variantes de Carry. A fixture foi corrigida para restaurar a memória antes de cada vetor; a execução final passou. Nenhum defeito de runtime foi identificado nem corrigido nesta tarefa.
+
+F-023 permanece AUDIT_PARTIAL pelos limites já registrados; E7 IN_PROGRESS; E8 BLOCKED.
+
+
+## 9. F-024 — fechamento auditado pela PR #716
+
+PR #716 MERGED em `56d75cc79803494e9fd8a54e8930871c9101fc84`; HEAD validado `9338f8dfee679fee6270c01f9670d6b678d219a0`; CI #6062 e pós-merge #6063 PASS. O teste exaustivo `all_four_i_r_transfer_opcodes_cover_all_byte_values_iff2_and_carry` percorre 4.096 vetores nos dois executores; microsequenciador inclui WAIT em cada M1 e snapshot/restore por fronteira. A matriz do erratum foi ampliada para IFF2 e Carry 0/1 nos dois opcodes, com INT aceito imediatamente após a instrução, no microsequenciador e no executor atômico SMS.
+
+F-024 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico. UM0080 (pp. 94–97) especifica os quatro opcodes, 9T (4,5), flags normativas e erratum de P/V=0 quando INT ocorre durante LD A,I/R. X/Y não é explicitamente enumerado na descrição de flags do UM0080; a derivação do valor carregado é mantida como comportamento de referência MAME/ares, não como prova de silício. Hardware SMS NOT RUN; CMOS/clones NOT_VERIFIED. E7 permanece IN_PROGRESS; E8 BLOCKED.
+
+
+## 10. F-025 — RETN/RETI e aliases, fechamento no perfil NMOS — PR #718
+
+PR #718 MERGED em `f0cfc7b9df1834ae8ad418c6241702e9003f072e`; HEAD validado `24fd53a5eb7c36462fa6ebc332e1a15b1504cbce`; CI #6071 / run `42658617730` PASS no HEAD exato da PR. CI pós-merge #6072 / run `42658844499` PASS no HEAD exato da main `f0cfc7b9df1834ae8ad418c6241702e9003f072e`.
+
+A matriz cobre ED45, ED4D, ED55, ED5D, ED65, ED6D, ED75 e ED7D. Para cada encoding: IFF2 false/true; IFF1 inicial inversa; SP normal, 0xFFFF e 0x0000; PC restaurado; SP incrementado com wrap; IFF1 recebe IFF2; IFF2 preservada; R incrementado pelos dois M1. O executor atômico e o microsequenciador são comparados; o microsequenciador verifica a ordem de barramento (fetch ED, fetch terminal, stack low, stack high), WAIT em cada pedido nos dois casos de wrap e snapshot encode/decode + restore após cada transação. Tempos: 14T nominal e 18T com quatro WAITs.
+
+WZ é atualizado para o endereço restaurado em PC. Essa expectativa foi corrigida após a primeira execução de teste, que incorretamente esperava preservar o WZ inicial; MAME (`macro retn`/`macro reti`) e ares (`instructionRETN`/`instructionRETI`) confirmam WZ=PC. Nenhum código de runtime foi alterado.
+
+UM0080 documenta RETN e RETI e sua semântica interna; MAME distingue a notificação `daisy_call_reti_device()` do retorno RETI. Os perfis SMS/SG-1000 atuais não possuem consumidor daisy-chain, portanto essa notificação é NOT_APPLICABLE neste escopo. Os oito encodings de IM0/1/2 permanecem cobertos pela auditoria ED anterior.
+
+**Classificação:** F-025 CLOSED somente para o perfil de compatibilidade Zilog NMOS clássico SMS/SG-1000. Hardware SMS NOT RUN; CMOS/R800/Z80N/clones NOT_VERIFIED. E7 IN_PROGRESS; E8 BLOCKED.

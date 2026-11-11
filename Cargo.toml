@@ -16,6 +16,8 @@ members = [
     "native/machine_scheduler",
     "native/video_runtime",
     "native/video_core",
+    "native/observability",
+    "native/debugger_core",
     "rust/runtime/sms-runtime",
 ]
 default-members = [
@@ -30,5 +32,10 @@ default-members = [
     "native/temporal_core",
     "native/machine_scheduler",
     "native/video_runtime",
+    "native/observability",
     "rust/runtime/sms-runtime",
 ]
+
+[workspace.dependencies]
+sega-observability = { path = "native/observability" }
+sega-debugger-core = { path = "native/debugger_core" }

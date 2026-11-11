@@ -194,6 +194,12 @@ impl Z80 {
     /// General-purpose, alternate, index and stack registers are not reset.
     /// The external INT level and machine T-state timeline are also preserved.
     pub fn reset(&mut self) {
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            pc = self.registers.pc,
+            total_tstates = self.total_tstates,
+            "Z80 reset asserted"
+        );
         self.registers.pc = 0;
         self.i = 0;
         self.r = 0;
@@ -221,11 +227,28 @@ impl Z80 {
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
     pub fn request_nmi(&mut self) {
+        if !self.nmi_pending {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                "NMI request latched"
+            );
+        }
         self.nmi_pending = true;
     }
 
     /// Latch a maskable interrupt and the byte supplied by the external data bus.
     pub fn request_int(&mut self, data_bus: u8) {
+        if self.int_pending != Some(data_bus) {
+            sega_observability::tracing::trace!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                data_bus,
+                interrupt_mode = self.interrupt_mode,
+                "INT request latched or vector changed"
+            );
+        }
         self.int_pending = Some(data_bus);
     }
 
@@ -235,6 +258,13 @@ impl Z80 {
     }
 
     fn service_nmi<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            return_pc = self.registers.pc,
+            vector = 0x0066_u16,
+            total_tstates = self.total_tstates,
+            "NMI accepted"
+        );
         self.nmi_pending = false;
         self.halted = false;
         self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
@@ -251,6 +281,14 @@ impl Z80 {
 
     fn service_int<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         let data_bus = self.int_pending.take().unwrap_or(0xFF);
+        sega_observability::tracing::debug!(
+            target: "sega::z80",
+            pc = self.registers.pc,
+            data_bus,
+            interrupt_mode = self.interrupt_mode,
+            total_tstates = self.total_tstates,
+            "INT accepted"
+        );
         let return_address = self.registers.pc;
         self.halted = false;
         self.iff1 = false;
@@ -353,6 +391,15 @@ impl Z80 {
             bus.observe_instruction_trace(trace);
         } else {
             self.capture_opcode_trace = false;
+        }
+        if let Err(error) = &result {
+            sega_observability::tracing::error!(
+                target: "sega::z80",
+                pc = self.registers.pc,
+                total_tstates = self.total_tstates,
+                error = ?error,
+                "Z80 instruction execution failed"
+            );
         }
         result
     }
@@ -845,6 +892,9 @@ impl Z80 {
     /// affect an instruction are ignored while retaining their extra M1 cost.
     fn execute_indexed<B: CpuBus>(&mut self, bus: &mut B, prefix: u8) -> Result<u32, CpuError> {
         let mut active_prefix = prefix;
+        // On Zilog NMOS, DD/FD is the previous non-flag-modifying instruction
+        // for SCF/CCF's undocumented X/Y flag calculation.
+        self.q_previous = 0;
         let mut opcode = self.fetch_opcode(bus);
         let mut extra_prefix_cycles = 0_u32;
         while opcode == 0xDD || opcode == 0xFD {
@@ -1179,8 +1229,9 @@ impl Z80 {
         self.q = flags;
     }
 
-    /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
-    /// documented as two-byte NOPs on the classic Z80.
+    /// Execute ED-prefixed Z80 instructions. The residual ED fallback models
+    /// reserved bytes as no-effect 8T encodings for the classic Zilog NMOS profile;
+    /// UM0080 does not specify these bytes universally across CPU variants.
     fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_enabled: bool) -> u32 {
         match opcode {
             0x47 => {
@@ -2104,7 +2155,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_Z, Z80};
+    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
@@ -3162,21 +3213,37 @@ mod tests {
     }
 
     #[test]
-    fn ed_neg_aliases_produce_identical_results_and_flags() {
-        let mut reference: Option<(u8, u8)> = None;
+    fn ed_neg_aliases_match_independent_results_and_flags_for_all_inputs() {
         for opcode in [0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C] {
-            let mut bus = TestBus([0; 0x10000]);
-            bus.0[..2].copy_from_slice(&[0xED, opcode]);
-            let mut cpu = Z80::default();
-            cpu.registers.a = 0x80;
-            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
-            assert_eq!(cpu.registers.a, 0x80, "ED {opcode:02X}");
-            assert_eq!(cpu.registers.f, 0x87, "ED {opcode:02X}");
-            let result = (cpu.registers.a, cpu.registers.f);
-            if let Some(expected) = reference {
-                assert_eq!(result, expected, "NEG alias ED {opcode:02X}");
-            } else {
-                reference = Some(result);
+            for value in 0_u8..=u8::MAX {
+                let mut bus = TestBus([0; 0x10000]);
+                bus.0[..2].copy_from_slice(&[0xED, opcode]);
+                let mut cpu = Z80::default();
+                cpu.registers.a = value;
+
+                let result = 0_u8.wrapping_sub(value);
+                let mut expected_flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 {
+                    expected_flags |= FLAG_Z;
+                }
+                if value & 0x0F != 0 {
+                    expected_flags |= FLAG_H;
+                }
+                if value == 0x80 {
+                    expected_flags |= FLAG_PV;
+                }
+                expected_flags |= FLAG_N;
+                if value != 0 {
+                    expected_flags |= FLAG_C;
+                }
+
+                assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(cpu.registers.a, result, "ED {opcode:02X}, A={value:02X}");
+                assert_eq!(
+                    cpu.registers.f, expected_flags,
+                    "ED {opcode:02X}, A={value:02X}"
+                );
+                assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X}, A={value:02X}");
             }
         }
     }
@@ -3208,19 +3275,30 @@ mod tests {
     #[test]
     fn ed_retn_reti_aliases_restore_iff1_and_pop_return_address() {
         for opcode in [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
-            let mut bus = TestBus([0; 0x10000]);
-            bus.0[..2].copy_from_slice(&[0xED, opcode]);
-            bus.0[0xD000] = 0x34;
-            bus.0[0xD001] = 0x12;
-            let mut cpu = Z80::default();
-            cpu.registers.sp = 0xD000;
-            cpu.iff1 = false;
-            cpu.iff2 = true;
-            assert_eq!(cpu.step(&mut bus), Ok(14), "ED {opcode:02X}");
-            assert_eq!(cpu.registers.pc, 0x1234, "ED {opcode:02X}");
-            assert_eq!(cpu.registers.sp, 0xD002, "ED {opcode:02X}");
-            assert!(cpu.iff1, "ED {opcode:02X}: IFF1 must be restored from IFF2");
-            assert!(cpu.iff2, "ED {opcode:02X}: IFF2 must remain unchanged");
+            for iff2 in [false, true] {
+                for (sp, return_address) in
+                    [(0xD000_u16, 0x1234_u16), (0xFFFF, 0x5678), (0x0000, 0x9ABC)]
+                {
+                    let mut bus = TestBus([0; 0x10000]);
+                    bus.0[0x1000] = 0xED;
+                    bus.0[0x1001] = opcode;
+                    bus.0[usize::from(sp)] = return_address as u8;
+                    bus.0[usize::from(sp.wrapping_add(1))] = (return_address >> 8) as u8;
+
+                    let mut cpu = Z80::default();
+                    cpu.registers.pc = 0x1000;
+                    cpu.registers.sp = sp;
+                    cpu.iff1 = !iff2;
+                    cpu.iff2 = iff2;
+
+                    assert_eq!(cpu.step(&mut bus), Ok(14), "ED {opcode:02X}");
+                    assert_eq!(cpu.registers.pc, return_address, "ED {opcode:02X}");
+                    assert_eq!(cpu.registers.sp, sp.wrapping_add(2), "ED {opcode:02X}");
+                    assert_eq!(cpu.iff1, iff2, "ED {opcode:02X}: IFF1 <- IFF2");
+                    assert_eq!(cpu.iff2, iff2, "ED {opcode:02X}: IFF2 unchanged");
+                    assert_eq!(cpu.r, 0x02, "ED {opcode:02X}: two M1 refresh increments");
+                }
+            }
         }
     }
 
@@ -3281,6 +3359,71 @@ mod tests {
         assert_eq!(rld_bus.0[0xC000], 0x42);
         assert_eq!(rld.registers.f, FLAG_C);
         assert_eq!(rld.wz, 0xC001);
+    }
+
+    #[test]
+    fn ed_rrd_rld_exhaustive_nibble_transform_and_flag_contract() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[0x1000] = 0xED;
+
+        for opcode in [0x67, 0x6F] {
+            bus.0[0x1001] = opcode;
+            for accumulator in u8::MIN..=u8::MAX {
+                for memory_value in u8::MIN..=u8::MAX {
+                    let address = if accumulator == u8::MAX && memory_value == u8::MAX {
+                        0xFFFF
+                    } else {
+                        0xC000
+                    };
+                    for carry in [0, FLAG_C] {
+                        bus.0[usize::from(address)] = memory_value;
+                        let (expected_a, expected_memory) = if opcode == 0x67 {
+                            (
+                                (accumulator & 0xF0) | (memory_value & 0x0F),
+                                ((accumulator & 0x0F) << 4) | (memory_value >> 4),
+                            )
+                        } else {
+                            (
+                                (accumulator & 0xF0) | (memory_value >> 4),
+                                (memory_value << 4) | (accumulator & 0x0F),
+                            )
+                        };
+                        let mut expected_flags = carry | (expected_a & (FLAG_S | FLAG_XY));
+                        if expected_a == 0 {
+                            expected_flags |= FLAG_Z;
+                        }
+                        if expected_a.count_ones().is_multiple_of(2) {
+                            expected_flags |= FLAG_PV;
+                        }
+
+                        let mut cpu = Z80::default();
+                        cpu.registers.pc = 0x1000;
+                        cpu.registers.a = accumulator;
+                        cpu.registers.set_hl(address);
+                        cpu.registers.f =
+                            FLAG_S | FLAG_Z | FLAG_H | FLAG_PV | FLAG_N | FLAG_XY | carry;
+                        cpu.r = 0xFE;
+                        cpu.wz = 0xABCD;
+
+                        assert_eq!(
+                            cpu.step(&mut bus),
+                            Ok(18),
+                            "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}"
+                        );
+                        assert_eq!(
+                            cpu.registers.a, expected_a,
+                            "ED {opcode:02X}, A={accumulator:02X}, (HL)={memory_value:02X}, C={carry:02X}"
+                        );
+                        assert_eq!(bus.0[usize::from(address)], expected_memory);
+                        assert_eq!(cpu.registers.f, expected_flags);
+                        assert_eq!(cpu.registers.hl(), address);
+                        assert_eq!(cpu.registers.pc, 0x1002);
+                        assert_eq!(cpu.r, 0x80);
+                        assert_eq!(cpu.wz, address.wrapping_add(1));
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -3383,6 +3526,95 @@ mod tests {
     }
 
     #[test]
+    fn ed_block_simple_forms_exhaustively_preserve_flags_and_track_wz() {
+        let mut bus = TestBus([0; 0x10000]);
+        for opcode in [0xA0_u8, 0xA8, 0xA1, 0xA9] {
+            let decrement = matches!(opcode, 0xA8 | 0xA9);
+            for accumulator in 0_u8..=u8::MAX {
+                for memory_value in 0_u8..=u8::MAX {
+                    for initial_count in [1_u16, 2] {
+                        bus.0[0xC200] = 0;
+                        bus.0[0x1000] = 0xED;
+                        bus.0[0x1001] = opcode;
+                        bus.0[0xC100] = memory_value;
+
+                        let initial_flags = accumulator.wrapping_add(memory_value);
+                        let initial_wz = 0xA55A_u16
+                            .wrapping_add(u16::from(accumulator) << 8)
+                            .wrapping_add(u16::from(memory_value));
+                        let direction = if decrement { -1_i16 } else { 1_i16 };
+                        let mut cpu = Z80::default();
+                        cpu.registers.pc = 0x1000;
+                        cpu.registers.a = accumulator;
+                        cpu.registers.f = initial_flags;
+                        cpu.registers.set_hl(0xC100);
+                        cpu.registers.set_de(0xC200);
+                        cpu.registers.set_bc(initial_count);
+                        cpu.wz = initial_wz;
+
+                        assert_eq!(
+                            cpu.step(&mut bus),
+                            Ok(16),
+                            "ED {opcode:02X}, A={accumulator:02X}, value={memory_value:02X}, BC={initial_count}"
+                        );
+
+                        let remaining = initial_count.wrapping_sub(1);
+                        assert_eq!(cpu.registers.bc(), remaining);
+                        assert_eq!(
+                            cpu.registers.hl(),
+                            0xC100_u16.wrapping_add_signed(direction)
+                        );
+                        assert_eq!(cpu.registers.pc, 0x1002);
+
+                        let expected_flags = if matches!(opcode, 0xA0 | 0xA8) {
+                            let sum = accumulator.wrapping_add(memory_value);
+                            (initial_flags & (FLAG_S | FLAG_Z | FLAG_C))
+                                | if remaining != 0 { FLAG_PV } else { 0 }
+                                | (sum & 0x08)
+                                | ((sum & 0x02) << 4)
+                        } else {
+                            let result = accumulator.wrapping_sub(memory_value);
+                            let half = (accumulator & 0x0F) < (memory_value & 0x0F);
+                            let adjusted = result.wrapping_sub(u8::from(half));
+                            (initial_flags & FLAG_C)
+                                | FLAG_N
+                                | (result & FLAG_S)
+                                | if result == 0 { FLAG_Z } else { 0 }
+                                | if half { FLAG_H } else { 0 }
+                                | if remaining != 0 { FLAG_PV } else { 0 }
+                                | (adjusted & 0x08)
+                                | ((adjusted & 0x02) << 4)
+                        };
+                        assert_eq!(
+                            cpu.registers.f, expected_flags,
+                            "ED {opcode:02X}, A={accumulator:02X}, value={memory_value:02X}, BC={initial_count}"
+                        );
+
+                        let expected_wz = if matches!(opcode, 0xA1 | 0xA9) {
+                            initial_wz.wrapping_add_signed(direction)
+                        } else {
+                            initial_wz
+                        };
+                        assert_eq!(
+                            cpu.wz, expected_wz,
+                            "ED {opcode:02X} WZ, A={accumulator:02X}, value={memory_value:02X}"
+                        );
+                        if matches!(opcode, 0xA0 | 0xA8) {
+                            assert_eq!(bus.0[0xC200], memory_value);
+                            assert_eq!(
+                                cpu.registers.de(),
+                                0xC200_u16.wrapping_add_signed(direction)
+                            );
+                        } else {
+                            assert_eq!(cpu.registers.a, accumulator);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ed_block_io_vectors_check_ports_memory_counter_and_repeat() {
         let mut ini_bus = TestIoBus::default();
         ini_bus.memory[..2].copy_from_slice(&[0xED, 0xA2]);
@@ -3435,6 +3667,36 @@ mod tests {
         assert_eq!(otir.registers.b, 1);
         assert_eq!(otir.registers.hl(), 0xC101);
         assert_eq!(otir.registers.pc, 0);
+    }
+
+    #[test]
+    fn ed70_discards_all_port_values_and_updates_only_documented_flags() {
+        for value in 0_u8..=u8::MAX {
+            let mut bus = TestIoBus::default();
+            bus.memory[..2].copy_from_slice(&[0xED, 0x70]);
+            bus.port_value = value;
+            let mut cpu = Z80::default();
+            cpu.registers.set_bc(0x3307);
+            cpu.registers.a = 0xA5;
+            cpu.registers.f = FLAG_C;
+
+            assert_eq!(cpu.step(&mut bus), Ok(12), "ED 70, input={value:02X}");
+            assert_eq!(bus.port_reads, vec![0x3307], "ED 70, input={value:02X}");
+            assert!(bus.port_writes.is_empty());
+            assert_eq!(cpu.registers.a, 0xA5);
+            assert_eq!(cpu.registers.b, 0x33);
+            assert_eq!(cpu.registers.c, 0x07);
+            assert_eq!(cpu.registers.f & FLAG_C, FLAG_C, "Carry preserved");
+            let mut expected_flags = FLAG_C | (value & (FLAG_S | FLAG_XY));
+            if value == 0 {
+                expected_flags |= FLAG_Z;
+            }
+            if value.count_ones().is_multiple_of(2) {
+                expected_flags |= FLAG_PV;
+            }
+            assert_eq!(cpu.registers.f, expected_flags, "ED 70, input={value:02X}");
+            assert_eq!(cpu.wz, 0x3308);
+        }
     }
 
     #[test]
@@ -3631,12 +3893,73 @@ mod tests {
         assert_eq!(otdr.registers.hl(), 0xC0FF);
         assert_eq!(otdr.registers.pc, 0);
     }
+
+    #[test]
+    fn ed_absolute_word_transfers_wrap_address_and_wz_at_ffff() {
+        for (store_opcode, load_opcode, pair) in [
+            (0x43, 0x4B, 0_u8), // BC
+            (0x53, 0x5B, 1_u8), // DE
+            (0x63, 0x6B, 2_u8), // HL
+            (0x73, 0x7B, 3_u8), // SP
+        ] {
+            let expected = [0x1234_u16, 0x2345, 0x3456, 0x4567][usize::from(pair)];
+            let mut store_bus = TestBus([0; 0x10000]);
+            store_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, store_opcode, 0xFF, 0xFF]);
+            let mut store_cpu = Z80::default();
+            store_cpu.registers.pc = 0x0100;
+            store_cpu.registers.f = 0xA5;
+            store_cpu.registers.set_bc(0x1234);
+            store_cpu.registers.set_de(0x2345);
+            store_cpu.registers.set_hl(0x3456);
+            store_cpu.registers.sp = 0x4567;
+
+            assert_eq!(store_cpu.step(&mut store_bus), Ok(20));
+            assert_eq!(store_bus.0[0xFFFF], expected as u8);
+            assert_eq!(store_bus.0[0x0000], (expected >> 8) as u8);
+            assert_eq!(store_cpu.wz, 0x0000);
+            assert_eq!(store_cpu.registers.pc, 0x0104);
+            assert_eq!(store_cpu.registers.f, 0xA5);
+
+            let mut load_bus = TestBus([0; 0x10000]);
+            load_bus.0[0x0100..0x0104].copy_from_slice(&[0xED, load_opcode, 0xFF, 0xFF]);
+            load_bus.0[0xFFFF] = 0xCD;
+            load_bus.0[0x0000] = 0xAB;
+            let mut load_cpu = Z80::default();
+            load_cpu.registers.pc = 0x0100;
+            load_cpu.registers.f = 0x5A;
+
+            assert_eq!(load_cpu.step(&mut load_bus), Ok(20));
+            let actual = match pair {
+                0 => load_cpu.registers.bc(),
+                1 => load_cpu.registers.de(),
+                2 => load_cpu.registers.hl(),
+                _ => load_cpu.registers.sp,
+            };
+            assert_eq!(actual, 0xABCD);
+            assert_eq!(load_cpu.wz, 0x0000);
+            assert_eq!(load_cpu.registers.pc, 0x0104);
+            assert_eq!(load_cpu.registers.f, 0x5A);
+        }
+    }
 }
 
 #[cfg(test)]
 mod architectural_state_tests {
     use super::{Z80, Z80AlternateRegisters, Z80Registers};
+    use crate::bus::CpuBus;
     use crate::{Z80ArchitecturalState, Z80ArchitecturalStateError};
+
+    struct AtomicTestBus([u8; 0x10000]);
+
+    impl CpuBus for AtomicTestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.0[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.0[usize::from(address)] = value;
+        }
+    }
 
     #[test]
     fn atomic_executor_architectural_state_round_trips_all_cpu_fields() {
@@ -3726,6 +4049,43 @@ mod architectural_state_tests {
             Err(Z80ArchitecturalStateError::InvalidInterruptMode(3))
         );
         assert_eq!(cpu.export_architectural_state(), before);
+    }
+
+    #[test]
+    fn indexed_ld_sp_ix_iy_transfer_index_pair_without_changing_flags_or_hl() {
+        let mut bus = AtomicTestBus([0; 0x10000]);
+        bus.0[..4].copy_from_slice(&[
+            0xDD, 0xF9, // LD SP,IX
+            0xFD, 0xF9, // LD SP,IY
+        ]);
+        let mut cpu = Z80 {
+            ix: 0x1234,
+            iy: 0xABCD,
+            registers: Z80Registers {
+                sp: 0xC000,
+                f: 0xD7,
+                h: 0x56,
+                l: 0x78,
+                ..Z80Registers::default()
+            },
+            wz: 0x9ABC,
+            ..Z80::default()
+        };
+
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.sp, 0x1234);
+        assert_eq!(cpu.registers.hl(), 0x5678);
+        assert_eq!((cpu.ix, cpu.iy), (0x1234, 0xABCD));
+        assert_eq!(cpu.registers.f, 0xD7);
+        assert_eq!(cpu.wz, 0x9ABC);
+
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.sp, 0xABCD);
+        assert_eq!(cpu.registers.hl(), 0x5678);
+        assert_eq!((cpu.ix, cpu.iy), (0x1234, 0xABCD));
+        assert_eq!(cpu.registers.f, 0xD7);
+        assert_eq!(cpu.wz, 0x9ABC);
+        assert_eq!(cpu.registers.pc, 4);
     }
 }
 

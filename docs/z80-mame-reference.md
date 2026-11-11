@@ -1,8 +1,8 @@
 # Pesquisa técnica: núcleo Z80 do MAME
 
-**Data da pesquisa:** 22/10/2026  
-**Projeto analisado:** [mamedev/mame](https://github.com/mamedev/mame)  
-**Revisão consultada:** [`1ee501dbef32ba9a4597d9f5c27bed4a0164e499`](https://github.com/mamedev/mame/commit/1ee501dbef32ba9a4597d9f5c27bed4a0164e499)  
+**Data da pesquisa:** 22/10/2026
+**Projeto analisado:** [mamedev/mame](https://github.com/mamedev/mame)
+**Revisão consultada:** [`1ee501dbef32ba9a4597d9f5c27bed4a0164e499`](https://github.com/mamedev/mame/commit/1ee501dbef32ba9a4597d9f5c27bed4a0164e499)
 **Objetivo:** extrair padrões de arquitetura, pontos de compatibilidade e tarefas úteis para a CPU Z80 deste projeto. Esta pesquisa não afirma equivalência entre os dois núcleos e não importa código do MAME.
 
 ## Resumo executivo
@@ -155,3 +155,24 @@ Esses detalhes devem virar testes de integração de plataforma quando barrament
 - Não foi realizada comparação binária automática nem benchmark.
 - A implementação MAME contém TODOs explícitos e assume uma variante específica em alguns pontos.
 - A lista de tarefas acima é uma proposta de trabalho; não significa que qualquer item tenha sido implementado no nosso código.
+
+
+## 7. ED opcode space — revisão MAME fixada em 2026-11-09
+
+Fonte consultada: [src/devices/cpu/z80/z80.lst](https://github.com/mamedev/mame/blob/c7541016a35d83a3eb5db5db5d20a5cb79a17a43/src/devices/cpu/z80/z80.lst), commit `c7541016a35d83a3eb5db5db5d20a5cb79a17a43`.
+
+- A tabela MAME classifica 178 segundos bytes ED como `DB ED` e chama `illegal_2()`: ED 00–3F, ED 77/7F, os buracos entre os blocos A0–BB e ED C0–FF.
+- As 78 codificações explícitas do núcleo do projeto correspondem às famílias implementadas (incluindo aliases); os 178 bytes restantes coincidem com o conjunto reservado do arquivo MAME.
+- O MAME distingue RETN (ED45/55/65/75) de RETI (ED4D/5D/6D/7D), mapeia aliases IM e lista ED70 como IN 0,(C) e ED71 como OUT (C),0.
+- O MAME é uma implementação de referência. A classificação `illegal_2` não prova por si só o comportamento físico de todas as revisões Z80.
+
+### Implicações para Sega Emulator
+
+O UM0080 documenta RETI como observável por periféricos daisy-chain; a interface CpuBus atual não expõe evento RETI. SMS e SG-1000 não possuem periférico Z80 daisy-chain no perfil atual, portanto essa notificação é NOT_APPLICABLE para essas máquinas, sem declarar o núcleo genérico completo para sistemas que venham a usar tais periféricos.
+
+A diferença de cobertura ED entre executor atômico e microsequenciador está registrada em `docs/z80-ed-opcode-audit.md` e `docs/z80-ed-opcode-matrix.md`.
+
+
+## 8. Baseline após PR #702 — 2026-11-09
+
+Main: `401bf4fb1ba8add6c84420cad5c9d2a62ceba72b`. A PR #702 corrigiu exclusivamente Q/previous-Q nos prefixos DD/FD antes de SCF/CCF; não alterou o tratamento ED. A análise MAME fixada na seção 7 permanece referência de implementação, não prova de silício. F-033 continua GAP_CONFIRMED para os 178 bytes reservados no microsequenciador.

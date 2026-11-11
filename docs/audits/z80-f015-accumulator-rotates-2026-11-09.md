@@ -1,0 +1,116 @@
+# Auditoria E7.7 — F-015: RLCA / RRCA / RLA / RRA
+
+**Baseline main antes da PR:** `f726755c87fcfb61bdf9ac5e2af031afe7712e21`.
+**PR:** #728 — squash merge `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**HEAD validado da PR:** `c198cff1629270378a3bdd22a1126ca3d98a44b8`.
+**Família:** F-015 — rotações do acumulador.
+**Estado:** CLOSED no perfil NMOS delimitado.
+**Escopo de perfil:** Zilog Z80 NMOS; sem alegação de medição física ou compatibilidade universal.
+
+## 1. Escopo
+
+- `07` RLCA — rotate A left circular.
+- `0F` RRCA — rotate A right circular.
+- `17` RLA — rotate A left through carry.
+- `1F` RRA — rotate A right through carry.
+
+Instruções BASE de um byte, sem operandos de memória e sem M-cycles de dados. Cada instrução é um M1 de 4 T-states; o WAIT é associado ao próprio M1.
+
+## 2. Referência documental — ZiLOG UM008011-0816
+
+- RLCA: p. 205.
+- RLA: p. 207.
+- RRCA: p. 209.
+- RRA: p. 211.
+- Cada operação: 1 M-cycle / 4 T-states.
+- S, Z e P/V preservadas; H e N resetadas; C recebe o bit deslocado. RLA/RRA usam o carry antigo como entrada; RLCA/RRCA fazem rotação circular.
+
+O manual não documenta os bits X/Y. Não atribuir X/Y ao UM0080.
+
+## 3. Comparação independente
+
+### MAME
+
+Fonte `src/devices/cpu/z80/z80.cpp`, commit `d763e6614a357fc529a6711d9f0c95fc9ecb051c`:
+- `rlca`, `rrca`, `rla`, `rra` atualizam X/Y a partir do novo A.
+- H e N são zerados; S/Z/PV são preservados; C recebe o bit deslocado.
+- `QT` usa a representação interna própria do MAME.
+
+### ares
+
+Fonte `ares/component/processor/z80/instructions.cpp`, commit `19d051721bb14c46be92a713216421447dec91b7`:
+- As quatro instruções atualizam X/Y a partir do novo A.
+- H e N são zerados; C recebe o bit deslocado.
+- Ares representa Q como indicador booleano de atualização de flags.
+
+**Cuidado com Q:** o runtime deste projeto representa `q` como o último byte F escrito e `q_previous` como o byte F anterior. Portanto, para estas instruções, o resultado esperado do projeto é `q == F_novo` e `q_previous == Q_anterior`. Não comparar diretamente o byte Q do projeto com o booleano Q do ares nem com o `QT` do MAME.
+
+X/Y têm concordância comparativa MAME/ares, mas não evidência física independente. F-023 continua responsável pela lacuna transversal de evidência independente X/Y/WZ.
+
+Links:
+- ZiLOG: https://www.zilog.com/docs/z80/um0080.pdf
+- MAME: https://github.com/mamedev/mame/blob/master/src/devices/cpu/z80/z80.cpp
+- ares: https://github.com/ares-emulator/ares/blob/master/ares/component/processor/z80/instructions.cpp
+
+## 4. Auditoria do runtime existente
+
+- `native/z80_alu/src/lib.rs`: `rotate_accumulator` já implementa as quatro fórmulas, preserva S/Z/PV, substitui X/Y pelo resultado e calcula C.
+- `native/z80_cpu/src/cpu.rs`: executor atômico chama `rotate_accumulator`, grava A e `set_flags`; o tempo nominal é 4T.
+- `native/z80_cpu/src/sequencer.rs`: microsequenciador executa a operação no término do M1 e chama `set_flags`; o estado Q é o F gravado.
+- Cobertura anterior: somente dois vetores unitários em `z80_alu` e cobertura temporal dirigida para os quatro opcodes. Não havia matriz semântica exaustiva de A×F nem diferencial amplo de Q/previous-Q, WZ, refresh e WAIT.
+- Nenhuma divergência de runtime identificada nesta auditoria; nenhuma alteração de runtime proposta.
+
+## 5. Novas evidências nesta branch
+
+### 5.1 Matriz semântica e temporal Z80
+
+Arquivo: `native/z80_cpu/tests/base_accumulator_rotates_f015.rs`.
+
+- 262.144 vetores: 4 opcodes × 256 valores de A × 256 padrões de F.
+- Oracle explícito: A rotacionado, carry de entrada/saída, S/Z/PV preservadas, H/N resetadas e X/Y do resultado conforme perfil comparativo NMOS.
+- Verifica PC, WZ preservado, F, Q=F novo, previous-Q, R/R7 e estado completo.
+- Executor atômico: 4T; microsequenciador: 4T + WAIT de 1T.
+- Um único OpcodeFetch M1; nenhuma transação de dados.
+- Snapshot encode/decode + restore com WAIT de 2T, comparado à execução contínua para 1.024 casos (4 opcodes × 256 valores de A).
+- Quatro casos adicionais verificam PC FFFF→0000.
+
+### 5.2 Integração SMS / MachineScheduler
+
+Arquivo: `native/sms_core/tests/z80_f015_temporal.rs`.
+
+- 4 opcodes × 8 valores-limite de A × 6 padrões de F = 192 casos.
+- WAIT de 1T no M1; 5T totais e 15 master ticks.
+- Snapshot enquanto o M1 está pendente, restore e retomada.
+- Compara estado serializado, A/F, WZ, Q/previous-Q, refresh, relógio e trace com execução contínua.
+- Confirma ausência de transações de barramento de dados.
+
+## 6. Validação CI e estado
+
+**HEAD validado:** `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.
+**CI #6129 / run `42678520765`: PASS no HEAD de código `3a48894d585e6ff6599b6487b1fb7d0c1607fa0d`.**
+**CI final #6131 / run `42678804879`: PASS no HEAD PR `c198cff1629270378a3bdd22a1126ca3d98a44b8`, incluindo a reconciliação documental.
+
+| Gate | Resultado | Evidência |
+|---|---|---|
+| Change impact classification | PASS | CI #6129 |
+| Rustfmt Z80/SMS/SG-1000 | PASS | `cargo fmt --manifest-path Cargo.toml --package sega-z80-cpu --package sega-z80-alu --package sega-z80-bus --package sega-sms-core --package sega-sg1000-core -- --check` |
+| Clippy focado | PASS | `cargo clippy --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core -- -D warnings` |
+| Testes Z80/SMS/SG-1000 | PASS | `cargo test --locked --all-targets -p sega-z80-cpu -p sega-z80-alu -p sega-z80-bus -p sega-sms-core -p sega-sg1000-core` |
+| Matriz F-015 | PASS | 3 testes em `base_accumulator_rotates_f015.rs`: 262.144 vetores A×F, 1.024 snapshot/restore e quatro PC-wrap |
+| Integração SMS F-015 | PASS | 1 teste em `z80_f015_temporal.rs`: 192 casos, WAIT, snapshot M1 e trace |
+| SingleStepTests DD/FD | PASS | 34.000/34.000 vetores; regressão adjacente, não parte da matriz F-015 |
+| Documentation patch hygiene | PASS | CI #6129 |
+| Agregador Rust quality/unit | PASS | CI #6129 |
+| `cargo test --workspace --locked` | NOT RUN | Job workspace SKIPPED pela classificação de impacto |
+| Scheduler stress / hosts / VDP / PSG | NOT RUN | Jobs não relacionados SKIPPED; não promover a PASS |
+
+**Histórico de correções de CI:**
+- #6126 / run `42678203298`: FAIL somente em rustfmt; formatação corrigida.
+- #6128 / run `42678364631`: rustfmt PASS; Clippy FAIL por `too_many_arguments` em `assert_rotate_case`; exceção local restrita ao helper.
+- #6129 / run `42678520765`: todos os gates aplicáveis PASS no HEAD acima.
+
+Nenhuma falha exigiu alteração de runtime; foram corrigidos somente testes.
+
+**Integração:** PR #728 integrada por squash no SHA `ce51578511a0090afbba3ded6312c9a25c5d78c7`.
+**CI pós-merge:** NOT VERIFIED nesta consulta; não há status check associado retornado para o SHA de merge. Não atribuir PASS.
+**Limites:** F-015 CLOSED somente para semântica de software no perfil Zilog NMOS delimitado. Sem validação física; X/Y permanece comportamento de compatibilidade comparativo MAME/ares. Sem alegação de compatibilidade universal CMOS/clones. F-023 permanece gate transversal. E7 IN_PROGRESS; E8/ZEXDOC/ZEXALL BLOCKED.

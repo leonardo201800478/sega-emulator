@@ -46,15 +46,22 @@ fn cpu_and_bus(opcode: u8) -> (Z80, TestBus) {
 #[test]
 fn atomic_executor_clears_pv_when_int_is_accepted_after_ld_a_i_or_r() {
     for opcode in [0x57, 0x5F] {
-        let (mut cpu, mut bus) = cpu_and_bus(opcode);
-        assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
-        assert_ne!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
-        assert_ne!(cpu.registers.f & FLAG_C, 0, "ED {opcode:02X}");
+        for iff2 in [false, true] {
+            for carry in [0, FLAG_C] {
+                let (mut cpu, mut bus) = cpu_and_bus(opcode);
+                cpu.iff2 = iff2;
+                cpu.registers.f = carry;
 
-        cpu.request_int(0xFF);
-        assert_eq!(cpu.step(&mut bus), Ok(13), "ED {opcode:02X}");
-        assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
-        assert_ne!(cpu.registers.f & FLAG_C, 0, "ED {opcode:02X}");
+                assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
+                assert_eq!(cpu.registers.f & FLAG_PV != 0, iff2, "ED {opcode:02X}");
+                assert_eq!(cpu.registers.f & FLAG_C, carry, "ED {opcode:02X}");
+
+                cpu.request_int(0xFF);
+                assert_eq!(cpu.step(&mut bus), Ok(13), "ED {opcode:02X}");
+                assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
+                assert_eq!(cpu.registers.f & FLAG_C, carry, "ED {opcode:02X}");
+            }
+        }
     }
 }
 
