@@ -51,10 +51,6 @@ impl FramePacingDeadline {
         self.deadline = deadline;
     }
 
-    fn schedule_after(&mut self, now: Instant, wait: Duration) {
-        self.deadline = (!wait.is_zero()).then(|| now + wait);
-    }
-
     fn remaining(&self, now: Instant) -> Option<Duration> {
         self.deadline
             .map(|deadline| deadline.saturating_duration_since(now))
@@ -1670,7 +1666,7 @@ mod tests {
 
         let frame_completed = Instant::now();
         let mut pacing = FramePacingDeadline::default();
-        pacing.schedule_after(frame_completed, Duration::from_millis(16));
+        pacing.set(Some(frame_completed + Duration::from_millis(16)));
 
         assert_eq!(
             pacing.remaining(frame_completed),
@@ -1708,7 +1704,7 @@ mod tests {
 
         let now = Instant::now();
         let mut pacing = FramePacingDeadline::default();
-        pacing.schedule_after(now, Duration::from_millis(16));
+        pacing.set(Some(now + Duration::from_millis(16)));
         assert!(pacing.remaining(now).is_some());
 
         // Pause, stop, reset and successful ROM replacement all leave the
@@ -1717,7 +1713,7 @@ mod tests {
         assert_eq!(pacing.remaining(now), None);
 
         // Starting a new running epoch must not inherit the old deadline.
-        pacing.schedule_after(now + Duration::from_millis(50), Duration::from_millis(12));
+        pacing.set(Some(now + Duration::from_millis(62)));
         assert_eq!(
             pacing.remaining(now + Duration::from_millis(50)),
             Some(Duration::from_millis(12))
@@ -1727,7 +1723,7 @@ mod tests {
     #[test]
     fn zero_frame_wait_does_not_create_a_deadline() {
         let mut pacing = FramePacingDeadline::default();
-        pacing.schedule_after(std::time::Instant::now(), Duration::ZERO);
+        pacing.set(None);
         assert_eq!(pacing.remaining(std::time::Instant::now()), None);
     }
 
