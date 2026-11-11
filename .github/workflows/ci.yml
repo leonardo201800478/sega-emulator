@@ -642,7 +642,7 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-r1-cargo-lockfile')
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any applicable validation failed or was cancelled
