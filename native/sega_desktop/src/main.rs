@@ -209,6 +209,16 @@ mod windows_poc {
                 }
                 (RenderingState::RenderingTeardown, _) => {
                     *queue_slot.borrow_mut() = None;
+                    if let Some(app) = app_weak.upgrade() {
+                        app.set_gpu_texture(slint::Image::default());
+                    }
+                }
+                (RenderingState::RenderingSetup, _) => {
+                    if let Some(app) = app_weak.upgrade() {
+                        app.set_gpu_status(
+                            "FALHA: o renderer Slint não forneceu GraphicsAPI::WGPU30.".into(),
+                        );
+                    }
                 }
                 _ => {}
             }

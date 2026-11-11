@@ -32,6 +32,7 @@ A successful build is not proof of Vulkan presentation. Run the Release executab
 2. The status line confirms Slint and the texture share the renderer's device/queue.
 3. The color-bar marker moves continuously in the imported texture.
 4. The texture and Slint text are composed in the same window.
-5. Resizing and closing the window do not crash or leave the process running.
+5. Renderer teardown releases the imported image; renderer recreation republishes a new texture.
+6. Resizing and closing the window do not crash or leave the process running.
 
 If Vulkan is unavailable, the app must fail to initialize rather than silently selecting DX12 or another backend. Record GPU, driver, executable SHA, logs and observations with the validation report.
