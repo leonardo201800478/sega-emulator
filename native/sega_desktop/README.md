@@ -12,6 +12,13 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 - Opções: status-footer visibility. FPS size/position remain pending. Fullscreen is available from the UI and F11.
 - DEBUG: request an immutable Z80/runtime snapshot and enable/disable bounded scheduler/bus trace capture. Full debugger viewport remains a follow-up.
 
+## Menu interaction
+
+- A barra de navegação usa itens compactos; cada seção abre um único painel contextual alinhado ao item selecionado, com reposicionamento horizontal para permanecer dentro da janela.
+- Abrir ou alternar menus não pausa a emulação nem altera o layout da área de vídeo ou o estado de fullscreen.
+- Clique fora do painel ou `Esc` fecha o menu. A tipografia e os controles de navegação usam escala reduzida.
+- Validar visualmente cada submenu em janela normal, maximizada e fullscreen, incluindo os itens de ROM recente e os menus próximos à borda direita.
+
 ## Runtime contract
 
 - SmsTemporalWorker owns the SMS machine and its execution thread.
