@@ -1699,7 +1699,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_pacing_deadline_clears_for_worker_state_transitions() {
+    fn clearing_deadline_prevents_carryover_to_a_new_worker_epoch() {
         use std::time::Instant;
 
         let now = Instant::now();
@@ -1707,8 +1707,8 @@ mod tests {
         pacing.set(Some(now + Duration::from_millis(16)));
         assert!(pacing.remaining(now).is_some());
 
-        // Pause, stop, reset and successful ROM replacement all leave the
-        // worker outside its previous running epoch.
+        // The worker loop clears the old deadline when pause, stop, reset or
+        // successful ROM replacement leaves the current running epoch.
         pacing.clear();
         assert_eq!(pacing.remaining(now), None);
 
