@@ -8,10 +8,9 @@ mod windows_host {
         fs,
         path::PathBuf,
         rc::Rc,
-        time::{Duration, Instant},
+        time::Duration,
     };
 
-    use rfd::FileDialog;
     use sega_sms_runtime::SmsTemporalWorker;
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
     use slint::{
@@ -24,7 +23,7 @@ mod windows_host {
     const PRESENT_INTERVAL: Duration = Duration::from_millis(16);
 
     slint::slint! {
-        import { Button } from "std-widgets.slint";
+        import { Button, LineEdit } from "std-widgets.slint";
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
             preferred-width: 1120px; preferred-height: 860px; background: #101820;
@@ -37,6 +36,7 @@ mod windows_host {
             in-out property <string> selected-region: "usa";
             in-out property <string> selected-aspect: "4:3";
             in-out property <string> recent-rom-path: "";
+            in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
             in-out property <bool> show-fps: true;
@@ -49,8 +49,7 @@ mod windows_host {
             callback stop-requested();
             callback reset-requested();
             callback step-frame-requested();
-            callback load-rom-requested();
-            callback load-recent-requested();
+            callback load-rom-requested(string);
             callback close-rom-requested();
             callback exit-requested();
             callback debug-snapshot-requested();
@@ -94,14 +93,15 @@ mod windows_host {
                             Text { text: "Outros sistemas: integração de runtime ainda não concluída."; color: #9baab6; }
                         }
                         if root.active-menu == "file": VerticalLayout {
+                            LineEdit { text <=> root.rom-path-input; placeholder-text: "C:\\ROMs\\game.sms"; }
                             HorizontalLayout {
-                                Button { text: "Abrir ROM…"; clicked => { root.load-rom-requested(); root.active-menu = "none"; } }
+                                Button { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
                                 Button { text: "Fechar ROM"; enabled: root.has-rom; clicked => { root.close-rom-requested(); root.active-menu = "none"; } }
                                 Button { text: "Sair"; clicked => { root.exit-requested(); } }
                             }
                             Text { text: "Recentes"; color: #b9c5ce; }
                             if root.recent-rom-path == "": Text { text: "Nenhuma ROM recente nesta sessão."; color: #9baab6; }
-                            if root.recent-rom-path != "": Button { text: "Abrir novamente: " + root.recent-rom-path; clicked => { root.load-recent-requested(); root.active-menu = "none"; } }
+                            if root.recent-rom-path != "": Button { text: "Abrir novamente: " + root.recent-rom-path; clicked => { root.load-rom-requested(root.recent-rom-path); root.active-menu = "none"; } }
                         }
                         if root.active-menu == "video": VerticalLayout {
                             Text { text: "Proporção da imagem"; color: #b9c5ce; }
@@ -546,8 +546,14 @@ mod windows_host {
         let open_worker = Rc::clone(&worker);
         let open_recent = Rc::clone(&recent_rom);
         let open_mailbox = mailbox.clone();
-        app.on_load_rom_requested(move || {
-            let Some(path) = FileDialog::new().set_title("Selecionar ROM do Sega Master System").add_filter("ROM do Master System", &["sms", "bin"]).pick_file() else { return; };
+        app.on_load_rom_requested(move |path: slint::SharedString| {
+            let path = PathBuf::from(path.as_str());
+            if path.as_os_str().is_empty() {
+                if let Some(app) = open_app.upgrade() {
+                    app.set_rom_status("Informe o caminho completo da ROM (.sms ou .bin).".into());
+                }
+                return;
+            }
             let region = open_app.upgrade().map(|app| app.get_selected_region().to_string()).unwrap_or_else(|| "usa".to_owned());
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
@@ -556,26 +562,13 @@ mod windows_host {
                         app.set_has_rom(true);
                         app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
                         app.set_recent_rom_path(path.display().to_string().into());
+                        app.set_rom_path_input(path.display().to_string().into());
                         app.set_debug_status("ROM carregada; snapshot ainda não solicitado.".into());
                     }
                 }
-                Err(error) => if let Some(app) = open_app.upgrade() { app.set_rom_status(format!("Falha ao carregar ROM: {error}").into()); },
-            }
-        });
-
-        let recent_app = app.as_weak();
-        let recent_worker = Rc::clone(&worker);
-        let recent_path = Rc::clone(&recent_rom);
-        let recent_mailbox = mailbox.clone();
-        app.on_load_recent_requested(move || {
-            let Some(path) = recent_path.borrow().clone() else { return; };
-            let region = recent_app.upgrade().map(|app| app.get_selected_region().to_string()).unwrap_or_else(|| "usa".to_owned());
-            match replace_sms_worker(&path, &region, &recent_worker, &recent_mailbox) {
-                Ok(()) => if let Some(app) = recent_app.upgrade() {
-                    app.set_has_rom(true);
-                    app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
+                Err(error) => if let Some(app) = open_app.upgrade() {
+                    app.set_rom_status(format!("Falha ao carregar ROM: {error}").into());
                 },
-                Err(error) => if let Some(app) = recent_app.upgrade() { app.set_rom_status(format!("Falha ao reabrir ROM recente: {error}").into()); },
             }
         });
 

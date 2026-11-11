@@ -74,7 +74,7 @@ The current SMS worker already publishes 256x192 RGB888 frames from `machine.fra
 ## R2.2 — menu migration
 
 The Slint host now exposes the legacy menu groups (Sistema, Arquivo, Vídeo, Áudio, Controles, Opções and DEBUG). Implemented before R3/R4:
-- optional command-line ROM startup and native file picker for SMS/BIN ROMs;
+- optional command-line ROM startup and ROM path entry for SMS/BIN ROMs;
 - in-session recent-ROM shortcut, close-ROM and exit actions;
 - worker-backed Start/Pause/Stop/Reset/Step-frame and ROM replacement;
 - region selection applied when a new worker is created;

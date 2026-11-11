@@ -5,7 +5,7 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 ## Menu migration
 
 - Sistema: SMS region selection (USA, Brasil, Europa, Japão); other Sega systems remain visible but disabled until their runtimes are integrated.
-- Arquivo: open ROM (.sms / .bin), reopen the most recent ROM in this session, close ROM and exit.
+- Arquivo: load ROM by absolute path (.sms / .bin), reopen the most recent ROM in this session, close ROM and exit.
 - Vídeo: original 4:3, 1:1 and 16:9 presentation modes. The source frame remains 256×192.
 - Áudio: menu retained; physical output, backend selection and volume remain disabled until R3 (CPAL 0.18.2).
 - Controles: keyboard/gamepad entries retained; physical input and remapping remain disabled until R4 (SDL3).
@@ -31,7 +31,7 @@ From the repository root on Windows x64:
 cargo run --release --locked --manifest-path native/sega_desktop/Cargo.toml -- [path\to\game.sms] [usa|brazil|europe|japan]
 ```
 
-The ROM argument is optional. Without it, open Arquivo > Abrir ROM. The selected region is applied when a ROM is loaded. The recent-ROM shortcut is kept for the current process session.
+The ROM argument is optional. Without it, enter the absolute path in Arquivo > Carregar ROM. The selected region is applied when a ROM is loaded. The recent-ROM shortcut is kept for the current process session.
 
 ## Validation
 
