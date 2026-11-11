@@ -1307,21 +1307,24 @@ fn handle_command(
             *running = false;
             telemetry.running.store(false, Ordering::Release);
             let sprite_limit_mode = machine.vdp().sprite_limit_mode();
-            let result = build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
-                powered_off.set_sprite_limit_mode(sprite_limit_mode);
-                audio_session.as_mut().map_or(Ok::<(), String>(()), |session| {
-                    session.suspend_and_flush()?;
-                    session.reset_dsp();
+            let result =
+                build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
+                    powered_off.set_sprite_limit_mode(sprite_limit_mode);
+                    audio_session
+                        .as_mut()
+                        .map_or(Ok::<(), String>(()), |session| {
+                            session.suspend_and_flush()?;
+                            session.reset_dsp();
+                            Ok(())
+                        })?;
+                    if let Some(session) = audio_session.as_ref() {
+                        telemetry.record_audio_session_metrics(session.as_ref());
+                    }
+                    *machine = powered_off;
+                    telemetry.reset_machine_counters();
+                    trace_history.clear();
                     Ok(())
-                })?;
-                if let Some(session) = audio_session.as_ref() {
-                    telemetry.record_audio_session_metrics(session.as_ref());
-                }
-                *machine = powered_off;
-                telemetry.reset_machine_counters();
-                trace_history.clear();
-                Ok(())
-            });
+                });
             if let Err(error) = &result {
                 telemetry.set_runtime_error(Some(error.clone()));
             }
