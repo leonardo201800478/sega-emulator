@@ -36,6 +36,31 @@ const WORKER_FRAME_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Absolute host-clock deadline for the next SMS frame.
+///
+/// This is presentation pacing only. It never advances or modifies virtual
+/// machine time; non-pausing worker commands consume the existing budget
+/// instead of restarting it.
+#[derive(Debug, Default, Clone, Copy)]
+struct FramePacingDeadline {
+    deadline: Option<Instant>,
+}
+
+impl FramePacingDeadline {
+    fn schedule_after(&mut self, now: Instant, wait: Duration) {
+        self.deadline = (!wait.is_zero()).then(|| now + wait);
+    }
+
+    fn remaining(&self, now: Instant) -> Option<Duration> {
+        self.deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
+    }
+
+    fn clear(&mut self) {
+        self.deadline = None;
+    }
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -1129,18 +1154,26 @@ fn worker_loop(
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
+    let mut frame_deadline = FramePacingDeadline::default();
 
     loop {
         if telemetry.shutdown.load(Ordering::Acquire) {
             break;
         }
         let command = if running {
-            match commands.recv_timeout(Duration::from_millis(0)) {
+            let timeout = frame_deadline
+                .remaining(Instant::now())
+                .unwrap_or(Duration::ZERO);
+            match commands.recv_timeout(timeout) {
                 Ok(command) => Some(command),
-                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Timeout) => {
+                    frame_deadline.clear();
+                    None
+                }
                 Err(RecvTimeoutError::Disconnected) => break,
             }
         } else {
+            frame_deadline.clear();
             match commands.recv_timeout(WORKER_IDLE_POLL_INTERVAL) {
                 Ok(command) => Some(command),
                 Err(RecvTimeoutError::Timeout) => continue,
@@ -1149,6 +1182,7 @@ fn worker_loop(
         };
 
         if let Some(command) = command {
+            let was_running = running;
             if !handle_command(
                 command,
                 &mut machine,
@@ -1164,6 +1198,11 @@ fn worker_loop(
                 &mut trace_enabled,
             ) {
                 break;
+            }
+            // Pause/reset/load/power transitions invalidate the previous
+            // frame's wall-clock epoch. Non-pausing commands retain it.
+            if was_running != running || !running {
+                frame_deadline.clear();
             }
             drain_machine_trace(&mut machine, &mut trace_history);
             continue;
@@ -1184,6 +1223,7 @@ fn worker_loop(
                 if breakpoint_hit {
                     running = false;
                     telemetry.running.store(false, Ordering::Release);
+                    frame_deadline.clear();
                     if let Some(session) = audio_session.as_mut() {
                         if let Err(error) = session.suspend_and_flush() {
                             telemetry.set_audio_error(Some(error));
@@ -1193,30 +1233,10 @@ fn worker_loop(
                         }
                     }
                 }
-                if running && !frame_wait.is_zero() {
-                    match commands.recv_timeout(frame_wait) {
-                        Ok(command) => {
-                            if !handle_command(
-                                command,
-                                &mut machine,
-                                &mut breakpoints,
-                                &mut rom,
-                                &region,
-                                &mut running,
-                                &mut audio_session,
-                                &mut video_mailbox,
-                                &mut video_sequence,
-                                &telemetry,
-                                &mut trace_history,
-                                &mut trace_enabled,
-                            ) {
-                                break;
-                            }
-                            drain_machine_trace(&mut machine, &mut trace_history);
-                        }
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(RecvTimeoutError::Disconnected) => break,
-                    }
+                if running {
+                    frame_deadline.schedule_after(Instant::now(), frame_wait);
+                } else {
+                    frame_deadline.clear();
                 }
             }
             Err(error) => {
@@ -1626,7 +1646,7 @@ mod tests {
     use super::{
         BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
         SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
-        execute_frame,
+        execute_frame, FramePacingDeadline,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
@@ -1634,6 +1654,73 @@ mod tests {
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[test]
+    fn frame_pacing_deadline_preserves_remaining_budget_across_commands() {
+        use std::time::Instant;
+
+        let frame_completed = Instant::now();
+        let mut pacing = FramePacingDeadline::default();
+        pacing.schedule_after(frame_completed, Duration::from_millis(16));
+
+        assert_eq!(
+            pacing.remaining(frame_completed),
+            Some(Duration::from_millis(16))
+        );
+
+        // A command wakes the worker 5 ms into the wait. Its 3 ms handler
+        // consumes time from the original budget; it must not restart 16 ms.
+        let command_received = frame_completed + Duration::from_millis(5);
+        assert_eq!(
+            pacing.remaining(command_received),
+            Some(Duration::from_millis(11))
+        );
+        let command_completed = command_received + Duration::from_millis(3);
+        assert_eq!(
+            pacing.remaining(command_completed),
+            Some(Duration::from_millis(8))
+        );
+
+        // A second queued command also consumes the same absolute budget.
+        let second_command_completed = command_completed + Duration::from_millis(2);
+        assert_eq!(
+            pacing.remaining(second_command_completed),
+            Some(Duration::from_millis(6))
+        );
+        assert_eq!(
+            pacing.remaining(frame_completed + Duration::from_millis(16)),
+            Some(Duration::ZERO)
+        );
+    }
+
+    #[test]
+    fn frame_pacing_deadline_clears_for_worker_state_transitions() {
+        use std::time::Instant;
+
+        let now = Instant::now();
+        let mut pacing = FramePacingDeadline::default();
+        pacing.schedule_after(now, Duration::from_millis(16));
+        assert!(pacing.remaining(now).is_some());
+
+        // Pause, stop, reset and successful ROM replacement all leave the
+        // worker outside its previous running epoch.
+        pacing.clear();
+        assert_eq!(pacing.remaining(now), None);
+
+        // Starting a new running epoch must not inherit the old deadline.
+        pacing.schedule_after(now + Duration::from_millis(50), Duration::from_millis(12));
+        assert_eq!(
+            pacing.remaining(now + Duration::from_millis(50)),
+            Some(Duration::from_millis(12))
+        );
+    }
+
+    #[test]
+    fn zero_frame_wait_does_not_create_a_deadline() {
+        let mut pacing = FramePacingDeadline::default();
+        pacing.schedule_after(std::time::Instant::now(), Duration::ZERO);
+        assert_eq!(pacing.remaining(std::time::Instant::now()), None);
+    }
 
     #[test]
     fn frame_timing_uses_worker_completion_timestamps_not_video_presentation() {
