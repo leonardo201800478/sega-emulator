@@ -86,3 +86,45 @@ Classificar cada item PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Sem 
 - [ ] Evidência e PR revisadas.
 
 R2 (frames SMS) começa somente após aprovação de R1. CPAL permanece R3.
+
+
+## Validação física inicial — Windows x64 / 2026-11-11
+
+Evidências fornecidas pelo usuário durante execução local da Release:
+
+- Janela Slint abriu no Windows 11.
+- O status exibido identificou backend Vulkan e adaptador NVIDIA GeForce RTX 5070.
+- A mensagem da aplicação confirmou o compartilhamento de device/queue entre Slint e WGPU 30.
+- A textura externa exibiu barras de cor, marcador branco móvel e variação vertical de tonalidade.
+- O contador observado chegou a 6.305 atualizações.
+- Maximização, minimização/restauração, redimensionamento vertical e encerramento/reabertura foram exercitados sem travamento.
+- Na primeira versão, a imagem permanecia em tamanho fixo de 640 × 480 logical pixels; a janela podia ser maximizada, mas a área apresentada não ocupava a largura disponível.
+
+Classificação após a evidência manual inicial:
+
+| ID | Resultado | Evidência / ressalva |
+|---|---|---|
+| R1-01 | PASS | Janela abriu em Windows 11 x64 |
+| R1-02 | PASS | Status Vulkan e device/queue ativos |
+| R1-03 | PASS | NVIDIA GeForce RTX 5070 identificada com backend Vulkan |
+| R1-04 | PASS | Status da aplicação confirmou device/queue compartilhados |
+| R1-05 | PASS | Textura animada; contador observado em 6.305 |
+| R1-06 | PASS | Textura e textos Slint na mesma janela |
+| R1-07 | PARTIAL | Maximizar, minimizar/restaurar e resize vertical sem falhas; imagem inicialmente fixa, correção responsiva em validação |
+| R1-08 | PASS CI | Build automatizado da versão mergeada; nova alteração de instrumentação requer CI própria |
+| R1-09 | PASS | Backend WGPU Vulkan explícito; execução mostrou Vulkan |
+| R1-10 | PARTIAL | Encerramento/reabertura sem travamento; falta inspecionar eventos RenderingTeardown/RenderingSetup no log |
+
+Não foi fornecida captura de informações do driver, SHA-256 do executável ou arquivo de log da execução inicial. Esses dados permanecem pendentes e não devem ser inferidos.
+
+## Instrumentação de lifecycle e layout responsivo — branch de validação
+
+A alteração subsequente em `native/sega_desktop/src/main.rs`:
+
+- Remove as dimensões fixas da área visual da imagem e usa tamanho preferido, limites mínimos e `vertical-stretch`, preservando `image-fit: contain`.
+- Exibe contadores de `RenderingSetup` e `RenderingTeardown` na janela.
+- Emite eventos estruturados `R1_LIFECYCLE` em stdout/stderr para captura com `Tee-Object`.
+- Mantém a liberação da fila compartilhada e da imagem Slint no evento `RenderingTeardown`.
+- Não tenta simular uma recriação de superfície nem afirma que resize dispara teardown; o ciclo de superfície pertence ao backend Winit/WGPU.
+
+Validação pendente para esta alteração: fmt, Clippy, testes, build Release Windows x64, teste manual do preenchimento responsivo e inspeção do log de lifecycle. R1-07 e R1-10 permanecem PARTIAL até essas evidências.
