@@ -35,11 +35,11 @@ mod windows_host {
     slint::slint! {
         import { Button, LineEdit } from "std-widgets.slint";
         component CompactButton inherits Button {
-            font-size: 12px;
             height: 28px;
         }
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
+            default-font-size: 12px;
             preferred-width: 1120px; preferred-height: 860px; background: #101820;
             in-out property <image> gpu-texture;
             in-out property <image> play-icon;
@@ -148,7 +148,7 @@ mod windows_host {
             clicked => { root.active-menu = "none"; }
         }
         if root.active-menu != "none": Rectangle {
-            x: min(max(root.active-menu == "system" ? 18px : root.active-menu == "file" ? 87px : root.active-menu == "video" ? 152px : root.active-menu == "audio" ? 213px : root.active-menu == "controls" ? 274px : root.active-menu == "options" ? 353px : 422px, 8px), parent.width - self.width - 8px);
+            x: min(max(root.active-menu == "system" ? 12px : root.active-menu == "file" ? 81px : root.active-menu == "video" ? 146px : root.active-menu == "audio" ? 207px : root.active-menu == "controls" ? 268px : root.active-menu == "options" ? 347px : 416px, 8px), parent.width - self.width - 8px);
             y: 88px; width: min(parent.width - 16px, 420px); height: min(parent.height - 104px, 360px); z: 100;
             background: #1b2834; border-radius: 5px; border-width: 1px;
             border-color: #405365; min-height: 120px; max-height: 360px; max-width: 420px;
@@ -209,7 +209,8 @@ mod windows_host {
                             Text { font-size: 12px; text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
-                            Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }                            CompactButton { text: "Gamepad SDL3 — integração R4"; enabled: false; }
+                            Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
+                            CompactButton { text: "Gamepad SDL3 — integração R4"; enabled: false; }
                             Text { font-size: 12px; text: "Teclado"; color: #b9c5ce; }
                             Text { font-size: 12px; text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
                             Text { font-size: 12px; text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
