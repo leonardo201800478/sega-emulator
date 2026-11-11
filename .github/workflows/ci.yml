@@ -210,11 +210,8 @@ jobs:
         run: |
           set -euo pipefail
           cargo metadata --locked --format-version 1 --no-deps
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
           test -f Cargo.lock
-          test -f native/audio_output/Cargo.lock
-          test -f native/sega_app/Cargo.lock
+          echo "Standalone legacy host workspaces are validated only by their path-scoped jobs."
       - name: Format root Rust workspace
         run: cargo fmt --all -- --check
       - name: Clippy workspace
