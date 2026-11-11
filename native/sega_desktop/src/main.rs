@@ -678,8 +678,7 @@ mod windows_host {
         }
 
         let selected = String::from_utf8_lossy(&output.stdout);
-        let selected =
-            selected.trim_end_matches(['\r', '\n']);
+        let selected = selected.trim_end_matches(['\r', '\n']);
         if selected.is_empty() {
             Ok(None)
         } else {
@@ -889,9 +888,16 @@ mod windows_host {
                         app.set_has_rom(true);
                         app.set_rom_status(
                             match start_result {
-                                Some(Ok(())) => format!("ROM: {} | região: {region} | execução iniciada", path.display()),
-                                Some(Err(error)) => format!("ROM: {} | falha ao iniciar: {error}", path.display()),
-                                None => "ROM carregada, mas o worker não está disponível.".to_owned(),
+                                Some(Ok(())) => format!(
+                                    "ROM: {} | região: {region} | execução iniciada",
+                                    path.display()
+                                ),
+                                Some(Err(error)) => {
+                                    format!("ROM: {} | falha ao iniciar: {error}", path.display())
+                                }
+                                None => {
+                                    "ROM carregada, mas o worker não está disponível.".to_owned()
+                                }
                             }
                             .into(),
                         );
