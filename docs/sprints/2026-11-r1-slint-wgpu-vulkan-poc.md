@@ -47,7 +47,7 @@ Documentação das APIs comprova viabilidade teórica, não substitui os testes 
 
 1. Confirmar APIs Slint 1.18/WGPU 30 e renderer FemtoVG WGPU.
 2. Adicionar `native/sega_desktop` ao workspace Rust, com dependência Slint apenas no target Windows.
-3. Restringir WGPU a Vulkan e validar adapter/backend no rendering notifier.
+3. Selecionar explicitamente `winit` + `femtovg-wgpu`, restringir WGPU a Vulkan e validar adapter/backend no rendering notifier.
 4. Criar/importar textura externa e atualizá-la pela queue compartilhada.
 5. Exibir textura e UI na mesma janela e solicitar redraw periódico.
 6. Tratar teardown/recriação do renderer, resize e shutdown.

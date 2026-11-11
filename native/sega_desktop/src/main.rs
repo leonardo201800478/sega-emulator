@@ -73,6 +73,8 @@ mod windows_poc {
         settings.power_preference = wgpu::PowerPreference::HighPerformance;
 
         slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name("femtovg-wgpu".into())
             .require_wgpu_30(WGPUConfiguration::Automatic(settings))
             .select()?;
 

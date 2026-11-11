@@ -5,7 +5,7 @@ This crate is an isolated feasibility application for the desktop replatforming 
 ## Scope
 
 - Slint 1.18.x with the WGPU 30 integration.
-- FemtoVG WGPU renderer selected through Slint's `renderer-femtovg-wgpu` feature.
+- Winit backend and `femtovg-wgpu` renderer selected explicitly through `BackendSelector` (with the `renderer-femtovg-wgpu` feature enabled).
 - WGPU 30 backend restricted to Vulkan through `WGPUSettings.backends = Backends::VULKAN`.
 - Rendering notifier obtains Slint's active `wgpu::Device` and `wgpu::Queue`.
 - A WGPU-owned RGBA8 texture is imported as `slint::Image` and updated through the same queue.

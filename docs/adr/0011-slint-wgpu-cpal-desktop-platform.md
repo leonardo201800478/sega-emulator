@@ -60,7 +60,7 @@ Critérios:
 8. Resize, recriação de surface e shutdown limpo.
 9. Build e execução Release no Windows x64.
 
-A POC atual usa `WGPUConfiguration::Automatic(WGPUSettings)` para restringir o backend Vulkan e `Window::set_rendering_notifier()` para obter o device/queue efetivos do renderer. A textura é importada por `Image::try_from<wgpu::Texture>()` e recuperada para atualização por `Image::to_wgpu_30_texture()`. O caminho manual permanece uma alternativa a avaliar se o renderer automático não satisfizer o ciclo de vida/presentação. Não presumir compatibilidade apenas pela documentação.
+A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via `BackendSelector::backend_name()` e `renderer_name()`, além de usar `WGPUConfiguration::Automatic(WGPUSettings)` para restringir o backend WGPU subjacente a Vulkan. `Window::set_rendering_notifier()` fornece o device/queue efetivos do renderer. A textura é importada por `Image::try_from<wgpu::Texture>()` e recuperada para atualização por `Image::to_wgpu_30_texture()`. O caminho manual permanece uma alternativa a avaliar se o renderer automático não satisfizer o ciclo de vida/presentação. Não presumir compatibilidade apenas pela documentação.
 
 **Fora de R1:** SmsTemporalWorker, ROM real, FrameMailbox, menu de jogo, pausa do Scheduler, HUD, CPAL, SDL3, HDR, VRR e paridade do frontend. Não alterar runtime, CPU, VDP, PSG ou Scheduler. Não exigir zero-copy físico; evitar cópias redundantes e demonstrar ownership correto.
 
