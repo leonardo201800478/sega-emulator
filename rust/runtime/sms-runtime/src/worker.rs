@@ -1649,9 +1649,9 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
-        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
-        execute_frame, FramePacingDeadline,
+        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FramePacingDeadline, Ordering,
+        SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
+        build_sms_temporal_machine, execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
