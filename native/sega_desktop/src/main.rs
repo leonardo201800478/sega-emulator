@@ -21,6 +21,8 @@ mod windows_host {
     const SMS_WIDTH: u32 = 256;
     const SMS_HEIGHT: u32 = 192;
     const PRESENT_INTERVAL: Duration = Duration::from_millis(16);
+    const APP_DATA_DIRECTORY: &str = "Sega Emulator";
+    const MAX_RECENT_ROMS: usize = 10;
 
     slint::slint! {
         import { Button, LineEdit } from "std-widgets.slint";
@@ -36,6 +38,9 @@ mod windows_host {
             in-out property <string> selected-region: "usa";
             in-out property <string> selected-aspect: "4:3";
             in-out property <string> recent-rom-path: "";
+            in-out property <[string]> recent-roms: [];
+            in-out property <string> fps-size: "medium";
+            in-out property <length> fps-font-size: 18px;
             in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
@@ -57,6 +62,7 @@ mod windows_host {
             callback debug-snapshot-requested();
             callback trace-toggle-requested(bool);
             callback fullscreen-requested(bool);
+            callback preferences-changed();
             VerticalLayout {
                 padding: 18px; spacing: 10px;
                 Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
@@ -80,10 +86,10 @@ mod windows_host {
                             Text { text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
                             Text { text: "Região / padrão de vídeo"; color: #b9c5ce; }
                             HorizontalLayout {
-                                Button { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; } }
-                                Button { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; } }
-                                Button { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; } }
-                                Button { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; } }
+                                Button { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; root.preferences-changed(); } }
+                                Button { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; root.preferences-changed(); } }
+                                Button { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; root.preferences-changed(); } }
+                                Button { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; root.preferences-changed(); } }
                             }
                             Text { text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
                             HorizontalLayout {
@@ -103,15 +109,18 @@ mod windows_host {
                                 Button { text: "Sair"; clicked => { root.exit-requested(); } }
                             }
                             Text { text: "Recentes"; color: #b9c5ce; }
-                            if root.recent-rom-path == "": Text { text: "Nenhuma ROM recente nesta sessão."; color: #9baab6; }
-                            if root.recent-rom-path != "": Button { text: "Abrir novamente: " + root.recent-rom-path; clicked => { root.load-rom-requested(root.recent-rom-path); root.active-menu = "none"; } }
+                            if root.recent-roms.length == 0: Text { text: "Nenhuma ROM recente."; color: #9baab6; }
+                            for rom in root.recent-roms: Button {
+                                text: rom;
+                                clicked => { root.load-rom-requested(rom); root.active-menu = "none"; }
+                            }
                         }
                         if root.active-menu == "video": VerticalLayout {
                             Text { text: "Proporção da imagem"; color: #b9c5ce; }
                             HorizontalLayout {
-                                Button { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; } }
-                                Button { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; } }
-                                Button { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; } }
+                                Button { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; root.preferences-changed(); } }
+                                Button { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
+                                Button { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
                             }
                             Text { text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
                         }
@@ -138,9 +147,14 @@ mod windows_host {
                         }
                         if root.active-menu == "options": VerticalLayout {
                             Text { text: "Overlay de FPS"; color: #f2f5f7; }
-                            Button { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; } }
-                            Button { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; } }
-                            Button { text: "Tamanho/posição do FPS — migração pendente"; enabled: false; }
+                            Button { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; root.preferences-changed(); } }
+                            Button { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; root.preferences-changed(); } }
+                            HorizontalLayout {
+                                Button { text: root.fps-size == "small" ? "✓ Pequeno" : "Pequeno"; clicked => { root.fps-size = "small"; root.fps-font-size = 13px; root.preferences-changed(); } }
+                                Button { text: root.fps-size == "medium" ? "✓ Médio" : "Médio"; clicked => { root.fps-size = "medium"; root.fps-font-size = 18px; root.preferences-changed(); } }
+                                Button { text: root.fps-size == "large" ? "✓ Grande" : "Grande"; clicked => { root.fps-size = "large"; root.fps-font-size = 24px; root.preferences-changed(); } }
+                            }
+                            Text { text: "Posição do HUD: inferior (posição em cantos será concluída após validar o overlay."; color: #9baab6; }
                             Button { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
                         }
                         if root.active-menu == "debug": VerticalLayout {
@@ -166,12 +180,129 @@ mod windows_host {
                     preferred-height: root.video-height; min-width: 256px; min-height: 192px;
                     horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
                 }
-                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
                 if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
             }
         }
+    }
+
+    /// Preferências persistidas exclusivamente para a camada de apresentação.
+    #[derive(Debug, Clone)]
+    struct DesktopPreferences {
+        region: String,
+        aspect: String,
+        show_fps: bool,
+        show_status_footer: bool,
+        fps_size: String,
+    }
+
+    impl Default for DesktopPreferences {
+        fn default() -> Self {
+            Self {
+                region: "usa".to_owned(),
+                aspect: "4:3".to_owned(),
+                show_fps: true,
+                show_status_footer: true,
+                fps_size: "medium".to_owned(),
+            }
+        }
+    }
+
+    /// Resolve o diretório de dados por usuário no Windows sem criar diretórios durante leitura.
+    fn app_data_directory() -> Option<PathBuf> {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join(APP_DATA_DIRECTORY))
+    }
+
+    /// Carrega preferências com fallback individual para valores seguros e conhecidos.
+    fn load_desktop_preferences() -> DesktopPreferences {
+        let mut preferences = DesktopPreferences::default();
+        let Some(directory) = app_data_directory() else { return preferences; };
+        let Ok(contents) = fs::read_to_string(directory.join("slint_ui_settings.txt")) else {
+            return preferences;
+        };
+
+        for line in contents.lines() {
+            let Some((key, value)) = line.split_once('=') else { continue; };
+            match key.trim() {
+                "region" if ["usa", "brazil", "europe", "japan"].contains(&value.trim()) => {
+                    preferences.region = value.trim().to_owned();
+                }
+                "aspect" if ["4:3", "1:1", "16:9"].contains(&value.trim()) => {
+                    preferences.aspect = value.trim().to_owned();
+                }
+                "show_fps" => {
+                    if let Ok(value) = value.trim().parse() { preferences.show_fps = value; }
+                }
+                "show_status_footer" => {
+                    if let Ok(value) = value.trim().parse() { preferences.show_status_footer = value; }
+                }
+                "fps_size" if ["small", "medium", "large"].contains(&value.trim()) => {
+                    preferences.fps_size = value.trim().to_owned();
+                }
+                _ => {}
+            }
+        }
+        preferences
+    }
+
+    /// Salva as preferências em arquivo simples, sem serializar estado do hardware.
+    fn save_desktop_preferences(preferences: &DesktopPreferences) -> Result<(), String> {
+        let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let contents = format!(
+            "region={}\\naspect={}\\nshow_fps={}\\nshow_status_footer={}\\nfps_size={}\\n",
+            preferences.region,
+            preferences.aspect,
+            preferences.show_fps,
+            preferences.show_status_footer,
+            preferences.fps_size
+        );
+        fs::write(directory.join("slint_ui_settings.txt"), contents)
+            .map_err(|error| error.to_string())
+    }
+
+    /// Carrega até dez ROMs recentes, removendo entradas duplicadas e vazias.
+    fn load_recent_roms() -> Vec<PathBuf> {
+        let Some(directory) = app_data_directory() else { return Vec::new(); };
+        let Ok(contents) = fs::read_to_string(directory.join("recent_roms.txt")) else {
+            return Vec::new();
+        };
+        let mut recent = Vec::new();
+        for line in contents.lines().filter(|line| !line.trim().is_empty()) {
+            let path = PathBuf::from(line);
+            if !recent.contains(&path) {
+                recent.push(path);
+            }
+            if recent.len() == MAX_RECENT_ROMS { break; }
+        }
+        recent
+    }
+
+    /// Persiste a lista recente, mantendo a ROM mais nova no início.
+    fn save_recent_roms(recent: &[PathBuf]) -> Result<(), String> {
+        let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let contents = recent.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join("\\n");
+        fs::write(directory.join("recent_roms.txt"), contents).map_err(|error| error.to_string())
+    }
+
+    /// Move uma ROM para o início da lista e limita o histórico a dez entradas.
+    fn record_recent_rom(recent: &mut Vec<PathBuf>, path: PathBuf) {
+        recent.retain(|entry| entry != &path);
+        recent.insert(0, path);
+        recent.truncate(MAX_RECENT_ROMS);
+        if let Err(error) = save_recent_roms(recent) {
+            eprintln!("R2_PREFERENCES recent_roms_save_failed error={error}");
+        }
+    }
+
+    /// Converte a lista de caminhos em um modelo imutável para o menu Slint.
+    fn recent_roms_model(recent: &[PathBuf]) -> Vec<slint::SharedString> {
+        recent.iter().map(|path| path.display().to_string().into()).collect()
     }
 
     /// Inicializa o renderer Slint sobre WGPU 30, restringindo a instância ao backend Vulkan.
@@ -538,10 +669,16 @@ mod windows_host {
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
         let rom_path = args.next().map(PathBuf::from);
+        let mut preferences = load_desktop_preferences();
         let region = args
             .next()
             .and_then(|value| value.into_string().ok())
-            .unwrap_or_else(|| "usa".to_owned());
+            .unwrap_or_else(|| preferences.region.clone());
+        preferences.region = region.clone();
+        let recent_roms = Rc::new(RefCell::new(load_recent_roms()));
+        if let Some(path) = rom_path.as_ref() {
+            record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
+        }
 
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
@@ -558,6 +695,16 @@ mod windows_host {
         app.set_frame_status("Aguardando o primeiro frame completo do VDP.".into());
         app.set_lifecycle_status("Renderer setup: 0 | teardown: 0".into());
         app.set_selected_region(region.clone().into());
+        app.set_show_fps(preferences.show_fps);
+        app.set_show_status_footer(preferences.show_status_footer);
+        app.set_fps_size(preferences.fps_size.clone().into());
+        app.set_fps_font_size(match preferences.fps_size.as_str() { "small" => 13.0, "large" => 24.0, _ => 18.0 } * slint::PhysicalLength::new(1.0).into());
+        app.set_recent_roms(recent_roms_model(&recent_roms.borrow()).into());
+        match preferences.aspect.as_str() {
+            "1:1" => { app.set_selected_aspect("1:1".into()); app.set_video_width(576.0.into()); app.set_video_height(576.0.into()); }
+            "16:9" => { app.set_selected_aspect("16:9".into()); app.set_video_width(768.0.into()); app.set_video_height(432.0.into()); }
+            _ => { app.set_selected_aspect("4:3".into()); app.set_video_width(768.0.into()); app.set_video_height(576.0.into()); }
+        }
         app.set_has_rom(worker.borrow().is_some());
         if let Some(path) = rom_path.as_ref() {
             app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
@@ -617,6 +764,7 @@ mod windows_host {
         let open_app = app.as_weak();
         let open_worker = Rc::clone(&worker);
         let open_recent = Rc::clone(&recent_rom);
+        let open_recent_list = Rc::clone(&recent_roms);
         let open_mailbox = mailbox.clone();
         app.on_load_rom_requested(move |path: slint::SharedString| {
             let path = PathBuf::from(path.as_str());
@@ -635,7 +783,9 @@ mod windows_host {
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
                     *open_recent.borrow_mut() = Some(path.clone());
+                    record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
+                        app.set_recent_roms(recent_roms_model(&open_recent_list.borrow()).into());
                         app.set_has_rom(true);
                         app.set_rom_status(
                             format!("ROM: {} | região: {region}", path.display()).into(),
@@ -671,8 +821,19 @@ mod windows_host {
         });
 
         let exit_app = app.as_weak();
+        let exit_recent = Rc::clone(&recent_roms);
+        let exit_prefs_app = app.as_weak();
         app.on_exit_requested(move || {
-            if let Some(app) = exit_app.upgrade() {
+            let _ = save_recent_roms(&exit_recent.borrow());
+            if let Some(app) = exit_prefs_app.upgrade() {
+                let prefs = DesktopPreferences {
+                    region: app.get_selected_region().to_string(),
+                    aspect: app.get_selected_aspect().to_string(),
+                    show_fps: app.get_show_fps(),
+                    show_status_footer: app.get_show_status_footer(),
+                    fps_size: app.get_fps_size().to_string(),
+                };
+                let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
             }
         });
@@ -704,6 +865,21 @@ mod windows_host {
                         .unwrap_or_else(|error| format!("Falha no snapshot: {error}"))
                         .into(),
                 );
+            }
+        });
+
+        let preferences_app = app.as_weak();
+        app.on_preferences_changed(move || {
+            let Some(app) = preferences_app.upgrade() else { return; };
+            let prefs = DesktopPreferences {
+                region: app.get_selected_region().to_string(),
+                aspect: app.get_selected_aspect().to_string(),
+                show_fps: app.get_show_fps(),
+                show_status_footer: app.get_show_status_footer(),
+                fps_size: app.get_fps_size().to_string(),
+            };
+            if let Err(error) = save_desktop_preferences(&prefs) {
+                eprintln!("R2_PREFERENCES save_failed error={error}");
             }
         });
 
