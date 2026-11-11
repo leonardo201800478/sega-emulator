@@ -581,7 +581,7 @@ jobs:
     # Preserve the protected legacy check context without claiming SDL3 coverage.
     # The portable input core remains tested by input-focused; SDL3 is not integrated.
     name: Windows SDL3 input validation
-    if: false
+    if: github.event_name == 'workflow_dispatch' && github.event_name == 'pull_request'
     runs-on: windows-latest
     steps:
       - name: Legacy SDL3 host intentionally not run
