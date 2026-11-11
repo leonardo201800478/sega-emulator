@@ -16,6 +16,8 @@ The HUD reads `SmsTemporalWorker::performance_metrics()`:
   frames.
 - `input_to_frame_ms`: host input detection to the first completed SMS frame
   that incorporates that input.
+- `completed_frames`: monotonically increasing completed-frame count for the
+  current telemetry instance.
 
 This is an emulation-boundary measurement, not input-to-display latency. It
 ends when the worker completes the first emulated frame after applying the
@@ -23,8 +25,6 @@ controller state. It deliberately does not instrument DXGI Present, GPU
 completion, compositor scheduling, scan-out, or monitor pixel response. Those
 stages are not measured by this low-overhead HUD metric and must not be inferred
 from it.
-- `completed_frames`: monotonically increasing completed-frame count for the
-  current telemetry instance.
 
 The HUD does not sample egui repaint frequency, DXGI Present, GPU throughput,
 monitor refresh rate, or a fixed 60 Hz target. It refreshes its presentation
