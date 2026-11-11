@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -83,9 +83,7 @@ pub struct SegaApp {
     fps_overlay_enabled: bool,
     fps_overlay_was_active: bool,
     fps_overlay_size: FpsOverlaySize,
-    fps_overlay_position: FpsOverlayPosition,
     fps_counter: FpsCounter,
-    fps_shared_value: Arc<AtomicU32>,
     theme_initialized: bool,
     debugger_window_open: Arc<AtomicBool>,
     debugger_window: Arc<Mutex<DebuggerWindowState>>,
@@ -135,9 +133,7 @@ impl Default for SegaApp {
             fps_overlay_enabled: true,
             fps_overlay_was_active: false,
             fps_overlay_size: FpsOverlaySize::Medium,
-            fps_overlay_position: FpsOverlayPosition::BottomRight,
             fps_counter: FpsCounter::default(),
-            fps_shared_value: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             theme_initialized: false,
             debugger_window_open: Arc::new(AtomicBool::new(false)),
             debugger_window: Arc::new(Mutex::new(DebuggerWindowState::default())),
@@ -287,42 +283,6 @@ impl FpsOverlaySize {
             Self::Medium => "Médio",
             Self::Large => "Grande",
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FpsOverlayPosition {
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
-}
-
-impl FpsOverlayPosition {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::TopLeft => "Superior esquerdo",
-            Self::TopRight => "Superior direito",
-            Self::BottomLeft => "Inferior esquerdo",
-            Self::BottomRight => "Inferior direito",
-        }
-    }
-}
-
-fn fps_overlay_position(
-    root_min: egui::Pos2,
-    viewport: egui::Rect,
-    size: egui::Vec2,
-    anchor: FpsOverlayPosition,
-) -> egui::Pos2 {
-    let margin = egui::vec2(12.0, 12.0);
-    let min = root_min + viewport.min.to_vec2();
-    let max = root_min + viewport.max.to_vec2();
-    match anchor {
-        FpsOverlayPosition::TopLeft => min + margin,
-        FpsOverlayPosition::TopRight => egui::pos2(max.x - size.x - margin.x, min.y + margin.y),
-        FpsOverlayPosition::BottomLeft => egui::pos2(min.x + margin.x, max.y - size.y - margin.y),
-        FpsOverlayPosition::BottomRight => max - size - margin,
     }
 }
 
@@ -606,14 +566,6 @@ impl SegaApp {
                 _ => FpsOverlaySize::Medium,
             };
         }
-        if let Some(position) = saved_ui_setting(contents, "fps_overlay_position") {
-            self.fps_overlay_position = match position {
-                "top_left" => FpsOverlayPosition::TopLeft,
-                "top_right" => FpsOverlayPosition::TopRight,
-                "bottom_left" => FpsOverlayPosition::BottomLeft,
-                _ => FpsOverlayPosition::BottomRight,
-            };
-        }
         if let Some(position) =
             saved_ui_setting(contents, "main_window_position").and_then(parse_saved_position)
         {
@@ -670,12 +622,6 @@ impl SegaApp {
             FpsOverlaySize::Medium => "medium",
             FpsOverlaySize::Large => "large",
         };
-        let fps_position = match self.fps_overlay_position {
-            FpsOverlayPosition::TopLeft => "top_left",
-            FpsOverlayPosition::TopRight => "top_right",
-            FpsOverlayPosition::BottomLeft => "bottom_left",
-            FpsOverlayPosition::BottomRight => "bottom_right",
-        };
         let debugger_position = debugger_window
             .window_position
             .map_or_else(String::new, |position| {
@@ -700,7 +646,7 @@ impl SegaApp {
             .join(",");
 
         let contents = format!(
-            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
             self.rom_path,
             debugger_window.breakpoint_rom_path,
             debugger_window.memory_address,
@@ -716,7 +662,6 @@ impl SegaApp {
             self.diagnostics_enabled,
             self.fps_overlay_enabled,
             fps_size,
-            fps_position,
             self.debugger_window_open.load(Ordering::Acquire),
             debugger_position,
             debugger_size,
@@ -916,7 +861,6 @@ impl SegaApp {
                 debugger_window_open: self.debugger_window_open.as_ref(),
                 fps_overlay_enabled: &mut self.fps_overlay_enabled,
                 fps_overlay_size: &mut self.fps_overlay_size,
-                fps_overlay_position: &mut self.fps_overlay_position,
             };
             render_header(ui, &mut header_state);
         }
@@ -1080,7 +1024,6 @@ impl SegaApp {
                                     debugger_window_open: self.debugger_window_open.as_ref(),
                                     fps_overlay_enabled: &mut self.fps_overlay_enabled,
                                     fps_overlay_size: &mut self.fps_overlay_size,
-                                    fps_overlay_position: &mut self.fps_overlay_position,
                                 };
                                 render_menu_content(menu_ui, menu, &mut header_state);
 
@@ -1125,7 +1068,7 @@ impl SegaApp {
         let show_status = self.footer_mode.is_visible();
         let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
         if show_status {
-            render_footer(ui, &self.native_viewport, &self.rom_path, self.fps_overlay_enabled.then_some(self.fps_counter.fps));
+            render_footer(ui, &self.native_viewport, &self.rom_path, self.fps_overlay_enabled.then_some(self.fps_counter.fps), self.fps_overlay_size.font_size());
         }
         viewport_rect
     }
@@ -1222,8 +1165,6 @@ impl SegaApp {
                     worker.set_diagnostics_enabled(true);
                 }
                 self.fps_counter.reset(0, Instant::now());
-                self.fps_shared_value
-                    .store(0.0_f32.to_bits(), Ordering::Relaxed);
                 remember_recent_rom(&mut self.recent_roms, path);
                 self.last_controller = None;
                 self.pause_key_down = false;
@@ -2341,7 +2282,6 @@ struct HeaderState<'a> {
     debugger_window_open: &'a AtomicBool,
     fps_overlay_enabled: &'a mut bool,
     fps_overlay_size: &'a mut FpsOverlaySize,
-    fps_overlay_position: &'a mut FpsOverlayPosition,
 }
 
 /// Render the menu bar. Dropdown content is hosted by a native child viewport.
@@ -2689,6 +2629,15 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
 fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
     ui.strong("FPS no rodapé");
     ui.checkbox(state.fps_overlay_enabled, "Exibir FPS na barra inferior");
+    ui.add_enabled_ui(*state.fps_overlay_enabled, |ui| {
+        egui::ComboBox::from_id_salt("fps_footer_size")
+            .selected_text(state.fps_overlay_size.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
+                ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Medium, "Médio");
+                ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
+            });
+    });
     ui.separator();
     let mut show_status = state.footer_mode.is_visible();
     if ui
@@ -3036,12 +2985,13 @@ fn render_footer(
     viewport: &NativeViewportState,
     rom_path: &str,
     fps: Option<f32>,
-) {
+    fps_font_size: f32,
+)
     ui.horizontal(|ui| {
         ui.small(viewport.status());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(fps) = fps {
-                ui.strong(format!("{fps:.0} FPS"));
+                ui.label(egui::RichText::new(format!("{fps:.0} FPS")).strong().size(fps_font_size));
                 ui.separator();
             }
             let rom_name = Path::new(rom_path)
@@ -3103,7 +3053,7 @@ fn to_win32_pixel(value: f32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FpsCounter, FpsOverlayPosition, FpsOverlaySize, SegaApp};
+    use super::{FpsCounter, FpsOverlaySize, SegaApp};
     use eframe::egui;
     use sega_input_runtime::{AxisSemantic, DeviceState};
     use std::io::{Cursor, Write};
@@ -3192,7 +3142,6 @@ mod tests {
         assert_eq!(app.region, "usa");
         assert!(app.fps_overlay_enabled);
         assert_eq!(app.fps_overlay_size, FpsOverlaySize::Medium);
-        assert_eq!(app.fps_overlay_position, FpsOverlayPosition::BottomRight);
     }
 
     #[test]
@@ -3229,25 +3178,6 @@ mod tests {
     fn fps_overlay_sizes_are_monotonic() {
         assert!(FpsOverlaySize::Small.dimensions().x < FpsOverlaySize::Medium.dimensions().x);
         assert!(FpsOverlaySize::Medium.dimensions().x < FpsOverlaySize::Large.dimensions().x);
-    }
-
-    #[test]
-    fn fps_overlay_positions_stay_inside_each_viewport_corner() {
-        let root = egui::pos2(100.0, 50.0);
-        let viewport = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(640.0, 480.0));
-        let size = FpsOverlaySize::Medium.dimensions();
-        for anchor in [
-            FpsOverlayPosition::TopLeft,
-            FpsOverlayPosition::TopRight,
-            FpsOverlayPosition::BottomLeft,
-            FpsOverlayPosition::BottomRight,
-        ] {
-            let point = super::fps_overlay_position(root, viewport, size, anchor);
-            assert!(point.x >= root.x + viewport.left() + 12.0);
-            assert!(point.y >= root.y + viewport.top() + 12.0);
-            assert!(point.x + size.x <= root.x + viewport.right() - 12.0);
-            assert!(point.y + size.y <= root.y + viewport.bottom() - 12.0);
-        }
     }
 
     #[test]
