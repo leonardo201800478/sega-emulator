@@ -75,15 +75,28 @@ A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via
 
 Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores.
 
-## 6. Preservação
+## 6. Matriz de validação CI
+
+A CI é orientada pelo impacto real dos arquivos alterados, não por uma matriz fixa de todas as APIs históricas.
+
+- Mudanças em `native/sega_desktop/**` executam o gate Windows x64 Release da POC Slint/WGPU 30/Vulkan.
+- Mudanças no runtime e nos componentes compartilhados continuam sujeitas aos gates Rust de workspace e aos testes focados correspondentes.
+- egui/eframe, D3D12 e WASAPI/XAudio2 são hosts transitórios. Seus gates só executam quando os respectivos diretórios de implementação são alterados ou quando a validação legada é solicitada manualmente.
+- O job de input valida o runtime genérico de entrada; não representa validação de SDL3, que ainda não foi integrado.
+- CPAL e SDL3 terão gates próprios quando suas integrações forem implementadas. Não executar nem declarar PASS de APIs ainda ausentes.
+- Alterações exclusivas em workflows não acionam por si só a bateria completa de testes de hardware. Alterações globais de manifests/lockfiles continuam executando a regressão Rust de workspace.
+
+A matriz não remove a baseline legada nem declara paridade. Ela evita que uma POC da nova arquitetura dependa de APIs que não fazem parte do seu escopo.
+
+## 7. Preservação
 
 MachineScheduler permanece autoridade de clocks/eventos. UI, renderização, áudio físico e input não comandam tempo virtual. Preservar ordem causal, WAIT states, operações retomáveis e estado necessário à restauração. Execução contínua e em blocos deve ser equivalente. Não duplicar worker, CPU, PSG, VDP ou Scheduler.
 
-## 7. Licenças
+## 8. Licenças
 
 Antes de distribuir binários, revisar licenças/notices de Slint, WGPU, CPAL e dependências transitivas. Registrar obrigações em THIRD_PARTY_NOTICES.md; confirmar termos oficiais vigentes para o uso pretendido.
 
-## 8. Estado
+## 9. Estado
 
 - Arquitetura e capacidades documentadas justificam a POC.
 - POC integrada compilada/executada: NOT RUN na revisão inicial; implementação submetida em PR própria para validação Windows Release.
