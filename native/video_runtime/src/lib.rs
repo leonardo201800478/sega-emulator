@@ -512,6 +512,23 @@ mod tests {
     }
 
     #[test]
+    fn mailbox_exposes_monotonic_publication_timestamp() {
+        let mailbox = super::FrameMailbox::new();
+        let before_publish = std::time::Instant::now();
+        mailbox.publish(test_frame(4)).unwrap();
+
+        let (frame, published_at) = mailbox
+            .take_latest_with_timestamp()
+            .unwrap()
+            .unwrap();
+        let consumed_at = std::time::Instant::now();
+
+        assert_eq!(frame.sequence(), 4);
+        assert!(published_at >= before_publish);
+        assert!(published_at <= consumed_at);
+    }
+
+    #[test]
     fn mailbox_reports_last_accepted_sequence_after_consumption() {
         let mailbox = super::FrameMailbox::new();
         assert_eq!(mailbox.last_sequence().unwrap(), None);
