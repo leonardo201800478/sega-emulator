@@ -69,3 +69,23 @@ Do not classify CI compilation as proof of physical rendering. Do not claim rend
 ## Implementation notes
 
 The current SMS worker already publishes 256x192 RGB888 frames from `machine.framebuffer()` after complete frames. The desktop host must consume that contract; it must not introduce a second VDP framebuffer or alter the scheduler. The first implementation intentionally retains the worker's existing frame copy and converts pixels at the host boundary.
+
+
+## R2.2 — menu migration
+
+The Slint host now exposes the legacy menu groups (Sistema, Arquivo, Vídeo, Áudio, Controles, Opções and DEBUG). Implemented before R3/R4:
+- optional command-line ROM startup and ROM path entry for SMS/BIN ROMs;
+- in-session recent-ROM shortcut, close-ROM and exit actions;
+- worker-backed Start/Pause/Stop/Reset/Step-frame and ROM replacement;
+- region selection applied when a new worker is created;
+- 4:3, 1:1 and 16:9 presentation viewport selection;
+- immutable Z80 debug snapshot and bounded trace enable/disable.
+
+Intentionally deferred and visibly disabled:
+- physical audio output/device/backend/volume (R3 / CPAL);
+- keyboard/gamepad event collection and remapping (R4 / SDL3);
+- FPS overlay size/position; OS fullscreen and source-frame FPS visibility are now implemented but require physical validation;
+- full debugger viewport with breakpoints, memory inspection and trace rendering;
+- persistent recent-ROM history and settings.
+
+All machine operations remain coarse-grained worker commands. The GUI does not execute CPU instructions or advance Scheduler time. Region changes are applied on ROM load; the currently running machine is not mutated in place.
