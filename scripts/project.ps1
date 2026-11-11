@@ -11,7 +11,9 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $workspaces = @(
     [pscustomobject]@{ Name = "root"; Manifest = "Cargo.toml"; Lockfile = "Cargo.lock" },
-    [pscustomobject]@{ Name = "sega-app"; Manifest = "native/sega_app/Cargo.toml"; Lockfile = "native/sega_app/Cargo.lock" }
+    [pscustomobject]@{ Name = "audio-output-legacy"; Manifest = "native/audio_output/Cargo.toml"; Lockfile = "native/audio_output/Cargo.lock" },
+    [pscustomobject]@{ Name = "sega-app-legacy"; Manifest = "native/sega_app/Cargo.toml"; Lockfile = "native/sega_app/Cargo.lock" },
+    [pscustomobject]@{ Name = "sms-debugger-legacy"; Manifest = "native/sms_debugger/Cargo.toml"; Lockfile = "native/sms_debugger/Cargo.lock" }
 )
 $results = @()
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -60,6 +62,22 @@ if ($Command -eq "audit") {
         $knownManifestPaths += [System.IO.Path]::GetFullPath($manifestPath)
         $metadata = Invoke-ProjectCargo -Name "metadata $($workspace.Name)" -CargoArguments @("metadata", "--locked", "--no-deps", "--format-version", "1", "--manifest-path", $manifestPath)
         $results += $metadata
+        if ($metadata.Status -eq "PASS") {
+            try {
+                $metadataDocument = $metadata.Output | ConvertFrom-Json
+                foreach ($package in $metadataDocument.packages) {
+                    $knownManifestPaths += [System.IO.Path]::GetFullPath($package.manifest_path)
+                }
+            }
+            catch {
+                $results += [pscustomobject]@{
+                    Name = "metadata inventory $($workspace.Name)"
+                    Status = "FAIL"
+                    ExitCode = $null
+                    Output = "Cargo metadata succeeded but its JSON could not be parsed: $($_.Exception.Message)"
+                }
+            }
+        }
 
         $results += [pscustomobject]@{
             Name = "lockfile $($workspace.Lockfile)"
