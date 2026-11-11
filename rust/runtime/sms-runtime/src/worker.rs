@@ -1721,10 +1721,11 @@ mod tests {
     }
 
     #[test]
-    fn zero_frame_wait_does_not_create_a_deadline() {
+    fn expired_frame_deadline_has_no_remaining_wait() {
+        let now = std::time::Instant::now();
         let mut pacing = FramePacingDeadline::default();
-        pacing.set(None);
-        assert_eq!(pacing.remaining(std::time::Instant::now()), None);
+        pacing.set(Some(now));
+        assert_eq!(pacing.remaining(now), Some(Duration::ZERO));
     }
 
     #[test]
