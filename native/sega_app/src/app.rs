@@ -286,7 +286,7 @@ fn fps_overlay_position(
 
 fn format_sms_hud_text(metrics: Option<SmsPerformanceMetrics>) -> String {
     let Some(metrics) = metrics else {
-        return "SMS aguardando ROM\nFrame --\nInput -> SMS frame --".to_owned();
+        return "SMS aguardando ROM\nFrame --\nInput -> emulated frame --".to_owned();
     };
     let frame_time = metrics
         .frame_time_ms
@@ -295,7 +295,7 @@ fn format_sms_hud_text(metrics: Option<SmsPerformanceMetrics>) -> String {
         .input_to_frame_ms
         .map_or_else(|| "--".to_owned(), |value| format!("{value:.1} ms"));
     format!(
-        "SMS {:.1} FPS\nFrame {frame_time}\nInput -> SMS frame {input_latency}",
+        "SMS {:.1} FPS\nFrame interval {frame_time}\nInput -> emulated frame {input_latency}",
         metrics.emulation_fps
     )
 }
@@ -3323,7 +3323,7 @@ mod tests {
 
         assert!(text.contains("0.0 FPS"));
         assert!(text.contains("Frame --"));
-        assert!(text.contains("Input -> SMS frame --"));
+        assert!(text.contains("Input -> emulated frame --"));
     }
 
     #[test]
