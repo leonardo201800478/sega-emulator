@@ -448,8 +448,8 @@ mod windows_host {
             let now = Instant::now();
             let elapsed = now.saturating_duration_since(last_sample);
             if elapsed >= Duration::from_millis(500) {
-                let produced =
-                    u32::try_from(frame.sequence().saturating_sub(last_sequence)).unwrap_or(u32::MAX);
+                let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence))
+                    .unwrap_or(u32::MAX);
                 let fps = f64::from(produced) / elapsed.as_secs_f64();
                 app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
                 last_sequence = frame.sequence();
@@ -501,8 +501,7 @@ mod windows_host {
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
         mailbox: &FrameMailbox,
     ) -> Result<(), String> {
-        let rom =
-            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        let rom = fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
         let next = SmsTemporalWorker::new(rom, region)?;
 
         let previous = worker_slot.borrow_mut().take();
@@ -623,9 +622,7 @@ mod windows_host {
             let path = PathBuf::from(path.as_str());
             if path.as_os_str().is_empty() {
                 if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status(
-                        "Informe o caminho completo da ROM (.sms ou .bin).".into(),
-                    );
+                    app.set_rom_status("Informe o caminho completo da ROM (.sms ou .bin).".into());
                 }
                 return;
             }
@@ -652,9 +649,7 @@ mod windows_host {
                 }
                 Err(error) => {
                     if let Some(app) = open_app.upgrade() {
-                        app.set_rom_status(
-                            format!("Falha ao carregar ROM: {error}").into(),
-                        );
+                        app.set_rom_status(format!("Falha ao carregar ROM: {error}").into());
                     }
                 }
             }
