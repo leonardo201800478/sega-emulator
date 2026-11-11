@@ -25,7 +25,7 @@ A main ainda contém egui/eframe, D3D12 e WASAPI/XAudio2. A nova stack não est�
 | PR | Estado | Escopo |
 |---|---|---|
 | [#744](https://github.com/leonardo201800478/sega-emulator/pull/744) | OPEN, Draft; HEAD a357f25b23da7655b421f4e9735c42c2d253c754 | Fallback FPS egui; não integrada |
-| [#745](https://github.com/leonardo201800478/sega-emulator/pull/745) | OPEN, Draft; HEAD b3939018d97fae9c061ecce402687135509de3b8 | ADR 0011/documentação. CI #6423 SUCCESS; jobs não aplicáveis SKIPPED/NOT RUN |
+| [#745](https://github.com/leonardo201800478/sega-emulator/pull/745) | OPEN, Draft; HEAD 5e928f1b2a8639e5c23fd0b957a33481e7800efc | ADR 0011 e reconciliação documental. CI #6426 em execução; Documentation patch hygiene PASS no HEAD observado, demais jobs não aplicáveis SKIPPED/NOT RUN |
 | [#746](https://github.com/leonardo201800478/sega-emulator/pull/746) | OPEN, Draft; HEAD 52df9085fc057360095d39c72a87ce2e354eb04a | FrameMailbox portável; não implementa WGPU. CI #6424 e SMS Debugger Runtime #147 SUCCESS no HEAD informado |
 
 PR Draft não é integração. Reconsultar estado e SHA antes de qualquer ação.
@@ -45,7 +45,7 @@ PR Draft não é integração. Reconsultar estado e SHA antes de qualquer ação
 | SDL3 na nova arquitetura | NOT RUN |
 | Paridade/corte da baseline | NOT RUN |
 
-CI #6423 não valida a POC gráfica. CI #6424 valida os jobs aplicáveis ao diff do worker, não WGPU/Vulkan.
+CI #6423 validou a revisão documental anterior, não a POC gráfica. No HEAD 5e928f1b2a8639e5c23fd0b957a33481e7800efc, a verificação de higiene documental do CI #6426 passou; a conclusão global ainda estava pendente nesta fotografia. CI #6424 valida os jobs aplicáveis ao diff do worker, não WGPU/Vulkan.
 
 ## Próxima tarefa
 
