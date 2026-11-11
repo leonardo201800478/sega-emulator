@@ -809,6 +809,7 @@ mod windows_host {
         app.set_selected_region(region.clone().into());
         app.set_show_fps(preferences.show_fps);
         app.set_show_status_footer(preferences.show_status_footer);
+        app.set_sprite_limit_enabled(preferences.sprite_limit_enabled);
         app.set_fps_size(preferences.fps_size.clone().into());
         app.set_fps_font_size(match preferences.fps_size.as_str() {
             "small" => 13.0,
@@ -1027,7 +1028,6 @@ mod windows_host {
                     show_fps: app.get_show_fps(),
                     show_status_footer: app.get_show_status_footer(),
                     fps_size: app.get_fps_size().to_string(),
-            sprite_limit_enabled: app.get_sprite_limit_enabled(),
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
                 };
                 let _ = save_desktop_preferences(&prefs);
@@ -1159,6 +1159,7 @@ mod windows_host {
             show_fps: app.get_show_fps(),
             show_status_footer: app.get_show_status_footer(),
             fps_size: app.get_fps_size().to_string(),
+            sprite_limit_enabled: app.get_sprite_limit_enabled(),
         };
         let _ = save_desktop_preferences(&final_preferences);
         let _ = save_recent_roms(&recent_roms.borrow());
