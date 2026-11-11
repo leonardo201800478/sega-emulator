@@ -711,7 +711,9 @@ mod windows_host {
         fn record_poll(&mut self, now: Instant) {
             self.polls = self.polls.saturating_add(1);
             if let Some(previous) = self.last_poll {
-                let elapsed = now.saturating_duration_since(previous).as_nanos()
+                let elapsed = now
+                    .saturating_duration_since(previous)
+                    .as_nanos()
                     .min(u128::from(u64::MAX)) as u64;
                 self.poll_interval_sum_ns = self
                     .poll_interval_sum_ns
@@ -730,8 +732,9 @@ mod windows_host {
             if let Some(previous) = self.last_consumed {
                 let elapsed = now.saturating_duration_since(previous).as_nanos()
                     .min(u128::from(u64::MAX)) as u64;
-                self.consumed_interval_sum_ns =
-                    self.consumed_interval_sum_ns.saturating_add(u128::from(elapsed));
+                self.consumed_interval_sum_ns = self
+                    .consumed_interval_sum_ns
+                    .saturating_add(u128::from(elapsed));
                 self.consumed_interval_max_ns = self.consumed_interval_max_ns.max(elapsed);
             }
             if self.last_sequence > 0 && sequence > self.last_sequence.saturating_add(1) {
@@ -739,7 +742,9 @@ mod windows_host {
                     .sequence_gaps
                     .saturating_add(sequence - self.last_sequence - 1);
             }
-            let residence = now.saturating_duration_since(published_at).as_nanos()
+            let residence = now
+                .saturating_duration_since(published_at)
+                .as_nanos()
                 .min(u128::from(u64::MAX)) as u64;
             self.mailbox_residence_count = self.mailbox_residence_count.saturating_add(1);
             self.mailbox_residence_sum_ns = self
@@ -753,25 +758,18 @@ mod windows_host {
         fn record_conversion(&mut self, elapsed: Duration) {
             self.conversion_count = self.conversion_count.saturating_add(1);
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-            self.conversion_sum_ns = self
-                .conversion_sum_ns
-                .saturating_add(u128::from(nanos));
+            self.conversion_sum_ns = self.conversion_sum_ns.saturating_add(u128::from(nanos));
             self.conversion_max_ns = self.conversion_max_ns.max(nanos);
         }
 
         fn record_queue_write(&mut self, elapsed: Duration) {
             self.queue_write_count = self.queue_write_count.saturating_add(1);
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-            self.queue_write_sum_ns = self
-                .queue_write_sum_ns
-                .saturating_add(u128::from(nanos));
+            self.queue_write_sum_ns = self.queue_write_sum_ns.saturating_add(u128::from(nanos));
             self.queue_write_max_ns = self.queue_write_max_ns.max(nanos);
         }
 
-        fn report_if_due(
-            &mut self,
-            worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
-        ) {
+        fn report_if_due(&mut self, worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>) {
             let elapsed = self.started.elapsed();
             if elapsed < Duration::from_secs(1) {
                 return;
@@ -781,11 +779,13 @@ mod windows_host {
                 let guard = worker_slot.borrow();
                 guard.as_ref().map_or(
                     (sega_sms_runtime::SmsFramePacingMetrics::default(), 0, 0),
-                    |worker| (
-                        worker.frame_pacing_metrics(),
-                        worker.video_replaced_frames(),
-                        worker.machine_clock_hz(),
-                    ),
+                    |worker| {
+                        (
+                            worker.frame_pacing_metrics(),
+                            worker.video_replaced_frames(),
+                            worker.machine_clock_hz(),
+                        )
+                    },
                 )
             };
             let average_us = |total_ns: u128, count: u64| -> u64 {
@@ -804,7 +804,10 @@ mod windows_host {
                 self.sequence_gaps,
                 average_us(self.poll_interval_sum_ns, self.polls.saturating_sub(1)),
                 self.poll_interval_max_ns / 1_000,
-                average_us(self.consumed_interval_sum_ns, self.consumed.saturating_sub(1)),
+                average_us(
+                    self.consumed_interval_sum_ns,
+                    self.consumed.saturating_sub(1)
+                ),
                 self.consumed_interval_max_ns / 1_000,
                 average_us(self.mailbox_residence_sum_ns, self.mailbox_residence_count),
                 self.mailbox_residence_max_ns / 1_000,
@@ -1580,12 +1583,8 @@ mod windows_host {
             setup_counter,
             teardown_counter,
         )?;
-        let _frame_timer = start_frame_presentation(
-            &app,
-            queue_slot,
-            mailbox.clone(),
-            Rc::clone(&worker),
-        );
+        let _frame_timer =
+            start_frame_presentation(&app, queue_slot, mailbox.clone(), Rc::clone(&worker));
 
         app.run()?;
         let final_preferences = DesktopPreferences {
