@@ -1,7 +1,7 @@
 # Estado do projeto — 2026-11-11
 
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
-**Main auditada:** 392a5c67e85a11a5a980d8f7055bcc8a12fe3784  
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
+**Main auditada:** 392a5c67e85a11a5a980d8f7055bcc8a12fe3784
 **Escopo:** estado remoto do GitHub e PRs relevantes; não representa execução local da POC.
 
 ## Resumo

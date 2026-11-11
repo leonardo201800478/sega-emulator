@@ -1,7 +1,7 @@
 # Sega Emulator — instruções permanentes
 
-**Stack desktop alvo:** Slint 1.18.x + WGPU 30.x + CPAL 0.18.2; Vulkan inicial no Windows x64; SDL3 após auditoria.  
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
+**Stack desktop alvo:** Slint 1.18.x + WGPU 30.x + CPAL 0.18.2; Vulkan inicial no Windows x64; SDL3 após auditoria.
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
 **Referência:** https://www.smspower.org/
 
 ## Objetivo e prioridades

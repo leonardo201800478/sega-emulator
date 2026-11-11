@@ -1,8 +1,8 @@
 # Sprint R1 — POC Slint + WGPU 30 + Vulkan
 
-**Início de referência:** 2026-11-11  
-**Baseline:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784  
-**ADR:** 0011 — Replataforma desktop  
+**Início de referência:** 2026-11-11
+**Baseline:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784
+**ADR:** 0011 — Replataforma desktop
 **Status inicial:** POC executável NOT RUN.
 
 ## Objetivo
@@ -55,9 +55,9 @@ Documentação das APIs comprova viabilidade teórica, não substitui os testes 
 
 ## Gates
 
-cargo fmt --all -- --check  
-cargo clippy --release --workspace --all-targets --locked -- -D warnings  
-cargo test --release --workspace --locked  
+cargo fmt --all -- --check
+cargo clippy --release --workspace --all-targets --locked -- -D warnings
+cargo test --release --workspace --locked
 Build Release Windows x64; execução Vulkan real; composição Slint/WGPU; atualização contínua da textura.
 
 Classificar cada item PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Sem GPU/driver compatível, execução física fica BLOCKED/NOT RUN.

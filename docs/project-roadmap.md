@@ -1,6 +1,6 @@
 # Roadmap mestre — Sega Emulator
 
-**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).  
+**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).
 **Decisões:** ADR 0010 (runtime/hardware), ADR 0011 (desktop/hosts) e ADR-0016 (fidelidade temporal).
 
 Duas trilhas coordenadas: evolução dos sistemas Sega (P0–P9) e replataforma desktop/host (R1–R5). A segunda não autoriza reescrever hardware nem antecipar sistemas.

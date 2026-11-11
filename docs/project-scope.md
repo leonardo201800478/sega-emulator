@@ -1,7 +1,7 @@
 # Escopo do projeto — Sega Emulator
 
-**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).  
-**Arquitetura desktop alvo:** ADR 0011 — Slint + WGPU + CPAL.  
+**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).
+**Arquitetura desktop alvo:** ADR 0011 — Slint + WGPU + CPAL.
 **Runtime:** ADR 0010 e ADR-0016 permanecem vigentes.
 
 ## Objetivo
