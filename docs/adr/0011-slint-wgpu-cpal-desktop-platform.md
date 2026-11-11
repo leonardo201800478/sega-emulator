@@ -210,9 +210,9 @@ O objetivo final é um workspace Rust coerente, com um único lockfile e versõe
 - consumir os VideoFrame completos e imutáveis pela mailbox já existente, desacoplando a publicação do frame do backend D3D12 atualmente acoplado ao worker;
 - transferir o frame CPU para textura GPU uma vez por frame, sem cópias completas intermediárias no lado CPU; preservar execução de todos os ciclos e eventos do Scheduler;
 - fullscreen borderless inicial, redimensionamento, minimização/restauração, mudança de proporção e shutdown repetido;
-- imagem 4:3 centralizada sem crop/stretch em monitor 16:9, com telemetria nos gutters laterais; quando o conteúdo preencher 16:9 ou não houver gutters suficientes, telemetria compacta em overlays nos cantos;
-- HUD esquerdo: FPS de emulação, FPS de apresentação, frame time, input-to-frame, resolução interna e proporção;
-- HUD direito: adapter/backend efetivo, present mode, refresh rate quando obtido de fonte confiável, estado HDR/capacidades, estado VRR como medido ou não verificável, sample rate e métricas de underrun/drop do áudio;
+- imagem 4:3 centralizada sem crop/stretch em monitor 16:9; não reservar gutters nem alterar a área do jogo para HUD;
+- HUD mínimo: exibir somente o FPS de emulação, obtido de `SmsPerformanceMetrics`, em texto discreto sobre o viewport; não exibir FPS de apresentação, frame time, input-to-frame, resolução, proporção ou outros indicadores;
+- Não exibir informações de GPU, backend, present mode, refresh rate, HDR, VRR ou áudio na HUD da POC;
 - botão SDL3 SDL_GAMEPAD_BUTTON_GUIDE abre/fecha o menu; borda de pressionamento evita alternância repetida; Guide nunca é enviado ao controle emulado;
 - menu translúcido sobre o último frame apresentado; ao abrir o menu, o host solicita imediatamente a pausa da máquina e o Scheduler interrompe o avanço em uma fronteira segura e determinística. CPU, VDP, PSG, áudio emulado e demais domínios temporais permanecem congelados enquanto o menu estiver aberto; D-pad e botões de confirmação/cancelamento navegam no menu e são consumidos pelo host;
 - testar aspect ratio 4:3 e 16:9, navegação integral pelo gamepad, pausa efetiva ao abrir o menu e retomada do SMS a partir do estado exato preservado ao fechá-lo;
@@ -333,23 +333,12 @@ A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real 
 - O menu abre sobre o último frame do jogo com fundo translúcido/escurecimento. A abertura solicita imediatamente a pausa da sessão; o Scheduler conclui apenas a operação em andamento até uma fronteira segura e então deixa de avançar o tempo virtual. Não há execução de CPU, avanço de VDP/PSG, frame emulado ou produção de áudio emulado enquanto o menu estiver aberto.
 - O botão Guide do gamepad alterna o menu por transição de botão (pressed edge), sem ser encaminhado ao controle do Master System.
 - Com o menu aberto, D-pad, confirmação e cancelamento são consumidos pela UI; ao fechar, o mapeamento de jogo volta a receber os controles.
-- Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação e utilizar os espaços laterais para telemetria compacta esquerda/direita. Para conteúdo 16:9 ou quando não houver área lateral suficiente, posicionar telemetria nos cantos sobre o vídeo, com fundo translúcido e margens seguras.
+- Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação. A HUD de teste será apenas um indicador discreto do FPS de emulação, sobreposto em um canto seguro; não reservar espaços laterais, não redimensionar e não cortar o jogo. O mesmo indicador simples será usado em 16:9.
 - Nunca cortar a imagem para abrir espaço ao HUD. Proporção e área ativa do jogo têm prioridade.
 
 ### 12.2 Telemetria e proveniência
 
-A telemetria deve separar explicitamente:
-- **Emulation FPS:** medido no worker SMS (SmsPerformanceMetrics);
-- **Presentation FPS:** contagem de frames submetidos pelo host à surface via present(); isso não comprova o instante de scanout físico do monitor;
-- **Frame time:** duração entre frames concluídos pelo worker e, separadamente, intervalos de apresentação;
-- **Input-to-frame:** medição existente no worker;
-- **Audio:** sample rate efetivo e contadores de underrun/drop da sessão CPAL;
-- **GPU/backend:** adapter e backend efetivamente selecionados, formato, color space e present mode;
-- **Display:** refresh rate apenas quando obtido de API confiável; caso contrário mostrar “não disponível”; a taxa de atualização configurada não é FPS do jogo nem confirmação de scanout;
-- **VRR:** distinguir capacidade, configuração e confirmação observada; não afirmar “ativo” apenas porque um modo WGPU está disponível;
-- **HDR:** distinguir capacidade de surface, HDR do display reportado e modo de saída configurado.
-
-A UI consulta snapshots em baixa frequência e nunca solicita debug_snapshot() bloqueante em cada frame. Contadores de host são coletados fora do callback de áudio e fora do avanço do Scheduler.
+A única informação visual da HUD nesta prova de conceito será o **FPS de emulação**, lido de `SmsPerformanceMetrics` do worker SMS e atualizado em baixa frequência. Não exibir FPS de apresentação, refresh rate, frame time, input-to-frame, resolução, proporção, GPU/backend, present mode, HDR, VRR, sample rate, underruns ou qualquer outra métrica. Métricas adicionais eventualmente necessárias à validação permanecem em logs/testes internos, nunca na HUD. A HUD não deve reservar espaço, redimensionar ou cortar o viewport.
 
 ### 12.3 Limite de transferência de vídeo
 
@@ -362,7 +351,7 @@ A prova será considerada aprovada somente se:
 2. A janela Slint permanece fullscreen e o menu sobrepõe o jogo na mesma composição.
 3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo; abrir o menu pausa a máquina na primeira fronteira segura e fechar retoma do estado preservado.
 4. Com o menu aberto, o estado da máquina permanece congelado e o último frame continua visível; ao fechar, a máquina retoma do ponto temporal preservado e volta a receber os controles do jogo.
-5. HUD mostra valores de origem identificada, sem misturar FPS do emulador com FPS do monitor.
+5. A HUD exibe exclusivamente o FPS de emulação originado em `SmsPerformanceMetrics`; não há outros indicadores visuais.
 6. Áudio CPAL permanece estável durante gameplay; ao abrir o menu, a saída é silenciada/interrompida de forma controlada sem avançar o áudio emulado; ao fechar, a produção e a saída são retomadas sem descontinuidade temporal indevida.
 7. VRR e HDR são testados em equipamento compatível e seus resultados são classificados separadamente, incluindo BLOCKED/NOT RUN quando o hardware não permite a comprovação.
 8. HUD, composição, áudio host e apresentação não alteram a semântica do SMS, Scheduler, CPU, VDP ou PSG. A única transição temporal causada pelo menu é a pausa/resume explícita definida nesta ADR.
