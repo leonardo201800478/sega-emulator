@@ -38,6 +38,11 @@ mod windows_host {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
             preferred-width: 1120px; preferred-height: 860px; background: #101820;
             in-out property <image> gpu-texture;
+            in-out property <image> play-icon;
+            in-out property <image> pause-icon;
+            in-out property <image> stop-icon;
+            in-out property <image> reset-icon;
+            in-out property <image> step-frame-icon;
             in-out property <string> gpu-status;
             in-out property <string> frame-status;
             in-out property <string> lifecycle-status;
@@ -194,11 +199,11 @@ mod windows_host {
                 }
                 HorizontalLayout {
                     spacing: 8px;
-                    Button { text: "Iniciar"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
-                    Button { text: "Pausar"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.emulation-paused = true; root.pause-requested(); } }
-                    Button { text: "Parar"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
-                    Button { text: "Reset"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
-                    Button { text: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
+                    Button { text: ""; icon: root.play-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
+                    Button { text: ""; icon: root.pause-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
+                    Button { text: ""; icon: root.stop-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
+                    Button { text: ""; icon: root.reset-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
+                    Button { text: ""; icon: root.step-frame-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
                     Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
                 }
                 Rectangle {
@@ -880,6 +885,27 @@ mod windows_host {
         Ok(())
     }
 
+    /// Material Icons are decoded to Slint SVG images once during application startup.
+    struct TransportIcons {
+        play: slint::Image,
+        pause: slint::Image,
+        stop: slint::Image,
+        reset: slint::Image,
+        step_frame: slint::Image,
+    }
+
+    fn load_transport_icons() -> Result<TransportIcons, slint::LoadImageError> {
+        use md_icons_classic::filled;
+
+        Ok(TransportIcons {
+            play: slint::Image::load_from_svg_data(filled::ICON_PLAY_ARROW.as_bytes())?,
+            pause: slint::Image::load_from_svg_data(filled::ICON_PAUSE.as_bytes())?,
+            stop: slint::Image::load_from_svg_data(filled::ICON_STOP.as_bytes())?,
+            reset: slint::Image::load_from_svg_data(filled::ICON_REPLAY.as_bytes())?,
+            step_frame: slint::Image::load_from_svg_data(filled::ICON_SKIP_NEXT.as_bytes())?,
+        })
+    }
+
     /// Executa o host SMS; a GUI envia somente comandos coarse-grained ao worker.
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
@@ -909,6 +935,12 @@ mod windows_host {
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
 
         let app = MainWindow::new()?;
+        let transport_icons = load_transport_icons()?;
+        app.set_play_icon(transport_icons.play);
+        app.set_pause_icon(transport_icons.pause);
+        app.set_stop_icon(transport_icons.stop);
+        app.set_reset_icon(transport_icons.reset);
+        app.set_step_frame_icon(transport_icons.step_frame);
         app.set_gpu_status("Aguardando inicialização do renderer WGPU 30...".into());
         app.set_frame_status("Aguardando o primeiro frame completo do VDP.".into());
         app.set_lifecycle_status("Renderer setup: 0 | teardown: 0".into());
@@ -1285,6 +1317,21 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn classic_material_transport_icons_load_as_slint_svg_images() {
+            let icons = load_transport_icons().unwrap();
+            for icon in [
+                icons.play,
+                icons.pause,
+                icons.stop,
+                icons.reset,
+                icons.step_frame,
+            ] {
+                assert!(icon.size().width > 0);
+                assert!(icon.size().height > 0);
+            }
+        }
 
         #[test]
         fn rgb888_conversion_respects_row_stride_and_sets_opaque_alpha() {
