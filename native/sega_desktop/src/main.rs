@@ -40,7 +40,9 @@ mod windows_host {
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
             default-font-size: 12px;
-            preferred-width: 1120px; preferred-height: 860px; background: #101820;
+            preferred-width: 1120px; preferred-height: 860px;
+            min-width: 960px; min-height: 720px;
+            background: #101820;
             in-out property <image> gpu-texture;
             in-out property <image> play-icon;
             in-out property <image> pause-icon;
@@ -149,10 +151,13 @@ mod windows_host {
         }
         if root.active-menu != "none": Rectangle {
             x: min(max(root.active-menu == "system" ? 12px : root.active-menu == "file" ? 81px : root.active-menu == "video" ? 146px : root.active-menu == "audio" ? 207px : root.active-menu == "controls" ? 268px : root.active-menu == "options" ? 347px : 416px, 8px), parent.width - self.width - 8px);
-            y: 88px; width: min(parent.width - 16px, 420px); height: min(parent.height - 104px, 360px); z: 100;
+            y: 88px; width: min(parent.width - 16px, 420px);
+            height: min(parent.height - 104px, root.active-menu == "file" ? 360px : root.active-menu == "controls" ? 280px : root.active-menu == "video" ? 190px : root.active-menu == "options" ? 220px : root.active-menu == "system" ? 220px : root.active-menu == "debug" ? 190px : 160px);
+            z: 100;
             background: #1b2834; border-radius: 5px; border-width: 1px;
             border-color: #405365; min-height: 120px; max-height: 360px; max-width: 420px;
             VerticalLayout {
+                alignment: start;
                 padding: 8px; spacing: 4px;
                         if root.active-menu == "system": VerticalLayout {
                             Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
