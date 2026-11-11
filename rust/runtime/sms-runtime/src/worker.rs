@@ -1113,6 +1113,7 @@ fn execute_frame(
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point must consume the same
     // budget instead of shifting every subsequent frame later.
+    let processing_elapsed = frame_started.elapsed();
     let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
     let frame_wait = frame_deadline
         .map(|deadline| deadline.saturating_duration_since(Instant::now()))
