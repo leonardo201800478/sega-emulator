@@ -134,7 +134,7 @@ struct FramePacingSample {
     pacing_wait_ns: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FramePacingWindow {
     samples: [FramePacingSample; FRAME_PACING_WINDOW_CAPACITY],
     len: usize,
@@ -305,10 +305,6 @@ impl FrameTimingState {
         self.pacing_window.push(sample);
     }
 
-    fn pacing_metrics(&self) -> SmsFramePacingMetrics {
-        self.pacing_window.snapshot()
-    }
-
     fn metrics_at(&self, now: Instant) -> SmsPerformanceMetrics {
         let mut metrics = self.metrics;
         if self
@@ -375,10 +371,13 @@ impl WorkerTelemetry {
     }
 
     fn frame_pacing_metrics(&self) -> SmsFramePacingMetrics {
-        self.frame_timing.lock().map_or_else(
-            |_| SmsFramePacingMetrics::default(),
-            |timing| timing.pacing_metrics(),
-        )
+        // Clone the fixed-size window under the mutex, then sort/allocate outside
+        // the worker's frame-completion critical section.
+        let window = self.frame_timing.lock().map_or_else(
+            |_| FramePacingWindow::default(),
+            |timing| timing.pacing_window.clone(),
+        );
+        window.snapshot()
     }
 
     fn performance_metrics(&self) -> SmsPerformanceMetrics {
