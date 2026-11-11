@@ -29,6 +29,8 @@ const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
 const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
 const WORKER_REPLY_TIMEOUT: Duration = Duration::from_millis(100);
+// A complete frame step can execute tens of thousands of instructions, especially in debug builds.
+const WORKER_FRAME_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -71,9 +73,13 @@ fn enqueue_worker_command(
     }
 }
 
-fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
+fn receive_worker_reply_with_timeout<T>(
+    receiver: Receiver<T>,
+    operation: &str,
+    timeout: Duration,
+) -> Result<T, String> {
     receiver
-        .recv_timeout(WORKER_REPLY_TIMEOUT)
+        .recv_timeout(timeout)
         .map_err(|error| match error {
             RecvTimeoutError::Timeout => {
                 format!("SMS machine worker timed out while {operation}")
@@ -82,6 +88,10 @@ fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, 
                 format!("SMS machine worker stopped while {operation}")
             }
         })
+}
+
+fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
+    receive_worker_reply_with_timeout(receiver, operation, WORKER_REPLY_TIMEOUT)
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
@@ -654,7 +664,11 @@ impl SmsTemporalWorker {
             &self.commands,
             WorkerCommand::StepFrame(max_instructions, reply_sender),
         )?;
-        receive_worker_reply(reply_receiver, "completing a frame step")?
+        receive_worker_reply_with_timeout(
+            reply_receiver,
+            "completing a frame step",
+            WORKER_FRAME_STEP_TIMEOUT,
+        )?
     }
 
     pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
