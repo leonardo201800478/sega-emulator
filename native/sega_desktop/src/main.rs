@@ -139,7 +139,7 @@ mod windows_host {
             x: 18px; y: 54px; width: min(parent.width - 36px, 820px); height: 280px; z: 100;
                     background: #1b2834; border-radius: 6px; border-width: 1px;
                     border-color: #405365; min-height: 170px; max-height: 280px;
-                    max-width: 820px; cross-axis-self-alignment: center;
+                    max-width: 820px;
                     VerticalLayout {
                         padding: 12px; spacing: 7px;
                         if root.active-menu == "system": VerticalLayout {
@@ -166,7 +166,6 @@ mod windows_host {
                             HorizontalLayout {
                                 Button { text: "Procurar..."; clicked => { root.browse-rom-requested(); } }
                                 Button { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
-                                Button { text: "Fechar ROM"; enabled: root.has-rom; clicked => { root.close-rom-requested(); root.active-menu = "none"; } }
                                 Button { text: "Sair"; clicked => { root.exit-requested(); } }
                             }
                             Text { text: "Recentes"; color: #b9c5ce; }
