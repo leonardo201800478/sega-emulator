@@ -57,6 +57,7 @@ mod windows_host {
             callback reset-requested();
             callback step-frame-requested();
             callback load-rom-requested(string);
+            callback browse-rom-requested();
             callback close-rom-requested();
             callback exit-requested();
             callback debug-snapshot-requested();
@@ -104,6 +105,7 @@ mod windows_host {
                         if root.active-menu == "file": VerticalLayout {
                             LineEdit { text <=> root.rom-path-input; placeholder-text: "C:\\ROMs\\game.sms"; }
                             HorizontalLayout {
+                                Button { text: "Procurar..."; clicked => { root.browse-rom-requested(); } }
                                 Button { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
                                 Button { text: "Fechar ROM"; enabled: root.has-rom; clicked => { root.close-rom-requested(); root.active-menu = "none"; } }
                                 Button { text: "Sair"; clicked => { root.exit-requested(); } }
