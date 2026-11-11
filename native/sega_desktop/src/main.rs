@@ -66,8 +66,18 @@ mod windows_host {
             callback debug-snapshot-requested();
             callback trace-toggle-requested(bool);
             callback fullscreen-requested(bool);
+            callback video-area-clicked();
             callback preferences-changed();
-            VerticalLayout {
+            FocusScope {
+                width: 100%; height: 100%;
+                KeyBinding {
+                    keys: @keys(F11);
+                    activated => {
+                        root.fullscreen-enabled = !root.fullscreen-enabled;
+                        root.fullscreen-requested(root.fullscreen-enabled);
+                    }
+                }
+                VerticalLayout {
                 padding: 18px; spacing: 10px;
                 Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
                 HorizontalLayout {
@@ -180,15 +190,28 @@ mod windows_host {
                     Button { text: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.step-frame-requested(); } }
                     Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
                 }
-                Image {
-                    source: root.gpu-texture; preferred-width: root.video-width;
-                    preferred-height: root.video-height; min-width: 256px; min-height: 192px;
-                    horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
+                Rectangle {
+                    horizontal-stretch: 1; vertical-stretch: 1;
+                    min-width: 256px; min-height: 192px;
+                    background: #05080b;
+                    Image {
+                        source: root.gpu-texture;
+                        width: min(parent.width, parent.height * (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        image-fit: fill;
+                    }
+                    TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { root.video-area-clicked(); }
+                    }
                 }
                 if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
                 if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
+                }
             }
         }
     }
