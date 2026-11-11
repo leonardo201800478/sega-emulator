@@ -670,7 +670,7 @@ mod windows_host {
         }
 
         let selected = String::from_utf8_lossy(&output.stdout);
-        let selected = selected.trim_end_matches(['\\r', '\\n']);
+        let selected = selected.trim_end_matches(|character| character == '\r' || character == '\n');
         if selected.is_empty() {
             Ok(None)
         } else {
