@@ -758,6 +758,7 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
+      - bootstrap-sms-debugger-lockfile
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
@@ -765,7 +766,7 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true' || needs.changes.outputs.ci == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && !(github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile') && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true' || needs.changes.outputs.ci == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' }}
           Z80: ${{ needs.z80-focused.result }}
@@ -779,6 +780,8 @@ jobs:
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WORKFLOW_LINT: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' }}
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
+          EXPECT_BOOTSTRAP: ${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile' }}
+          BOOTSTRAP: ${{ needs.bootstrap-sms-debugger-lockfile.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
           EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true') }}
@@ -787,7 +790,7 @@ jobs:
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
           EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
-          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
+          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && !(github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile') && needs.changes.outputs.tooling == 'true') }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
@@ -822,6 +825,7 @@ jobs:
           check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Workflow lint" "$EXPECT_WORKFLOW_LINT" "$WORKFLOW_LINT"
+          check_job "SMS debugger lockfile bootstrap" "$EXPECT_BOOTSTRAP" "$BOOTSTRAP"
           check_job "Legacy Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
           check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
           check_job "Legacy Windows WASAPI/XAudio2" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
