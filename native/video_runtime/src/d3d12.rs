@@ -71,10 +71,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{Error, Interface, Result, w};
 
-mod hud_overlay;
 mod mailbox_session;
 mod session;
-pub use hud_overlay::D3d12HudOverlay;
 pub use mailbox_session::{D3d12MailboxSession, D3d12MailboxSessionError};
 pub use session::{D3d12Session, D3d12SessionError};
 
