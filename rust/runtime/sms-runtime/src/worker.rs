@@ -1524,7 +1524,7 @@ fn handle_command(
             telemetry.set_audio_metrics(AudioOutputMetrics::default());
             let _ = reply.send(());
         }
-            WorkerCommand::SetVideoMailbox(mailbox, reply) => {
+        WorkerCommand::SetVideoMailbox(mailbox, reply) => {
             if let Some(attached_mailbox) = mailbox.as_ref() {
                 match attached_mailbox.last_sequence() {
                     Ok(Some(last_sequence)) => {
