@@ -28,6 +28,7 @@ mod windows_poc {
             in-out property <image> gpu-texture;
             in-out property <string> gpu-status;
             in-out property <string> frame-status;
+            in-out property <string> lifecycle-status;
 
             VerticalLayout {
                 padding: 24px;
@@ -47,8 +48,12 @@ mod windows_poc {
 
                 Image {
                     source: root.gpu-texture;
-                    width: 640px;
-                    height: 480px;
+                    preferred-width: 640px;
+                    preferred-height: 480px;
+                    min-width: 320px;
+                    min-height: 240px;
+                    vertical-stretch: 1;
+                    image-fit: contain;
                 }
 
                 Text {
@@ -61,6 +66,12 @@ mod windows_poc {
                     text: root.frame-status;
                     color: #b9c5ce;
                     font-size: 13px;
+                }
+
+                Text {
+                    text: root.lifecycle-status;
+                    color: #b9c5ce;
+                    font-size: 12px;
                 }
             }
         }
@@ -165,6 +176,8 @@ mod windows_poc {
     fn attach_gpu_texture(
         app: &MainWindow,
         queue_slot: Rc<RefCell<Option<wgpu::Queue>>>,
+        setup_counter: Rc<Cell<u64>>,
+        teardown_counter: Rc<Cell<u64>>,
     ) -> Result<(), Box<dyn Error>> {
         let app_weak = app.as_weak();
 
@@ -178,7 +191,15 @@ mod windows_poc {
                         return;
                     };
 
+                    let setup_count = setup_counter.get().wrapping_add(1);
+                    setup_counter.set(setup_count);
+
                     let adapter_info = device.adapter_info();
+                    eprintln!(
+                        "R1_LIFECYCLE event=RenderingSetup count={setup_count} backend={:?} adapter={}",
+                        adapter_info.backend, adapter_info.name
+                    );
+
                     if adapter_info.backend != wgpu::Backend::Vulkan {
                         app.set_gpu_status(
                             format!(
@@ -201,8 +222,16 @@ mod windows_poc {
                                 .into(),
                             );
                             *queue_slot.borrow_mut() = Some(queue.clone());
+                            app.set_lifecycle_status(
+                                format!(
+                                    "Renderer setup: {setup_count} | teardown: {}",
+                                    teardown_counter.get()
+                                )
+                                .into(),
+                            );
                         }
                         Err(error) => {
+                            eprintln!("R1_LIFECYCLE event=TextureImportFailed error={error}");
                             app.set_gpu_status(
                                 format!("FALHA ao importar textura WGPU: {error}").into(),
                             );
@@ -210,12 +239,28 @@ mod windows_poc {
                     }
                 }
                 (RenderingState::RenderingTeardown, _) => {
+                    let teardown_count = teardown_counter.get().wrapping_add(1);
+                    teardown_counter.set(teardown_count);
+                    eprintln!(
+                        "R1_LIFECYCLE event=RenderingTeardown count={teardown_count}"
+                    );
+
                     *queue_slot.borrow_mut() = None;
                     if let Some(app) = app_weak.upgrade() {
                         app.set_gpu_texture(slint::Image::default());
+                        app.set_lifecycle_status(
+                            format!(
+                                "Renderer setup: {} | teardown: {teardown_count}",
+                                setup_counter.get()
+                            )
+                            .into(),
+                        );
                     }
                 }
                 (RenderingState::RenderingSetup, _) => {
+                    eprintln!(
+                        "R1_LIFECYCLE event=RenderingSetupFailed reason=GraphicsAPI_not_WGPU30"
+                    );
                     if let Some(app) = app_weak.upgrade() {
                         app.set_gpu_status(
                             "FALHA: o renderer Slint não forneceu GraphicsAPI::WGPU30.".into(),
@@ -277,9 +322,17 @@ mod windows_poc {
         let app = MainWindow::new()?;
         app.set_gpu_status("Aguardando inicialização do renderer WGPU 30...".into());
         app.set_frame_status("Aguardando a primeira apresentação.".into());
+        app.set_lifecycle_status("Renderer setup: 0 | teardown: 0".into());
 
         let queue_slot = Rc::new(RefCell::new(None));
-        attach_gpu_texture(&app, Rc::clone(&queue_slot))?;
+        let setup_counter = Rc::new(Cell::new(0_u64));
+        let teardown_counter = Rc::new(Cell::new(0_u64));
+        attach_gpu_texture(
+            &app,
+            Rc::clone(&queue_slot),
+            Rc::clone(&setup_counter),
+            Rc::clone(&teardown_counter),
+        )?;
         let _texture_timer = start_texture_animation(&app, queue_slot);
 
         app.run()?;
