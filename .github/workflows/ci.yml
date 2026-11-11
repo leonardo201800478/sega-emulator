@@ -69,21 +69,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Checkout exact commit for capability detection
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Detect Slint desktop crate
-        id: slint_manifest
-        shell: bash
-        run: |
-          if [ -f native/sega_desktop/Cargo.toml ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
       - name: Classify changed paths
         if: github.event_name != 'workflow_dispatch'
         id: filter
@@ -237,6 +222,22 @@ jobs:
               - '.cargo/**'
               - 'build.rs'
               - 'scripts/common.ps1'
+
+      - name: Checkout exact commit for capability detection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Detect Slint desktop crate
+        id: slint_manifest
+        shell: bash
+        run: |
+          if [ -f native/sega_desktop/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
 
   rust-workspace:
     name: Rust workspace regression
