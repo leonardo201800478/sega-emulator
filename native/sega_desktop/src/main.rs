@@ -494,7 +494,7 @@ mod windows_host {
         Ok(worker)
     }
 
-    /// Substitui a máquina somente depois que a nova ROM foi validada e o novo worker está pronto.
+    /// Substitui a máquina sem permitir dois produtores simultâneos no FrameMailbox.
     fn replace_sms_worker(
         path: &PathBuf,
         region: &str,
@@ -503,13 +503,35 @@ mod windows_host {
     ) -> Result<(), String> {
         let rom =
             fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
-        let next = create_sms_worker(rom, region, mailbox)?;
-        let previous = worker_slot.borrow_mut().replace(next);
+        let next = SmsTemporalWorker::new(rom, region)?;
+
+        let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
-            let _ = previous.stop();
-            let _ = previous.detach_video_mailbox();
+            let was_running = previous.is_running();
+            if let Err(error) = previous.pause() {
+                *worker_slot.borrow_mut() = Some(previous);
+                return Err(error);
+            }
+            if let Err(error) = previous.detach_video_mailbox() {
+                *worker_slot.borrow_mut() = Some(previous);
+                return Err(error);
+            }
+            if let Err(error) = next.attach_video_mailbox(mailbox.clone()) {
+                let _ = previous.attach_video_mailbox(mailbox.clone());
+                if was_running {
+                    let _ = previous.start();
+                }
+                *worker_slot.borrow_mut() = Some(previous);
+                return Err(error);
+            }
+
+            *worker_slot.borrow_mut() = Some(next);
             drop(previous);
+        } else {
+            next.attach_video_mailbox(mailbox.clone())?;
+            *worker_slot.borrow_mut() = Some(next);
         }
+
         Ok(())
     }
 
