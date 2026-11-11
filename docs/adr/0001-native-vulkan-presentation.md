@@ -1,3 +1,5 @@
+> **SUPERSEDED — 2026-11-10:** a decisão de usar Vulkan diretamente via `ash` e manter D3D12 como API de fallback foi substituída pela [ADR 0011 — Slint + WGPU + CPAL](0011-slint-wgpu-cpal-desktop-platform.md). WGPU passa a ser a única API gráfica do produto; Vulkan é o backend preferencial inicial, não uma API chamada diretamente pela aplicação. Esta ADR permanece como histórico dos requisitos de HDR/VRR, geometria, pacing e independência do Scheduler.
+
 # ADR 0001 — Native Vulkan presentation backend
 
 - Status: Accepted for implementation
