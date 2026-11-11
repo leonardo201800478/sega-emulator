@@ -40,7 +40,7 @@ mod windows_host {
             in-out property <string> recent-rom-path: "";
             in-out property <[string]> recent-roms: [];
             in-out property <string> fps-size: "medium";
-            in-out property <int> fps-font-size: 18;
+            in-out property <length> fps-font-size: 18px;
             in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
@@ -180,7 +180,7 @@ mod windows_host {
                     preferred-height: root.video-height; min-width: 256px; min-height: 192px;
                     horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
                 }
-                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size * 1px; }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
                 if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
@@ -472,7 +472,7 @@ mod windows_host {
                         return;
                     }
 
-                    match create_imported_texture(device, queue) {
+                    match create_imported_texture(&device, &queue) {
                         Ok(image) => {
                             *queue_slot.borrow_mut() = Some(queue.clone());
 
@@ -719,9 +719,9 @@ mod windows_host {
         app.set_show_status_footer(preferences.show_status_footer);
         app.set_fps_size(preferences.fps_size.clone().into());
         app.set_fps_font_size(match preferences.fps_size.as_str() {
-            "small" => 13,
-            "large" => 24,
-            _ => 18,
+            "small" => 13.0,
+            "large" => 24.0,
+            _ => 18.0,
         });
         app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(
             recent_roms_model(&recent_roms.borrow()),
