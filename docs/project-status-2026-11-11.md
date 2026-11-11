@@ -1,7 +1,7 @@
 # Estado do projeto — 2026-11-11
 
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
-**Main auditada:** `82ccad8eb9cd11d78dfddd168f307f90012426b5`  
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
+**Main auditada:** `82ccad8eb9cd11d78dfddd168f307f90012426b5`
 **Escopo:** fotografia do GitHub, PRs, workflows e CI. Não representa execução física local de Vulkan.
 
 ## Resumo
