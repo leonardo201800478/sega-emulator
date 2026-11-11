@@ -156,6 +156,7 @@ jobs:
             app:
               - 'rust/runtime/sms-runtime/**'
               - 'native/sega_app/**'
+              - 'native/sega_desktop/**'
               - 'native/video_runtime/**'
               - 'native/video_core/**'
               - 'native/audio_output/**'
@@ -431,6 +432,28 @@ jobs:
         if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
         run: cargo test --release --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
 
+  windows-slint-wgpu:
+    name: Windows x64 Slint WGPU 30 Vulkan POC
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && (needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format Slint desktop POC
+        run: cargo fmt --manifest-path native/sega_desktop/Cargo.toml -- --check
+      - name: Clippy Slint desktop POC (Windows x64 Release)
+        run: cargo clippy --release --locked --all-targets --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test Slint desktop POC (Windows x64 Release)
+        run: cargo test --release --locked --all-targets --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Build Slint desktop POC (Windows x64 Release)
+        run: cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
+
   windows-audio:
     name: Windows WASAPI and XAudio2 validation
     needs: [changes]
@@ -630,6 +653,7 @@ jobs:
       - input-focused
       - docs-format
       - windows-d3d12
+      - windows-slint-wgpu
       - windows-audio
       - linux-audio
       - windows-input
@@ -657,6 +681,8 @@ jobs:
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
+          EXPECT_WINDOWS_SLINT_WGPU: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true') }}
+          WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
           EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
           EXPECT_LINUX_AUDIO: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true') }}
@@ -698,6 +724,7 @@ jobs:
           check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
+          check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
           check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
           check_job "Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
           check_job "Windows input" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
