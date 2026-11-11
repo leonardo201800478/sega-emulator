@@ -45,6 +45,7 @@ mod windows_host {
             background: #263541;
             border-radius: 3px;
             Text {
+                id: path-label;
                 x: 6px; y: 6px;
                 width: parent.width - 12px;
                 text: root.rom-path;
@@ -180,9 +181,11 @@ mod windows_host {
             ScrollView {
                 width: 100%; height: 100%;
                 content-width: self.width;
+                content-height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
                 VerticalLayout {
                     alignment: start;
                     width: 100%;
+                    height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
                     padding: 8px; spacing: 6px;
                         if root.active-menu == "system": VerticalLayout {
                             Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
