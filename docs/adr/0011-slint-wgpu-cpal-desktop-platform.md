@@ -325,12 +325,12 @@ A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real 
 
 A telemetria deve separar explicitamente:
 - **Emulation FPS:** medido no worker SMS (SmsPerformanceMetrics);
-- **Presentation FPS:** frames efetivamente submetidos/apresentados pelo host WGPU;
+- **Presentation FPS:** contagem de frames submetidos pelo host à surface via present(); isso não comprova o instante de scanout físico do monitor;
 - **Frame time:** duração entre frames concluídos pelo worker e, separadamente, intervalos de apresentação;
 - **Input-to-frame:** medição existente no worker;
 - **Audio:** sample rate efetivo e contadores de underrun/drop da sessão CPAL;
 - **GPU/backend:** adapter e backend efetivamente selecionados, formato, color space e present mode;
-- **Display:** refresh rate apenas quando obtido de API confiável; caso contrário mostrar “não disponível”;
+- **Display:** refresh rate apenas quando obtido de API confiável; caso contrário mostrar “não disponível”; a taxa de atualização configurada não é FPS do jogo nem confirmação de scanout;
 - **VRR:** distinguir capacidade, configuração e confirmação observada; não afirmar “ativo” apenas porque um modo WGPU está disponível;
 - **HDR:** distinguir capacidade de surface, HDR do display reportado e modo de saída configurado.
 
