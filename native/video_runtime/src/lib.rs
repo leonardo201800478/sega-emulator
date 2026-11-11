@@ -250,7 +250,7 @@ pub trait VideoFrameSink: Send + Sync {
 
 #[derive(Debug, Default)]
 struct MailboxState {
-    latest: Option<VideoFrame>,
+    latest: Option<(VideoFrame, std::time::Instant)>,
     last_sequence: Option<u64>,
     replaced_frames: u64,
     closed: bool,
@@ -297,16 +297,30 @@ impl FrameMailbox {
             });
         }
 
-        if state.latest.replace(frame).is_some() {
+        let published_at = std::time::Instant::now();
+        if state.latest.replace((frame, published_at)).is_some() {
             state.replaced_frames = state.replaced_frames.saturating_add(1);
         }
 
-        state.last_sequence = state.latest.as_ref().map(VideoFrame::sequence);
+        state.last_sequence = state.latest.as_ref().map(|(frame, _)| frame.sequence());
         Ok(())
     }
 
     /// Take the newest pending frame, leaving the mailbox empty.
     pub fn take_latest(&self) -> Result<Option<VideoFrame>, FrameMailboxError> {
+        Ok(self
+            .take_latest_with_timestamp()?
+            .map(|(frame, _published_at)| frame))
+    }
+
+    /// Take the newest pending frame together with its monotonic publication timestamp.
+    ///
+    /// The timestamp is captured inside publish after the mailbox lock is acquired and
+    /// sequence validation succeeds. It can be compared with Instant values from the
+    /// same process to measure mailbox residence time; it is not emulated machine time.
+    pub fn take_latest_with_timestamp(
+        &self,
+    ) -> Result<Option<(VideoFrame, std::time::Instant)>, FrameMailboxError> {
         let mut state = self
             .state
             .lock()
@@ -492,6 +506,20 @@ mod tests {
         assert_eq!(frame.sequence(), 2);
         assert_eq!(mailbox.replaced_frames().unwrap(), 1);
         assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_exposes_monotonic_publication_timestamp() {
+        let mailbox = super::FrameMailbox::new();
+        let before_publish = std::time::Instant::now();
+        mailbox.publish(test_frame(4)).unwrap();
+
+        let (frame, published_at) = mailbox.take_latest_with_timestamp().unwrap().unwrap();
+        let consumed_at = std::time::Instant::now();
+
+        assert_eq!(frame.sequence(), 4);
+        assert!(published_at >= before_publish);
+        assert!(published_at <= consumed_at);
     }
 
     #[test]
