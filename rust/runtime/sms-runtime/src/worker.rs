@@ -626,6 +626,14 @@ impl SmsTemporalWorker {
 
     /// Change the active SMS VDP sprite rendering limit through the machine worker.
     ///
+    /// The setting changes rendering compatibility only; VDP timing, overflow
+    /// reporting and Scheduler progression remain owned by the emulated machine.
+    pub fn set_sprite_limit_mode(&self, mode: SpriteLimitMode) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetSpriteLimitMode(mode, reply))
+    }
+
+    /// Change the active SMS VDP sprite rendering limit through the machine worker.
+    ///
     /// The setting changes presentation compatibility only; VDP timing, overflow
     /// reporting and Scheduler progression remain owned by the emulated machine.
     pub fn set_sprite_limit_mode(&self, mode: SpriteLimitMode) -> Result<(), String> {
