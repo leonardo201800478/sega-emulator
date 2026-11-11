@@ -675,9 +675,6 @@ mod windows_host {
             .and_then(|value| value.into_string().ok())
             .unwrap_or_else(|| preferences.region.clone());
         let recent_roms = Rc::new(RefCell::new(load_recent_roms()));
-        if let Some(path) = rom_path.as_ref() {
-            record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
-        }
 
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
@@ -686,6 +683,9 @@ mod windows_host {
         } else {
             None
         };
+        if let Some(path) = rom_path.as_ref() {
+            record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
+        }
         let worker = Rc::new(RefCell::new(worker));
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
 
