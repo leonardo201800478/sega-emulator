@@ -37,6 +37,12 @@ The window is fixed-capacity and overwritten in place. Percentiles are calculate
 
 The machine-tick delta is recorded independently of host duration. For PAL and NTSC captures, compare its stability and regional expected cadence separately from host frame intervals. A stable virtual tick delta with unstable wall intervals points away from Scheduler progression and toward worker/host scheduling or presentation.
 
+## Scheduler instrumentation granularity
+
+This first pass captures the virtual machine timestamp immediately before and after each completed frame step and records the resulting master-tick delta. It does not call Instant around every individual Scheduler dispatch. The SMS path dispatches at instruction/bus/T-state boundaries; per-dispatch wall-clock instrumentation could add significant observer overhead and contaminate the very pacing being measured.
+
+If the frame-level master-tick delta is inconsistent, or if step_frame duration is unstable while other host stages remain stable, the next diagnostic increment should add sampled/aggregated dispatch counters inside SmsTemporalMachine::dispatch_next (dispatch count, event class, elapsed host time and max/p95 sample), behind the existing diagnostics switch. That deeper instrumentation must remain opt-in and must not affect event order, dispatch budget, or virtual time.
+
 ## Host metrics
 
 The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second. It reports both pacing_wait_budget (the requested timeout computed by the worker) and pacing_wait_elapsed (the actual monotonic duration until timeout or command arrival):
