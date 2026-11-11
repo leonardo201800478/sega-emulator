@@ -1,19 +1,19 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** rota normativa de implementação.
-**Baseline de reconciliação:** main `9731b37098e7937fa92fffc15007a7c79aac4e4c` (2026-11-08).
+**Baseline de reconciliação:** main `392a5c67e85a11a5a980d8f7055bcc8a12fe3784` (2026-11-10).
 **Regra:** o roadmap define sequência e gates; o [status dos componentes](component-status.md) registra o estado observado de código, PRs e validações. Antes de cada tarefa, auditar SHA/main, PRs, workflows e arquivos relevantes.
 
-**Política arquitetural:** [ADR 0010 — produto 100% Rust e SMS temporal](adr/0010-rust-only-sms-temporal-first.md).
+**Política arquitetural:** [ADR 0010 — runtime Rust-only e SMS temporal](adr/0010-rust-only-sms-temporal-first.md) + [ADR 0011 — Slint/WGPU/CPAL](adr/0011-slint-wgpu-cpal-desktop-platform.md).
 **Política de fidelidade:** [ADR-0016 — fidelidade observável e temporização proporcional](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
 ## 1. Diretriz vigente
 
-O produto é integralmente Rust, com interface desktop egui/eframe. Python, PySide6/Qt, PyO3 e Maturin não fazem parte do produto nem podem ser reintroduzidos no runtime, testes, tooling, scripts, CI ou distribuição.
+O produto é integralmente Rust. A `main` auditada ainda contém egui/eframe e os hosts D3D12/WASAPI/XAudio2 como baseline integrada; a arquitetura alvo de aplicação foi substituída pela ADR 0011: Slint 1.18.x, WGPU 30.x (Vulkan preferencial no Windows x64) e CPAL 0.18.x. A POC ainda não está implementada nem integrada. Python, PySide6/Qt, PyO3 e Maturin não fazem parte do produto nem podem ser reintroduzidos no runtime, testes, tooling, scripts, CI ou distribuição.
 
 O primeiro runtime executável é o Master System temporal, composto pelo Z80 compartilhado, barramento/memória/mapper, PSG, VDP e MachineScheduler. O Scheduler é a autoridade única da ordem temporal. A GUI não executa hardware, avança clocks ou realiza callbacks por instrução.
 
-O shell egui, runtime SMS, viewport D3D12, áudio WASAPI/XAudio2 e controles teclado/SDL3 foram integrados pelas PRs #613 e #614. A integração no código não equivale a aceite físico: a qualidade sonora continua bloqueada pelas issues #640 e #659 e pelos gates de host ainda não executados na baseline.
+As PRs #613 e #614 foram integradas; isso comprova presença de código, não aceite físico. A qualidade sonora continua bloqueada pelas issues #640 e #659 e pelos gates de host ainda não executados na baseline. A replataforma não altera runtime, hardware ou Scheduler.
 
 ## 2. Sequência normativa
 
@@ -24,15 +24,27 @@ O shell egui, runtime SMS, viewport D3D12, áudio WASAPI/XAudio2 e controles tec
 5. **P4 — Mega Drive/Genesis.**
 6. **P5 — Sega CD.**
 7. **P6 — 32X / Sega CD 32X.**
-8. **P7 — Frontend egui/eframe completo:** biblioteca, preferências e fluxos de aplicação além do shell mínimo, sem lógica de hardware.
+8. **P7 — Frontend desktop completo (Slint):** biblioteca, preferências e fluxos de aplicação além do shell mínimo, sem lógica de hardware. egui/eframe permanece temporariamente como baseline até paridade e corte controlado.
 9. **P8 — Compatibilidade e auditoria.**
 10. **P9 — Comprovação temporal sistêmica dos caminhos observáveis.**
 
 Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriores. A integração mínima do shell egui necessária para executar o SMS pertence ao P1; o frontend completo permanece P7.
 
+## 2.1 Sequência da replataforma desktop (ADR 0011)
+
+- **R0 — Auditoria e congelamento:** reconciliar documentação, identificar acoplamentos D3D12/WASAPI/XAudio2 e preservar a baseline.
+- **R1 — POC gráfica mínima:** Slint + WGPU/Vulkan, SMS temporal real, FrameMailbox, Guide/menu com pausa determinística e HUD contendo somente FPS de emulação. Sem CPAL, HDR ou VRR.
+- **R2 — Áudio CPAL:** migrar a saída física e validar PCM real, callback, lifecycle e dispositivos.
+- **R3 — Integração completa do runtime:** conectar UI, mailbox e CPAL mantendo comandos coarse-grained e ownership do worker.
+- **R4 — Interface de produto:** biblioteca, configurações, perfis e debugger.
+- **R5 — HDR/VRR:** comprovação independente em hardware compatível; não inferir suporte por enumeração de API.
+- **R6 — Corte definitivo:** somente após paridade funcional, regressão e Release no HEAD exato; então remover egui e hosts antigos.
+
+Essa sequência de host não altera a ordem P0–P9 de plataformas/hardware nem autoriza antecipar consoles posteriores. A POC R1 pode avançar em paralelo à correção da qualidade de áudio porque não implementa saída física CPAL.
+
 ## 3. Estado da prioridade imediata — P1 / SMS
 
-**Prioridade operacional atual: confiabilidade de áudio.** Antes de retomar expansão de plataforma ou tarefas não bloqueadoras do SMS, executar a trilha AUDIO-00 a AUDIO-10 do [scorecard de áudio](audio/audio-reliability-scorecard.md). O confronto das quatro auditorias independentes está em [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md).
+**Prioridade operacional do SMS: confiabilidade de áudio.** A trilha AUDIO-00 a AUDIO-10 do [scorecard de áudio](audio/audio-reliability-scorecard.md) continua obrigatória para aceite de áudio/release e expansão de plataforma. O confronto das quatro auditorias independentes está em [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md). Em paralelo, é permitido executar exclusivamente R1 da ADR 0011 (POC gráfica Slint/WGPU + HUD mínima), pois essa fase não migra a saída física de áudio nem altera o runtime. R1 não depende de CPAL, HDR ou VRR; CPAL é R2 e HDR/VRR são R5.
 
 ### 3.1 Estado integrado
 
@@ -97,7 +109,7 @@ O [scorecard](z80-completion-scorecard.md) e a [matriz semântica DD/FD](z80-dd-
 ## 5. Contratos arquiteturais
 
 - Backend e lógica de hardware em Rust.
-- egui/eframe exclusivamente para UI, menus, estado de apresentação e comandos de alto nível.
+- UI exclusivamente para apresentação, menus e comandos de alto nível. A baseline integrada usa egui/eframe; a arquitetura alvo usa Slint conforme ADR 0011. Nenhuma UI controla hardware ou timing.
 - Integração coarse-grained: `load_rom`, `start`, `pause`, `stop`, `reset`, `step_frame`.
 - Scheduler único, causal e determinístico.
 - WAIT e suspensão/retomada somente onde o modelo e o caminho observável exigirem.
@@ -143,6 +155,7 @@ Toda validação deve indicar SHA, ambiente, comando, escopo e limitações. Tes
 
 ## 9. Documentos operacionais
 
+- [ADR 0011 — replataforma Slint/WGPU/CPAL](adr/0011-slint-wgpu-cpal-desktop-platform.md)
 - [Scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md)
 - [Auditoria consolidada das análises independentes](audits/audio-reliability-consolidated-2026-11-08.md)
 
