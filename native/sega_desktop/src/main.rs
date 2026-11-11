@@ -1164,9 +1164,8 @@ mod windows_host {
                         app.set_rom_status(
                             match start_result {
                                 Some(Ok(())) => format!(
-                                    "ROM: {} | região: {} | execução iniciada",
-                                    path.display(),
-                                    region.as_str()
+                                    "ROM: {} | execução iniciada",
+                                    path.display()
                                 ),
                                 Some(Err(error)) => {
                                     format!("ROM: {} | falha ao iniciar: {error}", path.display())
