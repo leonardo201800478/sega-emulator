@@ -1066,13 +1066,16 @@ impl SegaApp {
     /// Render the game viewport and optional status footer in the root window.
     fn render_game_area(&mut self, ui: &mut egui::Ui) -> egui::Rect {
         let show_status = self.footer_mode.is_visible();
-        let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
-        if show_status {
+        let show_fps = self.fps_overlay_enabled && self.native_viewport.video_attached;
+        let show_footer = show_status || show_fps;
+        let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_footer);
+        if show_footer {
             render_footer(
                 ui,
                 &self.native_viewport,
                 &self.rom_path,
-                (self.fps_overlay_enabled && self.native_viewport.video_attached).then_some(self.fps_counter.fps),
+                show_status,
+                show_fps.then_some(self.fps_counter.fps),
                 self.fps_overlay_size.font_size(),
             );
         }
@@ -2993,11 +2996,14 @@ fn render_footer(
     ui: &mut egui::Ui,
     viewport: &NativeViewportState,
     rom_path: &str,
+    show_status: bool,
     fps: Option<f32>,
     fps_font_size: f32,
 ) {
     ui.horizontal(|ui| {
-        ui.small(viewport.status());
+        if show_status {
+            ui.small(viewport.status());
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(fps) = fps {
                 ui.label(
@@ -3007,11 +3013,13 @@ fn render_footer(
                 );
                 ui.separator();
             }
-            let rom_name = Path::new(rom_path)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("Nenhuma ROM aberta");
-            ui.small(format!("ROM: {rom_name}"));
+            if show_status {
+                let rom_name = Path::new(rom_path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Nenhuma ROM aberta");
+                ui.small(format!("ROM: {rom_name}"));
+            }
         });
     });
 }
