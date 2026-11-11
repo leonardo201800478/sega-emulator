@@ -10,10 +10,12 @@ sega-video-runtime = { path = "../video_runtime" }
 slint = { version = "~1.18", default-features = false, features = [
     "compat-1-18",
     "std",
+    "svg",
     "backend-winit",
     "renderer-femtovg-wgpu",
     "unstable-wgpu-30",
 ] }
+md-icons-classic = "=0.4.0"
 zip = { version = "9.5.1", default-features = false, features = ["deflate"] }
 
 [lints.rust]
