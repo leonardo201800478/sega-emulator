@@ -31,7 +31,7 @@ From the repository root on Windows x64:
 cargo run --release --locked --manifest-path native/sega_desktop/Cargo.toml -- [path\to\game.sms] [usa|brazil|europe|japan]
 ```
 
-The ROM argument is optional. Without it, enter the absolute path in Arquivo > Carregar ROM. The selected region is applied when a ROM is loaded. The recent-ROM shortcut is kept for the current process session.
+The ROM argument is optional. Without it, enter the absolute path in Arquivo > Carregar ROM. The selected region is applied when a ROM is loaded. The File > Browse command opens the native Windows file-selection dialog and filters `.sms` / `.bin` ROMs. The path field remains available for manual entry. Recent ROMs are persisted in the desktop settings directory.
 
 ## Validation
 
