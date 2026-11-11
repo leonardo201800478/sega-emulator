@@ -703,7 +703,9 @@ mod windows_host {
             if let Some(previous) = self.last_poll {
                 let elapsed = now.saturating_duration_since(previous).as_nanos()
                     .min(u128::from(u64::MAX)) as u64;
-                self.poll_interval_sum_ns = self.poll_interval_sum_ns.saturating_add(u128::from(elapsed));
+                self.poll_interval_sum_ns = self
+                    .poll_interval_sum_ns
+                    .saturating_add(u128::from(elapsed));
                 self.poll_interval_max_ns = self.poll_interval_max_ns.max(elapsed);
             }
             self.last_poll = Some(now);
@@ -723,7 +725,8 @@ mod windows_host {
                 self.consumed_interval_max_ns = self.consumed_interval_max_ns.max(elapsed);
             }
             if self.last_sequence > 0 && sequence > self.last_sequence.saturating_add(1) {
-                self.sequence_gaps = self.sequence_gaps
+                self.sequence_gaps = self
+                    .sequence_gaps
                     .saturating_add(sequence - self.last_sequence - 1);
             }
             self.last_sequence = sequence;
@@ -732,13 +735,17 @@ mod windows_host {
 
         fn record_conversion(&mut self, elapsed: Duration) {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-            self.conversion_sum_ns = self.conversion_sum_ns.saturating_add(u128::from(nanos));
+            self.conversion_sum_ns = self
+                .conversion_sum_ns
+                .saturating_add(u128::from(nanos));
             self.conversion_max_ns = self.conversion_max_ns.max(nanos);
         }
 
         fn record_queue_write(&mut self, elapsed: Duration) {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-            self.queue_write_sum_ns = self.queue_write_sum_ns.saturating_add(u128::from(nanos));
+            self.queue_write_sum_ns = self
+                .queue_write_sum_ns
+                .saturating_add(u128::from(nanos));
             self.queue_write_max_ns = self.queue_write_max_ns.max(nanos);
         }
 
@@ -763,7 +770,9 @@ mod windows_host {
                 )
             };
             let average_us = |total_ns: u128, count: u64| -> u64 {
-                if count == 0 { 0 } else {
+                if count == 0 {
+                    0
+                } else {
                     (total_ns / u128::from(count) / 1_000).min(u128::from(u64::MAX)) as u64
                 }
             };
