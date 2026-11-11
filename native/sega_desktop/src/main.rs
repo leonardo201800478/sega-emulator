@@ -47,6 +47,7 @@ mod windows_host {
             in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
+            in-out property <bool> emulation-paused: false;
             in-out property <bool> show-fps: true;
             in-out property <bool> show-status-footer: true;
             in-out property <bool> trace-enabled: false;
@@ -82,13 +83,13 @@ mod windows_host {
                 Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
                 HorizontalLayout {
                     spacing: 5px;
-                    Button { text: "Sistema"; clicked => { root.pause-requested(); root.active-menu = "system"; } }
-                    Button { text: "Arquivo"; clicked => { root.pause-requested(); root.active-menu = "file"; } }
-                    Button { text: "Vídeo"; clicked => { root.pause-requested(); root.active-menu = "video"; } }
-                    Button { text: "Áudio"; clicked => { root.pause-requested(); root.active-menu = "audio"; } }
-                    Button { text: "Controles"; clicked => { root.pause-requested(); root.active-menu = "controls"; } }
-                    Button { text: "Opções"; clicked => { root.pause-requested(); root.active-menu = "options"; } }
-                    Button { text: "DEBUG"; clicked => { root.pause-requested(); root.active-menu = "debug"; } }
+                    Button { text: "Sistema"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "system"; } }
+                    Button { text: "Arquivo"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "file"; } }
+                    Button { text: "Vídeo"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "video"; } }
+                    Button { text: "Áudio"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "audio"; } }
+                    Button { text: "Controles"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "controls"; } }
+                    Button { text: "Opções"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "options"; } }
+                    Button { text: "DEBUG"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "debug"; } }
                     Button { text: "Fechar menu"; clicked => { root.active-menu = "none"; } }
                 }
                 if root.active-menu != "none": Rectangle {
@@ -183,11 +184,11 @@ mod windows_host {
                 }
                 HorizontalLayout {
                     spacing: 8px;
-                    Button { text: "Iniciar"; enabled: root.has-rom; clicked => { root.start-requested(); } }
-                    Button { text: "Pausar"; enabled: root.has-rom; clicked => { root.pause-requested(); } }
-                    Button { text: "Parar"; enabled: root.has-rom; clicked => { root.stop-requested(); } }
-                    Button { text: "Reset"; enabled: root.has-rom; clicked => { root.reset-requested(); } }
-                    Button { text: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.step-frame-requested(); } }
+                    Button { text: "Iniciar"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
+                    Button { text: "Pausar"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.emulation-paused = true; root.pause-requested(); } }
+                    Button { text: "Parar"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
+                    Button { text: "Reset"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
+                    Button { text: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
                     Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
                 }
                 Rectangle {
@@ -833,29 +834,38 @@ mod windows_host {
         }
 
         let start_worker = Rc::clone(&worker);
+        let start_app = app.as_weak();
         app.on_start_requested(move || {
             if let Some(worker) = start_worker.borrow().as_ref()
                 && let Err(error) = worker.start()
             {
                 eprintln!("R2_CONTROL action=start error={error}");
+            } else if let Some(app) = start_app.upgrade() {
+                app.set_emulation_paused(false);
             }
         });
 
         let pause_worker = Rc::clone(&worker);
+        let pause_app = app.as_weak();
         app.on_pause_requested(move || {
             if let Some(worker) = pause_worker.borrow().as_ref()
                 && let Err(error) = worker.pause()
             {
                 eprintln!("R2_CONTROL action=pause error={error}");
+            } else if let Some(app) = pause_app.upgrade() {
+                app.set_emulation_paused(true);
             }
         });
 
         let stop_worker = Rc::clone(&worker);
+        let stop_app = app.as_weak();
         app.on_stop_requested(move || {
             if let Some(worker) = stop_worker.borrow().as_ref()
                 && let Err(error) = worker.stop()
             {
                 eprintln!("R2_CONTROL action=stop error={error}");
+            } else if let Some(app) = stop_app.upgrade() {
+                app.set_emulation_paused(false);
             }
         });
 
@@ -1044,12 +1054,18 @@ mod windows_host {
         });
 
         let video_click_worker = Rc::clone(&worker);
+        let video_click_app = app.as_weak();
         app.on_video_area_clicked(move || {
-            if let Some(worker) = video_click_worker.borrow().as_ref()
-                && !worker.is_running()
+            let paused = video_click_app
+                .upgrade()
+                .is_some_and(|app| app.get_has_rom() && app.get_emulation_paused());
+            if paused
+                && let Some(worker) = video_click_worker.borrow().as_ref()
                 && let Err(error) = worker.start()
             {
                 eprintln!("R2_CONTROL action=video_click_resume error={error}");
+            } else if paused && let Some(app) = video_click_app.upgrade() {
+                app.set_rom_status("Falha ao retomar a emulação pelo vídeo.".into());
             }
         });
 
