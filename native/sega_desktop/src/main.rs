@@ -444,8 +444,8 @@ mod windows_host {
             let now = Instant::now();
             let elapsed = now.saturating_duration_since(last_sample);
             if elapsed >= Duration::from_millis(500) {
-                let produced = frame.sequence().saturating_sub(last_sequence);
-                let fps = produced as f64 / elapsed.as_secs_f64();
+                let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence)).unwrap_or(u32::MAX);
+                let fps = f64::from(produced) / elapsed.as_secs_f64();
                 app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
                 last_sequence = frame.sequence();
                 last_sample = now;
