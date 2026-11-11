@@ -12,7 +12,7 @@ mod windows_host {
         time::{Duration, Instant},
     };
 
-    use sega_sms_runtime::SmsTemporalWorker;
+    use sega_sms_runtime::{SmsTemporalWorker, SpriteLimitMode};
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
     use std::os::windows::process::CommandExt;
 
@@ -48,6 +48,7 @@ mod windows_host {
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
             in-out property <bool> emulation-paused: false;
+            in-out property <bool> sprite-limit-enabled: true;
             in-out property <bool> show-fps: true;
             in-out property <bool> show-status-footer: true;
             in-out property <bool> trace-enabled: false;
@@ -66,6 +67,7 @@ mod windows_host {
             callback exit-requested();
             callback debug-snapshot-requested();
             callback trace-toggle-requested(bool);
+            callback sprite-limit-toggle-requested(bool);
             callback fullscreen-requested(bool);
             callback video-area-clicked();
             callback preferences-changed();
@@ -139,6 +141,8 @@ mod windows_host {
                                 Button { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
                                 Button { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
                             }
+                            Button { text: root.sprite-limit-enabled ? "✓ Limite de sprites ativo" : "Desativar limite de sprites por linha"; clicked => { root.sprite-limit-enabled = !root.sprite-limit-enabled; root.sprite-limit-toggle-requested(root.sprite-limit-enabled); root.preferences-changed(); } }
+                            Text { text: "O modo sem limite é uma opção de compatibilidade; overflow e temporização do VDP permanecem no hardware emulado."; color: #9baab6; }
                             Text { text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
                         }
                         if root.active-menu == "audio": VerticalLayout {
@@ -226,6 +230,7 @@ mod windows_host {
         show_fps: bool,
         show_status_footer: bool,
         fps_size: String,
+        sprite_limit_enabled: bool,
     }
 
     impl Default for DesktopPreferences {
@@ -236,6 +241,7 @@ mod windows_host {
                 show_fps: true,
                 show_status_footer: true,
                 fps_size: "medium".to_owned(),
+                sprite_limit_enabled: true,
             }
         }
     }
@@ -281,6 +287,11 @@ mod windows_host {
                 "fps_size" if ["small", "medium", "large"].contains(&value.trim()) => {
                     preferences.fps_size = value.trim().to_owned();
                 }
+                "sprite_limit_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.sprite_limit_enabled = value;
+                    }
+                }
                 _ => {}
             }
         }
@@ -293,12 +304,13 @@ mod windows_host {
             app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = format!(
-            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\n",
+            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\n",
             preferences.region,
             preferences.aspect,
             preferences.show_fps,
             preferences.show_status_footer,
-            preferences.fps_size
+            preferences.fps_size,
+            preferences.sprite_limit_enabled
         );
         fs::write(directory.join("slint_ui_settings.txt"), contents)
             .map_err(|error| error.to_string())
@@ -776,7 +788,11 @@ mod windows_host {
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let worker = if let Some(path) = rom_path.as_ref() {
-            Some(create_sms_worker(fs::read(path)?, &region, &mailbox)?)
+            let worker = create_sms_worker(fs::read(path)?, &region, &mailbox)?;
+            if !preferences.sprite_limit_enabled {
+                worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
+            }
+            Some(worker)
         } else {
             None
         };
@@ -902,17 +918,32 @@ mod windows_host {
                 return;
             }
 
-            let region = open_app
+            let (region, sprite_limit_enabled) = open_app
                 .upgrade()
-                .map(|app| app.get_selected_region().to_string())
-                .unwrap_or_else(|| "usa".to_owned());
+                .map(|app| {
+                    (
+                        app.get_selected_region().to_string(),
+                        app.get_sprite_limit_enabled(),
+                    )
+                })
+                .unwrap_or_else(|| ("usa".to_owned(), true));
 
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
+                    let sprite_mode = if sprite_limit_enabled {
+                        SpriteLimitMode::HardwareLimit
+                    } else {
+                        SpriteLimitMode::UnlockedCompatibility
+                    };
                     let start_result = open_worker
                         .borrow()
                         .as_ref()
-                        .map(|worker| worker.reset().and_then(|()| worker.start()));
+                        .map(|worker| {
+                            worker
+                                .set_sprite_limit_mode(sprite_mode)
+                                .and_then(|()| worker.reset())
+                                .and_then(|()| worker.start())
+                        });
                     *open_recent.borrow_mut() = Some(path.clone());
                     record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
@@ -996,6 +1027,8 @@ mod windows_host {
                     show_fps: app.get_show_fps(),
                     show_status_footer: app.get_show_status_footer(),
                     fps_size: app.get_fps_size().to_string(),
+            sprite_limit_enabled: app.get_sprite_limit_enabled(),
+                    sprite_limit_enabled: app.get_sprite_limit_enabled(),
                 };
                 let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
@@ -1076,6 +1109,25 @@ mod windows_host {
                             );
                         }
                     }
+                }
+            }
+        });
+
+        let sprite_worker = Rc::clone(&worker);
+        let sprite_app = app.as_weak();
+        app.on_sprite_limit_toggle_requested(move |enabled| {
+            let mode = if enabled {
+                SpriteLimitMode::HardwareLimit
+            } else {
+                SpriteLimitMode::UnlockedCompatibility
+            };
+            if let Some(worker) = sprite_worker.borrow().as_ref()
+                && let Err(error) = worker.set_sprite_limit_mode(mode)
+            {
+                eprintln!("R2_VIDEO action=sprite_limit_toggle error={error}");
+                if let Some(app) = sprite_app.upgrade() {
+                    app.set_sprite_limit_enabled(!enabled);
+                    app.set_rom_status(format!("Falha ao alterar limite de sprites: {error}").into());
                 }
             }
         });
