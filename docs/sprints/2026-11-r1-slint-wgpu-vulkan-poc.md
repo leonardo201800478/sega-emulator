@@ -75,15 +75,15 @@ Classificar cada item PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Sem 
 ## Entregáveis
 
 - [x] Escopo documental definido.
-- [ ] POC Slint inicia.
-- [ ] WGPU 30/Vulkan inicializa.
-- [ ] Device/queue compartilhados comprovados.
-- [ ] Textura externa atualizada.
-- [ ] Composição na mesma janela.
-- [ ] Resize e shutdown validados.
-- [ ] Build Release Windows x64 no CI.
-- [ ] Execução física Windows/Vulkan registrada.
-- [ ] Evidência e PR revisadas.
+- [x] POC Slint inicia.
+- [x] WGPU 30/Vulkan inicializa.
+- [x] Device/queue compartilhados comprovados.
+- [x] Textura externa atualizada.
+- [x] Composição na mesma janela.
+- [x] Resize responsivo e shutdown validados; recriação in-process permanece NOT RUN.
+- [x] Build Release Windows x64 no CI.
+- [x] Execução física Windows/Vulkan registrada.
+- [x] Evidências físicas e CI registradas; PR #751 revisada.
 
 R2 (frames SMS) começa somente após aprovação de R1. CPAL permanece R3.
 
@@ -189,3 +189,57 @@ Atualização de classificação:
 - Recriação do renderer dentro do mesmo processo: NOT RUN; os cinco pares setup/teardown correspondem a cinco processos independentes e não comprovam reconfiguração/recriação in-process.
 
 A validação física confirma o caminho de execução e encerramento no hardware do usuário. Não há evidência de teste de perda/recriação de superfície ou de renderer no mesmo processo; não declarar esse cenário validado.
+
+
+## Fechamento operacional de R1 e handoff para R2 — 2026-11-11
+
+### Resultado consolidado
+
+O usuário executou a aplicação Release em Windows 11 x64 com NVIDIA GeForce RTX 5070. As evidências visuais e os logs confirmam:
+- Vulkan como backend ativo, sem fallback.
+- Slint e WGPU 30 usando o mesmo device/queue do renderer.
+- Textura WGPU externa importada e atualizada continuamente.
+- Composição da textura e UI Slint na mesma janela.
+- Textura responsiva ao resize, mantendo proporção; animação relatada como fluida.
+- Minimizar/restaurar e encerrar/reabrir sem travamento.
+- Após a correção de mutação reentrante, cinco execuções independentes produziram exatamente um RenderingSetup e um RenderingTeardown cada, sem panic.
+
+### Correção crítica de lifecycle
+
+A primeira execução instrumentada revelou panic `RefCell already mutably borrowed` no backend Winit ao modificar propriedades Slint sincronamente dentro do rendering notifier. A implementação foi alterada para diferir as mutações de UI via `Timer::single_shot(Duration::ZERO, ...)`. Cinco encerramentos independentes da versão corrigida passaram sem panic.
+
+### CI final da revisão
+
+O commit final da PR #751 é `2e00496165fa02144f11cf16df1b1eff3198dd61`. A CI correspondente executou os gates de workspace, Windows x64 Slint/WGPU 30/Vulkan e higiene documental; os gates aplicáveis devem estar todos concluídos com sucesso antes do merge. SKIPPED não conta como PASS.
+
+### Matriz final honesta
+
+| Critério | Estado | Observação |
+|---|---|---|
+| R1-01 Janela Slint | PASS | Execução física Windows 11 |
+| R1-02 WGPU 30 | PASS | Device/queue ativos |
+| R1-03 Vulkan | PASS | RTX 5070 identificada |
+| R1-04 Integração Slint/WGPU | PASS | Compartilhamento confirmado |
+| R1-05 Textura externa | PASS | Atualização contínua |
+| R1-06 Composição | PASS | Textura + UI na mesma janela |
+| R1-07 Resize/lifecycle | PARTIAL | Resize responsivo e shutdown aprovados; recriação de superfície/renderer in-process NOT RUN |
+| R1-08 Build reproduzível | PASS | CI Windows x64 e build Release |
+| R1-09 Backend sem fallback | PASS | Vulkan explicitamente selecionado e observado |
+| R1-10 Teardown/recriação | PARTIAL | Teardown no shutdown aprovado em cinco processos; recriação do renderer no mesmo processo NOT RUN |
+
+### Decisão de transição
+
+A POC R1 está aprovada como baseline gráfica operacional para iniciar a integração R2, com uma limitação explicitamente aberta: recriação do renderer/superfície dentro do mesmo processo ainda não foi exercitada. Essa limitação deve permanecer como risco técnico rastreado na R2 e ser coberta antes de considerar o host de produção concluído. Não afirmar que surface recreation foi validada.
+
+### Escopo obrigatório de R2
+
+R2 integra frames reais do SMS ao caminho de apresentação Slint/WGPU, mantendo:
+- `SmsTemporalWorker` como proprietário da máquina e da execução contínua.
+- `MachineScheduler` como autoridade temporal única.
+- CPU, VDP, PSG, barramentos, interrupções, timing e estados exclusivamente no backend Rust.
+- Host/GUI apenas com comandos coarse-grained e consumo de frames publicados.
+- Transporte de frames com ownership, sincronização e backpressure explícitos; evitar cópias desnecessárias somente após provar segurança e correção.
+- Sem callback por instrução, sem controle de ciclos pela GUI e sem espera bloqueante no thread de UI.
+- Sem CPAL nesta etapa (R3) e sem SDL3 (R4).
+
+Antes de alterar código, o responsável por R2 deve auditar o fluxo atual de `FrameMailbox`, `VideoFrame`, `PixelFormat`, `SmsTemporalWorker`, `native/video_output_wgpu` e o contrato atual de `native/sega_desktop`; não presumir APIs ou ownership sem ler as implementações.
