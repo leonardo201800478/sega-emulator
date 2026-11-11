@@ -198,7 +198,6 @@ impl FramePacingWindow {
         let mut machine_ticks: Vec<_> = samples
             .iter()
             .map(|sample| sample.machine_ticks_per_frame)
-            .filter(|value| *value > 0)
             .collect();
         let mut steps: Vec<_> = samples.iter().map(|sample| sample.step_frame_ns).collect();
         let mut publishes: Vec<_> = samples.iter().map(|sample| sample.video_publish_ns).collect();
