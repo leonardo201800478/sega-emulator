@@ -1061,20 +1061,18 @@ mod windows_host {
             let paused = video_click_app
                 .upgrade()
                 .is_some_and(|app| app.get_has_rom() && app.get_emulation_paused());
-            if paused {
-                if let Some(worker) = video_click_worker.borrow().as_ref() {
-                    match worker.start() {
-                        Ok(()) => {
-                            if let Some(app) = video_click_app.upgrade() {
-                                app.set_emulation_paused(false);
-                            }
+            if paused && let Some(worker) = video_click_worker.borrow().as_ref() {
+                match worker.start() {
+                    Ok(()) => {
+                        if let Some(app) = video_click_app.upgrade() {
+                            app.set_emulation_paused(false);
                         }
-                        Err(error) => {
-                            if let Some(app) = video_click_app.upgrade() {
-                                app.set_rom_status(
-                                    format!("Falha ao retomar a emulação: {error}").into(),
-                                );
-                            }
+                    }
+                    Err(error) => {
+                        if let Some(app) = video_click_app.upgrade() {
+                            app.set_rom_status(
+                                format!("Falha ao retomar a emulação: {error}").into(),
+                            );
                         }
                     }
                 }
