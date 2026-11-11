@@ -65,7 +65,7 @@ A UI envia somente comandos de alto nível (`load_rom`, `start`, `pause`, `stop`
 A thread proprietária da máquina permanece responsável pelo `SmsTemporalMachine`, CPU, Scheduler, VDP, áudio e avanço do tempo. A UI nunca recebe referências mutáveis a esses objetos.
 
 
-### 3.2 Política normativa de pausa do menu
+### 3.1 Política normativa de pausa do menu
 
 A abertura de qualquer menu de sistema do emulador (incluindo menu principal, overlay, configurações e menu invocado por Guide) pausa a emulação, tanto em fullscreen quanto em modo janela. Essa regra é independente da composição visual e vale para todos os sistemas suportados.
 
@@ -79,7 +79,7 @@ A abertura de qualquer menu de sistema do emulador (incluindo menu principal, ov
 
 A pausa da emulação não exige suspender a thread de UI, o renderer ou a apresentação do último frame. O host continua responsivo para desenhar e navegar no menu, mas o tempo virtual da máquina permanece parado.
 
-### 3.1 Risco conhecido: integração Slint/WGPU
+### 3.2 Risco conhecido: integração Slint/WGPU
 
 A integração externa WGPU 30 do Slint é atualmente exposta sob `unstable-wgpu-30`. A API pode mudar em uma atualização minor do Slint. Portanto:
 
@@ -89,7 +89,7 @@ A integração externa WGPU 30 do Slint é atualmente exposta sob `unstable-wgpu
 - documentar explicitamente o ownership e o ciclo de vida de textures, views, surfaces e recursos importados;
 - não atualizar Slint/WGPU sem repetir os testes de integração gráfica.
 
-**Gate obrigatório:** a prova de conceito deve demonstrar uma janela Slint com menus e uma textura produzida pelo renderer do emulador, compartilhando device/queue, sem janela filha nativa, sem segunda API gráfica e sem cópia CPU por frame como caminho permanente.
+**Gate obrigatório:** a prova de conceito deve demonstrar uma janela Slint com menus e uma textura produzida pelo renderer do emulador, compartilhando device/queue, sem janela filha nativa ou segunda API gráfica, sem cópias completas redundantes na CPU; um upload CPU→GPU por frame é esperado pelo contrato atual de `VideoFrame`.
 
 Se esse gate falhar, a arquitetura não será declarada aprovada para produção. Não será permitido esconder o problema adicionando um segundo renderer ou outra API sem uma nova ADR.
 
