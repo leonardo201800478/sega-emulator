@@ -468,7 +468,7 @@ jobs:
           ./actionlint -color
 
   windows-d3d12:
-    name: Legacy Windows x64 D3D12 compile
+    name: Windows x64 D3D12 compile
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
@@ -531,7 +531,7 @@ jobs:
         run: cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
 
   windows-audio:
-    name: Legacy Windows WASAPI and XAudio2 validation
+    name: Windows WASAPI and XAudio2 validation
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
@@ -554,7 +554,7 @@ jobs:
         run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
   linux-audio:
-    name: Legacy Linux audio-output host validation
+    name: Linux audio-output host validation
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
