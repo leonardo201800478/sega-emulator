@@ -279,7 +279,7 @@ Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca equiv
 - nenhuma janela overlay/child HWND para viewport ou menu;
 - menu acionado por Guide, navegação pelo controle e retorno ao jogo sem perda de input ou alteração indevida do estado da máquina;
 - telemetria distinguindo FPS de emulação, FPS de apresentação e refresh do monitor;
-- aspect ratio 4:3 e 16:9 sem distorção ou crop, com HUD nos gutters quando disponíveis e nos cantos quando não;
+- aspect ratio 4:3 e 16:9 sem distorção ou crop; HUD sempre discreta, sobreposta em um canto seguro, sem gutters, sem reservar espaço e sem alterar o viewport;
 - sem vazamento de recursos ou erro de sincronização;
 - resize/minimize/fullscreen/recreate/shutdown repetidos;
 - sem cópias completas redundantes no lado CPU; um upload CPU→GPU por frame é esperado pelo contrato atual de VideoFrame.
@@ -323,9 +323,9 @@ CPAL e WGPU também terão licenças e notices conferidos e fixados na atualiza�
 
 **Conclusão:** preservar o runtime de emulação; substituir gradualmente a camada de aplicação e os adaptadores host por Slint + WGPU + CPAL. A primeira entrega é uma prova de conceito isolada, não uma reescrita do hardware nem uma migração em massa.
 
-## 12. Especificação do teste integrado HUD / fullscreen
+## 12. Especificação de validação por fases — HUD / fullscreen
 
-A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real e uma ROM homebrew ou sintética legalmente distribuível. O objetivo é provar a plataforma host completa antes de expandir a interface.
+A validação deverá usar o runtime SMS temporal real e uma ROM homebrew ou sintética legalmente distribuível. Os gates são separados por fase: R1 comprova somente o caminho gráfico/desktop e a HUD mínima; R2 comprova áudio CPAL; R5 comprova HDR/VRR. Uma fase posterior não bloqueia a aprovação independente de R1.
 
 ### 12.1 Composição visual e controle
 
@@ -333,7 +333,7 @@ A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real 
 - O menu abre sobre o último frame do jogo com fundo translúcido/escurecimento. A abertura solicita imediatamente a pausa da sessão; o Scheduler conclui apenas a operação em andamento até uma fronteira segura e então deixa de avançar o tempo virtual. Não há execução de CPU, avanço de VDP/PSG, frame emulado ou produção de áudio emulado enquanto o menu estiver aberto.
 - O botão Guide do gamepad alterna o menu por transição de botão (pressed edge), sem ser encaminhado ao controle do Master System.
 - Com o menu aberto, D-pad, confirmação e cancelamento são consumidos pela UI; ao fechar, o mapeamento de jogo volta a receber os controles.
-- Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação. A HUD de teste será apenas um indicador discreto do FPS de emulação, sobreposto em um canto seguro; não reservar espaços laterais, não redimensionar e não cortar o jogo. O mesmo indicador simples será usado em 16:9.
+- Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação. A única informação visual será o FPS de emulação, discreto e sobreposto no mesmo canto seguro; não reservar gutters, não redimensionar e não cortar o jogo. Aplicar a mesma HUD mínima em 4:3 e 16:9.
 - Nunca cortar a imagem para abrir espaço ao HUD. Proporção e área ativa do jogo têm prioridade.
 
 ### 12.2 Telemetria e proveniência
@@ -344,16 +344,25 @@ A única informação visual da HUD nesta prova de conceito será o **FPS de emu
 
 O VideoFrame atual possui pixels imutáveis em memória CPU e é publicado através de FrameMailbox. A integração WGPU deve consumir esse contrato e fazer o upload necessário para uma textura GPU. O teste não exige zero-copy físico CPU→GPU; exige evitar cópias completas redundantes na CPU e não fazer conversão de formato desnecessária a cada frame.
 
-### 12.4 Critério de aceite end-to-end
+### 12.4 Critério de aceite — R1 (Slint/WGPU + HUD mínima)
 
-A prova será considerada aprovada somente se:
-1. O SMS temporal real inicia e executa uma ROM de teste, produzindo imagem e áudio.
-2. A janela Slint permanece fullscreen e o menu sobrepõe o jogo na mesma composição.
-3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo; abrir o menu pausa a máquina na primeira fronteira segura e fechar retoma do estado preservado.
-4. Com o menu aberto, o estado da máquina permanece congelado e o último frame continua visível; ao fechar, a máquina retoma do ponto temporal preservado e volta a receber os controles do jogo.
-5. A HUD exibe exclusivamente o FPS de emulação originado em `SmsPerformanceMetrics`; não há outros indicadores visuais.
-6. Áudio CPAL permanece estável durante gameplay; ao abrir o menu, a saída é silenciada/interrompida de forma controlada sem avançar o áudio emulado; ao fechar, a produção e a saída são retomadas sem descontinuidade temporal indevida.
-7. VRR e HDR são testados em equipamento compatível e seus resultados são classificados separadamente, incluindo BLOCKED/NOT RUN quando o hardware não permite a comprovação.
-8. HUD, composição, áudio host e apresentação não alteram a semântica do SMS, Scheduler, CPU, VDP ou PSG. A única transição temporal causada pelo menu é a pausa/resume explícita definida nesta ADR.
+R1 será considerada aprovada somente se:
+1. O SMS temporal real inicia e executa uma ROM homebrew/sintética de teste, produzindo frames completos no `FrameMailbox`.
+2. A janela Slint/WGPU apresenta os frames do SMS na mesma janela, com device/queue compartilhados e backend Vulkan explicitamente identificado no Windows x64.
+3. O conteúdo 4:3 fica centralizado em monitor 16:9 sem deformação, crop ou gutters reservados; o conteúdo 16:9 também não é deformado ou cortado.
+4. A única informação visual da HUD é o FPS de emulação originado em `SmsPerformanceMetrics`, em um canto seguro, sem alterar o viewport.
+5. Guide abre/fecha o menu por pressed edge; Guide e comandos de navegação são consumidos pela UI e não chegam ao SMS.
+6. Abrir o menu solicita pausa e o Scheduler congela a máquina na primeira fronteira segura; o último frame permanece visível. Fechar retoma do estado integral preservado, sem reset ou avanço artificial.
+7. Com o menu aberto, CPU, VDP, PSG, Scheduler, frames e produção de áudio emulado não avançam; a UI e a apresentação do último frame permanecem responsivas.
+8. Resize, minimize/restore, fullscreen, mudança de proporção e shutdown repetido não causam vazamento, deadlock ou erro de sincronização.
+9. Não há alteração de semântica, clock ou Scheduler do runtime SMS.
 
-Nenhuma aprovação de R1/R2 será inferida apenas de uma captura de tela ou de uma compilação bem-sucedida.
+Aprovação R1 não exige CPAL, HDR ou VRR. Esses itens pertencem às fases R2 e R5 e devem permanecer classificados como NOT RUN/BLOCKED até seus próprios testes.
+
+### 12.5 Critério de aceite — R2 (áudio CPAL)
+
+R2 será validada separadamente, conforme os gates de áudio da seção 9: PCM real do SMS, callback sem alocação/bloqueio, pausa/resume, unplug/replug, shutdown e estabilidade em dispositivos/taxas suportados. A pausa do menu não pode avançar os chips nem o Scheduler. Resultado físico não executado permanece NOT RUN/BLOCKED e não invalida retroativamente R1.
+
+### 12.6 Critério de aceite — R5 (HDR/VRR)
+
+HDR e VRR serão comprovados separadamente em hardware compatível, com os critérios e limitações da seção 4.2 e dos gates da seção 9. Enumeração de `PresentMode` não comprova VRR; PQ/BT.2020 sem metadados estáticos não será anunciado como conformidade HDR10 completa. Esses testes não fazem parte do gate R1.
