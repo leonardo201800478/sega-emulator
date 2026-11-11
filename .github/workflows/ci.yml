@@ -598,28 +598,41 @@ jobs:
           "$test_bin" --ignored --nocapture
 
   refresh-lockfiles:
-    name: Refresh root workspace Cargo.lock (manual artifact)
-    if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
+    name: Refresh root workspace Cargo.lock on R1 branch
+    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'feat/r1-')
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: true
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - name: Refresh root workspace dependencies only
         run: cargo update --workspace
       - name: Verify root workspace lockfile
         run: cargo metadata --locked --format-version 1 --no-deps
-      - name: Upload root Cargo.lock
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: root-cargo-lockfile-${{ github.run_id }}
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit refreshed lockfile to the same-repository PR branch
+        shell: bash
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Cargo.lock is already current."
+            exit 0
+          fi
+          git commit -m "chore: refresh root Cargo.lock for Slint WGPU R1"
+          git fetch origin "${PR_BRANCH}"
+          git rebase "origin/${PR_BRANCH}"
+          git push origin "HEAD:refs/heads/${PR_BRANCH}"
 
   quality-gate:
     name: Rust quality and unit regression
