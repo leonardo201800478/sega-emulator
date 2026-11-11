@@ -642,6 +642,40 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  refresh-r1-lockfile:
+    name: Refresh R1 root Cargo.lock on PR branch
+    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-r1-cargo-lockfile' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'feat/r1-')
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - name: Resolve R1 workspace dependencies
+        run: cargo update --workspace
+      - name: Verify root lockfile is current
+        run: cargo metadata --locked --format-version 1 --no-deps
+      - name: Commit refreshed root Cargo.lock to this PR branch
+        shell: bash
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Root Cargo.lock is already current."
+            exit 0
+          fi
+          git commit -m "chore: refresh root Cargo.lock for R1 Slint desktop"
+          git push origin "HEAD:${PR_BRANCH}"
+
   quality-gate:
     name: Rust quality and unit regression
     needs:
@@ -660,7 +694,7 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles') && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-r1-cargo-lockfile')
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any applicable validation failed or was cancelled
