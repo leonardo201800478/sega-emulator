@@ -72,13 +72,13 @@ mod windows_host {
                 Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
                 HorizontalLayout {
                     spacing: 5px;
-                    Button { text: "Sistema"; clicked => { root.active-menu = "system"; } }
-                    Button { text: "Arquivo"; clicked => { root.active-menu = "file"; } }
-                    Button { text: "Vídeo"; clicked => { root.active-menu = "video"; } }
-                    Button { text: "Áudio"; clicked => { root.active-menu = "audio"; } }
-                    Button { text: "Controles"; clicked => { root.active-menu = "controls"; } }
-                    Button { text: "Opções"; clicked => { root.active-menu = "options"; } }
-                    Button { text: "DEBUG"; clicked => { root.active-menu = "debug"; } }
+                    Button { text: "Sistema"; clicked => { root.pause-requested(); root.active-menu = "system"; } }
+                    Button { text: "Arquivo"; clicked => { root.pause-requested(); root.active-menu = "file"; } }
+                    Button { text: "Vídeo"; clicked => { root.pause-requested(); root.active-menu = "video"; } }
+                    Button { text: "Áudio"; clicked => { root.pause-requested(); root.active-menu = "audio"; } }
+                    Button { text: "Controles"; clicked => { root.pause-requested(); root.active-menu = "controls"; } }
+                    Button { text: "Opções"; clicked => { root.pause-requested(); root.active-menu = "options"; } }
+                    Button { text: "DEBUG"; clicked => { root.pause-requested(); root.active-menu = "debug"; } }
                     Button { text: "Fechar menu"; clicked => { root.active-menu = "none"; } }
                 }
                 if root.active-menu != "none": Rectangle {
@@ -679,7 +679,7 @@ mod windows_host {
 
         let selected = String::from_utf8_lossy(&output.stdout);
         let selected =
-            selected.trim_end_matches(|character| character == '\r' || character == '\n');
+            selected.trim_end_matches(['\r', '\n']);
         if selected.is_empty() {
             Ok(None)
         } else {
@@ -791,8 +791,8 @@ mod windows_host {
             }
             _ => {
                 app.set_selected_aspect("4:3".into());
-                app.set_video_width(768.0.into());
-                app.set_video_height(576.0.into());
+                app.set_video_width(768.0);
+                app.set_video_height(576.0);
             }
         }
         app.set_has_rom(worker.borrow().is_some());
@@ -804,6 +804,10 @@ mod windows_host {
             app.set_rom_status(
                 "Nenhuma ROM carregada — informe o caminho em Arquivo > Carregar ROM.".into(),
             );
+        }
+
+        if let Some(initial_worker) = worker.borrow().as_ref() {
+            initial_worker.start()?;
         }
 
         let start_worker = Rc::clone(&worker);
@@ -872,6 +876,10 @@ mod windows_host {
 
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
+                    let start_result = open_worker
+                        .borrow()
+                        .as_ref()
+                        .map(|worker| worker.reset().and_then(|()| worker.start()));
                     *open_recent.borrow_mut() = Some(path.clone());
                     record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
@@ -880,7 +888,12 @@ mod windows_host {
                         )));
                         app.set_has_rom(true);
                         app.set_rom_status(
-                            format!("ROM: {} | região: {region}", path.display()).into(),
+                            match start_result {
+                                Some(Ok(())) => format!("ROM: {} | região: {region} | execução iniciada", path.display()),
+                                Some(Err(error)) => format!("ROM: {} | falha ao iniciar: {error}", path.display()),
+                                None => "ROM carregada, mas o worker não está disponível.".to_owned(),
+                            }
+                            .into(),
                         );
                         app.set_recent_rom_path(path.display().to_string().into());
                         app.set_rom_path_input(path.display().to_string().into());
