@@ -670,8 +670,10 @@ mod windows_host {
         poll_interval_max_ns: u64,
         consumed_interval_sum_ns: u128,
         consumed_interval_max_ns: u64,
+        conversion_count: u64,
         conversion_sum_ns: u128,
         conversion_max_ns: u64,
+        queue_write_count: u64,
         queue_write_sum_ns: u128,
         queue_write_max_ns: u64,
     }
@@ -691,8 +693,10 @@ mod windows_host {
                 poll_interval_max_ns: 0,
                 consumed_interval_sum_ns: 0,
                 consumed_interval_max_ns: 0,
+                conversion_count: 0,
                 conversion_sum_ns: 0,
                 conversion_max_ns: 0,
+                queue_write_count: 0,
                 queue_write_sum_ns: 0,
                 queue_write_max_ns: 0,
             }
@@ -734,6 +738,7 @@ mod windows_host {
         }
 
         fn record_conversion(&mut self, elapsed: Duration) {
+            self.conversion_count = self.conversion_count.saturating_add(1);
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.conversion_sum_ns = self
                 .conversion_sum_ns
@@ -742,6 +747,7 @@ mod windows_host {
         }
 
         fn record_queue_write(&mut self, elapsed: Duration) {
+            self.queue_write_count = self.queue_write_count.saturating_add(1);
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.queue_write_sum_ns = self
                 .queue_write_sum_ns
@@ -787,9 +793,9 @@ mod windows_host {
                 self.poll_interval_max_ns / 1_000,
                 average_us(self.consumed_interval_sum_ns, self.consumed.saturating_sub(1)),
                 self.consumed_interval_max_ns / 1_000,
-                average_us(self.conversion_sum_ns, self.consumed),
+                average_us(self.conversion_sum_ns, self.conversion_count),
                 self.conversion_max_ns / 1_000,
-                average_us(self.queue_write_sum_ns, self.consumed),
+                average_us(self.queue_write_sum_ns, self.queue_write_count),
                 self.queue_write_max_ns / 1_000,
                 replaced_frames,
                 runtime.sample_count,
@@ -810,6 +816,8 @@ mod windows_host {
             );
 
             self.started = Instant::now();
+            self.last_poll = None;
+            self.last_consumed = None;
             self.polls = 0;
             self.empty_polls = 0;
             self.consumed = 0;
@@ -818,8 +826,10 @@ mod windows_host {
             self.poll_interval_max_ns = 0;
             self.consumed_interval_sum_ns = 0;
             self.consumed_interval_max_ns = 0;
+            self.conversion_count = 0;
             self.conversion_sum_ns = 0;
             self.conversion_max_ns = 0;
+            self.queue_write_count = 0;
             self.queue_write_sum_ns = 0;
             self.queue_write_max_ns = 0;
         }
