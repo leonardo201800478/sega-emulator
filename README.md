@@ -1,16 +1,16 @@
-# Sega Emulator — Rust + egui
+# Sega Emulator — Rust / SMS temporal
 
-Emulador de consoles Sega em desenvolvimento, construído integralmente em **Rust**. A interface desktop é nativa, utilizando **egui/eframe**. Não há frontend Python, PySide6/Qt, bindings PyO3 ou runtime alternativo.
+Emulador de consoles Sega em desenvolvimento, construído integralmente em **Rust**. O runtime temporal e o shell atualmente integrados na `main` são preservados como baseline. A arquitetura aprovada para a próxima aplicação desktop é **Slint + WGPU + CPAL**, conforme a [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md); a POC ainda não foi implementada nem integrada. Não há frontend Python, PySide6/Qt, bindings PyO3 ou runtime alternativo.
 
-A prioridade atual é tornar o **Sega Master System temporal** executável por meio de um único runtime, usando o Z80 compartilhado e o MachineScheduler como autoridade temporal.
+A prioridade de hardware continua sendo o **Sega Master System temporal**, com Z80 compartilhado e MachineScheduler como autoridade temporal. A replataforma do host não autoriza reescrita de CPU, VDP, PSG, barramentos ou Scheduler.
 
 ## Estado atual
 
 - `rust/runtime/sms-runtime` contém o worker SMS temporal implementado em Rust puro.
 - O runtime utiliza `sega-sms-core`, `sega-audio-runtime` e `sega-video-runtime`.
 - A máquina SMS temporal é executada pelo worker dedicado; a aplicação envia comandos de sessão, sem callbacks por instrução.
-- A sessão de áudio física é criada por uma factory do host e executada na thread proprietária da máquina, preservando a afinidade dos objetos WASAPI/XAudio2.
-- `native/sega_app` contém o shell desktop egui/eframe. A integração operacional entre GUI, worker SMS, viewport D3D12, áudio e input nativos está em desenvolvimento nas PRs empilhadas #613 e #614; elas ainda não fazem parte da main.
+- A sessão de áudio física usa a camada host WASAPI/XAudio2 atualmente integrada.
+- `native/sega_app` contém o shell desktop egui/eframe atualmente integrado. As PRs #613 e #614 foram mescladas; o runtime SMS, viewport D3D12, áudio e input nativos fazem parte da baseline `main`.
 - O SMS atômico antigo foi removido do core ativo. `native/sms_core` contém a máquina temporal e fachadas para componentes compartilhados.
 - A implementação temporal ainda é parcial: o VDP opera por scanline, há WAIT de fixture e ainda não há Save States persistentes completos.
 - O SG-1000 atômico antigo não é runtime alternativo nem fallback do SMS temporal.
@@ -18,7 +18,9 @@ A prioridade atual é tornar o **Sega Master System temporal** executável por m
 
 A existência dos crates e do worker temporal não comprova que o emulador esteja pronto para gameplay real. Compatibilidade, fidelidade e desempenho só devem ser declarados após validação reproduzível.
 
-**Fotografia operacional e PRs:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).  
+**Baseline auditada:** `main` SHA `392a5c67e85a11a5a980d8f7055bcc8a12fe3784` (2026-11-10).  
+**Migração desktop:** [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md) e [PR #745](https://github.com/leonardo201800478/sega-emulator/pull/745), ainda Draft e não mesclada.  
+**Fotografia histórica:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).  
 **Mapa de documentação:** [docs/README.md](docs/README.md).  
 **Evidência do stress longo do Scheduler:** [registro de 2026-11-07](docs/evidence/scheduler-stress-long-2026-11-07.md).
 
@@ -27,12 +29,15 @@ A existência dos crates e do worker temporal não comprova que o emulador estej
 O produto é integralmente Rust:
 
 - **Hardware e runtime:** CPU Z80 compartilhada, barramento, memória, mapper, I/O, VDP, PSG, Scheduler, áudio, vídeo e input.
-- **Aplicação desktop:** Rust com egui/eframe, responsável pela apresentação, menus e comandos de alto nível.
-- **Hosts nativos:** integração com D3D12, WASAPI/XAudio2 e dispositivos de entrada no ambiente Windows.
+- **Aplicação atualmente integrada na main:** egui/eframe, responsável pela apresentação, menus e comandos de alto nível; permanece como baseline durante a migração.
+- **Aplicação desktop alvo:** Slint 1.18.x.
+- **Apresentação alvo:** WGPU 30.x como API gráfica única, Vulkan como backend preferencial inicial no Windows x64.
+- **Saída de áudio alvo:** CPAL 0.18.x; a migração ocorrerá após o gate gráfico R1.
+- **Hosts atuais:** D3D12 e WASAPI/XAudio2 permanecem na baseline até paridade e validação da nova stack.
 - **Execução:** o worker SMS é proprietário da máquina e do Scheduler. A GUI não executa instruções, avança clocks nem controla eventos de hardware.
 - **Comunicação:** comandos coarse-grained de ciclo de vida e sessão; nunca callbacks por instrução.
 
-Não fazem parte da arquitetura: Python, PySide6, PyQt, Qt, PyO3, Maturin ou um frontend legado. Não há fallback para os cores atômicos antigos.
+Não fazem parte da arquitetura: Python, PySide6, PyQt, Qt, PyO3 ou Maturin. egui/eframe é a baseline temporária, não o destino da nova aplicação. Não há fallback para os cores atômicos antigos.
 
 São proibidos JIT, frame skipping, hacks temporais e otimizações especulativas.
 
@@ -45,7 +50,7 @@ Consulte as decisões normativas:
 
 - Rust toolchain definida em `rust-toolchain.toml` (atualmente 1.99.1).
 - Git.
-- Windows x64 e Visual Studio Build Tools com MSVC para validar os targets e hosts nativos Windows, incluindo D3D12, WASAPI e XAudio2.
+- Windows x64 e Visual Studio Build Tools com MSVC para validar a baseline nativa e, durante a migração, o caminho Slint/WGPU/Vulkan.
 - PowerShell para os scripts de automação e auditoria do repositório.
 
 **Não é necessário instalar Python, Qt, PyO3, Maturin ou ferramentas de testes Python.**
@@ -69,7 +74,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-Enquanto existirem workspaces standalone e targets específicos, eles também devem ser validados separadamente, incluindo compilação Windows/D3D12 e hosts WASAPI/XAudio2. Testes físicos não executados devem ser classificados como **NOT RUN** ou **BLOCKED**, nunca como PASS.
+Enquanto existirem workspaces standalone e targets específicos, eles também devem ser validados separadamente. A baseline atual ainda exige regressão dos hosts D3D12/WASAPI/XAudio2; a nova stack exigirá build Windows x64 Release e testes Vulkan/WGPU e CPAL nas fases correspondentes. Testes físicos não executados devem ser classificados como **NOT RUN** ou **BLOCKED**, nunca como PASS.
 
 Os testes externos ZEXDOC/ZEXALL estão **NOT RUN**: o executor Rust de baixo nível existe, mas a aquisição, montagem e orquestração da suíte ainda precisam ser portadas para Rust. A ausência dessas suítes não equivale a aprovação.
 
