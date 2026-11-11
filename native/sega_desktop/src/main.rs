@@ -730,7 +730,9 @@ mod windows_host {
         fn record_frame(&mut self, now: Instant, sequence: u64, published_at: Instant) {
             self.consumed = self.consumed.saturating_add(1);
             if let Some(previous) = self.last_consumed {
-                let elapsed = now.saturating_duration_since(previous).as_nanos()
+                let elapsed = now
+                    .saturating_duration_since(previous)
+                    .as_nanos()
                     .min(u128::from(u64::MAX)) as u64;
                 self.consumed_interval_sum_ns = self
                     .consumed_interval_sum_ns
