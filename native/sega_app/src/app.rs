@@ -1072,7 +1072,7 @@ impl SegaApp {
                 ui,
                 &self.native_viewport,
                 &self.rom_path,
-                self.fps_overlay_enabled.then_some(self.fps_counter.fps),
+                (self.fps_overlay_enabled && self.native_viewport.video_attached).then_some(self.fps_counter.fps),
                 self.fps_overlay_size.font_size(),
             );
         }
@@ -1494,7 +1494,10 @@ impl SegaApp {
             return;
         }
         let now = Instant::now();
-        let presented_sequence = self.native_viewport.session.as_ref()
+        let presented_sequence = self
+            .native_viewport
+            .session
+            .as_ref()
             .map_or(0, D3d12MailboxSession::last_presented_sequence);
         if !self.fps_overlay_was_active {
             self.fps_counter.reset(presented_sequence, now);
