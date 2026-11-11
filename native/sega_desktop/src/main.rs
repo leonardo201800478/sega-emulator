@@ -286,7 +286,7 @@ mod windows_host {
     fn save_recent_roms(recent: &[PathBuf]) -> Result<(), String> {
         let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        let contents = recent.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join("\\n");
+        let contents = recent.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join("\n");
         fs::write(directory.join("recent_roms.txt"), contents).map_err(|error| error.to_string())
     }
 
