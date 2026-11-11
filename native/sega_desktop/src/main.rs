@@ -1073,6 +1073,7 @@ mod windows_host {
                 show_fps: app.get_show_fps(),
                 show_status_footer: app.get_show_status_footer(),
                 fps_size: app.get_fps_size().to_string(),
+                sprite_limit_enabled: app.get_sprite_limit_enabled(),
             };
             if let Err(error) = save_desktop_preferences(&prefs) {
                 eprintln!("R2_PREFERENCES save_failed error={error}");
