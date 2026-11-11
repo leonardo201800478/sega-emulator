@@ -533,7 +533,7 @@ jobs:
     name: Legacy Windows WASAPI and XAudio2 validation
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
        (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true'))
     runs-on: windows-latest
@@ -556,7 +556,7 @@ jobs:
     name: Legacy Linux audio-output host validation
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -744,13 +744,13 @@ jobs:
           DOCS: ${{ needs.docs-format.result }}
           EXPECT_WORKFLOW_LINT: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' }}
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
-          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
+          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
-          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true') }}
+          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true') }}
           WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
-          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true')) }}
+          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
-          EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
+          EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
           EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
