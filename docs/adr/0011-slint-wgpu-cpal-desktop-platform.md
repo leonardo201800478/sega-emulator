@@ -188,21 +188,28 @@ O objetivo final é um workspace Rust coerente, com um único lockfile e versõe
 - manter testes, runtime, docs e SG-1000 intactos;
 - reconciliar README, ADRs, roadmap, scripts e workflows com o estado real da main.
 
-### R1 — Prova de conceito gráfica/desktop
-- Slint 1.18.x com WGPU 30.x e backend WGPU;
-- janela principal, menu mínimo e viewport;
-- mesma device/queue para UI e textura de vídeo;
-- Vulkan backend identificado e validado no Windows x64 Release;
-- resize, fullscreen, minimize/restore e shutdown repetidos;
-- shader simples de textura e nearest-neighbor;
-- nenhuma alteração ao runtime SMS.
+### R1 — Prova de conceito gráfica/desktop + HUD end-to-end
+- Slint 1.18.x com WGPU 30.x e backend Vulkan explicitamente selecionado no Windows x64;
+- executar uma ROM homebrew/sintética de SMS no SmsTemporalWorker real; não aceitar somente uma textura gerada artificialmente como prova de integração do emulador;
+- criar o viewport WGPU na mesma janela Slint e compartilhar wgpu::Device/wgpu::Queue; não criar child HWND ou janela de overlay;
+- consumir os VideoFrame completos e imutáveis pela mailbox já existente, desacoplando a publicação do frame do backend D3D12 atualmente acoplado ao worker;
+- transferir o frame CPU para textura GPU uma vez por frame, sem cópias completas intermediárias no lado CPU; preservar execução de todos os ciclos e eventos do Scheduler;
+- fullscreen borderless inicial, redimensionamento, minimização/restauração, mudança de proporção e shutdown repetido;
+- imagem 4:3 centralizada sem crop/stretch em monitor 16:9, com telemetria nos gutters laterais; quando o conteúdo preencher 16:9 ou não houver gutters suficientes, telemetria compacta em overlays nos cantos;
+- HUD esquerdo: FPS de emulação, FPS de apresentação, frame time, input-to-frame, resolução interna e proporção;
+- HUD direito: adapter/backend efetivo, present mode, refresh rate quando obtido de fonte confiável, estado HDR/capacidades, estado VRR como medido ou não verificável, sample rate e métricas de underrun/drop do áudio;
+- botão SDL3 SDL_GAMEPAD_BUTTON_GUIDE abre/fecha o menu; borda de pressionamento evita alternância repetida; Guide nunca é enviado ao controle emulado;
+- menu translúcido sobre o jogo, sem pausar a máquina; D-pad e botões de confirmação/cancelamento navegam no menu e são consumidos pelo host enquanto ele estiver aberto;
+- testar aspect ratio 4:3 e 16:9, navegação integral pelo gamepad, retorno ao jogo e continuidade da execução do SMS;
+- nenhuma alteração de semântica, clock ou Scheduler do runtime SMS.
 
-### R2 — Prova de conceito de áudio
-- CPAL 0.18.x;
+### R2 — Prova de conceito de áudio e integração com o SMS
+- CPAL 0.18.x por meio da interface AudioSession já aceita pelo SmsTemporalWorker;
 - enumerar dispositivos, selecionar saída e negociar formato;
-- reproduzir PCM sintético através do ring buffer;
-- medir underruns, latência e estabilidade em 44,1/48/96 kHz;
-- testar unplug/replug, pausa, reset e shutdown;
+- primeiro validar PCM sintético; depois consumir o PCM real produzido pelo audio_runtime do SMS;
+- medir sample rate efetivo, buffer, latência reportável, underruns/xruns, frames descartados e estabilidade em 44,1/48/96 kHz quando suportados;
+- callback de áudio sem alocação, bloqueio, logging ou acesso à UI; callback consome somente o ring buffer pré-alocado;
+- testar unplug/replug, pausa, reset, troca de ROM e shutdown;
 - comparar os resultados com a saída atual antes de removê-la.
 
 ### R3 — Integração do runtime existente
@@ -220,12 +227,13 @@ O objetivo final é um workspace Rust coerente, com um único lockfile e versõe
 - persistência e recuperação de configurações;
 - UX responsiva e acessibilidade.
 
-### R5 — Apresentação avançada
+### R5 — Apresentação avançada e comprovação de display
 - proporções, integer scaling, shaders em passadas combináveis;
-- VSync e modos Mailbox/Immediate conforme capacidade;
-- VRR/G-Sync/FreeSync sob testes físicos;
-- HDR PQ opcional, com a limitação de metadados claramente documentada;
-- testes de cores, gamut e tone mapping.
+- VSync e modos Mailbox/Immediate conforme capacidades reais da surface;
+- VRR/G-Sync/FreeSync: teste em monitor e driver reais, com variação controlada de FPS e confirmação externa por OSD/telemetria do driver; WGPU PresentMode suportado não será confundido com VRR efetivamente ativo;
+- HDR: consultar SurfaceCapabilities::format_capabilities, SurfaceColorSpace e Surface::display_hdr_info; executar padrão de teste PQ/BT.2020 em fullscreen, confirmar sinal HDR no monitor/OS e validar tone mapping;
+- registrar que WGPU 30 não configura metadados estáticos HDR10; resultado deve ser descrito como teste de saída PQ/HDR disponível, não como conformidade HDR10 completa com metadados;
+- testes de cores, gamut, luminância e retorno seguro para SDR.
 
 ### R6 — Corte definitivo
 - atingir paridade funcional documentada;
@@ -250,19 +258,30 @@ Não usar build Debug como evidência de desempenho. A validação de correção
 
 Classificar cada suíte como PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca equivale a PASS.
 
-**Gate WGPU/Slint:**
-- device/queue compartilhados comprovados;
-- nenhuma janela overlay/child HWND para o viewport;
+**Gate WGPU/Slint + HUD:**
+- device/queue compartilhados comprovados e backend Vulkan efetivamente identificado;
+- SMS temporal real produzindo frames no viewport;
+- nenhuma janela overlay/child HWND para viewport ou menu;
+- menu acionado por Guide, navegação pelo controle e retorno ao jogo sem perda de input ou alteração indevida do estado da máquina;
+- telemetria distinguindo FPS de emulação, FPS de apresentação e refresh do monitor;
+- aspect ratio 4:3 e 16:9 sem distorção ou crop, com HUD nos gutters quando disponíveis e nos cantos quando não;
 - sem vazamento de recursos ou erro de sincronização;
 - resize/minimize/fullscreen/recreate/shutdown repetidos;
-- renderização 2D sem cópia CPU por frame como caminho permanente.
+- sem cópias completas redundantes no lado CPU; um upload CPU→GPU por frame é esperado pelo contrato atual de VideoFrame.
 
 **Gate CPAL:**
 - callback sem alocação/bloqueio;
-- ausência de underruns sob carga sustentada;
+- PCM real do SMS audível e contínuo;
+- ausência de underruns/xruns sob carga sustentada dentro do buffer alvo;
 - dispositivo removido/reconectado sem travar o worker;
 - saída PCM de referência determinística antes do host;
 - shutdown seguro.
+
+**Gate VRR/HDR:**
+- registrar GPU, driver, SO, monitor, conexão, modo de tela e refresh selecionado;
+- VRR somente PASS se a faixa variável for observada/confirmada no monitor ou ferramenta do fabricante durante FPS variável; caso contrário BLOCKED/NOT RUN, nunca inferir VRR de PresentMode;
+- HDR somente PASS para o escopo explicitamente testado: surface anuncia espaço HDR, shader produz PQ/BT.2020 correto, SO/monitor confirmam entrada HDR e SDR fallback funciona;
+- declarar separadamente a limitação de metadados estáticos HDR10 do WGPU 30.
 
 **Gate de determinismo:**
 - execução contínua versus execução em blocos equivalente;
@@ -288,3 +307,49 @@ CPAL e WGPU também terão licenças e notices conferidos e fixados na atualiza�
 - HDR10 completo com metadados estáticos e VRR físico não estão comprovados.
 
 **Conclusão:** preservar o runtime de emulação; substituir gradualmente a camada de aplicação e os adaptadores host por Slint + WGPU + CPAL. A primeira entrega é uma prova de conceito isolada, não uma reescrita do hardware nem uma migração em massa.
+
+## 12. Especificação do teste integrado HUD / fullscreen
+
+A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real e uma ROM homebrew ou sintética legalmente distribuível. O objetivo é provar a plataforma host completa antes de expandir a interface.
+
+### 12.1 Composição visual e controle
+
+- O viewport do jogo é a camada de fundo da mesma janela fullscreen Slint/WGPU.
+- O menu abre sobre o jogo com fundo translúcido/escurecimento; a sessão continua rodando e o Scheduler continua avançando normalmente.
+- O botão Guide do gamepad alterna o menu por transição de botão (pressed edge), sem ser encaminhado ao controle do Master System.
+- Com o menu aberto, D-pad, confirmação e cancelamento são consumidos pela UI; ao fechar, o mapeamento de jogo volta a receber os controles.
+- Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação e utilizar os espaços laterais para telemetria compacta esquerda/direita. Para conteúdo 16:9 ou quando não houver área lateral suficiente, posicionar telemetria nos cantos sobre o vídeo, com fundo translúcido e margens seguras.
+- Nunca cortar a imagem para abrir espaço ao HUD. Proporção e área ativa do jogo têm prioridade.
+
+### 12.2 Telemetria e proveniência
+
+A telemetria deve separar explicitamente:
+- **Emulation FPS:** medido no worker SMS (SmsPerformanceMetrics);
+- **Presentation FPS:** frames efetivamente submetidos/apresentados pelo host WGPU;
+- **Frame time:** duração entre frames concluídos pelo worker e, separadamente, intervalos de apresentação;
+- **Input-to-frame:** medição existente no worker;
+- **Audio:** sample rate efetivo e contadores de underrun/drop da sessão CPAL;
+- **GPU/backend:** adapter e backend efetivamente selecionados, formato, color space e present mode;
+- **Display:** refresh rate apenas quando obtido de API confiável; caso contrário mostrar “não disponível”;
+- **VRR:** distinguir capacidade, configuração e confirmação observada; não afirmar “ativo” apenas porque um modo WGPU está disponível;
+- **HDR:** distinguir capacidade de surface, HDR do display reportado e modo de saída configurado.
+
+A UI consulta snapshots em baixa frequência e nunca solicita debug_snapshot() bloqueante em cada frame. Contadores de host são coletados fora do callback de áudio e fora do avanço do Scheduler.
+
+### 12.3 Limite de transferência de vídeo
+
+O VideoFrame atual possui pixels imutáveis em memória CPU e é publicado através de FrameMailbox. A integração WGPU deve consumir esse contrato e fazer o upload necessário para uma textura GPU. O teste não exige zero-copy físico CPU→GPU; exige evitar cópias completas redundantes na CPU e não fazer conversão de formato desnecessária a cada frame.
+
+### 12.4 Critério de aceite end-to-end
+
+A prova será considerada aprovada somente se:
+1. O SMS temporal real inicia e executa uma ROM de teste, produzindo imagem e áudio.
+2. A janela Slint permanece fullscreen e o menu sobrepõe o jogo na mesma composição.
+3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo.
+4. O jogo continua executando com o menu aberto e retoma o recebimento de input ao fechar.
+5. HUD mostra valores de origem identificada, sem misturar FPS do emulador com FPS do monitor.
+6. Áudio CPAL permanece estável durante gameplay, abertura do menu, fechamento, pausa, reset e shutdown.
+7. VRR e HDR são testados em equipamento compatível e seus resultados são classificados separadamente, incluindo BLOCKED/NOT RUN quando o hardware não permite a comprovação.
+8. Execução do SMS, Scheduler, CPU, VDP e PSG permanece inalterada pelo HUD, menu, áudio host e apresentação.
+
+Nenhuma aprovação de R1/R2 será inferida apenas de uma captura de tela ou de uma compilação bem-sucedida.
