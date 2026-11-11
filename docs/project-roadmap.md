@@ -28,7 +28,7 @@ As PRs #613 e #614 foram integradas; isso comprova presença de código, não ac
 9. **P8 — Compatibilidade e auditoria.**
 10. **P9 — Comprovação temporal sistêmica dos caminhos observáveis.**
 
-Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriores. A integração mínima do shell egui necessária para executar o SMS pertence ao P1; o frontend completo permanece P7.
+Não iniciar uma plataforma posterior com bloqueadores estruturais nas anteriores. O shell mínimo atualmente integrado (egui, mantido como baseline) e a POC gráfica R1 pertencem à trilha de host do P1; o frontend Slint completo permanece P7.
 
 ## 2.1 Sequência da replataforma desktop (ADR 0011)
 
