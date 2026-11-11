@@ -1068,7 +1068,13 @@ impl SegaApp {
         let show_status = self.footer_mode.is_visible();
         let viewport_rect = render_video_viewport(ui, self.aspect_ratio, show_status);
         if show_status {
-            render_footer(ui, &self.native_viewport, &self.rom_path, self.fps_overlay_enabled.then_some(self.fps_counter.fps), self.fps_overlay_size.font_size());
+            render_footer(
+                ui,
+                &self.native_viewport,
+                &self.rom_path,
+                self.fps_overlay_enabled.then_some(self.fps_counter.fps),
+                self.fps_overlay_size.font_size(),
+            );
         }
         viewport_rect
     }
@@ -2986,7 +2992,7 @@ fn render_footer(
     rom_path: &str,
     fps: Option<f32>,
     fps_font_size: f32,
-)
+) {
     ui.horizontal(|ui| {
         ui.small(viewport.status());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
