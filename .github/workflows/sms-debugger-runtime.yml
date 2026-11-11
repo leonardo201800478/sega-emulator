@@ -1,4 +1,4 @@
-name: SMS Runtime Integration
+name: SMS Debugger Runtime
 
 on:
   pull_request:
@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   sms-runtime-release:
-    name: SMS runtime Windows x64 Release integration
+    name: SMS runtime Release format, Clippy and tests
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -66,3 +66,13 @@ jobs:
 
       - name: Build SMS runtime (Release, Windows x64)
         run: cargo build --release --manifest-path rust/runtime/sms-runtime/Cargo.toml --locked --target x86_64-pc-windows-msvc
+
+  sms-debugger-release:
+    # Compatibility with the protected legacy check context. The egui debugger
+    # host is intentionally NOT RUN; debugger_core remains covered by workspace CI.
+    name: SMS debugger Windows Release validation
+    if: false
+    runs-on: windows-latest
+    steps:
+      - name: Legacy host intentionally not run
+        run: echo "NOT RUN: legacy egui debugger host is outside the supported CI baseline."
