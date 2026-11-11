@@ -49,13 +49,13 @@ The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second
 
 - timer callback count and empty mailbox polls;
 - average/max timer polling interval and mailbox residence interval;
-- consumed frames, sequence gaps, producer mailbox replacements, and publish-to-consume mailbox residence time;
+- consumed frames, sequence gaps, the cumulative producer mailbox replacement counter, and publish-to-consume mailbox residence time;
 - average/max RGB888→RGBA8 conversion time;
 - average/max Queue::write_texture call time;
 - worker p50/p95/p99 frame intervals and p95 stage durations;
 - machine clock and ticks-per-frame range.
 
-The host report is deliberately explicit that physical present timestamps are unavailable through the current Slint-owned surface. sequence_gaps and mailbox_replaced are not automatically defects: the mailbox is latest-frame-wins, so replacements can be expected if the consumer is slower. They must be interpreted alongside produced and consumed cadence.
+The host report is deliberately explicit that physical present timestamps are unavailable through the current Slint-owned surface. sequence_gaps is a per-window count and mailbox_replaced_total is cumulative; neither is automatically a defect: the mailbox is latest-frame-wins, so replacements can be expected if the consumer is slower. They must be interpreted alongside produced and consumed cadence.
 
 ## Existing pacing policy — audit target, not changed here
 
