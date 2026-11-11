@@ -21,7 +21,7 @@ Esta política é subordinada aos ADRs vigentes e ao código integrado na `main`
 | Workflow | Responsabilidade |
 |---|---|
 | `.github/workflows/ci.yml` | Classificação de impacto, regressão Rust, hosts condicionais, desktop Slint/WGPU, higiene documental e lint de workflows |
-| `.github/workflows/sms-debugger-runtime.yml` | Compatibilidade do SMS runtime com o host/debugger independente |
+| `.github/workflows/sms-debugger-runtime.yml` | Integração SMS runtime Windows x64 Release; não compila a GUI debugger legada |
 
 As alterações em `.github/workflows/**`, `.github/actions/**` ou `.github/scripts/**` acionam o gate `workflow-lint` e a regressão do workspace Rust. A análise estática dos workflows utiliza actionlint v1.7.12, instalado por release versionada e SHA-256 verificado.
 
