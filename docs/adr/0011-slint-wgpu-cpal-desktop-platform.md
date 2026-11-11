@@ -360,11 +360,11 @@ O VideoFrame atual possui pixels imutáveis em memória CPU e é publicado atrav
 A prova será considerada aprovada somente se:
 1. O SMS temporal real inicia e executa uma ROM de teste, produzindo imagem e áudio.
 2. A janela Slint permanece fullscreen e o menu sobrepõe o jogo na mesma composição.
-3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo.
+3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo; abrir o menu pausa a máquina na primeira fronteira segura e fechar retoma do estado preservado.
 4. Com o menu aberto, o estado da máquina permanece congelado e o último frame continua visível; ao fechar, a máquina retoma do ponto temporal preservado e volta a receber os controles do jogo.
 5. HUD mostra valores de origem identificada, sem misturar FPS do emulador com FPS do monitor.
-6. Áudio CPAL permanece estável durante gameplay, abertura do menu, fechamento, pausa, reset e shutdown.
+6. Áudio CPAL permanece estável durante gameplay; ao abrir o menu, a saída é silenciada/interrompida de forma controlada sem avançar o áudio emulado; ao fechar, a produção e a saída são retomadas sem descontinuidade temporal indevida.
 7. VRR e HDR são testados em equipamento compatível e seus resultados são classificados separadamente, incluindo BLOCKED/NOT RUN quando o hardware não permite a comprovação.
-8. Execução do SMS, Scheduler, CPU, VDP e PSG permanece inalterada pelo HUD, menu, áudio host e apresentação.
+8. HUD, composição, áudio host e apresentação não alteram a semântica do SMS, Scheduler, CPU, VDP ou PSG. A única transição temporal causada pelo menu é a pausa/resume explícita definida nesta ADR.
 
 Nenhuma aprovação de R1/R2 será inferida apenas de uma captura de tela ou de uma compilação bem-sucedida.
