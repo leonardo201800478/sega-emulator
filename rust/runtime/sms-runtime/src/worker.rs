@@ -368,6 +368,7 @@ enum WorkerCommand {
     DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
+    SetSpriteLimitMode(SpriteLimitMode, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, Instant),
     RequestNmi,
@@ -621,6 +622,14 @@ impl SmsTemporalWorker {
     /// Enable or disable bounded scheduler/bus trace capture.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
+    }
+
+    /// Change the active SMS VDP sprite rendering limit through the machine worker.
+    ///
+    /// The setting changes presentation compatibility only; VDP timing, overflow
+    /// reporting and Scheduler progression remain owned by the emulated machine.
+    pub fn set_sprite_limit_mode(&self, mode: SpriteLimitMode) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetSpriteLimitMode(mode, reply))
     }
 
     /// Read at most 256 bytes through the active mapper without advancing time.
@@ -1411,6 +1420,10 @@ fn handle_command(
             if !enabled {
                 trace_history.clear();
             }
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::SetSpriteLimitMode(mode, reply) => {
+            machine.set_sprite_limit_mode(mode);
             let _ = reply.send(Ok(()));
         }
         WorkerCommand::ReadMemory(start, length, reply) => {
