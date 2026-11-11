@@ -45,12 +45,14 @@ impl D3d12HudOverlay {
         super::NativeVideoWindow::validate_existing_handle(parent_handle)?;
         let parent = HWND(parent_handle as *mut c_void);
         let instance = unsafe { GetModuleHandleW(None)? };
-        register_hud_window_class(HINSTANCE(instance.0))?;
+        let instance = HINSTANCE(instance.0);
+        let class_name = hud_window_class_name(instance);
+        register_hud_window_class(instance, &class_name)?;
 
         let hwnd = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0),
-                w!("SegaEmulatorTelemetryHud"),
+                PCWSTR(class_name.as_ptr()),
                 w!(""),
                 WINDOW_STYLE(WS_CHILD.0 | WS_CLIPSIBLINGS.0),
                 0,
@@ -209,59 +211,53 @@ impl Drop for D3d12HudOverlay {
     }
 }
 
-fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
-    // RegisterClassW is process-scoped. Serialize registration and remember a
-    // successful result so creating later HUD instances never races a second
-    // RegisterClassW call against the already-registered class.
-    static REGISTRATION: std::sync::OnceLock<std::result::Result<(), windows::core::HRESULT>> =
-        std::sync::OnceLock::new();
+fn hud_window_class_name(instance: HINSTANCE) -> Vec<u16> {
+    // Include the owning module handle so separately linked copies of this
+    // crate cannot collide in the process-wide window-class namespace.
+    format!("SegaEmulatorTelemetryHud_{:X}", instance.0 as usize)
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect()
+}
 
-    let registration = REGISTRATION.get_or_init(|| {
-        let class = WNDCLASSW {
-            style: CS_HREDRAW | CS_VREDRAW,
-            lpfnWndProc: Some(hud_window_proc),
-            hInstance: instance,
-            lpszClassName: w!("SegaEmulatorTelemetryHud"),
-            ..Default::default()
-        };
+fn register_hud_window_class(instance: HINSTANCE, class_name: &[u16]) -> Result<()> {
+    let class_name = PCWSTR(class_name.as_ptr());
+    let class = WNDCLASSW {
+        style: CS_HREDRAW | CS_VREDRAW,
+        lpfnWndProc: Some(hud_window_proc),
+        hInstance: instance,
+        lpszClassName: class_name,
+        ..Default::default()
+    };
 
-        let atom = unsafe { RegisterClassW(&class) };
-        if atom != 0 {
-            return Ok(());
-        }
+    let atom = unsafe { RegisterClassW(&class) };
+    if atom != 0 {
+        return Ok(());
+    }
 
-        // A class may have been registered before this module's first call.
-        // Rust does not guarantee stable function-pointer address equality,
-        // even for the same function. The private class name, owning module,
-        // and registration attributes identify the class we own.
-        let registration_error = Error::from_thread();
-        let mut existing = WNDCLASSW::default();
-        let class_matches = unsafe {
-            GetClassInfoW(
-                Some(instance),
-                w!("SegaEmulatorTelemetryHud"),
-                &mut existing,
-            )
-            .is_ok()
-        } && existing.hInstance == instance
-            && existing.style == class.style
-            && existing.cbClsExtra == class.cbClsExtra
-            && existing.cbWndExtra == class.cbWndExtra
-            && existing.lpfnWndProc.is_some();
+    let registration_error = Error::from_thread();
+    // ERROR_CLASS_ALREADY_EXISTS is expected when another HUD instance from
+    // this module has already registered the same module-scoped class.
+    if registration_error.code().0 != 0x8007_0582_u32 as i32 {
+        return Err(registration_error);
+    }
 
-        if class_matches {
-            Ok(())
-        } else {
-            Err(registration_error.code())
-        }
-    });
+    let mut existing = WNDCLASSW::default();
+    let class_matches = unsafe { GetClassInfoW(Some(instance), class_name, &mut existing) }
+        .is_ok()
+        && existing.hInstance == instance
+        && existing.style == class.style
+        && existing.cbClsExtra == class.cbClsExtra
+        && existing.cbWndExtra == class.cbWndExtra
+        && existing.lpfnWndProc.is_some();
 
-    match registration {
-        Ok(()) => Ok(()),
-        Err(code) => Err(Error::new(
-            *code,
-            "Failed to register or validate the SMS telemetry HUD window class",
-        )),
+    if class_matches {
+        Ok(())
+    } else {
+        Err(Error::new(
+            registration_error.code(),
+            "HUD window class name is already registered with incompatible attributes",
+        ))
     }
 }
 
@@ -364,7 +360,9 @@ mod tests {
 
         let mut hud = D3d12HudOverlay::create(parent.hwnd().0 as usize).unwrap();
         let instance = unsafe { super::GetModuleHandleW(None).unwrap() };
-        super::register_hud_window_class(super::HINSTANCE(instance.0)).unwrap();
+        let instance = super::HINSTANCE(instance.0);
+        let class_name = super::hud_window_class_name(instance);
+        super::register_hud_window_class(instance, &class_name).unwrap();
         hud.set_bounds(8, 8, 160, 60).unwrap();
         hud.set_text("SMS 50.0 FPS\nFrame 20.00 ms\nInput -> Frame 8.0 ms")
             .unwrap();
