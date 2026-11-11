@@ -596,7 +596,7 @@ mod windows_host {
             }
         });
         let exit_app = app.as_weak();
-        app.on_exit_requested(move || { if let Some(app) = exit_app.upgrade() { app.window().hide(); } });
+        app.on_exit_requested(move || { if let Some(app) = exit_app.upgrade() { let _ = app.window().hide(); } });
 
         let debug_app = app.as_weak();
         let debug_worker = Rc::clone(&worker);
