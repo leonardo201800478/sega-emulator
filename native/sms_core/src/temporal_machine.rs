@@ -738,6 +738,14 @@ impl SmsTemporalMachine {
         self.bus.vdp()
     }
 
+    /// Configure the VDP sprite drawing policy without advancing machine time.
+    ///
+    /// This mutator is intended for coarse-grained commands executed by the
+    /// machine-owning worker thread, never for direct GUI access.
+    pub fn set_sprite_limit_mode(&mut self, mode: crate::SpriteLimitMode) {
+        self.bus.vdp_mut().set_sprite_limit_mode(mode);
+    }
+
     /// Current completed-frame counter from the temporal VDP.
     pub fn frame_number(&self) -> u64 {
         self.bus.vdp().frame_number()

@@ -28,7 +28,11 @@ const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
 const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
-const WORKER_REPLY_TIMEOUT: Duration = Duration::from_millis(100);
+// Running workers accept control commands at complete-frame boundaries; debug builds may need
+// substantially longer than one wall-clock frame to reach that safe point.
+const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
+// A complete frame step can execute tens of thousands of instructions, especially in debug builds.
+const WORKER_FRAME_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -71,17 +75,23 @@ fn enqueue_worker_command(
     }
 }
 
+fn receive_worker_reply_with_timeout<T>(
+    receiver: Receiver<T>,
+    operation: &str,
+    timeout: Duration,
+) -> Result<T, String> {
+    receiver.recv_timeout(timeout).map_err(|error| match error {
+        RecvTimeoutError::Timeout => {
+            format!("SMS machine worker timed out while {operation}")
+        }
+        RecvTimeoutError::Disconnected => {
+            format!("SMS machine worker stopped while {operation}")
+        }
+    })
+}
+
 fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
-    receiver
-        .recv_timeout(WORKER_REPLY_TIMEOUT)
-        .map_err(|error| match error {
-            RecvTimeoutError::Timeout => {
-                format!("SMS machine worker timed out while {operation}")
-            }
-            RecvTimeoutError::Disconnected => {
-                format!("SMS machine worker stopped while {operation}")
-            }
-        })
+    receive_worker_reply_with_timeout(receiver, operation, WORKER_REPLY_TIMEOUT)
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
@@ -368,6 +378,7 @@ enum WorkerCommand {
     DebugSnapshot(SyncSender<Result<SmsDebugSnapshot, String>>),
     ReadMemory(u16, usize, SyncSender<Result<Vec<u8>, String>>),
     SetTraceEnabled(bool, SyncSender<Result<(), String>>),
+    SetSpriteLimitMode(SpriteLimitMode, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
     SetController(u8, ControllerButtons, Instant),
     RequestNmi,
@@ -407,6 +418,7 @@ pub struct SmsDebugSnapshot {
     pub vdp_status: u8,
     pub vdp_scanline: u16,
     pub vdp_cycles_into_line: u16,
+    pub sprite_limit_mode: SpriteLimitMode,
     pub mapper_banks: [u8; 3],
     pub mapper_control: u8,
     pub memory_control: u8,
@@ -623,6 +635,14 @@ impl SmsTemporalWorker {
         self.request_unit(|reply| WorkerCommand::SetTraceEnabled(enabled, reply))
     }
 
+    /// Change the active SMS VDP sprite rendering limit through the machine worker.
+    ///
+    /// The setting changes rendering compatibility only; VDP timing, overflow
+    /// reporting and Scheduler progression remain owned by the emulated machine.
+    pub fn set_sprite_limit_mode(&self, mode: SpriteLimitMode) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetSpriteLimitMode(mode, reply))
+    }
+
     /// Read at most 256 bytes through the active mapper without advancing time.
     pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
         if length > DEBUG_MEMORY_READ_LIMIT {
@@ -644,7 +664,11 @@ impl SmsTemporalWorker {
             &self.commands,
             WorkerCommand::StepFrame(max_instructions, reply_sender),
         )?;
-        receive_worker_reply(reply_receiver, "completing a frame step")?
+        receive_worker_reply_with_timeout(
+            reply_receiver,
+            "completing a frame step",
+            WORKER_FRAME_STEP_TIMEOUT,
+        )?
     }
 
     pub fn set_controller(&self, player: u8, buttons: ControllerButtons) -> Result<(), String> {
@@ -1264,7 +1288,7 @@ fn handle_command(
                 }
             }
         }
-        WorkerCommand::Pause(reply) | WorkerCommand::Stop(reply) => {
+        WorkerCommand::Pause(reply) => {
             *running = false;
             telemetry.running.store(false, Ordering::Release);
             let result = audio_session
@@ -1275,6 +1299,34 @@ fn handle_command(
             }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
+            }
+            let _ = reply.send(result);
+        }
+        WorkerCommand::Stop(reply) => {
+            // POWER-off is different from Pause: retain the ROM, but cold-reset the machine.
+            *running = false;
+            telemetry.running.store(false, Ordering::Release);
+            let sprite_limit_mode = machine.vdp().sprite_limit_mode();
+            let result =
+                build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
+                    powered_off.set_sprite_limit_mode(sprite_limit_mode);
+                    audio_session
+                        .as_mut()
+                        .map_or(Ok::<(), String>(()), |session| {
+                            session.suspend_and_flush()?;
+                            session.reset_dsp();
+                            Ok(())
+                        })?;
+                    if let Some(session) = audio_session.as_ref() {
+                        telemetry.record_audio_session_metrics(session.as_ref());
+                    }
+                    *machine = powered_off;
+                    telemetry.reset_machine_counters();
+                    trace_history.clear();
+                    Ok(())
+                });
+            if let Err(error) = &result {
+                telemetry.set_runtime_error(Some(error.clone()));
             }
             let _ = reply.send(result);
         }
@@ -1395,6 +1447,7 @@ fn handle_command(
                 vdp_status: machine.vdp().status(),
                 vdp_scanline: machine.vdp().scanline(),
                 vdp_cycles_into_line: machine.vdp().cycles_into_line(),
+                sprite_limit_mode: machine.vdp().sprite_limit_mode(),
                 mapper_banks: machine.selected_mapper_banks(),
                 mapper_control: machine.mapper_control(),
                 memory_control: machine.memory_control(),
@@ -1411,6 +1464,10 @@ fn handle_command(
             if !enabled {
                 trace_history.clear();
             }
+            let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::SetSpriteLimitMode(mode, reply) => {
+            machine.set_sprite_limit_mode(mode);
             let _ = reply.send(Ok(()));
         }
         WorkerCommand::ReadMemory(start, length, reply) => {
@@ -1568,7 +1625,8 @@ fn handle_command(
 mod tests {
     use super::{
         BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
-        SmsTemporalWorker, WorkerTelemetry, build_sms_temporal_machine, execute_frame,
+        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
+        execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
@@ -1876,6 +1934,47 @@ mod tests {
         ]);
         rom[..program.len()].copy_from_slice(&program);
         rom
+    }
+
+    #[test]
+    fn sprite_limit_mode_changes_only_through_worker_command_queue() {
+        let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::HardwareLimit
+        );
+
+        worker
+            .set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)
+            .unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::UnlockedCompatibility
+        );
+
+        worker
+            .set_sprite_limit_mode(SpriteLimitMode::HardwareLimit)
+            .unwrap();
+        assert_eq!(
+            worker.debug_snapshot().unwrap().sprite_limit_mode,
+            SpriteLimitMode::HardwareLimit
+        );
+    }
+
+    #[test]
+    fn stop_powers_off_machine_but_keeps_rom_available_for_restart() {
+        let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker.step_frame(100_000).unwrap();
+        assert!(worker.machine_time_ticks() > 0);
+
+        worker.stop().unwrap();
+        assert!(!worker.is_running());
+        let powered_off = worker.debug_snapshot().unwrap();
+        assert_eq!(powered_off.frame_number, 0);
+        assert_eq!(powered_off.machine_time_ticks, 0);
+
+        worker.start().unwrap();
+        assert!(worker.is_running());
     }
 
     #[test]

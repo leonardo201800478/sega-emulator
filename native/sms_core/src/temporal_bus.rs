@@ -662,6 +662,13 @@ impl SmsTemporalBus {
         &self.vdp
     }
 
+    /// Mutable VDP access for machine-owned configuration commands.
+    ///
+    /// Callers must hold exclusive ownership of the temporal machine worker.
+    pub fn vdp_mut(&mut self) -> &mut SmsVdp {
+        &mut self.vdp
+    }
+
     /// Export memory, scheduler, and in-flight response state.
     pub fn export_state(&self) -> SmsTemporalBusState {
         SmsTemporalBusState {

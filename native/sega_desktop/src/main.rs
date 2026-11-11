@@ -6,13 +6,18 @@ mod windows_host {
         cell::{Cell, RefCell},
         error::Error,
         fs,
+        io::{Cursor, Read},
         path::PathBuf,
+        process::Command,
         rc::Rc,
         time::{Duration, Instant},
     };
 
-    use sega_sms_runtime::SmsTemporalWorker;
+    use sega_sms_runtime::{SmsTemporalWorker, SpriteLimitMode};
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
+    use std::os::windows::process::CommandExt;
+    use zip::ZipArchive;
+
     use slint::{
         GraphicsAPI, RenderingState, Timer, TimerMode,
         wgpu_30::{WGPUConfiguration, WGPUSettings, wgpu},
@@ -21,13 +26,49 @@ mod windows_host {
     const SMS_WIDTH: u32 = 256;
     const SMS_HEIGHT: u32 = 192;
     const PRESENT_INTERVAL: Duration = Duration::from_millis(16);
+    const APP_DATA_DIRECTORY: &str = "Sega Emulator";
+    const MAX_RECENT_ROMS: usize = 10;
+    const MAX_ROM_ARCHIVE_BYTES: usize = 32 * 1024 * 1024;
+    const MAX_ROM_BYTES: u64 = 16 * 1024 * 1024;
+    const MAX_ZIP_ENTRIES: usize = 4_096;
 
     slint::slint! {
-        import { Button, LineEdit } from "std-widgets.slint";
+        import { Button, LineEdit, ScrollView } from "std-widgets.slint";
+        component CompactButton inherits Button {
+            height: 28px;
+        }
+        component RecentRomEntry inherits Rectangle {
+            in property <string> rom-path;
+            callback activated();
+            width: 100%;
+            height: path_label.preferred-height + 12px;
+            background: #263541;
+            border-radius: 3px;
+            path_label := Text {
+                x: 6px; y: 6px;
+                width: parent.width - 12px;
+                text: root.rom-path;
+                color: #f2f5f7;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+            TouchArea {
+                width: 100%; height: 100%;
+                clicked => { root.activated(); }
+            }
+        }
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
-            preferred-width: 1120px; preferred-height: 860px; background: #101820;
+            default-font-size: 12px;
+            preferred-width: 1120px; preferred-height: 860px;
+            min-width: 960px; min-height: 720px;
+            background: #101820;
             in-out property <image> gpu-texture;
+            in-out property <image> play-icon;
+            in-out property <image> pause-icon;
+            in-out property <image> stop-icon;
+            in-out property <image> reset-icon;
+            in-out property <image> step-frame-icon;
             in-out property <string> gpu-status;
             in-out property <string> frame-status;
             in-out property <string> lifecycle-status;
@@ -36,9 +77,14 @@ mod windows_host {
             in-out property <string> selected-region: "usa";
             in-out property <string> selected-aspect: "4:3";
             in-out property <string> recent-rom-path: "";
+            in-out property <[string]> recent-roms: [];
+            in-out property <string> fps-size: "medium";
+            in-out property <length> fps-font-size: 18px;
             in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
+            in-out property <bool> emulation-paused: false;
+            in-out property <bool> sprite-limit-enabled: true;
             in-out property <bool> show-fps: true;
             in-out property <bool> show-status-footer: true;
             in-out property <bool> trace-enabled: false;
@@ -52,126 +98,334 @@ mod windows_host {
             callback reset-requested();
             callback step-frame-requested();
             callback load-rom-requested(string);
+            callback browse-rom-requested();
             callback close-rom-requested();
             callback exit-requested();
             callback debug-snapshot-requested();
             callback trace-toggle-requested(bool);
+            callback sprite-limit-toggle-requested(bool);
             callback fullscreen-requested(bool);
-            VerticalLayout {
-                padding: 18px; spacing: 10px;
-                Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
+            callback video-area-clicked();
+            callback preferences-changed();
+            FocusScope {
+                width: 100%; height: 100%;
+                KeyBinding {
+                    keys: @keys(Escape);
+                    activated => { root.active-menu = "none"; }
+                }
+                KeyBinding {
+                    keys: @keys(F11);
+                    activated => {
+                        root.fullscreen-enabled = !root.fullscreen-enabled;
+                        root.fullscreen-requested(root.fullscreen-enabled);
+                    }
+                }
+                VerticalLayout {
+                padding: 12px; spacing: 8px;
+                Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 20px; }
+                HorizontalLayout {
+                    spacing: 3px;
+                    z: 95;
+                    CompactButton { text: "Sistema"; width: 66px; clicked => { root.active-menu = root.active-menu == "system" ? "none" : "system"; } }
+                    CompactButton { text: "Arquivo"; width: 62px; clicked => { root.active-menu = root.active-menu == "file" ? "none" : "file"; } }
+                    CompactButton { text: "Vídeo"; width: 58px; clicked => { root.active-menu = root.active-menu == "video" ? "none" : "video"; } }
+                    CompactButton { text: "Áudio"; width: 58px; clicked => { root.active-menu = root.active-menu == "audio" ? "none" : "audio"; } }
+                    CompactButton { text: "Controles"; width: 76px; clicked => { root.active-menu = root.active-menu == "controls" ? "none" : "controls"; } }
+                    CompactButton { text: "Opções"; width: 66px; clicked => { root.active-menu = root.active-menu == "options" ? "none" : "options"; } }
+                    CompactButton { text: "DEBUG"; width: 58px; clicked => { root.active-menu = root.active-menu == "debug" ? "none" : "debug"; } }
+                }
                 HorizontalLayout {
                     spacing: 5px;
-                    Button { text: "Sistema"; clicked => { root.active-menu = "system"; } }
-                    Button { text: "Arquivo"; clicked => { root.active-menu = "file"; } }
-                    Button { text: "Vídeo"; clicked => { root.active-menu = "video"; } }
-                    Button { text: "Áudio"; clicked => { root.active-menu = "audio"; } }
-                    Button { text: "Controles"; clicked => { root.active-menu = "controls"; } }
-                    Button { text: "Opções"; clicked => { root.active-menu = "options"; } }
-                    Button { text: "DEBUG"; clicked => { root.active-menu = "debug"; } }
-                    Button { text: "Fechar menu"; clicked => { root.active-menu = "none"; } }
+                    CompactButton { text: ""; icon: root.play-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
+                    CompactButton { text: ""; icon: root.pause-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
+                    CompactButton { text: ""; icon: root.stop-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
+                    CompactButton { text: ""; icon: root.reset-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
+                    CompactButton { text: ""; icon: root.step-frame-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
+                    Text { text: root.rom-status; color: #b9c5ce; font-size: 12px; vertical-alignment: center; }
                 }
-                if root.active-menu != "none": Rectangle {
-                    background: #1b2834; border-radius: 6px; border-width: 1px;
-                    border-color: #405365; min-height: 170px; max-height: 280px;
-                    VerticalLayout {
-                        padding: 12px; spacing: 7px;
+                Rectangle {
+                    horizontal-stretch: 1; vertical-stretch: 1;
+                    min-width: 256px; min-height: 192px;
+                    background: #05080b;
+                    Image {
+                        source: root.gpu-texture;
+                        width: min(parent.width, parent.height * (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        image-fit: fill;
+                    }
+                    TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { root.video-area-clicked(); }
+                    }
+                }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
+                if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
+                if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
+                if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
+                }
+        if root.active-menu != "none": TouchArea {
+            x: 0px; y: 74px; width: 100%; height: parent.height - 74px; z: 90;
+            clicked => { root.active-menu = "none"; }
+        }
+        if root.active-menu != "none": Rectangle {
+            x: min(max(root.active-menu == "system" ? 12px : root.active-menu == "file" ? 81px : root.active-menu == "video" ? 146px : root.active-menu == "audio" ? 207px : root.active-menu == "controls" ? 268px : root.active-menu == "options" ? 347px : 416px, 8px), parent.width - self.width - 8px);
+            y: 88px;
+            width: min(parent.width - 16px, root.active-menu == "file" ? 560px : 480px);
+            height: min(parent.height - 104px, root.active-menu == "file" ? 480px : root.active-menu == "controls" ? 300px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "system" ? 250px : root.active-menu == "debug" ? 210px : 180px);
+            z: 100;
+            background: #1b2834; border-radius: 5px; border-width: 1px;
+            border-color: #405365; min-height: 120px; max-height: 480px; max-width: 560px;
+            ScrollView {
+                width: 100%; height: 100%;
+                content-width: self.width;
+                content-height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
+                VerticalLayout {
+                    alignment: start;
+                    width: 100%;
+                    height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
+                    padding: 8px; spacing: 6px;
                         if root.active-menu == "system": VerticalLayout {
-                            Text { text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
-                            Text { text: "Região / padrão de vídeo"; color: #b9c5ce; }
-                            HorizontalLayout {
-                                Button { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; } }
-                                Button { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; } }
-                                Button { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; } }
-                                Button { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; } }
+                            Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Região / padrão de vídeo"; color: #b9c5ce; }
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
+                                CompactButton { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; root.preferences-changed(); } }
                             }
-                            Text { text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
-                            HorizontalLayout {
-                                Button { text: "SG-1000"; enabled: false; }
-                                Button { text: "Game Gear"; enabled: false; }
-                                Button { text: "Mega Drive / Genesis"; enabled: false; }
-                                Button { text: "Sega CD"; enabled: false; }
-                                Button { text: "32X"; enabled: false; }
+                            Text { font-size: 12px; text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
+                                CompactButton { text: "SG-1000"; enabled: false; }
+                                CompactButton { text: "Game Gear"; enabled: false; }
+                                CompactButton { text: "Mega Drive / Genesis"; enabled: false; }
+                                CompactButton { text: "Sega CD"; enabled: false; }
+                                CompactButton { text: "32X"; enabled: false; }
                             }
-                            Text { text: "Outros sistemas: integração de runtime ainda não concluída."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Outros sistemas: integração de runtime ainda não concluída."; color: #9baab6; }
                         }
                         if root.active-menu == "file": VerticalLayout {
                             LineEdit { text <=> root.rom-path-input; placeholder-text: "C:\\ROMs\\game.sms"; }
                             HorizontalLayout {
-                                Button { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
-                                Button { text: "Fechar ROM"; enabled: root.has-rom; clicked => { root.close-rom-requested(); root.active-menu = "none"; } }
-                                Button { text: "Sair"; clicked => { root.exit-requested(); } }
+                                CompactButton { text: "Procurar..."; clicked => { root.browse-rom-requested(); } }
+                                CompactButton { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
+                                CompactButton { text: "Sair"; clicked => { root.exit-requested(); } }
                             }
-                            Text { text: "Recentes"; color: #b9c5ce; }
-                            if root.recent-rom-path == "": Text { text: "Nenhuma ROM recente nesta sessão."; color: #9baab6; }
-                            if root.recent-rom-path != "": Button { text: "Abrir novamente: " + root.recent-rom-path; clicked => { root.load-rom-requested(root.recent-rom-path); root.active-menu = "none"; } }
+                            Text { font-size: 12px; text: "Recentes"; color: #b9c5ce; }
+                            if root.recent-roms.length == 0: Text { font-size: 12px; text: "Nenhuma ROM recente."; color: #9baab6; }
+                            for rom in root.recent-roms: RecentRomEntry {
+                                rom-path: rom;
+                                activated => { root.load-rom-requested(rom); root.active-menu = "none"; }
+                            }
                         }
                         if root.active-menu == "video": VerticalLayout {
-                            Text { text: "Proporção da imagem"; color: #b9c5ce; }
-                            HorizontalLayout {
-                                Button { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; } }
-                                Button { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; } }
-                                Button { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; } }
+                            Text { font-size: 12px; text: "Proporção da imagem"; color: #b9c5ce; }
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
+                                CompactButton { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
                             }
-                            Text { text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
+                            CompactButton { text: root.sprite-limit-enabled ? "✓ Limite de sprites ativo" : "Desativar limite de sprites por linha"; clicked => { root.sprite-limit-enabled = !root.sprite-limit-enabled; root.sprite-limit-toggle-requested(root.sprite-limit-enabled); root.preferences-changed(); } }
+                            Text { font-size: 12px; text: "O modo sem limite é uma opção de compatibilidade; overflow e temporização do VDP permanecem no hardware emulado."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
                         }
                         if root.active-menu == "audio": VerticalLayout {
-                            Text { text: "Configuração de áudio"; color: #f2f5f7; }
-                            Button { text: "Áudio ativo"; enabled: false; }
-                            HorizontalLayout {
-                                Button { text: "WASAPI Shared"; enabled: false; }
-                                Button { text: "XAudio2"; enabled: false; }
+                            Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
+                            CompactButton { text: "Áudio ativo"; enabled: false; }
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
+                                CompactButton { text: "WASAPI Shared"; enabled: false; }
+                                CompactButton { text: "XAudio2"; enabled: false; }
                             }
-                            Text { text: "Volume: 100%"; color: #b9c5ce; }
-                            Text { text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Volume: 100%"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
-                            Text { text: "Dispositivo de entrada"; color: #f2f5f7; }
-                            Button { text: "Gamepad SDL3 — integração R4"; enabled: false; }
-                            Text { text: "Teclado"; color: #b9c5ce; }
-                            Text { text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
-                            Text { text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
-                            Text { text: "Iniciar / Pausar / Parar / Reset / Avançar quadro"; color: #9baab6; }
-                            Button { text: "Remapear teclado"; enabled: false; }
-                            Button { text: "Remapear controle"; enabled: false; }
-                            Text { text: "Remapeamento e leitura física aguardam a integração SDL3 da R4."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
+                            CompactButton { text: "Gamepad SDL3 — integração R4"; enabled: false; }
+                            Text { font-size: 12px; text: "Teclado"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
+                            Text { font-size: 12px; text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
+                            Text { font-size: 12px; text: "Iniciar / Pausar / Parar / Reset / Avançar quadro"; color: #9baab6; }
+                            CompactButton { text: "Remapear teclado"; enabled: false; }
+                            CompactButton { text: "Remapear controle"; enabled: false; }
+                            Text { font-size: 12px; text: "Remapeamento e leitura física aguardam a integração SDL3 da R4."; color: #9baab6; }
                         }
                         if root.active-menu == "options": VerticalLayout {
-                            Text { text: "Overlay de FPS"; color: #f2f5f7; }
-                            Button { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; } }
-                            Button { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; } }
-                            Button { text: "Tamanho/posição do FPS — migração pendente"; enabled: false; }
-                            Button { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
+                            Text { font-size: 12px; text: "Overlay de FPS"; color: #f2f5f7; }
+                            CompactButton { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; root.preferences-changed(); } }
+                            CompactButton { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; root.preferences-changed(); } }
+                            FlexboxLayout {
+                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
+                                CompactButton { text: root.fps-size == "small" ? "✓ Pequeno" : "Pequeno"; clicked => { root.fps-size = "small"; root.fps-font-size = 13px; root.preferences-changed(); } }
+                                CompactButton { text: root.fps-size == "medium" ? "✓ Médio" : "Médio"; clicked => { root.fps-size = "medium"; root.fps-font-size = 18px; root.preferences-changed(); } }
+                                CompactButton { text: root.fps-size == "large" ? "✓ Grande" : "Grande"; clicked => { root.fps-size = "large"; root.fps-font-size = 24px; root.preferences-changed(); } }
+                            }
+                            Text { font-size: 12px; text: "Posição do HUD: inferior (posição em cantos será concluída após validar o overlay."; color: #9baab6; }
+                            CompactButton { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
                         }
                         if root.active-menu == "debug": VerticalLayout {
-                            Text { text: "Diagnóstico do runtime SMS"; color: #f2f5f7; }
-                            Button { text: "Capturar snapshot do Z80"; enabled: root.has-rom; clicked => { root.debug-snapshot-requested(); } }
-                            Button { text: root.trace-enabled ? "Desativar trace" : "Ativar trace"; enabled: root.has-rom; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
-                            Text { text: root.debug-status; color: #b9c5ce; }
-                            Text { text: "Debugger com registradores, breakpoints e memória será migrado em etapa própria; a GUI não executa instruções."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Diagnóstico do runtime SMS"; color: #f2f5f7; }
+                            CompactButton { text: "Capturar snapshot do Z80"; enabled: root.has-rom; clicked => { root.debug-snapshot-requested(); } }
+                            CompactButton { text: root.trace-enabled ? "Desativar trace" : "Ativar trace"; enabled: root.has-rom; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
+                            Text { font-size: 12px; text: root.debug-status; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Debugger com registradores, breakpoints e memória será migrado em etapa própria; a GUI não executa instruções."; color: #9baab6; }
                         }
                     }
                 }
-                HorizontalLayout {
-                    spacing: 8px;
-                    Button { text: "Iniciar"; enabled: root.has-rom; clicked => { root.start-requested(); } }
-                    Button { text: "Pausar"; enabled: root.has-rom; clicked => { root.pause-requested(); } }
-                    Button { text: "Parar"; enabled: root.has-rom; clicked => { root.stop-requested(); } }
-                    Button { text: "Reset"; enabled: root.has-rom; clicked => { root.reset-requested(); } }
-                    Button { text: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.step-frame-requested(); } }
-                    Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
                 }
-                Image {
-                    source: root.gpu-texture; preferred-width: root.video-width;
-                    preferred-height: root.video-height; min-width: 256px; min-height: 192px;
-                    horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
-                }
-                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; }
-                if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
-                if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
-                if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
             }
         }
+    }
+
+    /// Preferências persistidas exclusivamente para a camada de apresentação.
+    #[derive(Debug, Clone)]
+    struct DesktopPreferences {
+        region: String,
+        aspect: String,
+        show_fps: bool,
+        show_status_footer: bool,
+        fps_size: String,
+        sprite_limit_enabled: bool,
+    }
+
+    impl Default for DesktopPreferences {
+        fn default() -> Self {
+            Self {
+                region: "usa".to_owned(),
+                aspect: "4:3".to_owned(),
+                show_fps: true,
+                show_status_footer: true,
+                fps_size: "medium".to_owned(),
+                sprite_limit_enabled: true,
+            }
+        }
+    }
+
+    /// Resolve o diretório de dados por usuário no Windows sem criar diretórios durante leitura.
+    fn app_data_directory() -> Option<PathBuf> {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join(APP_DATA_DIRECTORY))
+    }
+
+    /// Carrega preferências com fallback individual para valores seguros e conhecidos.
+    fn load_desktop_preferences() -> DesktopPreferences {
+        let mut preferences = DesktopPreferences::default();
+        let Some(directory) = app_data_directory() else {
+            return preferences;
+        };
+        let Ok(contents) = fs::read_to_string(directory.join("slint_ui_settings.txt")) else {
+            return preferences;
+        };
+
+        for line in contents.lines() {
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            match key.trim() {
+                "region" if ["usa", "brazil", "europe", "japan"].contains(&value.trim()) => {
+                    preferences.region = value.trim().to_owned();
+                }
+                "aspect" if ["4:3", "1:1", "16:9"].contains(&value.trim()) => {
+                    preferences.aspect = value.trim().to_owned();
+                }
+                "show_fps" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.show_fps = value;
+                    }
+                }
+                "show_status_footer" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.show_status_footer = value;
+                    }
+                }
+                "fps_size" if ["small", "medium", "large"].contains(&value.trim()) => {
+                    preferences.fps_size = value.trim().to_owned();
+                }
+                "sprite_limit_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.sprite_limit_enabled = value;
+                    }
+                }
+                _ => {}
+            }
+        }
+        preferences
+    }
+
+    /// Salva as preferências em arquivo simples, sem serializar estado do hardware.
+    fn save_desktop_preferences(preferences: &DesktopPreferences) -> Result<(), String> {
+        let directory =
+            app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let contents = format!(
+            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\n",
+            preferences.region,
+            preferences.aspect,
+            preferences.show_fps,
+            preferences.show_status_footer,
+            preferences.fps_size,
+            preferences.sprite_limit_enabled
+        );
+        fs::write(directory.join("slint_ui_settings.txt"), contents)
+            .map_err(|error| error.to_string())
+    }
+
+    /// Carrega até dez ROMs recentes, removendo entradas duplicadas e vazias.
+    fn load_recent_roms() -> Vec<PathBuf> {
+        let Some(directory) = app_data_directory() else {
+            return Vec::new();
+        };
+        let Ok(contents) = fs::read_to_string(directory.join("recent_roms.txt")) else {
+            return Vec::new();
+        };
+        let mut recent = Vec::new();
+        for line in contents.lines().filter(|line| !line.trim().is_empty()) {
+            let path = PathBuf::from(line);
+            if !recent.contains(&path) {
+                recent.push(path);
+            }
+            if recent.len() == MAX_RECENT_ROMS {
+                break;
+            }
+        }
+        recent
+    }
+
+    /// Persiste a lista recente, mantendo a ROM mais nova no início.
+    fn save_recent_roms(recent: &[PathBuf]) -> Result<(), String> {
+        let directory =
+            app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let contents = recent
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(directory.join("recent_roms.txt"), contents).map_err(|error| error.to_string())
+    }
+
+    /// Move uma ROM para o início da lista e limita o histórico a dez entradas.
+    fn record_recent_rom(recent: &mut Vec<PathBuf>, path: PathBuf) {
+        recent.retain(|entry| entry != &path);
+        recent.insert(0, path);
+        recent.truncate(MAX_RECENT_ROMS);
+        if let Err(error) = save_recent_roms(recent) {
+            eprintln!("R2_PREFERENCES recent_roms_save_failed error={error}");
+        }
+    }
+
+    /// Converte a lista de caminhos em um modelo imutável para o menu Slint.
+    fn recent_roms_model(recent: &[PathBuf]) -> Vec<slint::SharedString> {
+        recent
+            .iter()
+            .map(|path| path.display().to_string().into())
+            .collect()
     }
 
     /// Inicializa o renderer Slint sobre WGPU 30, restringindo a instância ao backend Vulkan.
@@ -392,8 +646,7 @@ mod windows_host {
                             );
                         }
                     });
-                }
-                _ => {}
+                }                _ => {}
             }
         })?;
 
@@ -483,6 +736,153 @@ mod windows_host {
         timer
     }
 
+    /// Abre o diálogo nativo de seleção de arquivos do Windows para ROMs SMS.
+    ///
+    /// O PowerShell 5.1 e o Windows Forms fazem parte do Windows; o diálogo usa
+    /// o seletor comum do Shell. O processo auxiliar não recebe entrada do usuário.
+    fn pick_rom_file() -> Result<Option<PathBuf>, String> {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const SCRIPT: &str = r#"
+            Add-Type -AssemblyName System.Windows.Forms
+            [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+            $dialog = New-Object System.Windows.Forms.OpenFileDialog
+            $dialog.Title = 'Selecionar ROM do Sega Master System'
+            $dialog.Filter = 'ROM Sega 8-bit (*.sms;*.bin;*.zip)|*.sms;*.bin;*.zip|Todos os arquivos (*.*)|*.*'
+            $dialog.Multiselect = $false
+            $dialog.CheckFileExists = $true
+            if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                [Console]::Out.Write($dialog.FileName)
+            }
+        "#;
+
+        let output = Command::new("powershell.exe")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-STA",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                SCRIPT,
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|error| format!("não foi possível iniciar o seletor do Windows: {error}"))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+        }
+
+        let selected = String::from_utf8_lossy(&output.stdout);
+        let selected = selected.trim_end_matches(['\r', '\n']);
+        if selected.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(PathBuf::from(selected)))
+        }
+    }
+
+    /// Read a raw SMS ROM or a ZIP containing exactly one supported ROM entry.
+    ///
+    /// ZIP data is decompressed in memory only. No archive path is ever written to disk,
+    /// and entry count, archive size and uncompressed ROM size are bounded.
+    fn read_rom_image(path: &PathBuf) -> Result<Vec<u8>, String> {
+        let is_zip = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"));
+        let max_size = if is_zip {
+            MAX_ROM_ARCHIVE_BYTES as u64
+        } else {
+            MAX_ROM_BYTES
+        };
+        let metadata = fs::metadata(path)
+            .map_err(|error| format!("não foi possível consultar o arquivo ROM: {error}"))?;
+        if metadata.len() > max_size {
+            return Err(format!("arquivo ROM excede o limite de {max_size} bytes"));
+        }
+
+        let bytes =
+            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        if is_zip {
+            extract_rom_from_zip(&bytes)
+        } else {
+            Ok(bytes)
+        }
+    }
+
+    /// Extract a single .sms/.bin entry without writing archive-controlled paths.
+    fn extract_rom_from_zip(bytes: &[u8]) -> Result<Vec<u8>, String> {
+        if bytes.len() > MAX_ROM_ARCHIVE_BYTES {
+            return Err(format!(
+                "arquivo ZIP excede o limite de {MAX_ROM_ARCHIVE_BYTES} bytes"
+            ));
+        }
+
+        let mut archive = ZipArchive::new(Cursor::new(bytes))
+            .map_err(|error| format!("arquivo ZIP inválido: {error}"))?;
+        if archive.len() > MAX_ZIP_ENTRIES {
+            return Err(format!(
+                "arquivo ZIP contém mais de {MAX_ZIP_ENTRIES} entradas"
+            ));
+        }
+
+        let mut candidates = Vec::new();
+        for index in 0..archive.len() {
+            let entry = archive
+                .by_index(index)
+                .map_err(|error| format!("não foi possível inspecionar entrada ZIP: {error}"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry
+                .name()
+                .map_err(|error| format!("não foi possível ler o nome da entrada ZIP: {error}"))?
+                .into_owned();
+            let is_rom = std::path::Path::new(&name)
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin")
+                });
+            if is_rom {
+                candidates.push((index, name, entry.size()));
+            }
+        }
+
+        if candidates.is_empty() {
+            return Err("ZIP não contém uma ROM .sms ou .bin.".to_owned());
+        }
+        if candidates.len() != 1 {
+            return Err(
+                "ZIP contém múltiplas ROMs; mantenha somente uma entrada .sms ou .bin.".to_owned(),
+            );
+        }
+
+        let (index, name, expected_size) = candidates.pop().expect("one candidate was checked");
+        if expected_size == 0 || expected_size > MAX_ROM_BYTES {
+            return Err(format!(
+                "ROM compactada '{name}' tem tamanho inválido ou excede {MAX_ROM_BYTES} bytes"
+            ));
+        }
+
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| format!("não foi possível abrir ROM '{name}': {error}"))?;
+        let mut rom = Vec::with_capacity(expected_size as usize);
+        entry
+            .by_ref()
+            .take(MAX_ROM_BYTES + 1)
+            .read_to_end(&mut rom)
+            .map_err(|error| format!("falha ao descompactar ROM '{name}': {error}"))?;
+        if rom.len() as u64 != expected_size {
+            return Err(format!(
+                "tamanho descompactado inconsistente para ROM '{name}'"
+            ));
+        }
+        Ok(rom)
+    }
+
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
     fn create_sms_worker(
         rom: Vec<u8>,
@@ -501,7 +901,7 @@ mod windows_host {
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
         mailbox: &FrameMailbox,
     ) -> Result<(), String> {
-        let rom = fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
 
         let previous = worker_slot.borrow_mut().take();
@@ -534,30 +934,95 @@ mod windows_host {
         Ok(())
     }
 
+    /// Material Icons are decoded to Slint SVG images once during application startup.
+    struct TransportIcons {
+        play: slint::Image,
+        pause: slint::Image,
+        stop: slint::Image,
+        reset: slint::Image,
+        step_frame: slint::Image,
+    }
+
+    fn load_transport_icons() -> Result<TransportIcons, slint::LoadImageError> {
+        use md_icons_classic::filled;
+
+        Ok(TransportIcons {
+            play: slint::Image::load_from_svg_data(filled::ICON_PLAY_ARROW.as_bytes())?,
+            pause: slint::Image::load_from_svg_data(filled::ICON_PAUSE.as_bytes())?,
+            stop: slint::Image::load_from_svg_data(filled::ICON_STOP.as_bytes())?,
+            reset: slint::Image::load_from_svg_data(filled::ICON_REPLAY.as_bytes())?,
+            step_frame: slint::Image::load_from_svg_data(filled::ICON_SKIP_NEXT.as_bytes())?,
+        })
+    }
+
     /// Executa o host SMS; a GUI envia somente comandos coarse-grained ao worker.
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
         let rom_path = args.next().map(PathBuf::from);
+        let preferences = load_desktop_preferences();
         let region = args
             .next()
             .and_then(|value| value.into_string().ok())
-            .unwrap_or_else(|| "usa".to_owned());
+            .unwrap_or_else(|| preferences.region.clone());
+        let recent_roms = Rc::new(RefCell::new(load_recent_roms()));
 
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let worker = if let Some(path) = rom_path.as_ref() {
-            Some(create_sms_worker(fs::read(path)?, &region, &mailbox)?)
+            let worker = create_sms_worker(read_rom_image(path)?, &region, &mailbox)?;
+            if !preferences.sprite_limit_enabled {
+                worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
+            }
+            Some(worker)
         } else {
             None
         };
+        if let Some(path) = rom_path.as_ref() {
+            record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
+        }
         let worker = Rc::new(RefCell::new(worker));
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
 
         let app = MainWindow::new()?;
+        let transport_icons = load_transport_icons()?;
+        app.set_play_icon(transport_icons.play);
+        app.set_pause_icon(transport_icons.pause);
+        app.set_stop_icon(transport_icons.stop);
+        app.set_reset_icon(transport_icons.reset);
+        app.set_step_frame_icon(transport_icons.step_frame);
         app.set_gpu_status("Aguardando inicialização do renderer WGPU 30...".into());
         app.set_frame_status("Aguardando o primeiro frame completo do VDP.".into());
         app.set_lifecycle_status("Renderer setup: 0 | teardown: 0".into());
         app.set_selected_region(region.clone().into());
+        app.set_show_fps(preferences.show_fps);
+        app.set_show_status_footer(preferences.show_status_footer);
+        app.set_sprite_limit_enabled(preferences.sprite_limit_enabled);
+        app.set_fps_size(preferences.fps_size.clone().into());
+        app.set_fps_font_size(match preferences.fps_size.as_str() {
+            "small" => 13.0,
+            "large" => 24.0,
+            _ => 18.0,
+        });
+        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(
+            recent_roms_model(&recent_roms.borrow()),
+        )));
+        match preferences.aspect.as_str() {
+            "1:1" => {
+                app.set_selected_aspect("1:1".into());
+                app.set_video_width(576.0);
+                app.set_video_height(576.0);
+            }
+            "16:9" => {
+                app.set_selected_aspect("16:9".into());
+                app.set_video_width(768.0);
+                app.set_video_height(432.0);
+            }
+            _ => {
+                app.set_selected_aspect("4:3".into());
+                app.set_video_width(768.0);
+                app.set_video_height(576.0);
+            }
+        }
         app.set_has_rom(worker.borrow().is_some());
         if let Some(path) = rom_path.as_ref() {
             app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
@@ -569,39 +1034,74 @@ mod windows_host {
             );
         }
 
+        if let Some(initial_worker) = worker.borrow().as_ref() {
+            initial_worker.start()?;
+        }
+
         let start_worker = Rc::clone(&worker);
+        let start_app = app.as_weak();
         app.on_start_requested(move || {
             if let Some(worker) = start_worker.borrow().as_ref()
                 && let Err(error) = worker.start()
             {
                 eprintln!("R2_CONTROL action=start error={error}");
+            } else if let Some(app) = start_app.upgrade() {
+                app.set_emulation_paused(false);
             }
         });
 
         let pause_worker = Rc::clone(&worker);
+        let pause_app = app.as_weak();
         app.on_pause_requested(move || {
             if let Some(worker) = pause_worker.borrow().as_ref()
                 && let Err(error) = worker.pause()
             {
                 eprintln!("R2_CONTROL action=pause error={error}");
+            } else if let Some(app) = pause_app.upgrade() {
+                app.set_emulation_paused(true);
             }
         });
 
         let stop_worker = Rc::clone(&worker);
+        let stop_app = app.as_weak();
         app.on_stop_requested(move || {
-            if let Some(worker) = stop_worker.borrow().as_ref()
-                && let Err(error) = worker.stop()
-            {
-                eprintln!("R2_CONTROL action=stop error={error}");
+            let result = stop_worker
+                .borrow()
+                .as_ref()
+                .map_or(Ok(()), |worker| worker.stop());
+            if let Some(app) = stop_app.upgrade() {
+                match result {
+                    Ok(()) => {
+                        app.set_emulation_paused(false);
+                        app.set_rom_status(
+                            "Máquina desligada (POWER OFF). ROM mantida; pressione Iniciar para ligar.".into(),
+                        );
+                    }
+                    Err(error) => {
+                        app.set_rom_status(format!("Falha ao desligar a máquina: {error}").into());
+                        eprintln!("R2_CONTROL action=stop error={error}");
+                    }
+                }
             }
         });
 
         let reset_worker = Rc::clone(&worker);
+        let reset_app = app.as_weak();
         app.on_reset_requested(move || {
-            if let Some(worker) = reset_worker.borrow().as_ref()
-                && let Err(error) = worker.reset()
-            {
-                eprintln!("R2_CONTROL action=reset error={error}");
+            let result = reset_worker.borrow().as_ref().map_or(Ok(()), |worker| {
+                worker.reset().and_then(|()| worker.start())
+            });
+            if let Some(app) = reset_app.upgrade() {
+                match result {
+                    Ok(()) => {
+                        app.set_emulation_paused(false);
+                        app.set_rom_status("Console reiniciado; execução retomada.".into());
+                    }
+                    Err(error) => {
+                        app.set_rom_status(format!("Falha ao reiniciar o console: {error}").into());
+                        eprintln!("R2_CONTROL action=reset error={error}");
+                    }
+                }
             }
         });
 
@@ -617,28 +1117,63 @@ mod windows_host {
         let open_app = app.as_weak();
         let open_worker = Rc::clone(&worker);
         let open_recent = Rc::clone(&recent_rom);
+        let open_recent_list = Rc::clone(&recent_roms);
         let open_mailbox = mailbox.clone();
         app.on_load_rom_requested(move |path: slint::SharedString| {
             let path = PathBuf::from(path.as_str());
             if path.as_os_str().is_empty() {
                 if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status("Informe o caminho completo da ROM (.sms ou .bin).".into());
+                    app.set_rom_status(
+                        "Informe o caminho completo da ROM (.sms, .bin ou .zip).".into(),
+                    );
                 }
                 return;
             }
 
-            let region = open_app
+            let (region, sprite_limit_enabled) = open_app
                 .upgrade()
-                .map(|app| app.get_selected_region().to_string())
-                .unwrap_or_else(|| "usa".to_owned());
+                .map(|app| {
+                    (
+                        app.get_selected_region().to_string(),
+                        app.get_sprite_limit_enabled(),
+                    )
+                })
+                .unwrap_or_else(|| ("usa".to_owned(), true));
 
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
+                    let sprite_mode = if sprite_limit_enabled {
+                        SpriteLimitMode::HardwareLimit
+                    } else {
+                        SpriteLimitMode::UnlockedCompatibility
+                    };
+                    let start_result = open_worker.borrow().as_ref().map(|worker| {
+                        worker
+                            .set_sprite_limit_mode(sprite_mode)
+                            .and_then(|()| worker.reset())
+                            .and_then(|()| worker.start())
+                    });
                     *open_recent.borrow_mut() = Some(path.clone());
+                    record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
+                        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(
+                            recent_roms_model(&open_recent_list.borrow()),
+                        )));
                         app.set_has_rom(true);
+                        app.set_emulation_paused(false);
                         app.set_rom_status(
-                            format!("ROM: {} | região: {region}", path.display()).into(),
+                            match start_result {
+                                Some(Ok(())) => {
+                                    format!("ROM: {} | execução iniciada", path.display())
+                                }
+                                Some(Err(error)) => {
+                                    format!("ROM: {} | falha ao iniciar: {error}", path.display())
+                                }
+                                None => {
+                                    "ROM carregada, mas o worker não está disponível.".to_owned()
+                                }
+                            }
+                            .into(),
                         );
                         app.set_recent_rom_path(path.display().to_string().into());
                         app.set_rom_path_input(path.display().to_string().into());
@@ -655,6 +1190,24 @@ mod windows_host {
             }
         });
 
+        let browse_app = app.as_weak();
+        app.on_browse_rom_requested(move || match pick_rom_file() {
+            Ok(Some(path)) => {
+                if let Some(app) = browse_app.upgrade() {
+                    let selected_path = path.to_string_lossy().into_owned();
+                    app.set_rom_path_input(selected_path.clone().into());
+                    app.set_active_menu("none".into());
+                    app.invoke_load_rom_requested(selected_path.into());
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                if let Some(app) = browse_app.upgrade() {
+                    app.set_rom_status(format!("Seletor de arquivos indisponível: {error}").into());
+                }
+            }
+        });
+
         let close_app = app.as_weak();
         let close_worker = Rc::clone(&worker);
         app.on_close_rom_requested(move || {
@@ -665,14 +1218,26 @@ mod windows_host {
             }
             if let Some(app) = close_app.upgrade() {
                 app.set_has_rom(false);
+                app.set_emulation_paused(false);
                 app.set_rom_status("Nenhuma ROM carregada.".into());
                 app.set_debug_status("Máquina fechada.".into());
             }
         });
 
-        let exit_app = app.as_weak();
+        let exit_recent = Rc::clone(&recent_roms);
+        let exit_prefs_app = app.as_weak();
         app.on_exit_requested(move || {
-            if let Some(app) = exit_app.upgrade() {
+            let _ = save_recent_roms(&exit_recent.borrow());
+            if let Some(app) = exit_prefs_app.upgrade() {
+                let prefs = DesktopPreferences {
+                    region: app.get_selected_region().to_string(),
+                    aspect: app.get_selected_aspect().to_string(),
+                    show_fps: app.get_show_fps(),
+                    show_status_footer: app.get_show_status_footer(),
+                    fps_size: app.get_fps_size().to_string(),
+                    sprite_limit_enabled: app.get_sprite_limit_enabled(),
+                };
+                let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
             }
         });
@@ -707,10 +1272,73 @@ mod windows_host {
             }
         });
 
+        let preferences_app = app.as_weak();
+        app.on_preferences_changed(move || {
+            let Some(app) = preferences_app.upgrade() else {
+                return;
+            };
+            let prefs = DesktopPreferences {
+                region: app.get_selected_region().to_string(),
+                aspect: app.get_selected_aspect().to_string(),
+                show_fps: app.get_show_fps(),
+                show_status_footer: app.get_show_status_footer(),
+                fps_size: app.get_fps_size().to_string(),
+                sprite_limit_enabled: app.get_sprite_limit_enabled(),
+            };
+            if let Err(error) = save_desktop_preferences(&prefs) {
+                eprintln!("R2_PREFERENCES save_failed error={error}");
+            }
+        });
+
         let fullscreen_app = app.as_weak();
         app.on_fullscreen_requested(move |enabled| {
             if let Some(app) = fullscreen_app.upgrade() {
                 app.window().set_fullscreen(enabled);
+            }
+        });
+
+        let video_click_worker = Rc::clone(&worker);
+        let video_click_app = app.as_weak();
+        app.on_video_area_clicked(move || {
+            let paused = video_click_app
+                .upgrade()
+                .is_some_and(|app| app.get_has_rom() && app.get_emulation_paused());
+            if paused && let Some(worker) = video_click_worker.borrow().as_ref() {
+                match worker.start() {
+                    Ok(()) => {
+                        if let Some(app) = video_click_app.upgrade() {
+                            app.set_emulation_paused(false);
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(app) = video_click_app.upgrade() {
+                            app.set_rom_status(
+                                format!("Falha ao retomar a emulação: {error}").into(),
+                            );
+                        }
+                    }
+                }
+            }
+        });
+
+        let sprite_worker = Rc::clone(&worker);
+        let sprite_app = app.as_weak();
+        app.on_sprite_limit_toggle_requested(move |enabled| {
+            let mode = if enabled {
+                SpriteLimitMode::HardwareLimit
+            } else {
+                SpriteLimitMode::UnlockedCompatibility
+            };
+            if let Some(worker) = sprite_worker.borrow().as_ref()
+                && let Err(error) = worker.set_sprite_limit_mode(mode)
+            {
+                eprintln!("R2_VIDEO action=sprite_limit_toggle error={error}");
+                if let Some(app) = sprite_app.upgrade() {
+                    app.set_sprite_limit_enabled(!enabled);
+                    app.set_rom_status(
+                        format!("Falha ao alterar limite de sprites: {error}").into(),
+                    );
+                }
             }
         });
 
@@ -735,6 +1363,16 @@ mod windows_host {
         let _frame_timer = start_frame_presentation(&app, queue_slot, mailbox.clone());
 
         app.run()?;
+        let final_preferences = DesktopPreferences {
+            region: app.get_selected_region().to_string(),
+            aspect: app.get_selected_aspect().to_string(),
+            show_fps: app.get_show_fps(),
+            show_status_footer: app.get_show_status_footer(),
+            fps_size: app.get_fps_size().to_string(),
+            sprite_limit_enabled: app.get_sprite_limit_enabled(),
+        };
+        let _ = save_desktop_preferences(&final_preferences);
+        let _ = save_recent_roms(&recent_roms.borrow());
 
         if let Some(worker) = worker.borrow_mut().take() {
             let _ = worker.pause();
@@ -749,6 +1387,21 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn classic_material_transport_icons_load_as_slint_svg_images() {
+            let icons = load_transport_icons().unwrap();
+            for icon in [
+                icons.play,
+                icons.pause,
+                icons.stop,
+                icons.reset,
+                icons.step_frame,
+            ] {
+                assert!(icon.size().width > 0);
+                assert!(icon.size().height > 0);
+            }
+        }
 
         #[test]
         fn rgb888_conversion_respects_row_stride_and_sets_opaque_alpha() {
@@ -770,6 +1423,39 @@ mod windows_host {
                     255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
                 ]
             );
+        }
+
+        fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
+            use std::io::Write;
+            use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+            for (name, contents) in entries {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(contents).unwrap();
+            }
+            writer.finish().unwrap().into_inner()
+        }
+
+        #[test]
+        fn zip_rom_loader_reads_single_sms_entry_in_memory() {
+            let bytes = zip_archive(&[("games/sonic.sms", b"SMS-ROM")]);
+            assert_eq!(extract_rom_from_zip(&bytes).unwrap(), b"SMS-ROM");
+        }
+        #[test]
+        fn zip_rom_loader_rejects_archives_without_roms_or_with_multiple_roms() {
+            let no_rom = zip_archive(&[("readme.txt", b"not a rom")]);
+            assert!(extract_rom_from_zip(&no_rom).is_err());
+
+            let multiple = zip_archive(&[("sonic.sms", b"first"), ("alex-kidd.bin", b"second")]);
+            assert!(extract_rom_from_zip(&multiple).is_err());
+        }
+
+        #[test]
+        fn zip_rom_loader_rejects_invalid_archive_bytes() {
+            assert!(extract_rom_from_zip(b"not a ZIP archive").is_err());
         }
 
         #[test]
