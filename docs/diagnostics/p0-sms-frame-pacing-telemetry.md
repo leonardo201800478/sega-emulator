@@ -30,7 +30,8 @@ SmsFramePacingMetrics reports a rolling window of at most 512 completed frames:
 - VideoFrame construction + FrameMailbox::publish duration p50/p95/p99;
 - physical audio-session submission duration p50/p95/p99 (zero when no session exists);
 - total execute_frame processing duration p50/p95/p99;
-- calculated worker pacing-wait budget p50/p95/p99;\n- actual time spent in the worker's command-queue wait p50/p95/p99.
+- calculated worker pacing-wait budget p50/p95/p99;
+- actual time spent in the worker's command-queue wait p50/p95/p99.
 
 The window is fixed-capacity and overwritten in place. Percentiles are calculated only when a host requests a snapshot, not on every frame. The first frame has no preceding interval and is excluded from interval percentiles.
 
