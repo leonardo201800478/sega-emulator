@@ -1288,7 +1288,7 @@ fn handle_command(
                 }
             }
         }
-        WorkerCommand::Pause(reply) | WorkerCommand::Stop(reply) => {
+        WorkerCommand::Pause(reply) => {
             *running = false;
             telemetry.running.store(false, Ordering::Release);
             let result = audio_session
@@ -1299,6 +1299,29 @@ fn handle_command(
             }
             if let Err(error) = &result {
                 telemetry.set_audio_error(Some(error.clone()));
+            }
+            let _ = reply.send(result);
+        }
+        WorkerCommand::Stop(reply) => {
+            // POWER-off is different from Pause: retain the ROM, but cold-reset the machine.
+            *running = false;
+            telemetry.running.store(false, Ordering::Release);
+            let sprite_limit_mode = machine.vdp().sprite_limit_mode();
+            let result = build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
+                powered_off.set_sprite_limit_mode(sprite_limit_mode);
+                audio_session
+                    .as_mut()
+                    .map_or(Ok(()), |session| session.suspend_and_flush())?;
+                if let Some(session) = audio_session.as_ref() {
+                    telemetry.record_audio_session_metrics(session.as_ref());
+                }
+                *machine = powered_off;
+                telemetry.reset_machine_counters();
+                trace_history.clear();
+                Ok(())
+            });
+            if let Err(error) = &result {
+                telemetry.set_runtime_error(Some(error.clone()));
             }
             let _ = reply.send(result);
         }
@@ -1931,6 +1954,22 @@ mod tests {
             worker.debug_snapshot().unwrap().sprite_limit_mode,
             SpriteLimitMode::HardwareLimit
         );
+    }
+
+    #[test]
+    fn stop_powers_off_machine_but_keeps_rom_available_for_restart() {
+        let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker.step_frame(100_000).unwrap();
+        assert!(worker.machine_time_ticks() > 0);
+
+        worker.stop().unwrap();
+        assert!(!worker.is_running());
+        let powered_off = worker.debug_snapshot().unwrap();
+        assert_eq!(powered_off.frame_number, 0);
+        assert_eq!(powered_off.machine_time_ticks, 0);
+
+        worker.start().unwrap();
+        assert!(worker.is_running());
     }
 
     #[test]
