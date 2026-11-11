@@ -156,7 +156,9 @@ mod windows_poc {
 
         let mut rgba = Vec::with_capacity(output_len);
         for y in 0..frame.height() {
-            let row = frame.row(y).ok_or_else(|| format!("linha {y} ausente no frame"))?;
+            let row = frame
+                .row(y)
+                .ok_or_else(|| format!("linha {y} ausente no frame"))?;
             if row.len() != expected_row_bytes {
                 return Err(format!(
                     "linha {y} possui {} bytes; esperado {expected_row_bytes}",
@@ -357,8 +359,12 @@ mod windows_poc {
                 app.set_frame_status(
                     format!(
                         "Frame ignorado: {}x{}; esperado {}x{}",
-                        frame.width(), frame.height(), SMS_WIDTH, SMS_HEIGHT
-                    ).into(),
+                        frame.width(),
+                        frame.height(),
+                        SMS_WIDTH,
+                        SMS_HEIGHT
+                    )
+                    .into(),
                 );
                 return;
             }
@@ -374,8 +380,11 @@ mod windows_poc {
                     app.set_frame_status(
                         format!(
                             "VDP frame: {} | {}x{} RGB888 → RGBA8",
-                            frame.sequence(), frame.width(), frame.height()
-                        ).into(),
+                            frame.sequence(),
+                            frame.width(),
+                            frame.height()
+                        )
+                        .into(),
                     );
                     app.window().request_redraw();
                 }
@@ -396,7 +405,8 @@ mod windows_poc {
         let worker = SmsTemporalWorker::new(rom, region)
             .map_err(|error| format!("não foi possível iniciar o runtime SMS: {error}"))?;
         let mailbox = FrameMailbox::new();
-        worker.attach_video_mailbox(mailbox.clone())
+        worker
+            .attach_video_mailbox(mailbox.clone())
             .map_err(|error| format!("não foi possível conectar o mailbox de vídeo: {error}"))?;
         Ok((worker, mailbox))
     }
@@ -404,9 +414,13 @@ mod windows_poc {
     /// Executa o host SMS; a GUI envia somente comandos coarse-grained ao worker.
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
-        let rom_path = args.next().map(PathBuf::from)
+        let rom_path = args
+            .next()
+            .map(PathBuf::from)
             .ok_or("uso: sega-desktop.exe <rom.sms> [usa|brazil|europe|japan]")?;
-        let region = args.next().and_then(|value| value.into_string().ok())
+        let region = args
+            .next()
+            .and_then(|value| value.into_string().ok())
             .unwrap_or_else(|| "usa".to_owned());
 
         select_vulkan_backend()?;
@@ -467,29 +481,34 @@ mod windows_poc {
         #[test]
         fn rgb888_conversion_respects_row_stride_and_sets_opaque_alpha() {
             let frame = VideoFrame::new(
-                7, 2, 2, PixelFormat::Rgb888, 8,
+                7,
+                2,
+                2,
+                PixelFormat::Rgb888,
+                8,
                 vec![
-                    255, 0, 0, 0, 255, 0, 90, 91,
-                    0, 0, 255, 255, 255, 255, 92, 93,
+                    255, 0, 0, 0, 255, 0, 90, 91, 0, 0, 255, 255, 255, 255, 92, 93,
                 ],
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(
                 convert_rgb888_to_rgba8(&frame).unwrap(),
                 vec![
-                    255, 0, 0, 255, 0, 255, 0, 255,
-                    0, 0, 255, 255, 255, 255, 255, 255,
+                    255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
                 ]
             );
         }
 
         #[test]
         fn rgb888_conversion_rejects_other_pixel_formats() {
-            let frame = VideoFrame::new(
-                1, 1, 1, PixelFormat::Rgba8888, 4, vec![1, 2, 3, 4],
-            ).unwrap();
-            assert!(convert_rgb888_to_rgba8(&frame)
-                .unwrap_err().contains("esperado RGB888"));
+            let frame =
+                VideoFrame::new(1, 1, 1, PixelFormat::Rgba8888, 4, vec![1, 2, 3, 4]).unwrap();
+            assert!(
+                convert_rgb888_to_rgba8(&frame)
+                    .unwrap_err()
+                    .contains("esperado RGB888")
+            );
         }
 
         #[test]
