@@ -297,15 +297,15 @@ mod windows_host {
 
     /// Persiste a lista recente, mantendo a ROM mais nova no início.
     fn save_recent_roms(recent: &[PathBuf]) -> Result<(), String> {
-        let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        let directory =
+            app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = recent
             .iter()
             .map(|path| path.display().to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        fs::write(directory.join("recent_roms.txt"), contents)
-            .map_err(|error| error.to_string())
+        fs::write(directory.join("recent_roms.txt"), contents).map_err(|error| error.to_string())
     }
 
     /// Move uma ROM para o início da lista e limita o histórico a dez entradas.
