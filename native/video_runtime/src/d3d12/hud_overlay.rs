@@ -243,8 +243,7 @@ fn register_hud_window_class(instance: HINSTANCE, class_name: &[u16]) -> Result<
     }
 
     let mut existing = WNDCLASSW::default();
-    let class_matches = unsafe { GetClassInfoW(Some(instance), class_name, &mut existing) }
-        .is_ok()
+    let class_matches = unsafe { GetClassInfoW(Some(instance), class_name, &mut existing) }.is_ok()
         && existing.hInstance == instance
         && existing.style == class.style
         && existing.cbClsExtra == class.cbClsExtra
