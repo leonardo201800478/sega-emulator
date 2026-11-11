@@ -8,7 +8,7 @@ mod windows_host {
         fs,
         path::PathBuf,
         rc::Rc,
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     use sega_sms_runtime::SmsTemporalWorker;
@@ -42,6 +42,8 @@ mod windows_host {
             in-out property <bool> show-fps: true;
             in-out property <bool> show-status-footer: true;
             in-out property <bool> trace-enabled: false;
+            in-out property <bool> fullscreen-enabled: false;
+            in-out property <string> fps-status: "FPS: --";
             in-out property <length> video-width: 768px;
             in-out property <length> video-height: 576px;
             callback start-requested();
@@ -54,6 +56,7 @@ mod windows_host {
             callback exit-requested();
             callback debug-snapshot-requested();
             callback trace-toggle-requested(bool);
+            callback fullscreen-requested(bool);
             VerticalLayout {
                 padding: 18px; spacing: 10px;
                 Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
@@ -138,7 +141,7 @@ mod windows_host {
                             Button { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; } }
                             Button { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; } }
                             Button { text: "Tamanho/posição do FPS — migração pendente"; enabled: false; }
-                            Button { text: "Tela cheia (F11) — migração pendente"; enabled: false; }
+                            Button { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
                         }
                         if root.active-menu == "debug": VerticalLayout {
                             Text { text: "Diagnóstico do runtime SMS"; color: #f2f5f7; }
@@ -163,6 +166,7 @@ mod windows_host {
                     preferred-height: root.video-height; min-width: 256px; min-height: 192px;
                     horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
                 }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
@@ -404,6 +408,8 @@ mod windows_host {
     ) -> Timer {
         let timer = Timer::default();
         let app_weak = app.as_weak();
+        let mut last_sequence = 0_u64;
+        let mut last_sample = Instant::now();
 
         timer.start(TimerMode::Repeated, PRESENT_INTERVAL, move || {
             let Some(app) = app_weak.upgrade() else {
@@ -429,14 +435,20 @@ mod windows_host {
                 app.set_frame_status(
                     format!(
                         "Frame ignorado: {}x{}; esperado {}x{}",
-                        frame.width(),
-                        frame.height(),
-                        SMS_WIDTH,
-                        SMS_HEIGHT
-                    )
-                    .into(),
+                        frame.width(), frame.height(), SMS_WIDTH, SMS_HEIGHT
+                    ).into(),
                 );
                 return;
+            }
+
+            let now = Instant::now();
+            let elapsed = now.saturating_duration_since(last_sample);
+            if elapsed >= Duration::from_millis(500) {
+                let produced = frame.sequence().saturating_sub(last_sequence);
+                let fps = produced as f64 / elapsed.as_secs_f64();
+                app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
+                last_sequence = frame.sequence();
+                last_sample = now;
             }
 
             match convert_rgb888_to_rgba8(&frame) {
@@ -450,11 +462,8 @@ mod windows_host {
                     app.set_frame_status(
                         format!(
                             "VDP frame: {} | {}x{} RGB888 → RGBA8",
-                            frame.sequence(),
-                            frame.width(),
-                            frame.height()
-                        )
-                        .into(),
+                            frame.sequence(), frame.width(), frame.height()
+                        ).into(),
                     );
                     app.window().request_redraw();
                 }
@@ -508,7 +517,7 @@ mod windows_host {
             app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
             app.set_recent_rom_path(path.display().to_string().into());
         } else {
-            app.set_rom_status("Nenhuma ROM carregada — use Arquivo > Abrir ROM.".into());
+            app.set_rom_status("Nenhuma ROM carregada — informe o caminho em Arquivo > Carregar ROM.".into());
         }
 
         let start_worker = Rc::clone(&worker);
@@ -602,6 +611,13 @@ mod windows_host {
                 app.set_debug_status(result.unwrap_or_else(|error| format!("Falha no snapshot: {error}")).into());
             }
         });
+        let fullscreen_app = app.as_weak();
+        app.on_fullscreen_requested(move |enabled| {
+            if let Some(app) = fullscreen_app.upgrade() {
+                app.window().set_fullscreen(enabled);
+            }
+        });
+
         let trace_worker = Rc::clone(&worker);
         app.on_trace_toggle_requested(move |enabled| {
             if let Some(worker) = trace_worker.borrow().as_ref() && let Err(error) = worker.set_trace_enabled(enabled) {

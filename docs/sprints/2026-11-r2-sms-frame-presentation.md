@@ -84,7 +84,7 @@ The Slint host now exposes the legacy menu groups (Sistema, Arquivo, Vídeo, Áu
 Intentionally deferred and visibly disabled:
 - physical audio output/device/backend/volume (R3 / CPAL);
 - keyboard/gamepad event collection and remapping (R4 / SDL3);
-- FPS overlay size/position and OS fullscreen until host behavior is implemented and validated;
+- FPS overlay size/position; OS fullscreen and source-frame FPS visibility are now implemented but require physical validation;
 - full debugger viewport with breakpoints, memory inspection and trace rendering;
 - persistent recent-ROM history and settings.
 

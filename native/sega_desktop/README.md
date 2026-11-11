@@ -9,7 +9,7 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 - Vídeo: original 4:3, 1:1 and 16:9 presentation modes. The source frame remains 256×192.
 - Áudio: menu retained; physical output, backend selection and volume remain disabled until R3 (CPAL 0.18.2).
 - Controles: keyboard/gamepad entries retained; physical input and remapping remain disabled until R4 (SDL3).
-- Opções: status-footer visibility. FPS overlay size/position and fullscreen are explicitly marked pending.
+- Opções: status-footer visibility. FPS size/position remain pending; fullscreen and FPS visibility are implemented.
 - DEBUG: request an immutable Z80/runtime snapshot and enable/disable bounded scheduler/bus trace capture. Full debugger viewport remains a follow-up.
 
 ## Runtime contract
