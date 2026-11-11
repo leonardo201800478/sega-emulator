@@ -104,7 +104,39 @@ mod windows_host {
                     Button { text: "DEBUG"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "debug"; } }
                     Button { text: "Fechar menu"; clicked => { root.active-menu = "none"; } }
                 }
-                if root.active-menu != "none": Rectangle {
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button { text: ""; icon: root.play-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
+                    Button { text: ""; icon: root.pause-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
+                    Button { text: ""; icon: root.stop-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
+                    Button { text: ""; icon: root.reset-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
+                    Button { text: ""; icon: root.step-frame-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
+                    Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
+                }
+                Rectangle {
+                    horizontal-stretch: 1; vertical-stretch: 1;
+                    min-width: 256px; min-height: 192px;
+                    background: #05080b;
+                    Image {
+                        source: root.gpu-texture;
+                        width: min(parent.width, parent.height * (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        image-fit: fill;
+                    }
+                    TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { root.video-area-clicked(); }
+                    }
+                }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
+                if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
+                if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
+                if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
+                }
+        if root.active-menu != "none": Rectangle {
+            x: 18px; y: 54px; width: min(parent.width - 36px, 820px); height: 280px; z: 100;
                     background: #1b2834; border-radius: 6px; border-width: 1px;
                     border-color: #405365; min-height: 170px; max-height: 280px;
                     max-width: 820px; cross-axis-self-alignment: center;
@@ -197,37 +229,7 @@ mod windows_host {
                         }
                     }
                 }
-                HorizontalLayout {
-                    spacing: 8px;
-                    Button { text: ""; icon: root.play-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
-                    Button { text: ""; icon: root.pause-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
-                    Button { text: ""; icon: root.stop-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
-                    Button { text: ""; icon: root.reset-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
-                    Button { text: ""; icon: root.step-frame-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
-                    Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
-                }
-                Rectangle {
-                    horizontal-stretch: 1; vertical-stretch: 1;
-                    min-width: 256px; min-height: 192px;
-                    background: #05080b;
-                    Image {
-                        source: root.gpu-texture;
-                        width: min(parent.width, parent.height * (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
-                        height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
-                        image-fit: fill;
-                    }
-                    TouchArea {
-                        width: 100%; height: 100%;
-                        clicked => { root.video-area-clicked(); }
-                    }
-                }
-                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
-                if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
-                if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
-                if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
-                }
+
             }
         }
     }
@@ -1016,21 +1018,44 @@ mod windows_host {
         let stop_worker = Rc::clone(&worker);
         let stop_app = app.as_weak();
         app.on_stop_requested(move || {
-            if let Some(worker) = stop_worker.borrow().as_ref()
-                && let Err(error) = worker.stop()
-            {
-                eprintln!("R2_CONTROL action=stop error={error}");
-            } else if let Some(app) = stop_app.upgrade() {
-                app.set_emulation_paused(false);
+            let result = stop_worker
+                .borrow()
+                .as_ref()
+                .map_or(Ok(()), |worker| worker.stop());
+            if let Some(app) = stop_app.upgrade() {
+                match result {
+                    Ok(()) => {
+                        app.set_emulation_paused(false);
+                        app.set_rom_status(
+                            "Máquina desligada (POWER OFF). ROM mantida; pressione Iniciar para ligar.".into(),
+                        );
+                    }
+                    Err(error) => {
+                        app.set_rom_status(format!("Falha ao desligar a máquina: {error}").into());
+                        eprintln!("R2_CONTROL action=stop error={error}");
+                    }
+                }
             }
         });
 
         let reset_worker = Rc::clone(&worker);
+        let reset_app = app.as_weak();
         app.on_reset_requested(move || {
-            if let Some(worker) = reset_worker.borrow().as_ref()
-                && let Err(error) = worker.reset()
-            {
-                eprintln!("R2_CONTROL action=reset error={error}");
+            let result = reset_worker
+                .borrow()
+                .as_ref()
+                .map_or(Ok(()), |worker| worker.reset().and_then(|()| worker.start()));
+            if let Some(app) = reset_app.upgrade() {
+                match result {
+                    Ok(()) => {
+                        app.set_emulation_paused(false);
+                        app.set_rom_status("Console reiniciado; execução retomada.".into());
+                    }
+                    Err(error) => {
+                        app.set_rom_status(format!("Falha ao reiniciar o console: {error}").into());
+                        eprintln!("R2_CONTROL action=reset error={error}");
+                    }
+                }
             }
         });
 
