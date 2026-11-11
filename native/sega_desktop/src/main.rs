@@ -156,8 +156,10 @@ mod windows_host {
             z: 100;
             background: #1b2834; border-radius: 5px; border-width: 1px;
             border-color: #405365; min-height: 120px; max-height: 360px; max-width: 420px;
+            clip: true;
             VerticalLayout {
                 alignment: start;
+                width: 100%;
                 padding: 8px; spacing: 4px;
                         if root.active-menu == "system": VerticalLayout {
                             Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
@@ -189,6 +191,9 @@ mod windows_host {
                             if root.recent-roms.length == 0: Text { font-size: 12px; text: "Nenhuma ROM recente."; color: #9baab6; }
                             for rom in root.recent-roms: CompactButton {
                                 text: rom;
+                                width: 100%;
+                                max-width: 100%;
+                                clip: true;
                                 clicked => { root.load-rom-requested(rom); root.active-menu = "none"; }
                             }
                         }
