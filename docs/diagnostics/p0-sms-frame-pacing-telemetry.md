@@ -1,6 +1,7 @@
 # P0 — SMS frame-pacing telemetry
 
-**Issue:** [#755](https://github.com/leonardo201800478/sega-emulator/issues/755)  
+**Issue:** [#755](https://github.com/leonardo201800478/sega-emulator/issues/755)
+
 **Scope:** diagnostic instrumentation only; no timing-policy correction is included.
 
 ## Decision
