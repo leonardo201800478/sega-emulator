@@ -302,10 +302,7 @@ impl FrameMailbox {
             state.replaced_frames = state.replaced_frames.saturating_add(1);
         }
 
-        state.last_sequence = state
-            .latest
-            .as_ref()
-            .map(|(frame, _)| frame.sequence());
+        state.last_sequence = state.latest.as_ref().map(|(frame, _)| frame.sequence());
         Ok(())
     }
 
@@ -517,10 +514,7 @@ mod tests {
         let before_publish = std::time::Instant::now();
         mailbox.publish(test_frame(4)).unwrap();
 
-        let (frame, published_at) = mailbox
-            .take_latest_with_timestamp()
-            .unwrap()
-            .unwrap();
+        let (frame, published_at) = mailbox.take_latest_with_timestamp().unwrap().unwrap();
         let consumed_at = std::time::Instant::now();
 
         assert_eq!(frame.sequence(), 4);
