@@ -472,7 +472,7 @@ mod windows_host {
                         return;
                     }
 
-                    match create_imported_texture(&device, &queue) {
+                    match create_imported_texture(device, queue) {
                         Ok(image) => {
                             *queue_slot.borrow_mut() = Some(queue.clone());
 
@@ -729,13 +729,13 @@ mod windows_host {
         match preferences.aspect.as_str() {
             "1:1" => {
                 app.set_selected_aspect("1:1".into());
-                app.set_video_width(576.0.into());
-                app.set_video_height(576.0.into());
+                app.set_video_width(576.0);
+                app.set_video_height(576.0);
             }
             "16:9" => {
                 app.set_selected_aspect("16:9".into());
-                app.set_video_width(768.0.into());
-                app.set_video_height(432.0.into());
+                app.set_video_width(768.0);
+                app.set_video_height(432.0);
             }
             _ => {
                 app.set_selected_aspect("4:3".into());
@@ -860,7 +860,6 @@ mod windows_host {
             }
         });
 
-        let exit_app = app.as_weak();
         let exit_recent = Rc::clone(&recent_roms);
         let exit_prefs_app = app.as_weak();
         app.on_exit_requested(move || {
