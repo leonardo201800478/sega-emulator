@@ -2,7 +2,6 @@
 
 use std::time::{Duration, Instant};
 
-use crate::icons::{IconKind, icon_button};
 use eframe::egui;
 use sega_sms_runtime::{SmsDebugSnapshot, SmsTemporalWorkerDebugHandle};
 
@@ -138,15 +137,15 @@ fn render_debugger_toolbar(
     state: &mut DebuggerWindowState,
 ) {
     ui.horizontal_wrapped(|ui| {
-        let running = worker.is_running();
-        let run_icon = if running {
-            IconKind::Pause
-        } else {
-            IconKind::Play
-        };
-        let run_tooltip = if running { "Pausar" } else { "Executar" };
-        if icon_button(ui, run_icon, run_tooltip, true).clicked() {
-            let result = if running {
+        if ui
+            .button(if worker.is_running() {
+                "Pausar"
+            } else {
+                "Executar"
+            })
+            .clicked()
+        {
+            let result = if worker.is_running() {
                 worker.pause()
             } else {
                 worker.start()
@@ -156,7 +155,10 @@ fn render_debugger_toolbar(
             }
         }
 
-        if icon_button(ui, IconKind::Step, "Executar uma instrução", !running).clicked() {
+        if ui
+            .add_enabled(!worker.is_running(), egui::Button::new("Step instruction"))
+            .clicked()
+        {
             match worker.step_instruction() {
                 Ok(()) => {
                     if let Ok(snapshot) = worker.debug_snapshot() {
@@ -171,12 +173,14 @@ fn render_debugger_toolbar(
         }
 
         let trace_enabled = state.trace_capture_enabled;
-        let trace_tooltip = if trace_enabled {
-            "Desativar trace"
-        } else {
-            "Ativar trace"
-        };
-        if icon_button(ui, IconKind::Trace, trace_tooltip, true).clicked() {
+        if ui
+            .button(if trace_enabled {
+                "Desativar trace"
+            } else {
+                "Ativar trace"
+            })
+            .clicked()
+        {
             match worker.set_trace_enabled(!trace_enabled) {
                 Ok(()) => {
                     state.trace_capture_enabled = !trace_enabled;
@@ -255,7 +259,7 @@ fn render_debugger_breakpoints(
     ui.heading("Breakpoints");
     ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(&mut state.breakpoint_input).desired_width(72.0));
-        if icon_button(ui, IconKind::Add, "Adicionar breakpoint", true).clicked() {
+        if ui.button("Adicionar").clicked() {
             if let Some(address) = parse_debug_address(&state.breakpoint_input) {
                 if !state.breakpoints.contains(&address) && state.breakpoints.len() < 64 {
                     match worker.set_breakpoint(address, true) {
@@ -274,9 +278,8 @@ fn render_debugger_breakpoints(
     let mut remove = None;
     for address in &state.breakpoints {
         ui.horizontal(|ui| {
-            let _ = icon_button(ui, IconKind::Breakpoint, "Breakpoint ativo", false);
             ui.monospace(format!("{address:04X}"));
-            if icon_button(ui, IconKind::Remove, "Remover breakpoint", true).clicked() {
+            if ui.small_button("Remover").clicked() {
                 remove = Some(*address);
             }
         });
