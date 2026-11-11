@@ -7,6 +7,14 @@ on:
       - "native/sms_debugger/**"
       - "native/sms_core/**"
       - "native/z80_cpu/**"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/temporal_core/**"
+      - "native/machine_scheduler/**"
+      - "native/sn76489/**"
+      - "native/audio_runtime/**"
+      - "native/video_core/**"
+      - "native/observability/**"
       - "rust/runtime/sms-runtime/**"
       - ".github/workflows/sms-debugger-runtime.yml"
   push:
@@ -16,8 +24,15 @@ on:
       - "native/sms_debugger/**"
       - "native/sms_core/**"
       - "native/z80_cpu/**"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/temporal_core/**"
+      - "native/machine_scheduler/**"
+      - "native/sn76489/**"
+      - "native/audio_runtime/**"
+      - "native/video_core/**"
+      - "native/observability/**"
       - "rust/runtime/sms-runtime/**"
-      - "native/sms_debugger/**"
       - ".github/workflows/sms-debugger-runtime.yml"
 
 permissions:
@@ -31,11 +46,12 @@ jobs:
   sms-runtime-release:
     name: SMS runtime Release format, Clippy and tests
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Install pinned Rust toolchain
@@ -43,7 +59,7 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
 
-      - name: Check formatting
+      - name: Check root workspace formatting
         run: cargo fmt --all -- --check
 
       - name: Clippy SMS runtime (Release)
@@ -53,13 +69,14 @@ jobs:
         run: cargo test --release --manifest-path rust/runtime/sms-runtime/Cargo.toml --all-targets --locked
 
   sms-debugger-release:
-    name: SMS debugger Windows Release validation
+    name: SMS debugger Windows x64 Release validation
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Install pinned Rust toolchain
@@ -67,8 +84,13 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
 
-      - name: Generate debugger lockfile for validation
-        run: cargo generate-lockfile --manifest-path native/sms_debugger/Cargo.toml
+      - name: Validate standalone debugger manifest and lockfile
+        shell: pwsh
+        run: |
+          cargo metadata --locked --no-deps --format-version 1 --manifest-path native/sms_debugger/Cargo.toml
+          if (-not (Test-Path native/sms_debugger/Cargo.lock -PathType Leaf)) {
+            throw "The standalone SMS debugger Cargo.lock must be versioned."
+          }
 
       - name: Check debugger formatting
         run: cargo fmt --manifest-path native/sms_debugger/Cargo.toml --all -- --check
@@ -78,3 +100,6 @@ jobs:
 
       - name: Test SMS debugger (Release)
         run: cargo test --release --manifest-path native/sms_debugger/Cargo.toml --all-targets --locked
+
+      - name: Build SMS debugger (Release)
+        run: cargo build --release --manifest-path native/sms_debugger/Cargo.toml --locked --target x86_64-pc-windows-msvc
