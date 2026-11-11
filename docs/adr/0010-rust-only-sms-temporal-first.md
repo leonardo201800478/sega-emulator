@@ -1,3 +1,5 @@
+> **Aditivo — 2026-11-10:** a ADR 0011 substitui exclusivamente as decisões de tecnologia de interface (egui/eframe) e os adaptadores host de vídeo/áudio descritos nesta ADR. A arquitetura Rust-only, o ownership do runtime, a prioridade SMS temporal, a preservação SG-1000, o Scheduler e os requisitos de determinismo permanecem vigentes. A nova stack desktop é Slint + WGPU + CPAL; consulte [ADR 0011](0011-slint-wgpu-cpal-desktop-platform.md). Esta ADR permanece normativa para hardware/runtime e roadmap, não para o framework de UI ou APIs de saída de host.
+
 # ADR 0010 — Produto 100% Rust, SMS temporal como único runtime inicial
 
 - **Status:** ACCEPTED — decisão definitiva de arquitetura e prioridade.
