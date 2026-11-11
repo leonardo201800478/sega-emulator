@@ -28,7 +28,9 @@ const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
 const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
-const WORKER_REPLY_TIMEOUT: Duration = Duration::from_millis(100);
+// Running workers accept control commands at complete-frame boundaries; debug builds may need
+// substantially longer than one wall-clock frame to reach that safe point.
+const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 // A complete frame step can execute tens of thousands of instructions, especially in debug builds.
 const WORKER_FRAME_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -78,16 +80,14 @@ fn receive_worker_reply_with_timeout<T>(
     operation: &str,
     timeout: Duration,
 ) -> Result<T, String> {
-    receiver
-        .recv_timeout(timeout)
-        .map_err(|error| match error {
-            RecvTimeoutError::Timeout => {
-                format!("SMS machine worker timed out while {operation}")
-            }
-            RecvTimeoutError::Disconnected => {
-                format!("SMS machine worker stopped while {operation}")
-            }
-        })
+    receiver.recv_timeout(timeout).map_err(|error| match error {
+        RecvTimeoutError::Timeout => {
+            format!("SMS machine worker timed out while {operation}")
+        }
+        RecvTimeoutError::Disconnected => {
+            format!("SMS machine worker stopped while {operation}")
+        }
+    })
 }
 
 fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, String> {
