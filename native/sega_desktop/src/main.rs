@@ -192,8 +192,6 @@ mod windows_host {
                             for rom in root.recent-roms: CompactButton {
                                 text: rom;
                                 width: 100%;
-                                max-width: 100%;
-                                clip: true;
                                 clicked => { root.load-rom-requested(rom); root.active-menu = "none"; }
                             }
                         }
@@ -419,7 +417,8 @@ mod windows_host {
     /// Retorna a extensão 2D da textura SMS em resolução nativa.
     fn texture_extent() -> wgpu::Extent3d {
         wgpu::Extent3d {
-            width: SMS_WIDTH,            height: SMS_HEIGHT,
+            width: SMS_WIDTH,
+            height: SMS_HEIGHT,
             depth_or_array_layers: 1,
         }
     }
@@ -546,7 +545,7 @@ mod windows_host {
                         return;
                     }
 
-                    match create_imported_texture(device, queue) {
+                    match create_imported_texture(&device, &queue) {
                         Ok(image) => {
                             *queue_slot.borrow_mut() = Some(queue.clone());
 
@@ -817,7 +816,8 @@ mod windows_host {
                 .is_some_and(|extension| {
                     extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin")
                 });
-            if is_rom {                candidates.push((index, name, entry.size()));
+            if is_rom {
+                candidates.push((index, name, entry.size()));
             }
         }
 
@@ -1016,7 +1016,8 @@ mod windows_host {
                 && let Err(error) = worker.start()
             {
                 eprintln!("R2_CONTROL action=start error={error}");
-            } else if let Some(app) = start_app.upgrade() {                app.set_emulation_paused(false);
+            } else if let Some(app) = start_app.upgrade() {
+                app.set_emulation_paused(false);
             }
         });
 
@@ -1058,10 +1059,9 @@ mod windows_host {
         let reset_worker = Rc::clone(&worker);
         let reset_app = app.as_weak();
         app.on_reset_requested(move || {
-            let result = reset_worker
-                .borrow()
-                .as_ref()
-                .map_or(Ok(()), |worker| worker.reset().and_then(|()| worker.start()));
+            let result = reset_worker.borrow().as_ref().map_or(Ok(()), |worker| {
+                worker.reset().and_then(|()| worker.start())
+            });
             if let Some(app) = reset_app.upgrade() {
                 match result {
                     Ok(()) => {
@@ -1135,8 +1135,9 @@ mod windows_host {
                         app.set_rom_status(
                             match start_result {
                                 Some(Ok(())) => format!(
-                                    "ROM: {} | região: {region} | execução iniciada",
-                                    path.display()
+                                    "ROM: {} | região: {} | execução iniciada",
+                                    path.display(),
+                                    region
                                 ),
                                 Some(Err(error)) => {
                                     format!("ROM: {} | falha ao iniciar: {error}", path.display())
