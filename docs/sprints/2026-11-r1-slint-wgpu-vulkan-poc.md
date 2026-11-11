@@ -56,6 +56,13 @@ Documentação das APIs comprova viabilidade teórica, não substitui os testes 
 9. Executar manualmente em hardware Windows/Vulkan; registrar GPU, driver, SHA e logs.
 10. Abrir PR; merge exige autorização explícita.
 
+## Atualização operacional — 2026-11-11
+
+- `Cargo.lock` da workspace raiz foi regenerado com `cargo update --workspace` e verificado com `cargo metadata --locked --format-version 1 --no-deps`.
+- O conteúdo gerado corresponde exatamente ao arquivo entregue para integração (138818 bytes; Git blob SHA `de69e313a1a6822c297f989888545113b53f8bc3`; SHA-256 `c5ea77bbe0fcaa7b6d98cb4aaa9dad74e8e148a715c2bb4ccc77dfe4f777ad1a`).
+- A atualização está no branch da PR #747. A CI precisa reexecutar Clippy, testes e build Release no HEAD atualizado.
+- A execução física em GPU Vulkan continua NOT RUN até validação no Windows x64.
+
 ## Gates
 
 cargo fmt --all -- --check
