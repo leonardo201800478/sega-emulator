@@ -15,7 +15,7 @@ The capture keeps these domains separate:
 
 1. **Virtual machine time:** SmsTemporalMachine::now() / Scheduler master ticks. This is the hardware timeline.
 2. **Worker wall time:** monotonic Instant measurements around step_frame_until, completed-frame publication, audio submission, total frame work, and the existing pacing wait.
-3. **Mailbox boundary:** publication sequence, replacement count, host polling, empty polls, consumed sequence gaps, and time between consumed frames.
+3. **Mailbox boundary:** publication sequence and monotonic publication timestamp, replacement count, host polling, empty polls, consumed sequence gaps, mailbox residence time, and time between consumed frames.
 4. **WGPU host boundary:** RGB888→RGBA8 conversion and duration of the Queue::write_texture call.
 
 The Slint Winit backend owns the surface and physical present operation. Therefore this patch explicitly does **not** label queue.write_texture as GPU completion or physical presentation, and logs physical_present_timestamp=unavailable_slint_owned. A future present timestamp requires a supported Slint/backend hook or a separately justified renderer integration; it must not be fabricated from request_redraw.
@@ -42,8 +42,8 @@ The machine-tick delta is recorded independently of host duration. For PAL and N
 The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second. It reports both pacing_wait_budget (the requested timeout computed by the worker) and pacing_wait_elapsed (the actual monotonic duration until timeout or command arrival):
 
 - timer callback count and empty mailbox polls;
-- average/max timer polling interval;
-- consumed frames, sequence gaps and producer mailbox replacements;
+- average/max timer polling interval and mailbox residence interval;
+- consumed frames, sequence gaps, producer mailbox replacements, and publish-to-consume mailbox residence time;
 - average/max RGB888→RGBA8 conversion time;
 - average/max Queue::write_texture call time;
 - worker p50/p95/p99 frame intervals and p95 stage durations;
@@ -63,7 +63,7 @@ The desktop's PRESENT_INTERVAL remains a mailbox polling interval, not the emula
 2. Keep the same driver/G-SYNC/V-Sync configuration across comparison runs. Do not use a frame limiter or alter Scheduler settings during the baseline.
 3. Run a representative NTSC ROM for at least five minutes; repeat with a representative Europe/PAL ROM for at least five minutes.
 4. Save stdout/stderr containing R2_FRAME_PACING_HOST records. Keep the initial startup interval separate from steady state.
-5. Compare worker frame interval, virtual ticks/frame, step duration, publish duration, requested/actual pacing wait, mailbox replacements, host consumed intervals, and queue-write duration.
+5. Compare worker frame interval, virtual ticks/frame, step duration, publish duration, requested/actual pacing wait, mailbox replacements, host consumed intervals, publish-to-consume residence, and queue-write duration.
 6. Repeat with the presentation window minimized/occluded only as a separate experiment; do not combine those results with the normal visible baseline.
 7. Only after locating the stage, propose a narrowly scoped correction and add deterministic regression tests.
 
