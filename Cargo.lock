@@ -2355,6 +2355,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-icons-classic"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45c7364b15d5644fc22d5001bbda5808fd361cc9a90013e423bd104e7e89cfb7"
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3517,6 +3523,7 @@ version = "0.1.0"
 name = "sega-desktop"
 version = "0.1.0"
 dependencies = [
+ "md-icons-classic",
  "sega-sms-runtime",
  "sega-video-runtime",
  "slint",
