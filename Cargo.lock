@@ -3506,6 +3506,8 @@ version = "0.1.0"
 name = "sega-desktop"
 version = "0.1.0"
 dependencies = [
+ "sega-sms-runtime",
+ "sega-video-runtime",
  "slint",
 ]
 
