@@ -1754,7 +1754,7 @@ impl eframe::App for SegaApp {
         }
         self.update_native_viewport(frame, ui.ctx(), viewport_rect);
         self.render_debugger_window(&context);
-                self.update_fps_counter();
+        self.update_fps_counter();
         if self.fps_overlay_enabled && self.native_viewport.video_attached {
             context.request_repaint_after(FPS_SAMPLE_INTERVAL);
         }
@@ -2639,7 +2639,7 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         egui::ComboBox::from_id_salt("fps_footer_size")
             .selected_text(state.fps_overlay_size.label())
             .show_ui(ui, |ui| {
-                ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
+                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
                 ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Medium, "Médio");
                 ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
             });
@@ -2997,7 +2997,11 @@ fn render_footer(
         ui.small(viewport.status());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(fps) = fps {
-                ui.label(egui::RichText::new(format!("{fps:.0} FPS")).strong().size(fps_font_size));
+                ui.label(
+                    egui::RichText::new(format!("{fps:.0} FPS"))
+                        .strong()
+                        .size(fps_font_size),
+                );
                 ui.separator();
             }
             let rom_name = Path::new(rom_path)
