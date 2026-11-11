@@ -34,6 +34,10 @@ mod windows_host {
 
     slint::slint! {
         import { Button, LineEdit } from "std-widgets.slint";
+        component CompactButton inherits Button {
+            font-size: 12px;
+            height: 28px;
+        }
         export component MainWindow inherits Window {
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
             preferred-width: 1120px; preferred-height: 860px; background: #101820;
@@ -84,6 +88,10 @@ mod windows_host {
             FocusScope {
                 width: 100%; height: 100%;
                 KeyBinding {
+                    keys: @keys(Escape);
+                    activated => { root.active-menu = "none"; }
+                }
+                KeyBinding {
                     keys: @keys(F11);
                     activated => {
                         root.fullscreen-enabled = !root.fullscreen-enabled;
@@ -91,27 +99,27 @@ mod windows_host {
                     }
                 }
                 VerticalLayout {
-                padding: 18px; spacing: 10px;
-                Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 25px; }
+                padding: 12px; spacing: 8px;
+                Text { text: "SEGA EMULATOR"; color: #f2f5f7; font-size: 20px; }
                 HorizontalLayout {
-                    spacing: 5px;
-                    Button { text: "Sistema"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "system"; } }
-                    Button { text: "Arquivo"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "file"; } }
-                    Button { text: "Vídeo"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "video"; } }
-                    Button { text: "Áudio"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "audio"; } }
-                    Button { text: "Controles"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "controls"; } }
-                    Button { text: "Opções"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "options"; } }
-                    Button { text: "DEBUG"; clicked => { root.emulation-paused = true; root.pause-requested(); root.active-menu = "debug"; } }
-                    Button { text: "Fechar menu"; clicked => { root.active-menu = "none"; } }
+                    spacing: 3px;
+                    z: 95;
+                    CompactButton { text: "Sistema"; width: 66px; clicked => { root.active-menu = root.active-menu == "system" ? "none" : "system"; } }
+                    CompactButton { text: "Arquivo"; width: 62px; clicked => { root.active-menu = root.active-menu == "file" ? "none" : "file"; } }
+                    CompactButton { text: "Vídeo"; width: 58px; clicked => { root.active-menu = root.active-menu == "video" ? "none" : "video"; } }
+                    CompactButton { text: "Áudio"; width: 58px; clicked => { root.active-menu = root.active-menu == "audio" ? "none" : "audio"; } }
+                    CompactButton { text: "Controles"; width: 76px; clicked => { root.active-menu = root.active-menu == "controls" ? "none" : "controls"; } }
+                    CompactButton { text: "Opções"; width: 66px; clicked => { root.active-menu = root.active-menu == "options" ? "none" : "options"; } }
+                    CompactButton { text: "DEBUG"; width: 58px; clicked => { root.active-menu = root.active-menu == "debug" ? "none" : "debug"; } }
                 }
                 HorizontalLayout {
-                    spacing: 8px;
-                    Button { text: ""; icon: root.play-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
-                    Button { text: ""; icon: root.pause-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
-                    Button { text: ""; icon: root.stop-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
-                    Button { text: ""; icon: root.reset-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
-                    Button { text: ""; icon: root.step-frame-icon; icon-size: 30px; colorize-icon: true; width: 58px; height: 48px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
-                    Text { text: root.rom-status; color: #b9c5ce; vertical-alignment: center; }
+                    spacing: 5px;
+                    CompactButton { text: ""; icon: root.play-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Iniciar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.start-requested(); } }
+                    CompactButton { text: ""; icon: root.pause-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Pausar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.pause-requested(); } }
+                    CompactButton { text: ""; icon: root.stop-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Parar emulação"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.stop-requested(); } }
+                    CompactButton { text: ""; icon: root.reset-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Resetar console"; enabled: root.has-rom; clicked => { root.emulation-paused = false; root.reset-requested(); } }
+                    CompactButton { text: ""; icon: root.step-frame-icon; icon-size: 24px; colorize-icon: true; width: 44px; height: 38px; accessible-role: button; accessible-label: "Avançar um quadro"; enabled: root.has-rom; clicked => { root.emulation-paused = true; root.step-frame-requested(); } }
+                    Text { text: root.rom-status; color: #b9c5ce; font-size: 12px; vertical-alignment: center; }
                 }
                 Rectangle {
                     horizontal-stretch: 1; vertical-stretch: 1;
@@ -135,96 +143,99 @@ mod windows_host {
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
                 }
+        if root.active-menu != "none": TouchArea {
+            x: 0px; y: 0px; width: 100%; height: 100%; z: 90;
+            clicked => { root.active-menu = "none"; }
+        }
         if root.active-menu != "none": Rectangle {
-            x: 18px; y: 54px; width: min(parent.width - 36px, 820px); height: 280px; z: 100;
-                    background: #1b2834; border-radius: 6px; border-width: 1px;
-                    border-color: #405365; min-height: 170px; max-height: 280px;
-                    max-width: 820px;
-                    VerticalLayout {
-                        padding: 12px; spacing: 7px;
+            x: min(max(root.active-menu == "system" ? 18px : root.active-menu == "file" ? 87px : root.active-menu == "video" ? 152px : root.active-menu == "audio" ? 213px : root.active-menu == "controls" ? 274px : root.active-menu == "options" ? 353px : 422px, 8px), parent.width - self.width - 8px);
+            y: 88px; width: min(parent.width - 16px, 420px); height: min(parent.height - 104px, 360px); z: 100;
+            background: #1b2834; border-radius: 5px; border-width: 1px;
+            border-color: #405365; min-height: 120px; max-height: 360px; max-width: 420px;
+            VerticalLayout {
+                padding: 8px; spacing: 4px;
                         if root.active-menu == "system": VerticalLayout {
-                            Text { text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
-                            Text { text: "Região / padrão de vídeo"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Região / padrão de vídeo"; color: #b9c5ce; }
                             HorizontalLayout {
-                                Button { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; root.preferences-changed(); } }
-                                Button { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; root.preferences-changed(); } }
-                                Button { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; root.preferences-changed(); } }
-                                Button { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "usa" ? "✓ USA / NTSC" : "USA / NTSC"; clicked => { root.selected-region = "usa"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "brazil" ? "✓ Brasil / PAL-M" : "Brasil / PAL-M"; clicked => { root.selected-region = "brazil"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "europe" ? "✓ Europa / PAL" : "Europa / PAL"; clicked => { root.selected-region = "europe"; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-region == "japan" ? "✓ Japão / NTSC" : "Japão / NTSC"; clicked => { root.selected-region = "japan"; root.preferences-changed(); } }
                             }
-                            Text { text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "A região selecionada será aplicada ao carregar a próxima ROM."; color: #b9c5ce; }
                             HorizontalLayout {
-                                Button { text: "SG-1000"; enabled: false; }
-                                Button { text: "Game Gear"; enabled: false; }
-                                Button { text: "Mega Drive / Genesis"; enabled: false; }
-                                Button { text: "Sega CD"; enabled: false; }
-                                Button { text: "32X"; enabled: false; }
+                                CompactButton { text: "SG-1000"; enabled: false; }
+                                CompactButton { text: "Game Gear"; enabled: false; }
+                                CompactButton { text: "Mega Drive / Genesis"; enabled: false; }
+                                CompactButton { text: "Sega CD"; enabled: false; }
+                                CompactButton { text: "32X"; enabled: false; }
                             }
-                            Text { text: "Outros sistemas: integração de runtime ainda não concluída."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Outros sistemas: integração de runtime ainda não concluída."; color: #9baab6; }
                         }
                         if root.active-menu == "file": VerticalLayout {
                             LineEdit { text <=> root.rom-path-input; placeholder-text: "C:\\ROMs\\game.sms"; }
                             HorizontalLayout {
-                                Button { text: "Procurar..."; clicked => { root.browse-rom-requested(); } }
-                                Button { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
-                                Button { text: "Sair"; clicked => { root.exit-requested(); } }
+                                CompactButton { text: "Procurar..."; clicked => { root.browse-rom-requested(); } }
+                                CompactButton { text: "Carregar ROM"; clicked => { root.load-rom-requested(root.rom-path-input); root.active-menu = "none"; } }
+                                CompactButton { text: "Sair"; clicked => { root.exit-requested(); } }
                             }
-                            Text { text: "Recentes"; color: #b9c5ce; }
-                            if root.recent-roms.length == 0: Text { text: "Nenhuma ROM recente."; color: #9baab6; }
-                            for rom in root.recent-roms: Button {
+                            Text { font-size: 12px; text: "Recentes"; color: #b9c5ce; }
+                            if root.recent-roms.length == 0: Text { font-size: 12px; text: "Nenhuma ROM recente."; color: #9baab6; }
+                            for rom in root.recent-roms: CompactButton {
                                 text: rom;
                                 clicked => { root.load-rom-requested(rom); root.active-menu = "none"; }
                             }
                         }
                         if root.active-menu == "video": VerticalLayout {
-                            Text { text: "Proporção da imagem"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Proporção da imagem"; color: #b9c5ce; }
                             HorizontalLayout {
-                                Button { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; root.preferences-changed(); } }
-                                Button { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
-                                Button { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-aspect == "4:3" ? "✓ Original (4:3)" : "Original (4:3)"; clicked => { root.selected-aspect = "4:3"; root.video-width = 768px; root.video-height = 576px; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-aspect == "1:1" ? "✓ 1:1" : "1:1"; clicked => { root.selected-aspect = "1:1"; root.video-width = 576px; root.video-height = 576px; root.preferences-changed(); } }
+                                CompactButton { text: root.selected-aspect == "16:9" ? "✓ 16:9" : "16:9"; clicked => { root.selected-aspect = "16:9"; root.video-width = 768px; root.video-height = 432px; root.preferences-changed(); } }
                             }
-                            Button { text: root.sprite-limit-enabled ? "✓ Limite de sprites ativo" : "Desativar limite de sprites por linha"; clicked => { root.sprite-limit-enabled = !root.sprite-limit-enabled; root.sprite-limit-toggle-requested(root.sprite-limit-enabled); root.preferences-changed(); } }
-                            Text { text: "O modo sem limite é uma opção de compatibilidade; overflow e temporização do VDP permanecem no hardware emulado."; color: #9baab6; }
-                            Text { text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
+                            CompactButton { text: root.sprite-limit-enabled ? "✓ Limite de sprites ativo" : "Desativar limite de sprites por linha"; clicked => { root.sprite-limit-enabled = !root.sprite-limit-enabled; root.sprite-limit-toggle-requested(root.sprite-limit-enabled); root.preferences-changed(); } }
+                            Text { font-size: 12px; text: "O modo sem limite é uma opção de compatibilidade; overflow e temporização do VDP permanecem no hardware emulado."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
                         }
                         if root.active-menu == "audio": VerticalLayout {
-                            Text { text: "Configuração de áudio"; color: #f2f5f7; }
-                            Button { text: "Áudio ativo"; enabled: false; }
+                            Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
+                            CompactButton { text: "Áudio ativo"; enabled: false; }
                             HorizontalLayout {
-                                Button { text: "WASAPI Shared"; enabled: false; }
-                                Button { text: "XAudio2"; enabled: false; }
+                                CompactButton { text: "WASAPI Shared"; enabled: false; }
+                                CompactButton { text: "XAudio2"; enabled: false; }
                             }
-                            Text { text: "Volume: 100%"; color: #b9c5ce; }
-                            Text { text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Volume: 100%"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
-                            Text { text: "Dispositivo de entrada"; color: #f2f5f7; }
-                            Button { text: "Gamepad SDL3 — integração R4"; enabled: false; }
-                            Text { text: "Teclado"; color: #b9c5ce; }
-                            Text { text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
-                            Text { text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
-                            Text { text: "Iniciar / Pausar / Parar / Reset / Avançar quadro"; color: #9baab6; }
-                            Button { text: "Remapear teclado"; enabled: false; }
-                            Button { text: "Remapear controle"; enabled: false; }
-                            Text { text: "Remapeamento e leitura física aguardam a integração SDL3 da R4."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }                            CompactButton { text: "Gamepad SDL3 — integração R4"; enabled: false; }
+                            Text { font-size: 12px; text: "Teclado"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
+                            Text { font-size: 12px; text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
+                            Text { font-size: 12px; text: "Iniciar / Pausar / Parar / Reset / Avançar quadro"; color: #9baab6; }
+                            CompactButton { text: "Remapear teclado"; enabled: false; }
+                            CompactButton { text: "Remapear controle"; enabled: false; }
+                            Text { font-size: 12px; text: "Remapeamento e leitura física aguardam a integração SDL3 da R4."; color: #9baab6; }
                         }
                         if root.active-menu == "options": VerticalLayout {
-                            Text { text: "Overlay de FPS"; color: #f2f5f7; }
-                            Button { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; root.preferences-changed(); } }
-                            Button { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; root.preferences-changed(); } }
+                            Text { font-size: 12px; text: "Overlay de FPS"; color: #f2f5f7; }
+                            CompactButton { text: root.show-fps ? "✓ Exibir HUD de FPS" : "Exibir HUD de FPS"; clicked => { root.show-fps = !root.show-fps; root.preferences-changed(); } }
+                            CompactButton { text: root.show-status-footer ? "✓ Exibir status no rodapé" : "Exibir status no rodapé"; clicked => { root.show-status-footer = !root.show-status-footer; root.preferences-changed(); } }
                             HorizontalLayout {
-                                Button { text: root.fps-size == "small" ? "✓ Pequeno" : "Pequeno"; clicked => { root.fps-size = "small"; root.fps-font-size = 13px; root.preferences-changed(); } }
-                                Button { text: root.fps-size == "medium" ? "✓ Médio" : "Médio"; clicked => { root.fps-size = "medium"; root.fps-font-size = 18px; root.preferences-changed(); } }
-                                Button { text: root.fps-size == "large" ? "✓ Grande" : "Grande"; clicked => { root.fps-size = "large"; root.fps-font-size = 24px; root.preferences-changed(); } }
+                                CompactButton { text: root.fps-size == "small" ? "✓ Pequeno" : "Pequeno"; clicked => { root.fps-size = "small"; root.fps-font-size = 13px; root.preferences-changed(); } }
+                                CompactButton { text: root.fps-size == "medium" ? "✓ Médio" : "Médio"; clicked => { root.fps-size = "medium"; root.fps-font-size = 18px; root.preferences-changed(); } }
+                                CompactButton { text: root.fps-size == "large" ? "✓ Grande" : "Grande"; clicked => { root.fps-size = "large"; root.fps-font-size = 24px; root.preferences-changed(); } }
                             }
-                            Text { text: "Posição do HUD: inferior (posição em cantos será concluída após validar o overlay."; color: #9baab6; }
-                            Button { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
+                            Text { font-size: 12px; text: "Posição do HUD: inferior (posição em cantos será concluída após validar o overlay."; color: #9baab6; }
+                            CompactButton { text: root.fullscreen-enabled ? "✓ Tela cheia" : "Tela cheia (F11)"; clicked => { root.fullscreen-enabled = !root.fullscreen-enabled; root.fullscreen-requested(root.fullscreen-enabled); } }
                         }
                         if root.active-menu == "debug": VerticalLayout {
-                            Text { text: "Diagnóstico do runtime SMS"; color: #f2f5f7; }
-                            Button { text: "Capturar snapshot do Z80"; enabled: root.has-rom; clicked => { root.debug-snapshot-requested(); } }
-                            Button { text: root.trace-enabled ? "Desativar trace" : "Ativar trace"; enabled: root.has-rom; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
-                            Text { text: root.debug-status; color: #b9c5ce; }
-                            Text { text: "Debugger com registradores, breakpoints e memória será migrado em etapa própria; a GUI não executa instruções."; color: #9baab6; }
+                            Text { font-size: 12px; text: "Diagnóstico do runtime SMS"; color: #f2f5f7; }
+                            CompactButton { text: "Capturar snapshot do Z80"; enabled: root.has-rom; clicked => { root.debug-snapshot-requested(); } }
+                            CompactButton { text: root.trace-enabled ? "Desativar trace" : "Ativar trace"; enabled: root.has-rom; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
+                            Text { font-size: 12px; text: root.debug-status; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Debugger com registradores, breakpoints e memória será migrado em etapa própria; a GUI não executa instruções."; color: #9baab6; }
                         }
                     }
                 }
@@ -397,8 +408,7 @@ mod windows_host {
     /// Retorna a extensão 2D da textura SMS em resolução nativa.
     fn texture_extent() -> wgpu::Extent3d {
         wgpu::Extent3d {
-            width: SMS_WIDTH,
-            height: SMS_HEIGHT,
+            width: SMS_WIDTH,            height: SMS_HEIGHT,
             depth_or_array_layers: 1,
         }
     }
@@ -597,8 +607,7 @@ mod windows_host {
                             );
                         }
                     });
-                }
-                _ => {}
+                }                _ => {}
             }
         })?;
 
@@ -797,8 +806,7 @@ mod windows_host {
                 .is_some_and(|extension| {
                     extension.eq_ignore_ascii_case("sms") || extension.eq_ignore_ascii_case("bin")
                 });
-            if is_rom {
-                candidates.push((index, name, entry.size()));
+            if is_rom {                candidates.push((index, name, entry.size()));
             }
         }
 
@@ -997,8 +1005,7 @@ mod windows_host {
                 && let Err(error) = worker.start()
             {
                 eprintln!("R2_CONTROL action=start error={error}");
-            } else if let Some(app) = start_app.upgrade() {
-                app.set_emulation_paused(false);
+            } else if let Some(app) = start_app.upgrade() {                app.set_emulation_paused(false);
             }
         });
 
@@ -1197,8 +1204,7 @@ mod windows_host {
         });
 
         let debug_app = app.as_weak();
-        let debug_worker = Rc::clone(&worker);
-        app.on_debug_snapshot_requested(move || {
+        let debug_worker = Rc::clone(&worker);        app.on_debug_snapshot_requested(move || {
             let worker_guard = debug_worker.borrow();
             let Some(worker) = worker_guard.as_ref() else {
                 return;
@@ -1398,7 +1404,6 @@ mod windows_host {
             let bytes = zip_archive(&[("games/sonic.sms", b"SMS-ROM")]);
             assert_eq!(extract_rom_from_zip(&bytes).unwrap(), b"SMS-ROM");
         }
-
         #[test]
         fn zip_rom_loader_rejects_archives_without_roms_or_with_multiple_roms() {
             let no_rom = zip_archive(&[("readme.txt", b"not a rom")]);
@@ -1445,10 +1450,3 @@ mod windows_host {
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    windows_host::run()
-}
-
-#[cfg(not(windows))]
-fn main() {
-    println!("sega-desktop R2 currently targets Windows x64 with Vulkan.");
-}
