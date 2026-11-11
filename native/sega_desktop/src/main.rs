@@ -144,7 +144,7 @@ mod windows_host {
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
                 }
         if root.active-menu != "none": TouchArea {
-            x: 0px; y: 0px; width: 100%; height: 100%; z: 90;
+            x: 0px; y: 74px; width: 100%; height: parent.height - 74px; z: 90;
             clicked => { root.active-menu = "none"; }
         }
         if root.active-menu != "none": Rectangle {
