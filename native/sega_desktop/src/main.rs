@@ -777,7 +777,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 elapsed.as_millis(),
                 self.polls,
                 self.empty_polls,
@@ -804,7 +804,8 @@ mod windows_host {
                 runtime.video_publish_p95_ns / 1_000,
                 runtime.audio_submit_p95_ns / 1_000,
                 runtime.frame_processing_p95_ns / 1_000,
-                runtime.pacing_wait_p95_ns / 1_000,
+                runtime.pacing_wait_budget_p95_ns / 1_000,
+                runtime.pacing_wait_elapsed_p95_ns / 1_000,
                 machine_clock_hz,
             );
 
