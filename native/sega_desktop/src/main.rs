@@ -435,8 +435,12 @@ mod windows_host {
                 app.set_frame_status(
                     format!(
                         "Frame ignorado: {}x{}; esperado {}x{}",
-                        frame.width(), frame.height(), SMS_WIDTH, SMS_HEIGHT
-                    ).into(),
+                        frame.width(),
+                        frame.height(),
+                        SMS_WIDTH,
+                        SMS_HEIGHT
+                    )
+                    .into(),
                 );
                 return;
             }
@@ -444,7 +448,8 @@ mod windows_host {
             let now = Instant::now();
             let elapsed = now.saturating_duration_since(last_sample);
             if elapsed >= Duration::from_millis(500) {
-                let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence)).unwrap_or(u32::MAX);
+                let produced =
+                    u32::try_from(frame.sequence().saturating_sub(last_sequence)).unwrap_or(u32::MAX);
                 let fps = f64::from(produced) / elapsed.as_secs_f64();
                 app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
                 last_sequence = frame.sequence();
@@ -462,8 +467,11 @@ mod windows_host {
                     app.set_frame_status(
                         format!(
                             "VDP frame: {} | {}x{} RGB888 → RGBA8",
-                            frame.sequence(), frame.width(), frame.height()
-                        ).into(),
+                            frame.sequence(),
+                            frame.width(),
+                            frame.height()
+                        )
+                        .into(),
                     );
                     app.window().request_redraw();
                 }
@@ -476,15 +484,25 @@ mod windows_host {
     }
 
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
-    fn create_sms_worker(rom: Vec<u8>, region: &str, mailbox: &FrameMailbox) -> Result<SmsTemporalWorker, String> {
+    fn create_sms_worker(
+        rom: Vec<u8>,
+        region: &str,
+        mailbox: &FrameMailbox,
+    ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
         worker.attach_video_mailbox(mailbox.clone())?;
         Ok(worker)
     }
 
     /// Substitui a máquina somente depois que a nova ROM foi validada e o novo worker está pronto.
-    fn replace_sms_worker(path: &PathBuf, region: &str, worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>, mailbox: &FrameMailbox) -> Result<(), String> {
-        let rom = fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+    fn replace_sms_worker(
+        path: &PathBuf,
+        region: &str,
+        worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
+        mailbox: &FrameMailbox,
+    ) -> Result<(), String> {
+        let rom =
+            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
         let next = create_sms_worker(rom, region, mailbox)?;
         let previous = worker_slot.borrow_mut().replace(next);
         if let Some(previous) = previous {
@@ -499,14 +517,21 @@ mod windows_host {
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
         let rom_path = args.next().map(PathBuf::from);
-        let region = args.next().and_then(|value| value.into_string().ok()).unwrap_or_else(|| "usa".to_owned());
+        let region = args
+            .next()
+            .and_then(|value| value.into_string().ok())
+            .unwrap_or_else(|| "usa".to_owned());
+
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let worker = if let Some(path) = rom_path.as_ref() {
             Some(create_sms_worker(fs::read(path)?, &region, &mailbox)?)
-        } else { None };
+        } else {
+            None
+        };
         let worker = Rc::new(RefCell::new(worker));
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
+
         let app = MainWindow::new()?;
         app.set_gpu_status("Aguardando inicialização do renderer WGPU 30...".into());
         app.set_frame_status("Aguardando o primeiro frame completo do VDP.".into());
@@ -516,37 +541,54 @@ mod windows_host {
         if let Some(path) = rom_path.as_ref() {
             app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
             app.set_recent_rom_path(path.display().to_string().into());
+            app.set_rom_path_input(path.display().to_string().into());
         } else {
-            app.set_rom_status("Nenhuma ROM carregada — informe o caminho em Arquivo > Carregar ROM.".into());
+            app.set_rom_status(
+                "Nenhuma ROM carregada — informe o caminho em Arquivo > Carregar ROM.".into(),
+            );
         }
 
         let start_worker = Rc::clone(&worker);
         app.on_start_requested(move || {
-            if let Some(worker) = start_worker.borrow().as_ref() && let Err(error) = worker.start() {
+            if let Some(worker) = start_worker.borrow().as_ref()
+                && let Err(error) = worker.start()
+            {
                 eprintln!("R2_CONTROL action=start error={error}");
             }
         });
+
         let pause_worker = Rc::clone(&worker);
         app.on_pause_requested(move || {
-            if let Some(worker) = pause_worker.borrow().as_ref() && let Err(error) = worker.pause() {
+            if let Some(worker) = pause_worker.borrow().as_ref()
+                && let Err(error) = worker.pause()
+            {
                 eprintln!("R2_CONTROL action=pause error={error}");
             }
         });
+
         let stop_worker = Rc::clone(&worker);
         app.on_stop_requested(move || {
-            if let Some(worker) = stop_worker.borrow().as_ref() && let Err(error) = worker.stop() {
+            if let Some(worker) = stop_worker.borrow().as_ref()
+                && let Err(error) = worker.stop()
+            {
                 eprintln!("R2_CONTROL action=stop error={error}");
             }
         });
+
         let reset_worker = Rc::clone(&worker);
         app.on_reset_requested(move || {
-            if let Some(worker) = reset_worker.borrow().as_ref() && let Err(error) = worker.reset() {
+            if let Some(worker) = reset_worker.borrow().as_ref()
+                && let Err(error) = worker.reset()
+            {
                 eprintln!("R2_CONTROL action=reset error={error}");
             }
         });
+
         let step_worker = Rc::clone(&worker);
         app.on_step_frame_requested(move || {
-            if let Some(worker) = step_worker.borrow().as_ref() && let Err(error) = worker.step_frame(100_000) {
+            if let Some(worker) = step_worker.borrow().as_ref()
+                && let Err(error) = worker.step_frame(100_000)
+            {
                 eprintln!("R2_CONTROL action=step_frame error={error}");
             }
         });
@@ -559,25 +601,40 @@ mod windows_host {
             let path = PathBuf::from(path.as_str());
             if path.as_os_str().is_empty() {
                 if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status("Informe o caminho completo da ROM (.sms ou .bin).".into());
+                    app.set_rom_status(
+                        "Informe o caminho completo da ROM (.sms ou .bin).".into(),
+                    );
                 }
                 return;
             }
-            let region = open_app.upgrade().map(|app| app.get_selected_region().to_string()).unwrap_or_else(|| "usa".to_owned());
+
+            let region = open_app
+                .upgrade()
+                .map(|app| app.get_selected_region().to_string())
+                .unwrap_or_else(|| "usa".to_owned());
+
             match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
                 Ok(()) => {
                     *open_recent.borrow_mut() = Some(path.clone());
                     if let Some(app) = open_app.upgrade() {
                         app.set_has_rom(true);
-                        app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
+                        app.set_rom_status(
+                            format!("ROM: {} | região: {region}", path.display()).into(),
+                        );
                         app.set_recent_rom_path(path.display().to_string().into());
                         app.set_rom_path_input(path.display().to_string().into());
-                        app.set_debug_status("ROM carregada; snapshot ainda não solicitado.".into());
+                        app.set_debug_status(
+                            "ROM carregada; snapshot ainda não solicitado.".into(),
+                        );
                     }
                 }
-                Err(error) => if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status(format!("Falha ao carregar ROM: {error}").into());
-                },
+                Err(error) => {
+                    if let Some(app) = open_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Falha ao carregar ROM: {error}").into(),
+                        );
+                    }
+                }
             }
         });
 
@@ -595,22 +652,43 @@ mod windows_host {
                 app.set_debug_status("Máquina fechada.".into());
             }
         });
+
         let exit_app = app.as_weak();
-        app.on_exit_requested(move || { if let Some(app) = exit_app.upgrade() { let _ = app.window().hide(); } });
+        app.on_exit_requested(move || {
+            if let Some(app) = exit_app.upgrade() {
+                let _ = app.window().hide();
+            }
+        });
 
         let debug_app = app.as_weak();
         let debug_worker = Rc::clone(&worker);
         app.on_debug_snapshot_requested(move || {
-            let Some(worker) = debug_worker.borrow().as_ref() else { return; };
-            let result = worker.debug_snapshot().map(|snapshot| format!(
-                "PC={:04X} SP={:04X} AF={:04X} BC={:04X} DE={:04X} HL={:04X} | frame={} ticks={} T-states={}",
-                snapshot.pc, snapshot.sp, snapshot.af, snapshot.bc, snapshot.de, snapshot.hl,
-                snapshot.frame_number, snapshot.machine_time_ticks, snapshot.instruction_tstates
-            ));
+            let Some(worker) = debug_worker.borrow().as_ref() else {
+                return;
+            };
+            let result = worker.debug_snapshot().map(|snapshot| {
+                format!(
+                    "PC={:04X} SP={:04X} AF={:04X} BC={:04X} DE={:04X} HL={:04X} | frame={} ticks={} T-states={}",
+                    snapshot.pc,
+                    snapshot.sp,
+                    snapshot.af,
+                    snapshot.bc,
+                    snapshot.de,
+                    snapshot.hl,
+                    snapshot.frame_number,
+                    snapshot.machine_time_ticks,
+                    snapshot.instruction_tstates
+                )
+            });
             if let Some(app) = debug_app.upgrade() {
-                app.set_debug_status(result.unwrap_or_else(|error| format!("Falha no snapshot: {error}")).into());
+                app.set_debug_status(
+                    result
+                        .unwrap_or_else(|error| format!("Falha no snapshot: {error}"))
+                        .into(),
+                );
             }
         });
+
         let fullscreen_app = app.as_weak();
         app.on_fullscreen_requested(move |enabled| {
             if let Some(app) = fullscreen_app.upgrade() {
@@ -620,7 +698,9 @@ mod windows_host {
 
         let trace_worker = Rc::clone(&worker);
         app.on_trace_toggle_requested(move |enabled| {
-            if let Some(worker) = trace_worker.borrow().as_ref() && let Err(error) = worker.set_trace_enabled(enabled) {
+            if let Some(worker) = trace_worker.borrow().as_ref()
+                && let Err(error) = worker.set_trace_enabled(enabled)
+            {
                 eprintln!("R2_CONTROL action=trace_toggle error={error}");
             }
         });
@@ -628,9 +708,16 @@ mod windows_host {
         let queue_slot = Rc::new(RefCell::new(None));
         let setup_counter = Rc::new(Cell::new(0_u64));
         let teardown_counter = Rc::new(Cell::new(0_u64));
-        attach_gpu_texture(&app, Rc::clone(&queue_slot), setup_counter, teardown_counter)?;
+        attach_gpu_texture(
+            &app,
+            Rc::clone(&queue_slot),
+            setup_counter,
+            teardown_counter,
+        )?;
         let _frame_timer = start_frame_presentation(&app, queue_slot, mailbox.clone());
+
         app.run()?;
+
         if let Some(worker) = worker.borrow_mut().take() {
             let _ = worker.pause();
             let _ = worker.detach_video_mailbox();
