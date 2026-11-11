@@ -44,8 +44,7 @@ mod windows_host {
             height: path-label.preferred-height + 12px;
             background: #263541;
             border-radius: 3px;
-            Text {
-                id: path-label;
+            path_label := Text {
                 x: 6px; y: 6px;
                 width: parent.width - 12px;
                 text: root.rom-path;
@@ -1167,7 +1166,7 @@ mod windows_host {
                                 Some(Ok(())) => format!(
                                     "ROM: {} | região: {} | execução iniciada",
                                     path.display(),
-                                    region
+                                    region.as_str()
                                 ),
                                 Some(Err(error)) => {
                                     format!("ROM: {} | falha ao iniciar: {error}", path.display())
