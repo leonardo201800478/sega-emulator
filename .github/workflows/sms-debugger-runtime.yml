@@ -75,4 +75,5 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Legacy host intentionally not run
-        run: echo "NOT RUN: legacy egui debugger host is outside the supported CI baseline."
+        run: |
+          echo "NOT RUN: legacy egui debugger host is outside the supported CI baseline."
