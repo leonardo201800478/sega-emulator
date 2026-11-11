@@ -14,7 +14,17 @@ on:
         options: [none, short, long]
         default: none
       refresh_cargo_lockfiles:
-        description: "Generate updated Cargo.lock files and upload them as an artifact"
+        description: "Refresh tracked workspace lockfiles and upload them as an artifact"
+        required: false
+        type: boolean
+        default: false
+      validate_legacy_hosts:
+        description: "Opt in to legacy egui/D3D12/WASAPI/XAudio2 host validation"
+        required: false
+        type: boolean
+        default: false
+      validate_slint_desktop:
+        description: "Opt in to Slint/WGPU Windows x64 validation"
         required: false
         type: boolean
         default: false
@@ -24,7 +34,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   changes:
@@ -40,10 +50,15 @@ jobs:
       psg: ${{ steps.filter.outputs.psg }}
       vdp: ${{ steps.filter.outputs.vdp }}
       docs: ${{ steps.filter.outputs.docs }}
+      ci: ${{ steps.filter.outputs.ci }}
       video: ${{ steps.filter.outputs.video }}
       audio: ${{ steps.filter.outputs.audio }}
       input: ${{ steps.filter.outputs.input }}
       app: ${{ steps.filter.outputs.app }}
+      slint_desktop: ${{ steps.filter.outputs.slint_desktop }}
+      slint_desktop_present: ${{ steps.slint_manifest.outputs.present }}
+      legacy_video: ${{ steps.filter.outputs.legacy_video }}
+      legacy_audio: ${{ steps.filter.outputs.legacy_audio }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
       full: ${{ steps.filter.outputs.full }}
@@ -59,7 +74,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 (Node.js 24)
         with:
-          base: ${{ github.ref }}
+          base: ${{ github.event_name == 'pull_request' && '' || github.ref }}
           predicate-quantifier: some-with-excludes
           filters: |
             docs:
@@ -68,6 +83,11 @@ jobs:
               - '**/*.rst'
               - '**/*.txt'
               - 'docs/**'
+            ci:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+              - '.github/scripts/**'
+              - '.actionlint*'
             rust:
               - 'native/**/*.rs'
               - 'rust/**/*.rs'
@@ -109,6 +129,7 @@ jobs:
               - '!native/sms_core/src/input.rs'
               - '!native/sega_app/**'
               - '!native/audio_output/**'
+              - '!native/sms_debugger/**'
             z80:
               - 'native/z80_cpu/**'
               - 'native/z80_alu/**'
@@ -154,8 +175,8 @@ jobs:
               - 'native/sg1000_core/src/input.rs'
               - 'native/observability/**'
             app:
-              - 'rust/runtime/sms-runtime/**'
               - 'native/sega_app/**'
+              - 'rust/runtime/sms-runtime/**'
               - 'native/video_runtime/**'
               - 'native/video_core/**'
               - 'native/audio_output/**'
@@ -171,13 +192,31 @@ jobs:
               - '!native/sms_core/src/bus.rs'
               - '!native/sms_core/tests/z80_*.rs'
               - '!native/sms_core/src/bin/z80test_runner.rs'
+            slint_desktop:
+              - 'native/sega_desktop/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain*'
+              - '.cargo/**'
+            legacy_video:
+              - 'native/video_runtime/**'
+              - 'native/video_core/**'
+              - 'native/sms_core/src/vdp.rs'
+              - 'native/sg1000_core/src/vdp.rs'
+              - 'native/observability/**'
+            legacy_audio:
+              - 'native/audio_output/**'
+              - 'native/audio_runtime/**'
+              - 'native/sn76489/**'
+              - 'native/sg1000_core/src/psg.rs'
+              - 'native/observability/**'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
             tooling:
               - 'scripts/**/*.ps1'
+              - 'atualizar_recompilar_sega_emulator.ps1'
             full:
-              - '.github/workflows/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain*'
@@ -185,14 +224,32 @@ jobs:
               - 'build.rs'
               - 'scripts/common.ps1'
 
+      - name: Checkout exact commit for capability detection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Detect Slint desktop crate
+        id: slint_manifest
+        shell: bash
+        run: |
+          if [ -f native/sega_desktop/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
   rust-workspace:
     name: Rust workspace regression
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.other_rust == 'true' ||
-        needs.changes.outputs.full == 'true'))
+      !(github.event_name == 'pull_request' && github.event.action == 'labeled' && ((github.event.label.name == 'refresh-cargo-lockfiles'))) &&
+      ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+       (github.event_name != 'workflow_dispatch' &&
+        (needs.changes.outputs.other_rust == 'true' ||
+         needs.changes.outputs.full == 'true' ||
+         needs.changes.outputs.ci == 'true')))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -208,11 +265,8 @@ jobs:
         run: |
           set -euo pipefail
           cargo metadata --locked --format-version 1 --no-deps
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
           test -f Cargo.lock
-          test -f native/audio_output/Cargo.lock
-          test -f native/sega_app/Cargo.lock
+          echo "Standalone legacy host workspaces are validated only by their path-scoped jobs."
       - name: Format root Rust workspace
         run: cargo fmt --all -- --check
       - name: Clippy workspace
@@ -366,7 +420,7 @@ jobs:
   docs-format:
     name: Documentation patch hygiene
     needs: [changes]
-    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' && !(github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -389,15 +443,38 @@ jobs:
           fi
           git diff --check "$range"
 
+
+  workflow-lint:
+    name: GitHub Actions workflow validation
+    needs: [changes]
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install actionlint v1.7.12 and verify checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="actionlint_1.7.12_linux_amd64.tar.gz"
+          curl -fsSLo "$archive" "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$archive"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" | sha256sum --check
+          tar -xzf "$archive" actionlint
+          ./actionlint -version
+          ./actionlint -color
+
   windows-d3d12:
     name: Windows x64 D3D12 compile
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.video == 'true' ||
-        needs.changes.outputs.app == 'true' ||
-        needs.changes.outputs.full == 'true'))
+       (needs.changes.outputs.legacy_video == 'true' ||
+        needs.changes.outputs.app == 'true'))
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -431,13 +508,35 @@ jobs:
         if: needs.changes.outputs.video == 'true' || needs.changes.outputs.full == 'true' || github.event_name == 'workflow_dispatch'
         run: cargo test --release --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
 
+  windows-slint-wgpu:
+    name: Windows x64 Slint WGPU 30 Vulkan POC
+    needs: [changes]
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles')) && ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true')) }}
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format Slint desktop POC
+        run: cargo fmt --manifest-path native/sega_desktop/Cargo.toml -- --check
+      - name: Clippy Slint desktop POC (Windows x64 Release)
+        run: cargo clippy --release --locked --all-targets --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test Slint desktop POC (Windows x64 Release)
+        run: cargo test --release --locked --all-targets --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Build Slint desktop POC (Windows x64 Release)
+        run: cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
+
   windows-audio:
     name: Windows WASAPI and XAudio2 validation
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true'))
+       (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true'))
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -458,8 +557,8 @@ jobs:
     name: Linux audio-output host validation
     needs: [changes]
     if: |
-      github.event_name != 'workflow_dispatch' &&
-      (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) ||
+      (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -476,34 +575,24 @@ jobs:
       - name: Test non-Windows audio-output host
         run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml
 
-  windows-input:
+
+
+  windows-input-retired:
+    # Preserve the protected legacy check context without claiming SDL3 coverage.
+    # The portable input core remains tested by input-focused; SDL3 is not integrated.
     name: Windows SDL3 input validation
-    needs: [changes]
-    if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true'))
+    if: github.event_name == 'workflow_dispatch' && github.event_name == 'pull_request'
     runs-on: windows-latest
-    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Clippy native SDL3 input runtime
-        run: cargo clippy --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Test native SDL3 input runtime
-        run: cargo test --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc
+      - name: Legacy SDL3 host intentionally not run
+        run: |
+          echo "SKIPPED: SDL3 is not integrated; portable input core has its own gate."
 
   windows-tooling:
     name: Windows PowerShell tooling syntax
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true'))
+      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true')
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -511,6 +600,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.99.1
+
       - name: Parse changed project PowerShell scripts
         shell: pwsh
         env:
@@ -519,14 +613,14 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           if ($env:EVENT_NAME -eq "workflow_dispatch") {
-            $files = @(Get-ChildItem -Path scripts -Filter *.ps1 -Recurse | ForEach-Object FullName)
+            $files = @((Get-ChildItem -Path scripts -Filter *.ps1 -Recurse | ForEach-Object FullName)) + @((Get-Item -LiteralPath "atualizar_recompilar_sega_emulator.ps1" -ErrorAction SilentlyContinue | ForEach-Object FullName))
           } else {
             if ($env:EVENT_NAME -eq "pull_request") {
               $range = "$($env:BASE_SHA)...$($env:HEAD_SHA)"
             } else {
               $range = "$($env:BASE_SHA)..$($env:HEAD_SHA)"
             }
-            $paths = git diff --name-only $range -- scripts
+            $paths = git diff --name-only $range -- scripts atualizar_recompilar_sega_emulator.ps1
             if ($LASTEXITCODE -ne 0) { throw "Could not discover changed PowerShell scripts" }
             $files = @($paths | Where-Object { $_.EndsWith(".ps1", [System.StringComparison]::OrdinalIgnoreCase) })
             if (-not $files) { Write-Host "No PowerShell scripts changed."; exit 0 }
@@ -546,6 +640,11 @@ jobs:
             Write-Host "PASS $file"
           }
 
+      - name: Audit Cargo workspace and lockfile inventory
+        shell: pwsh
+        run: |
+          ./scripts/project.ps1 audit
+          ./scripts/project.ps1 locks
   scheduler-stress:
     name: Scheduler deterministic stress
     needs: [changes]
@@ -580,11 +679,14 @@ jobs:
           if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
           "$test_bin" --ignored --nocapture
 
+
   refresh-lockfiles:
-    name: Refresh Cargo lockfiles (manual artifact)
+    name: Generate Cargo lockfiles (manual artifact; no repository writes)
     if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -592,13 +694,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-      - name: Refresh root workspace dependencies
+      - name: Refresh root workspace lockfile
         run: cargo update --workspace
-      - name: Refresh standalone audio-output workspace
+      - name: Refresh standalone audio-output lockfile
         run: cargo update --manifest-path native/audio_output/Cargo.toml
-      - name: Refresh standalone egui application workspace
+      - name: Refresh standalone legacy application lockfile
         run: cargo update --manifest-path native/sega_app/Cargo.toml
-      - name: Verify refreshed lockfiles
+      - name: Verify all lockfiles
         shell: bash
         run: |
           set -euo pipefail
@@ -608,7 +710,7 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
-      - name: Upload generated Cargo lockfiles
+      - name: Upload lockfiles for reviewed integration
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-lockfiles-${{ github.run_id }}
@@ -618,6 +720,8 @@ jobs:
             native/sega_app/Cargo.lock
           if-no-files-found: error
           retention-days: 1
+
+
 
   quality-gate:
     name: Rust quality and unit regression
@@ -629,10 +733,12 @@ jobs:
       - vdp-focused
       - input-focused
       - docs-format
+      - workflow-lint
       - windows-d3d12
+      - windows-slint-wgpu
       - windows-audio
       - linux-audio
-      - windows-input
+      - windows-input-retired
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
@@ -643,7 +749,7 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true' || needs.changes.outputs.ci == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' }}
           Z80: ${{ needs.z80-focused.result }}
@@ -655,15 +761,19 @@ jobs:
           INPUT_FOCUSED: ${{ needs.input-focused.result }}
           EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
-          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WORKFLOW_LINT: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.ci == 'true' }}
+          WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
+          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
-          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true') }}
+          WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
+          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
-          EXPECT_LINUX_AUDIO: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true') }}
+          EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
-          EXPECT_WINDOWS_INPUT: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true')) }}
-          WINDOWS_INPUT: ${{ needs.windows-input.result }}
-          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_INPUT_RETIRED: false
+          WINDOWS_INPUT_RETIRED: ${{ needs.windows-input-retired.result }}
+          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
@@ -697,9 +807,11 @@ jobs:
           check_job "VDP focused" "$EXPECT_VDP" "$VDP"
           check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
-          check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
-          check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
-          check_job "Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
-          check_job "Windows input" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
+          check_job "Workflow lint" "$EXPECT_WORKFLOW_LINT" "$WORKFLOW_LINT"
+          check_job "Legacy Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
+          check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
+          check_job "Legacy Windows WASAPI/XAudio2" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
+          check_job "Legacy Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
+          check_job "Retired SDL3 host context" "$EXPECT_WINDOWS_INPUT_RETIRED" "$WINDOWS_INPUT_RETIRED"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"

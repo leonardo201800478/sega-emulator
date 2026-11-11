@@ -59,15 +59,17 @@ Consolidar native/sega_desktop, native/video_output_wgpu e native/audio_output; 
 
 ## 4. Estado operacional
 
-- Main auditada: 392a5c67e85a11a5a980d8f7055bcc8a12fe3784.
-- PR #743 integrada; worker SMS e comandos limitados fazem parte da baseline.
-- PR #744 Draft, não integrada.
-- PR #745 formaliza ADR 0011, Draft; CI #6423 SUCCESS no HEAD documental, com jobs não aplicáveis SKIPPED/NOT RUN.
-- PR #746 torna FrameMailbox portável, Draft; CI #6424 e SMS Debugger Runtime #147 SUCCESS no HEAD indicado. Não valida WGPU/Vulkan.
-- POC Slint/WGPU/Vulkan compilada/executada: NOT RUN.
+A fotografia operacional vinculada ao SHA atual está em [project-status-2026-11-11.md](project-status-2026-11-11.md).
+
+- Main auditada: `82ccad8eb9cd11d78dfddd168f307f90012426b5`.
+- PR #745 — ADR 0011 e reconciliação documental: MERGED.
+- PR #750 — higienização de CI: Draft, gates em validação; não integrada.
+- PR #747 — POC R1 Slint/WGPU/Vulkan: Draft; gate Clippy pendente de correção; Vulkan físico NOT RUN.
+- PR #746 e #744: Draft e base desatualizada; revalidar antes de merge.
+- PR #749: documentação auxiliar empilhada sobre #747; não é integração independente.
 - CPAL e SDL3 na nova arquitetura: NOT RUN.
 
-Consultar project-status-2026-11-11.md e reauditar GitHub antes de cada tarefa.
+PR aberta, branch ou CI parcial não representa integração funcional. Reauditar GitHub e SHA antes de cada tarefa.
 
 ## 5. Z80
 

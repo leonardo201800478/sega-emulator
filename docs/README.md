@@ -18,6 +18,7 @@ PR Draft, branch, documentação ou CI parcial não alteram o estado integrado d
 - [Escopo](project-scope.md)
 - [Roadmap mestre](project-roadmap.md)
 - [Sprint R1](sprints/2026-11-r1-slint-wgpu-vulkan-poc.md)
+- [Política de CI e validação](ci-validation-policy.md)
 - [Status 2026-11-11](project-status-2026-11-11.md)
 - [Instruções permanentes](project-instructions-prompt.md)
 - [ADR 0011 — Slint/WGPU/CPAL](adr/0011-slint-wgpu-cpal-desktop-platform.md)
