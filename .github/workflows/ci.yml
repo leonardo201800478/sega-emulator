@@ -740,7 +740,7 @@ jobs:
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
           EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
-          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && !(github.event.action == 'labeled' && github.event.label.name == 'bootstrap-sms-debugger-lockfile') && needs.changes.outputs.tooling == 'true') }}
+          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
