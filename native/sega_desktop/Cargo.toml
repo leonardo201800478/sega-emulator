@@ -14,7 +14,7 @@ slint = { version = "~1.18", default-features = false, features = [
 ] }
 
 [lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny" # Slint macros locally allow generated unsafe glue; handwritten unsafe remains denied.
 unused_must_use = "deny"
 
 [lints.clippy]
