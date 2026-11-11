@@ -1,6 +1,6 @@
 # Política de CI e validação
 
-**Baseline de auditoria:** `main` em `82ccad8eb9cd11d78dfddd168f307f90012426b5` (2026-11-11).  
+**Baseline de auditoria:** `main` em `82ccad8eb9cd11d78dfddd168f307f90012426b5` (2026-11-11).
 **Escopo:** runtime Rust, hardware, hosts transitórios e migração Slint/WGPU/CPAL/SDL3.
 
 Esta política é subordinada aos ADRs vigentes e ao código integrado na `main`. PRs Draft, branches e validações parciais não alteram o estado integrado.
