@@ -71,7 +71,7 @@ jobs:
     # Compatibility with the protected legacy check context. The egui debugger
     # host is intentionally NOT RUN; debugger_core remains covered by workspace CI.
     name: SMS debugger Windows Release validation
-    if: false
+    if: github.event_name == 'workflow_dispatch' && github.event_name == 'pull_request'
     runs-on: windows-latest
     steps:
       - name: Legacy host intentionally not run
