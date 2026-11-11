@@ -18,10 +18,10 @@ A prioridade de hardware continua sendo o **Sega Master System temporal**, com Z
 
 A existência dos crates e do worker temporal não comprova que o emulador esteja pronto para gameplay real. Compatibilidade, fidelidade e desempenho só devem ser declarados após validação reproduzível.
 
-**Baseline auditada:** `main` SHA `392a5c67e85a11a5a980d8f7055bcc8a12fe3784` (2026-11-10).  
-**Migração desktop:** [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md) e [PR #745](https://github.com/leonardo201800478/sega-emulator/pull/745), ainda Draft e não mesclada.  
-**Fotografia histórica:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).  
-**Mapa de documentação:** [docs/README.md](docs/README.md).  
+**Baseline auditada:** `main` SHA `392a5c67e85a11a5a980d8f7055bcc8a12fe3784` (2026-11-10).
+**Migração desktop:** [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md) e [PR #745](https://github.com/leonardo201800478/sega-emulator/pull/745), ainda Draft e não mesclada.
+**Fotografia histórica:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).
+**Mapa de documentação:** [docs/README.md](docs/README.md).
 **Evidência do stress longo do Scheduler:** [registro de 2026-11-07](docs/evidence/scheduler-stress-long-2026-11-07.md).
 
 ## Arquitetura
