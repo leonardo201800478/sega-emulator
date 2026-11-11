@@ -294,7 +294,7 @@ mod windows_poc {
         fn test_pattern_has_rgba8_extent_and_opaque_alpha() {
             let pixels = render_test_pattern(0);
             assert_eq!(pixels.len(), (TEXTURE_WIDTH * TEXTURE_HEIGHT * 4) as usize);
-            assert!(pixels.chunks_exact(4).all(|pixel| pixel[3] == 255));
+            assert!(pixels.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255));
         }
 
         #[test]
