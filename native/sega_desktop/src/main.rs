@@ -40,7 +40,7 @@ mod windows_host {
             in-out property <string> recent-rom-path: "";
             in-out property <[string]> recent-roms: [];
             in-out property <string> fps-size: "medium";
-            in-out property <length> fps-font-size: 18px;
+            in-out property <int> fps-font-size: 18;
             in-out property <string> rom-path-input: "";
             in-out property <string> debug-status: "Debugger ainda não consultado.";
             in-out property <bool> has-rom: false;
@@ -180,7 +180,7 @@ mod windows_host {
                     preferred-height: root.video-height; min-width: 256px; min-height: 192px;
                     horizontal-stretch: 1; vertical-stretch: 1; image-fit: fill;
                 }
-                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size; }
+                if root.show-fps: Text { text: root.fps-status; color: #8bd5ca; font-size: root.fps-font-size * 1px; }
                 if root.show-status-footer: Text { text: root.gpu-status; color: #8bd5ca; }
                 if root.show-status-footer: Text { text: root.frame-status; color: #b9c5ce; }
                 if root.show-status-footer: Text { text: root.lifecycle-status; color: #b9c5ce; }
@@ -254,7 +254,7 @@ mod windows_host {
         let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = format!(
-            "region={}\\naspect={}\\nshow_fps={}\\nshow_status_footer={}\\nfps_size={}\\n",
+            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\n",
             preferences.region,
             preferences.aspect,
             preferences.show_fps,
@@ -669,12 +669,11 @@ mod windows_host {
     pub fn run() -> Result<(), Box<dyn Error>> {
         let mut args = std::env::args_os().skip(1);
         let rom_path = args.next().map(PathBuf::from);
-        let mut preferences = load_desktop_preferences();
+        let preferences = load_desktop_preferences();
         let region = args
             .next()
             .and_then(|value| value.into_string().ok())
             .unwrap_or_else(|| preferences.region.clone());
-        preferences.region = region.clone();
         let recent_roms = Rc::new(RefCell::new(load_recent_roms()));
         if let Some(path) = rom_path.as_ref() {
             record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
@@ -698,7 +697,7 @@ mod windows_host {
         app.set_show_fps(preferences.show_fps);
         app.set_show_status_footer(preferences.show_status_footer);
         app.set_fps_size(preferences.fps_size.clone().into());
-        app.set_fps_font_size(match preferences.fps_size.as_str() { "small" => 13.0, "large" => 24.0, _ => 18.0 } * slint::PhysicalLength::new(1.0).into());
+        app.set_fps_font_size(match preferences.fps_size.as_str() { "small" => 13, "large" => 24, _ => 18 });
         app.set_recent_roms(recent_roms_model(&recent_roms.borrow()).into());
         match preferences.aspect.as_str() {
             "1:1" => { app.set_selected_aspect("1:1".into()); app.set_video_width(576.0.into()); app.set_video_height(576.0.into()); }
@@ -911,6 +910,15 @@ mod windows_host {
         let _frame_timer = start_frame_presentation(&app, queue_slot, mailbox.clone());
 
         app.run()?;
+        let final_preferences = DesktopPreferences {
+            region: app.get_selected_region().to_string(),
+            aspect: app.get_selected_aspect().to_string(),
+            show_fps: app.get_show_fps(),
+            show_status_footer: app.get_show_status_footer(),
+            fps_size: app.get_fps_size().to_string(),
+        };
+        let _ = save_desktop_preferences(&final_preferences);
+        let _ = save_recent_roms(&recent_roms.borrow());
 
         if let Some(worker) = worker.borrow_mut().take() {
             let _ = worker.pause();
