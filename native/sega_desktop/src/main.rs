@@ -919,6 +919,7 @@ mod windows_host {
                             recent_roms_model(&open_recent_list.borrow()),
                         )));
                         app.set_has_rom(true);
+                        app.set_emulation_paused(false);
                         app.set_rom_status(
                             match start_result {
                                 Some(Ok(())) => format!(
@@ -977,6 +978,7 @@ mod windows_host {
             }
             if let Some(app) = close_app.upgrade() {
                 app.set_has_rom(false);
+                app.set_emulation_paused(false);
                 app.set_rom_status("Nenhuma ROM carregada.".into());
                 app.set_debug_status("Máquina fechada.".into());
             }
@@ -1059,13 +1061,23 @@ mod windows_host {
             let paused = video_click_app
                 .upgrade()
                 .is_some_and(|app| app.get_has_rom() && app.get_emulation_paused());
-            if paused
-                && let Some(worker) = video_click_worker.borrow().as_ref()
-                && let Err(error) = worker.start()
-            {
-                eprintln!("R2_CONTROL action=video_click_resume error={error}");
-            } else if paused && let Some(app) = video_click_app.upgrade() {
-                app.set_rom_status("Falha ao retomar a emulação pelo vídeo.".into());
+            if paused {
+                if let Some(worker) = video_click_worker.borrow().as_ref() {
+                    match worker.start() {
+                        Ok(()) => {
+                            if let Some(app) = video_click_app.upgrade() {
+                                app.set_emulation_paused(false);
+                            }
+                        }
+                        Err(error) => {
+                            if let Some(app) = video_click_app.upgrade() {
+                                app.set_rom_status(
+                                    format!("Falha ao retomar a emulação: {error}").into(),
+                                );
+                            }
+                        }
+                    }
+                }
             }
         });
 
