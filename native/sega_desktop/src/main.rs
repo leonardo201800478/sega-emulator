@@ -733,16 +733,25 @@ mod windows_host {
     /// ZIP data is decompressed in memory only. No archive path is ever written to disk,
     /// and entry count, archive size and uncompressed ROM size are bounded.
     fn read_rom_image(path: &PathBuf) -> Result<Vec<u8>, String> {
-        let bytes =
-            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
         let is_zip = path
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"));
+        let max_size = if is_zip {
+            MAX_ROM_ARCHIVE_BYTES as u64
+        } else {
+            MAX_ROM_BYTES
+        };
+        let metadata = fs::metadata(path)
+            .map_err(|error| format!("não foi possível consultar o arquivo ROM: {error}"))?;
+        if metadata.len() > max_size {
+            return Err(format!("arquivo ROM excede o limite de {max_size} bytes"));
+        }
+
+        let bytes =
+            fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
         if is_zip {
             extract_rom_from_zip(&bytes)
-        } else if bytes.len() > MAX_ROM_BYTES as usize {
-            Err(format!("ROM excede o limite de {MAX_ROM_BYTES} bytes"))
         } else {
             Ok(bytes)
         }
