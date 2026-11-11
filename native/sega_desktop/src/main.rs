@@ -7,12 +7,15 @@ mod windows_host {
         error::Error,
         fs,
         path::PathBuf,
+        process::Command,
         rc::Rc,
         time::{Duration, Instant},
     };
 
     use sega_sms_runtime::SmsTemporalWorker;
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
+    use std::os::windows::process::CommandExt;
+
     use slint::{
         GraphicsAPI, RenderingState, Timer, TimerMode,
         wgpu_30::{WGPUConfiguration, WGPUSettings, wgpu},
@@ -637,6 +640,44 @@ mod windows_host {
         timer
     }
 
+    /// Abre o diálogo nativo de seleção de arquivos do Windows para ROMs SMS.
+    ///
+    /// O PowerShell 5.1 e o Windows Forms fazem parte do Windows; o diálogo usa
+    /// o seletor comum do Shell. O processo auxiliar não recebe entrada do usuário.
+    fn pick_rom_file() -> Result<Option<PathBuf>, String> {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const SCRIPT: &str = r#"
+            Add-Type -AssemblyName System.Windows.Forms
+            [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+            $dialog = New-Object System.Windows.Forms.OpenFileDialog
+            $dialog.Title = 'Selecionar ROM do Sega Master System'
+            $dialog.Filter = 'ROM Sega 8-bit (*.sms;*.bin)|*.sms;*.bin|Todos os arquivos (*.*)|*.*'
+            $dialog.Multiselect = $false
+            $dialog.CheckFileExists = $true
+            if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                [Console]::Out.Write($dialog.FileName)
+            }
+        "#;
+
+        let output = Command::new("powershell.exe")
+            .args(["-NoLogo", "-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", SCRIPT])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|error| format!("não foi possível iniciar o seletor do Windows: {error}"))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+        }
+
+        let selected = String::from_utf8_lossy(&output.stdout);
+        let selected = selected.trim_end_matches(['\\r', '\\n']);
+        if selected.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(PathBuf::from(selected)))
+        }
+    }
+
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
     fn create_sms_worker(
         rom: Vec<u8>,
@@ -849,17 +890,20 @@ mod windows_host {
 
         let browse_app = app.as_weak();
         app.on_browse_rom_requested(move || {
-            let selected = rfd::FileDialog::new()
-                .set_title("Selecionar ROM do Sega Master System")
-                .add_filter("ROM Sega 8-bit", &["sms", "bin"])
-                .pick_file();
-
-            if let Some(path) = selected {
-                if let Some(app) = browse_app.upgrade() {
-                    let selected_path = path.to_string_lossy().into_owned();
-                    app.set_rom_path_input(selected_path.clone().into());
-                    app.set_active_menu("none".into());
-                    app.invoke_load_rom_requested(selected_path.into());
+            match pick_rom_file() {
+                Ok(Some(path)) => {
+                    if let Some(app) = browse_app.upgrade() {
+                        let selected_path = path.to_string_lossy().into_owned();
+                        app.set_rom_path_input(selected_path.clone().into());
+                        app.set_active_menu("none".into());
+                        app.invoke_load_rom_requested(selected_path.into());
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    if let Some(app) = browse_app.upgrade() {
+                        app.set_rom_status(format!("Seletor de arquivos indisponível: {error}").into());
+                    }
                 }
             }
         });
