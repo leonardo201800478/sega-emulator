@@ -576,6 +576,17 @@ jobs:
         run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml
 
 
+
+  windows-input-retired:
+    # Preserve the protected legacy check context without claiming SDL3 coverage.
+    # The portable input core remains tested by input-focused; SDL3 is not integrated.
+    name: Windows SDL3 input validation
+    if: false
+    runs-on: windows-latest
+    steps:
+      - name: Legacy SDL3 host intentionally not run
+        run: echo "SKIPPED: SDL3 is not integrated; portable input core has its own gate."
+
   windows-tooling:
     name: Windows PowerShell tooling syntax
     needs: [changes]
@@ -726,6 +737,7 @@ jobs:
       - windows-slint-wgpu
       - windows-audio
       - linux-audio
+      - windows-input-retired
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
@@ -758,6 +770,8 @@ jobs:
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
           EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
+          EXPECT_WINDOWS_INPUT_RETIRED: false
+          WINDOWS_INPUT_RETIRED: ${{ needs.windows-input-retired.result }}
           EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
@@ -797,5 +811,6 @@ jobs:
           check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
           check_job "Legacy Windows WASAPI/XAudio2" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
           check_job "Legacy Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
+          check_job "Retired SDL3 host context" "$EXPECT_WINDOWS_INPUT_RETIRED" "$WINDOWS_INPUT_RETIRED"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
