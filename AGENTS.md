@@ -1,57 +1,46 @@
 # Instruções para agentes de código — Sega Emulator
 
-As regras normativas são a ADR 0010 (`docs/adr/0010-rust-only-sms-temporal-first.md`), a ADR-0016 (`docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md`) e o [roadmap mestre](docs/project-roadmap.md). A fotografia operacional atual fica em [docs/project-status-2026-11-07.md](docs/project-status-2026-11-07.md).
+Decisões vigentes: ADR 0010 (runtime/hardware), ADR 0011 (desktop/hosts) e ADR-0016 (fidelidade temporal). O roadmap mestre define sequência e gates. GitHub é a única fonte da verdade.
 
-## Prioridade e arquitetura
+## Arquitetura
 
-- Produto 100% Rust. Não reintroduzir Python, PySide6/Qt, PyO3 ou Maturin em runtime, testes, tooling, scripts, CI ou distribuição.
-- GUI nativa egui/eframe; apresentação e comandos coarse-grained, sem lógica de hardware.
-- Único runtime ativo inicial: Master System temporal, sobre o Z80 compartilhado, SN76489 temporal, VDP temporal e MachineScheduler.
-- `rust/runtime/sms-runtime` é o worker SMS temporal comum. Não duplicar worker, máquina, CPU, PSG, VDP ou Scheduler.
-- O shell egui está na main; a integração vertical SMS/vídeo/áudio/input está em PRs abertas #613/#614 na fotografia de 2026-11-07. Não tratá-las como integradas antes do merge.
-- SG-1000 atômico legado não é runtime alternativo nem fallback do SMS. Preservar regressões/evidências e seguir P2 somente após P1.
-- A UI nunca executa hardware, avança clocks ou faz callbacks por instrução.
-- Não usar JIT, frame skipping, hacks temporais ou otimizações especulativas.
+- Backend/runtime 100% Rust: CPU, barramentos, memória, mappers, VDP, áudio, interrupções, Scheduler, timing e estados.
+- Desktop alvo: Slint 1.18.x + WGPU 30.x + CPAL 0.18.2; Vulkan inicial preferencial no Windows x64; SDL3 após auditoria.
+- egui/eframe e D3D12/WASAPI/XAudio2 são baseline integrada; preservar até paridade e aceite da nova stack.
+- Preservar SmsTemporalWorker, FrameMailbox, Scheduler, SMS, SG-1000 e componentes validados.
+- Não duplicar CPU, worker, máquina, PSG, VDP ou Scheduler.
+- GUI exclusivamente apresentação/integração OS. Sem hardware, instruções, clocks ou callbacks por instrução.
+- Comunicação coarse-grained: load_rom/start/pause/stop/reset/step_frame e snapshots/frames com ownership explícito.
+- Proibidos JIT, frame skipping, hacks temporais e otimizações especulativas.
 
-## Sequência obrigatória por tarefa
+## R1–R5
 
-1. Auditar SHA/main, PRs, workflows, manifests e árvore relevante.
-2. Pesquisar evidência independente e documentação primária; usar três frentes em tarefas complexas.
-3. Definir critérios de aceitação mensuráveis.
-4. Modelar estados, transições, eventos e ciclos necessários.
-5. Implementar incrementos pequenos e compiláveis em branch.
-6. Executar testes direcionados.
-7. Executar regressão e gates aplicáveis.
-8. Auditar diff, riscos e dependências.
-9. Atualizar documentação e ledger de evidências.
-10. Publicar por Pull Request; não fazer merge sem CI verde no HEAD final e autorização explícita.
+1. R1: POC isolada Slint/WGPU/Vulkan; janela, device/queue compartilhados, textura externa atualizada e composição. Sem SMS real, menus, HUD, CPAL ou SDL3.
+2. R2: frames reais SMS, preservando worker e Scheduler.
+3. R3: CPAL 0.18.2, dispositivos, formatos, streams e underruns.
+4. R4: auditar/integrar SDL3.
+5. R5: frontend Slint completo e corte da baseline após paridade.
+
+## Método
+
+Auditar SHA/main, PRs, branches e workflows; pesquisar documentação oficial e referências primárias; verificar versões, APIs e licenças; definir critérios; modelar estados/ownership/timing; implementar incrementos pequenos; executar fmt, Clippy e testes direcionados antes do workflow; regredir; auditar diff; documentar; publicar por PR.
+
+Para tarefas complexas, confrontar três frentes: engenharia reversa, documentação primária e arquitetura/modelagem. Não inventar resultados de agentes ou testes.
 
 ## Fidelidade e desempenho
 
-- MachineScheduler é a autoridade única dos clocks/eventos.
-- CPU, barramento, PSG, VDP, áudio e vídeo preservam ordem causal e determinismo.
-- WAIT, suspensão/retomada e snapshots devem refletir o estado real dos caminhos temporais ativos.
-- Execução contínua e em blocos deve produzir estados/saídas equivalentes.
-- Aplicar ADR-0016: precisão temporal detalhada nos caminhos em que ordem/duração altera comportamento observável; não impor microsequenciamento universal sem consumidor demonstrado.
+MachineScheduler é a autoridade única dos clocks/eventos. Preservar ordem causal, determinismo, WAIT states e estado necessário à retomada. Execução contínua e em blocos deve ser equivalente. UI, renderização e áudio físico nunca controlam ciclos. Aplicativos e avaliações de desempenho somente Release.
 
-## Gates obrigatórios
+## Gates
 
-```text
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-```
+- cargo fmt --all -- --check
+- cargo clippy --release --workspace --all-targets --locked -- -D warnings
+- cargo test --release --workspace --locked
 
-Validar também targets Windows/D3D12/WASAPI/XAudio2 e workspaces standalone enquanto existirem. Testes físicos não executados são NOT RUN. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN e vincular ao SHA exato. SKIPPED nunca equivale a PASS.
+Validar workspaces/targets standalone separadamente. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca é PASS. Testes físicos não executados permanecem NOT RUN. CI verde só valida jobs executados no SHA correspondente.
 
-## GitHub e publicação
+## GitHub e privacidade
 
-- GitHub é a fonte da verdade.
-- Toda alteração em branch e Pull Request.
-- Proibido commit direto na main, force-push e reset destrutivo.
-- Não fazer merge sem CI 100% verde no HEAD final e autorização explícita.
-- Não declarar migração concluída por compilação isolada ou remoção de arquivos sem validação funcional.
+Toda alteração em branch e PR. Proibidos commit direto na main, force-push e reset destrutivo. Não fazer merge sem CI aplicável verde no HEAD final e autorização explícita. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
 
-## Relatório
-
-Informar SHA base/final, branch/PR, arquivos alterados, testes realmente executados, CI, limitações e próximos passos. Nunca alegar execução local, teste físico, aprovação ou merge sem evidência.
+Ao receber "Prossiga", auditar main/PRs/CI, identificar a última tarefa concluída, resolver pendências e avançar até conclusão ou bloqueio real, sem duplicar trabalho.

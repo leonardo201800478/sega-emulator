@@ -1,80 +1,38 @@
-# Sega Emulator — Rust + egui
+# Sega Emulator — Rust / Slint + WGPU + CPAL
 
-Emulador de consoles Sega em desenvolvimento, construído integralmente em **Rust**. A interface desktop é nativa, utilizando **egui/eframe**. Não há frontend Python, PySide6/Qt, bindings PyO3 ou runtime alternativo.
+Emulador Sega multissistema com runtime de hardware integralmente em Rust. A arquitetura desktop de destino é **Slint 1.18.x + WGPU 30.x + CPAL 0.18.2**, com Vulkan como backend gráfico inicial preferencial no Windows x64.
 
-A prioridade atual é tornar o **Sega Master System temporal** executável por meio de um único runtime, usando o Z80 compartilhado e o MachineScheduler como autoridade temporal.
+**Estado importante:** a main ainda contém egui/eframe, D3D12 e WASAPI/XAudio2 como baseline integrada. A nova stack está em fase de POC; não está implementada nem integrada.
 
-## Estado atual
+## Migração
 
-- `rust/runtime/sms-runtime` contém o worker SMS temporal implementado em Rust puro.
-- O runtime utiliza `sega-sms-core`, `sega-audio-runtime` e `sega-video-runtime`.
-- A máquina SMS temporal é executada pelo worker dedicado; a aplicação envia comandos de sessão, sem callbacks por instrução.
-- A sessão de áudio física é criada por uma factory do host e executada na thread proprietária da máquina, preservando a afinidade dos objetos WASAPI/XAudio2.
-- `native/sega_app` contém o shell desktop egui/eframe. A integração operacional entre GUI, worker SMS, viewport D3D12, áudio e input nativos está em desenvolvimento nas PRs empilhadas #613 e #614; elas ainda não fazem parte da main.
-- O SMS atômico antigo foi removido do core ativo. `native/sms_core` contém a máquina temporal e fachadas para componentes compartilhados.
-- A implementação temporal ainda é parcial: o VDP opera por scanline, há WAIT de fixture e ainda não há Save States persistentes completos.
-- O SG-1000 atômico antigo não é runtime alternativo nem fallback do SMS temporal.
-- A PR #615 integrou melhoria de filtragem de saída SN76489 e fidelidade do reset do ruído.
+- **R1:** POC isolada Slint/WGPU/Vulkan: janela, device/queue compartilhados, textura externa atualizada e composição na mesma janela.
+- **R2:** frames reais SMS, preservando SmsTemporalWorker, FrameMailbox e Scheduler.
+- **R3:** saída física CPAL 0.18.2.
+- **R4:** auditoria e integração SDL3 para teclado/gamepads.
+- **R5:** frontend Slint completo, launcher, biblioteca, configurações, HUD e telemetria; corte da baseline após paridade.
 
-A existência dos crates e do worker temporal não comprova que o emulador esteja pronto para gameplay real. Compatibilidade, fidelidade e desempenho só devem ser declarados após validação reproduzível.
-
-**Fotografia operacional e PRs:** [status do projeto em 2026-11-07](docs/project-status-2026-11-07.md).  
-**Mapa de documentação:** [docs/README.md](docs/README.md).  
-**Evidência do stress longo do Scheduler:** [registro de 2026-11-07](docs/evidence/scheduler-stress-long-2026-11-07.md).
+Consulte [status](docs/project-status-2026-11-11.md), [escopo](docs/project-scope.md), [roadmap](docs/project-roadmap.md), [sprint R1](docs/sprints/2026-11-r1-slint-wgpu-vulkan-poc.md) e [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md).
 
 ## Arquitetura
 
-O produto é integralmente Rust:
+**Runtime Rust preservado:** CPU Z80 compartilhada, memória, barramentos, mappers, VDP, PSG, interrupções, MachineScheduler, timing e estados. O Scheduler é a autoridade temporal. A GUI não executa instruções, avança clocks ou controla ciclos.
 
-- **Hardware e runtime:** CPU Z80 compartilhada, barramento, memória, mapper, I/O, VDP, PSG, Scheduler, áudio, vídeo e input.
-- **Aplicação desktop:** Rust com egui/eframe, responsável pela apresentação, menus e comandos de alto nível.
-- **Hosts nativos:** integração com D3D12, WASAPI/XAudio2 e dispositivos de entrada no ambiente Windows.
-- **Execução:** o worker SMS é proprietário da máquina e do Scheduler. A GUI não executa instruções, avança clocks nem controla eventos de hardware.
-- **Comunicação:** comandos coarse-grained de ciclo de vida e sessão; nunca callbacks por instrução.
+**Desktop alvo:** Slint 1.18.x para GUI; WGPU 30.x para renderização; Vulkan via WGPU no Windows x64; CPAL 0.18.2 para áudio; SDL3 para input após auditoria.
 
-Não fazem parte da arquitetura: Python, PySide6, PyQt, Qt, PyO3, Maturin ou um frontend legado. Não há fallback para os cores atômicos antigos.
+Estrutura de referência: native/sega_desktop, native/video_output_wgpu e native/audio_output. A estrutura real prevalece; não duplicar crates/componentes.
 
-São proibidos JIT, frame skipping, hacks temporais e otimizações especulativas.
+egui/eframe e D3D12/WASAPI/XAudio2 são baseline temporária. Não removê-los antes de paridade, regressão e validação Release.
 
-Consulte as decisões normativas:
-- [ADR 0010 — Produto 100% Rust e SMS temporal](docs/adr/0010-rust-only-sms-temporal-first.md)
-- [ADR-0016 — Fidelidade observável e temporização proporcional](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
-- [Roadmap mestre](docs/project-roadmap.md)
+## Build e validação
 
-## Ambiente de desenvolvimento
+Builds do aplicativo e avaliações de desempenho devem usar Release. Não usar Debug como referência de desempenho. Conferir formatação, Clippy e testes direcionados antes de enviar ao workflow.
 
-- Rust toolchain definida em `rust-toolchain.toml` (atualmente 1.99.1).
-- Git.
-- Windows x64 e Visual Studio Build Tools com MSVC para validar os targets e hosts nativos Windows, incluindo D3D12, WASAPI e XAudio2.
-- PowerShell para os scripts de automação e auditoria do repositório.
+Gates:
+- cargo fmt --all -- --check
+- cargo clippy --release --workspace --all-targets --locked -- -D warnings
+- cargo test --release --workspace --locked
 
-**Não é necessário instalar Python, Qt, PyO3, Maturin ou ferramentas de testes Python.**
+Validar workspaces standalone e targets específicos separadamente. SKIPPED é NOT RUN, nunca PASS. Todo resultado deve corresponder ao SHA exato.
 
-## Compilar e validar
-
-Na raiz do repositório, em PowerShell:
-
-```powershell
-.\scripts\compile-fast.ps1 -Release -AllWorkspaces
-.\scripts\project.ps1 audit
-.\scripts\project.ps1 locks
-.\scripts\project.ps1 validate
-```
-
-Gates Rust obrigatórios:
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-```
-
-Enquanto existirem workspaces standalone e targets específicos, eles também devem ser validados separadamente, incluindo compilação Windows/D3D12 e hosts WASAPI/XAudio2. Testes físicos não executados devem ser classificados como **NOT RUN** ou **BLOCKED**, nunca como PASS.
-
-Os testes externos ZEXDOC/ZEXALL estão **NOT RUN**: o executor Rust de baixo nível existe, mas a aquisição, montagem e orquestração da suíte ainda precisam ser portadas para Rust. A ausência dessas suítes não equivale a aprovação.
-
-## Segurança e licença
-
-Use somente ROMs e firmware que você tenha direito de executar. ROMs comerciais, BIOS proprietárias e dumps protegidos não devem ser versionados.
-
-O projeto é distribuído sob a licença MIT. Consulte [LICENSE](LICENSE). Sega e nomes de consoles/chips são marcas de seus respectivos titulares; o projeto é independente e não afiliado à SEGA.
+Não usar JIT, frame skipping, hacks temporais ou otimizações especulativas. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos. Projeto independente, sem afiliação à SEGA.
