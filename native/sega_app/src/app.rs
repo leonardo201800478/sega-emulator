@@ -3312,8 +3312,8 @@ mod tests {
         }));
 
         assert!(text.contains("49.8 FPS"));
-        assert!(text.contains("20.10 ms"));
-        assert!(text.contains("7.5 ms"));
+        assert!(text.contains("Frame interval 20.10 ms"));
+        assert!(text.contains("Input -> emulated frame 7.5 ms"));
         assert!(!text.contains("60 FPS"));
     }
 
@@ -3322,7 +3322,7 @@ mod tests {
         let text = super::format_sms_hud_text(Some(super::SmsPerformanceMetrics::default()));
 
         assert!(text.contains("0.0 FPS"));
-        assert!(text.contains("Frame --"));
+        assert!(text.contains("Frame interval --"));
         assert!(text.contains("Input -> emulated frame --"));
     }
 
