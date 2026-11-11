@@ -1,7 +1,7 @@
 #![deny(unsafe_code)]
 
 #[cfg(windows)]
-mod windows_poc {
+mod windows_host {
     use std::{
         cell::{Cell, RefCell},
         error::Error,
