@@ -43,6 +43,7 @@ As alterações em `.github/workflows/**`, `.github/actions/**` ou `.github/scri
 | D3D12 legado | Clippy e testes Windows do runtime gráfico | CI / Legacy Windows host | Alterações no runtime gráfico/VDP ou opt-in |
 | CPAL | Dispositivos, formatos, streams, callback e underruns | Gate futuro R3 | Somente após implementação |
 | SDL3 | Teclado, gamepads e mapeamento de controles | Gate futuro R4 | Somente após integração |
+| SMS debugger GUI egui | `NOT RUN`; o núcleo debugger_core continua coberto no workspace Rust | Nenhum gate padrão | Host de desenvolvimento legado; reativação exige lockfile e gate opt-in |
 | Documentação | `git diff --check` | CI / Documentation | Alterações Markdown, MDX, RST ou TXT |
 | Workflows | actionlint e validação do gate agregado | CI / Workflow lint | Alterações nos workflows e arquivos auxiliares |
 | PowerShell tooling | Parser PowerShell nos scripts alterados | CI / Windows tooling | Alterações em `scripts/**/*.ps1` |
@@ -104,9 +105,8 @@ Workspaces com lockfile independente devem ser auditados individualmente:
 - `Cargo.lock` — workspace Rust raiz, incluindo `native/sega_desktop` quando integrado.
 - `native/audio_output/Cargo.lock` — host de áudio legado.
 - `native/sega_app/Cargo.lock` — aplicação egui/eframe legada.
-- `native/sms_debugger/Cargo.lock` — host/debugger independente.
 
-O lockfile do SMS debugger deve ser versionado; gerar um lockfile novo durante cada execução de CI não é validação reprodutível.
+O host GUI `native/sms_debugger` é um utilitário legado e fica explicitamente `NOT RUN` na CI padrão. O núcleo `debugger_core` permanece coberto pelo workspace raiz. Se o host GUI voltar a ser suportado, deverá receber lockfile versionado e gate opt-in próprio antes de ser reativado.
 
 O refresh de lockfiles é uma operação manual/opt-in que produz artefato temporário para revisão. O workflow não recebe permissão `contents: write`, não faz commit e não executa push automático.
 
