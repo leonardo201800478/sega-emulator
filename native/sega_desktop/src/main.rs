@@ -574,7 +574,7 @@ mod windows_host {
                         return;
                     }
 
-                    match create_imported_texture(&device, &queue) {
+                    match create_imported_texture(device, queue) {
                         Ok(image) => {
                             *queue_slot.borrow_mut() = Some(queue.clone());
 
