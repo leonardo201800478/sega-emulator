@@ -5,7 +5,7 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 ## Menu migration
 
 - Sistema: SMS region selection (USA, Brasil, Europa, Japão); other Sega systems remain visible but disabled until their runtimes are integrated.
-- Arquivo: load raw `.sms` / `.bin` ROMs or a `.zip` containing exactly one supported ROM entry; reopen recent ROMs, close ROM and exit.
+- Arquivo: load raw `.sms` / `.bin` ROMs or a `.zip` containing exactly one supported ROM entry; reopen recent ROMs and exit. O desligamento POWER OFF mantém a ROM carregada; o comando de descarregar ROM não fica exposto neste menu.
 - Vídeo: 4:3, 1:1 and 16:9 presentation modes preserve the selected ratio while the window is resized; unused viewport space is letterboxed. The source frame remains 256×192. The optional sprite-limit compatibility mode is persisted separately from hardware state.
 - Áudio: menu retained; physical output, backend selection and volume remain disabled until R3 (CPAL 0.18.2).
 - Controles: keyboard/gamepad entries retained; physical input and remapping remain disabled until R4 (SDL3).
@@ -16,7 +16,7 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 
 - SmsTemporalWorker owns the SMS machine and its execution thread.
 - MachineScheduler remains the sole authority for emulated time.
-- Start/Pause/Stop/Reset/Step-frame and ROM replacement are coarse-grained worker commands.
+- Start liga e executa; Pause congela preservando o estado; Stop executa POWER OFF (reinicializa a máquina sem descarregar a ROM); Reset reinicializa e retoma automaticamente; Step-frame avança um quadro enquanto pausado. Todas são operações coarse-grained do worker.
 - Completed immutable VideoFrame values are published through FrameMailbox.
 - The UI timer consumes only the newest pending frame; it never advances emulation.
 - RGB888 is converted to tightly packed RGBA8 only at the presentation boundary.
@@ -42,7 +42,7 @@ cargo test --release --locked --all-targets --manifest-path native/sega_desktop/
 cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
 ```
 
-A successful build does not prove physical Vulkan presentation. Run on Windows x64 and verify real VDP output, all enabled menu commands, ROM replacement/close, pause/resume/reset/step-frame, aspect-ratio modes during continuous resize, video-click resume from pause, F11 fullscreen toggle, ZIP ROM selection and rejection cases, sprite-limit toggling, trace capture, and clean shutdown.
+A successful build does not prove physical Vulkan presentation. Run on Windows x64 and verify real VDP output, menu panels opening without changing main-window geometry or fullscreen state, ROM replacement, pause/resume/POWER OFF/restart/reset-auto-resume/step-frame, aspect-ratio modes during continuous resize, video-click resume from pause, F11 fullscreen toggle, ZIP ROM selection and rejection cases, sprite-limit toggling, trace capture, and clean shutdown.
 
 
 ## R2.3 — persistent frontend preferences
