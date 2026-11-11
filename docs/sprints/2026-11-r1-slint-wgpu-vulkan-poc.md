@@ -128,3 +128,38 @@ A alteração subsequente em `native/sega_desktop/src/main.rs`:
 - Não tenta simular uma recriação de superfície nem afirma que resize dispara teardown; o ciclo de superfície pertence ao backend Winit/WGPU.
 
 Validação pendente para esta alteração: fmt, Clippy, testes, build Release Windows x64, teste manual do preenchimento responsivo e inspeção do log de lifecycle. R1-07 e R1-10 permanecem PARTIAL até essas evidências.
+
+
+## Reteste físico do usuário — resize e teardown / 2026-11-11
+
+Novas evidências enviadas pelo usuário após a build de validação:
+
+- Duas capturas demonstram a textura redimensionando junto com a janela, mantendo sua proporção e preenchendo a área útil disponível.
+- O usuário reportou animação fluida.
+- A janela identificou novamente Vulkan e NVIDIA GeForce RTX 5070.
+- Os contadores mostraram `Renderer setup: 1 | teardown: 0` enquanto a janela estava ativa.
+- O log registrou `RenderingSetup count=1` e `RenderingTeardown count=1` no encerramento.
+- Na primeira execução, o processo entrou em panic no encerramento: `RefCell already mutably borrowed`, em `i-slint-backend-winit-1.18.1/winitwindowadapter.rs:1852`. O segundo encerramento observado não reproduziu o panic.
+
+### Análise e correção
+
+A causa imediata era a mutação síncrona de propriedades Slint dentro do callback de `RenderingTeardown` (e, por consistência, também em `RenderingSetup`). O callback é executado enquanto o backend Winit mantém empréstimo interno do adaptador; alterar uma propriedade pode disparar atualização/redraw reentrante e tentar obter novo empréstimo mutável do mesmo `RefCell`.
+
+Correção na branch desta PR:
+
+- O callback de lifecycle limita-se a atualizar contadores, liberar a fila externa e preparar os dados de UI.
+- Atualizações de propriedades Slint são agendadas com `Timer::single_shot(Duration::ZERO, ...)`, para ocorrerem depois que o notifier retornar.
+- A imagem é limpa de forma diferida no teardown.
+- O tratamento de erro de backend, falha de importação e API incompatível também usa atualização diferida.
+
+A API `Timer::single_shot` está documentada no Slint 1.18.1. Esta correção evita a mutação reentrante observada; o encerramento precisa ser repetido com a nova build para confirmar o resultado.
+
+| Critério | Estado após evidência do usuário |
+|---|---|
+| Resize responsivo e proporção | PASS |
+| Fluidez visual observada | PASS qualitativo |
+| Eventos Setup/Teardown emitidos | PASS |
+| Encerramento sem panic | FAIL na primeira execução; segunda execução sem reprodução |
+| Correção diferida do notifier | Implementada; CI e reteste pendentes |
+
+Não declarar R1 concluída até a CI desta revisão passar e o usuário confirmar encerramento repetido sem panic na nova build.
