@@ -14,7 +14,12 @@ on:
         options: [none, short, long]
         default: none
       refresh_cargo_lockfiles:
-        description: "Generate updated Cargo.lock files and upload them as an artifact"
+        description: "Generate the root workspace Cargo.lock and upload it as an artifact"
+        required: false
+        type: boolean
+        default: false
+      validate_legacy_hosts:
+        description: "Opt in to legacy egui/D3D12/WASAPI/XAudio2 host validation"
         required: false
         type: boolean
         default: false
@@ -44,6 +49,9 @@ jobs:
       audio: ${{ steps.filter.outputs.audio }}
       input: ${{ steps.filter.outputs.input }}
       app: ${{ steps.filter.outputs.app }}
+      slint_desktop: ${{ steps.filter.outputs.slint_desktop }}
+      legacy_video: ${{ steps.filter.outputs.legacy_video }}
+      legacy_audio: ${{ steps.filter.outputs.legacy_audio }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
       full: ${{ steps.filter.outputs.full }}
@@ -154,31 +162,23 @@ jobs:
               - 'native/sg1000_core/src/input.rs'
               - 'native/observability/**'
             app:
-              - 'rust/runtime/sms-runtime/**'
               - 'native/sega_app/**'
+            slint_desktop:
               - 'native/sega_desktop/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain*'
+              - '.cargo/**'
+            legacy_video:
               - 'native/video_runtime/**'
-              - 'native/video_core/**'
+            legacy_audio:
               - 'native/audio_output/**'
-              - 'native/audio_runtime/**'
-              - 'native/input_runtime/**'
-              - 'native/machine_scheduler/**'
-              - 'native/temporal_core/**'
-              - 'native/sn76489/**'
-              - 'native/observability/**'
-              - 'native/sms_core/**'
-              - '!native/sms_core/src/cpu.rs'
-              - '!native/sms_core/src/alu.rs'
-              - '!native/sms_core/src/bus.rs'
-              - '!native/sms_core/tests/z80_*.rs'
-              - '!native/sms_core/src/bin/z80test_runner.rs'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
             tooling:
               - 'scripts/**/*.ps1'
             full:
-              - '.github/workflows/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain*'
@@ -394,11 +394,10 @@ jobs:
     name: Windows x64 D3D12 compile
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.video == 'true' ||
-        needs.changes.outputs.app == 'true' ||
-        needs.changes.outputs.full == 'true'))
+       (needs.changes.outputs.legacy_video == 'true' ||
+        needs.changes.outputs.app == 'true'))
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -435,7 +434,7 @@ jobs:
   windows-slint-wgpu:
     name: Windows x64 Slint WGPU 30 Vulkan POC
     needs: [changes]
-    if: github.event_name != 'workflow_dispatch' && (needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')
+    if: (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true')
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -458,9 +457,9 @@ jobs:
     name: Windows WASAPI and XAudio2 validation
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
+      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
       (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true'))
+       (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true'))
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -481,8 +480,8 @@ jobs:
     name: Linux audio-output host validation
     needs: [changes]
     if: |
-      github.event_name != 'workflow_dispatch' &&
-      (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')
+      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
+      (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -503,9 +502,8 @@ jobs:
     name: Windows SDL3 input validation
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true'))
+      (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
+      (github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true')
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -524,9 +522,7 @@ jobs:
     name: Windows PowerShell tooling syntax
     needs: [changes]
     if: |
-      (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
-      (github.event_name != 'workflow_dispatch' &&
-       (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true'))
+      github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -604,7 +600,7 @@ jobs:
           "$test_bin" --ignored --nocapture
 
   refresh-lockfiles:
-    name: Refresh Cargo lockfiles (manual artifact)
+    name: Refresh root workspace Cargo.lock (manual artifact)
     if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -615,66 +611,17 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-      - name: Refresh root workspace dependencies
+      - name: Refresh root workspace dependencies only
         run: cargo update --workspace
-      - name: Refresh standalone audio-output workspace
-        run: cargo update --manifest-path native/audio_output/Cargo.toml
-      - name: Refresh standalone egui application workspace
-        run: cargo update --manifest-path native/sega_app/Cargo.toml
-      - name: Verify refreshed lockfiles
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo metadata --locked --format-version 1 --no-deps
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/audio_output/Cargo.toml
-          cargo metadata --locked --format-version 1 --no-deps --manifest-path native/sega_app/Cargo.toml
-          test -f Cargo.lock
-          test -f native/audio_output/Cargo.lock
-          test -f native/sega_app/Cargo.lock
-      - name: Upload generated Cargo lockfiles
+      - name: Verify root workspace lockfile
+        run: cargo metadata --locked --format-version 1 --no-deps
+      - name: Upload root Cargo.lock
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cargo-lockfiles-${{ github.run_id }}
-          path: |
-            Cargo.lock
-            native/audio_output/Cargo.lock
-            native/sega_app/Cargo.lock
+          name: root-cargo-lockfile-${{ github.run_id }}
+          path: Cargo.lock
           if-no-files-found: error
           retention-days: 1
-
-  refresh-r1-lockfile:
-    name: Refresh R1 root Cargo.lock on PR branch
-    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-r1-cargo-lockfile' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'feat/r1-')
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: true
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
-      - name: Resolve R1 workspace dependencies
-        run: cargo update --workspace
-      - name: Verify root lockfile is current
-        run: cargo metadata --locked --format-version 1 --no-deps
-      - name: Commit refreshed root Cargo.lock to this PR branch
-        shell: bash
-        env:
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
-          if git diff --cached --quiet; then
-            echo "Root Cargo.lock is already current."
-            exit 0
-          fi
-          git commit -m "chore: refresh root Cargo.lock for R1 Slint desktop"
-          git push origin "HEAD:${PR_BRANCH}"
 
   quality-gate:
     name: Rust quality and unit regression
@@ -713,17 +660,17 @@ jobs:
           INPUT_FOCUSED: ${{ needs.input-focused.result }}
           EXPECT_DOCS: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.docs == 'true' }}
           DOCS: ${{ needs.docs-format.result }}
-          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.video == 'true' || needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
-          EXPECT_WINDOWS_SLINT_WGPU: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.app == 'true' || needs.changes.outputs.full == 'true') }}
+          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true') }}
           WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
-          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
-          EXPECT_LINUX_AUDIO: ${{ github.event_name != 'workflow_dispatch' && (needs.changes.outputs.audio == 'true' || needs.changes.outputs.full == 'true') }}
+          EXPECT_LINUX_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.legacy_audio == 'true') }}
           LINUX_AUDIO: ${{ needs.linux-audio.result }}
-          EXPECT_WINDOWS_INPUT: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.input == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_INPUT: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.input == 'true') }}
           WINDOWS_INPUT: ${{ needs.windows-input.result }}
-          EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.tooling == 'true' || needs.changes.outputs.full == 'true')) }}
+          EXPECT_WINDOWS_TOOLING: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true' }}
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
@@ -757,10 +704,10 @@ jobs:
           check_job "VDP focused" "$EXPECT_VDP" "$VDP"
           check_job "Input focused" "$EXPECT_INPUT_FOCUSED" "$INPUT_FOCUSED"
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
-          check_job "Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
+          check_job "Legacy Windows D3D12" "$EXPECT_WINDOWS_D3D12" "$WINDOWS_D3D12"
           check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
-          check_job "Windows audio" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
-          check_job "Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
-          check_job "Windows input" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
+          check_job "Legacy Windows WASAPI/XAudio2" "$EXPECT_WINDOWS_AUDIO" "$WINDOWS_AUDIO"
+          check_job "Legacy Linux audio host" "$EXPECT_LINUX_AUDIO" "$LINUX_AUDIO"
+          check_job "Windows input runtime" "$EXPECT_WINDOWS_INPUT" "$WINDOWS_INPUT"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
