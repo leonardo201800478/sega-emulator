@@ -1,0 +1,21 @@
+[package]
+name = "sega-desktop"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[target.'cfg(windows)'.dependencies]
+slint = { version = "~1.18", default-features = false, features = [
+    "compat-1-18",
+    "std",
+    "backend-winit",
+    "renderer-femtovg-wgpu",
+    "unstable-wgpu-30",
+] }
+
+[lints.rust]
+unsafe_code = "deny" # Slint macros locally allow generated unsafe glue; handwritten unsafe remains denied.
+unused_must_use = "deny"
+
+[lints.clippy]
+all = "warn"
