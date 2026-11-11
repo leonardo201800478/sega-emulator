@@ -210,19 +210,28 @@ impl Drop for D3d12HudOverlay {
 }
 
 fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
-    let class = WNDCLASSW {
-        style: CS_HREDRAW | CS_VREDRAW,
-        lpfnWndProc: Some(hud_window_proc),
-        hInstance: instance,
-        lpszClassName: w!("SegaEmulatorTelemetryHud"),
-        ..Default::default()
-    };
+    // RegisterClassW is process-scoped. Serialize registration and remember a
+    // successful result so creating later HUD instances never races a second
+    // RegisterClassW call against the already-registered class.
+    static REGISTRATION: std::sync::OnceLock<std::result::Result<(), windows::core::HRESULT>> =
+        std::sync::OnceLock::new();
 
-    let atom = unsafe { RegisterClassW(&class) };
-    if atom == 0 {
-        // Window classes are process-scoped and can outlive every HWND created
-        // from them. Verify an existing registration instead of relying only on
-        // GetLastError: another subsystem may already have registered this name.
+    let registration = REGISTRATION.get_or_init(|| {
+        let class = WNDCLASSW {
+            style: CS_HREDRAW | CS_VREDRAW,
+            lpfnWndProc: Some(hud_window_proc),
+            hInstance: instance,
+            lpszClassName: w!("SegaEmulatorTelemetryHud"),
+            ..Default::default()
+        };
+
+        let atom = unsafe { RegisterClassW(&class) };
+        if atom != 0 {
+            return Ok(());
+        }
+
+        // A class may have been registered before this module's first call.
+        // Reuse it only when its module and window procedure match ours.
         let registration_error = Error::from_thread();
         let expected_window_proc: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT =
             hud_window_proc;
@@ -238,11 +247,21 @@ fn register_hud_window_class(instance: HINSTANCE) -> Result<()> {
             && existing
                 .lpfnWndProc
                 .is_some_and(|registered| std::ptr::fn_addr_eq(registered, expected_window_proc));
-        if !class_matches {
-            return Err(registration_error);
+
+        if class_matches {
+            Ok(())
+        } else {
+            Err(registration_error.code())
         }
+    });
+
+    match registration {
+        Ok(()) => Ok(()),
+        Err(code) => Err(Error::new(
+            *code,
+            "Failed to register or validate the SMS telemetry HUD window class",
+        )),
     }
-    Ok(())
 }
 
 unsafe extern "system" fn hud_window_proc(
