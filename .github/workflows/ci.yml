@@ -14,7 +14,7 @@ on:
         options: [none, short, long]
         default: none
       refresh_cargo_lockfiles:
-        description: "Generate the root workspace Cargo.lock and upload it as an artifact"
+        description: "Refresh tracked workspace lockfiles and upload them as an artifact"
         required: false
         type: boolean
         default: false
@@ -34,7 +34,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   changes:
