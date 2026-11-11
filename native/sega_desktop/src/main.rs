@@ -187,10 +187,6 @@ mod windows_poc {
                     RenderingState::RenderingSetup,
                     GraphicsAPI::WGPU30 { device, queue, .. },
                 ) => {
-                    let Some(app) = app_weak.upgrade() else {
-                        return;
-                    };
-
                     let setup_count = setup_counter.get().wrapping_add(1);
                     setup_counter.set(setup_count);
 
@@ -201,40 +197,52 @@ mod windows_poc {
                     );
 
                     if adapter_info.backend != wgpu::Backend::Vulkan {
-                        app.set_gpu_status(
-                            format!(
-                                "FALHA: backend esperado Vulkan; recebido {:?} ({})",
-                                adapter_info.backend, adapter_info.name
-                            )
-                            .into(),
+                        let app_weak = app_weak.clone();
+                        let status = format!(
+                            "FALHA: backend esperado Vulkan; recebido {:?} ({})",
+                            adapter_info.backend, adapter_info.name
                         );
+                        Timer::single_shot(Duration::ZERO, move || {
+                            if let Some(app) = app_weak.upgrade() {
+                                app.set_gpu_status(status.into());
+                            }
+                        });
                         return;
                     }
 
                     match create_imported_texture(device, queue) {
                         Ok(image) => {
-                            app.set_gpu_texture(image);
-                            app.set_gpu_status(
-                                format!(
-                                    "PASS API: Vulkan | adapter: {} | Slint/WGPU 30 compartilham device/queue",
-                                    adapter_info.name
-                                )
-                                .into(),
-                            );
                             *queue_slot.borrow_mut() = Some(queue.clone());
-                            app.set_lifecycle_status(
-                                format!(
-                                    "Renderer setup: {setup_count} | teardown: {}",
-                                    teardown_counter.get()
-                                )
-                                .into(),
+
+                            let app_weak = app_weak.clone();
+                            let status = format!(
+                                "PASS API: Vulkan | adapter: {} | Slint/WGPU 30 compartilham device/queue",
+                                adapter_info.name
                             );
+                            let lifecycle_status = format!(
+                                "Renderer setup: {setup_count} | teardown: {}",
+                                teardown_counter.get()
+                            );
+
+                            // Rendering notifiers run while the Winit adapter is borrowed.
+                            // Defer Slint property mutations until the notifier has returned.
+                            Timer::single_shot(Duration::ZERO, move || {
+                                if let Some(app) = app_weak.upgrade() {
+                                    app.set_gpu_texture(image);
+                                    app.set_gpu_status(status.into());
+                                    app.set_lifecycle_status(lifecycle_status.into());
+                                }
+                            });
                         }
                         Err(error) => {
                             eprintln!("R1_LIFECYCLE event=TextureImportFailed error={error}");
-                            app.set_gpu_status(
-                                format!("FALHA ao importar textura WGPU: {error}").into(),
-                            );
+                            let app_weak = app_weak.clone();
+                            let status = format!("FALHA ao importar textura WGPU: {error}");
+                            Timer::single_shot(Duration::ZERO, move || {
+                                if let Some(app) = app_weak.upgrade() {
+                                    app.set_gpu_status(status.into());
+                                }
+                            });
                         }
                     }
                 }
@@ -246,26 +254,34 @@ mod windows_poc {
                     );
 
                     *queue_slot.borrow_mut() = None;
-                    if let Some(app) = app_weak.upgrade() {
-                        app.set_gpu_texture(slint::Image::default());
-                        app.set_lifecycle_status(
-                            format!(
-                                "Renderer setup: {} | teardown: {teardown_count}",
-                                setup_counter.get()
-                            )
-                            .into(),
-                        );
-                    }
+
+                    let app_weak = app_weak.clone();
+                    let lifecycle_status = format!(
+                        "Renderer setup: {} | teardown: {teardown_count}",
+                        setup_counter.get()
+                    );
+
+                    // Do not mutate Slint properties from inside RenderingTeardown:
+                    // Winit still holds an internal RefCell borrow at this point.
+                    Timer::single_shot(Duration::ZERO, move || {
+                        if let Some(app) = app_weak.upgrade() {
+                            app.set_gpu_texture(slint::Image::default());
+                            app.set_lifecycle_status(lifecycle_status.into());
+                        }
+                    });
                 }
                 (RenderingState::RenderingSetup, _) => {
                     eprintln!(
                         "R1_LIFECYCLE event=RenderingSetupFailed reason=GraphicsAPI_not_WGPU30"
                     );
-                    if let Some(app) = app_weak.upgrade() {
-                        app.set_gpu_status(
-                            "FALHA: o renderer Slint não forneceu GraphicsAPI::WGPU30.".into(),
-                        );
-                    }
+                    let app_weak = app_weak.clone();
+                    Timer::single_shot(Duration::ZERO, move || {
+                        if let Some(app) = app_weak.upgrade() {
+                            app.set_gpu_status(
+                                "FALHA: o renderer Slint não forneceu GraphicsAPI::WGPU30.".into(),
+                            );
+                        }
+                    });
                 }
                 _ => {}
             }
