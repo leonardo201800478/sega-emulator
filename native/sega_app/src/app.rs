@@ -2641,7 +2641,7 @@ fn render_options_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
             .show_ui(ui, |ui| {
                 ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Small, "Pequeno");
                 ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Medium, "Médio");
-                ui.selectable_value(*state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
+                ui.selectable_value(state.fps_overlay_size, FpsOverlaySize::Large, "Grande");
             });
     });
     ui.separator();
