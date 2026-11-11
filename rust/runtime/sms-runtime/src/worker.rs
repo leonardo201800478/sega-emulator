@@ -1331,7 +1331,9 @@ fn handle_command(
             let _ = reply.send(result);
         }
         WorkerCommand::Reset(reply) => match build_sms_temporal_machine(rom.clone(), region) {
-            Ok(reset_machine) => {
+            Ok(mut reset_machine) => {
+                // Reset rebuilds machine state but preserves host-selected VDP compatibility policy.
+                reset_machine.set_sprite_limit_mode(machine.vdp().sprite_limit_mode());
                 *running = false;
                 telemetry.running.store(false, Ordering::Release);
                 let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
@@ -1975,6 +1977,22 @@ mod tests {
 
         worker.start().unwrap();
         assert!(worker.is_running());
+    }
+
+    #[test]
+    fn reset_preserves_host_selected_sprite_limit_mode() {
+        let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker
+            .set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)
+            .unwrap();
+
+        worker.step_frame(100_000).unwrap();
+        worker.reset().unwrap();
+
+        let reset = worker.debug_snapshot().unwrap();
+        assert_eq!(reset.sprite_limit_mode, SpriteLimitMode::UnlockedCompatibility);
+        assert_eq!(reset.frame_number, 0);
+        assert_eq!(reset.machine_time_ticks, 0);
     }
 
     #[test]
