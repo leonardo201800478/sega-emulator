@@ -56,6 +56,7 @@ jobs:
       input: ${{ steps.filter.outputs.input }}
       app: ${{ steps.filter.outputs.app }}
       slint_desktop: ${{ steps.filter.outputs.slint_desktop }}
+      slint_desktop_present: ${{ steps.slint_manifest.outputs.present }}
       legacy_video: ${{ steps.filter.outputs.legacy_video }}
       legacy_audio: ${{ steps.filter.outputs.legacy_audio }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
@@ -68,6 +69,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Checkout exact commit for capability detection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Detect Slint desktop crate
+        id: slint_manifest
+        shell: bash
+        run: |
+          if [ -f native/sega_desktop/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Classify changed paths
         if: github.event_name != 'workflow_dispatch'
         id: filter
@@ -493,7 +509,7 @@ jobs:
   windows-slint-wgpu:
     name: Windows x64 Slint WGPU 30 Vulkan POC
     needs: [changes]
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles')) && ((github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true')) }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'refresh-cargo-lockfiles')) && ((github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true')) }}
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -729,7 +745,7 @@ jobs:
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
           EXPECT_WINDOWS_D3D12: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_video == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_D3D12: ${{ needs.windows-d3d12.result }}
-          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true') }}
+          EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true') }}
           WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
           EXPECT_WINDOWS_AUDIO: ${{ (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.legacy_audio == 'true' || needs.changes.outputs.app == 'true')) }}
           WINDOWS_AUDIO: ${{ needs.windows-audio.result }}
