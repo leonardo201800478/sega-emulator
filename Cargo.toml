@@ -18,6 +18,7 @@ members = [
     "native/video_core",
     "native/observability",
     "native/debugger_core",
+    "native/sega_desktop",
     "rust/runtime/sms-runtime",
 ]
 default-members = [
@@ -33,6 +34,7 @@ default-members = [
     "native/machine_scheduler",
     "native/video_runtime",
     "native/observability",
+    "native/sega_desktop",
     "rust/runtime/sms-runtime",
 ]
 

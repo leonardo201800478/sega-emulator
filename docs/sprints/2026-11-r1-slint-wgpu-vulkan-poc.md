@@ -12,11 +12,12 @@ Comprovar integração executável entre Slint 1.18, WGPU 30 e Vulkan no Windows
 ## Escopo
 
 - Verificar APIs oficiais e versões.
-- Criar aplicação mínima Rust/Slint.
-- Inicializar WGPU 30 com Vulkan explícito.
-- Compartilhar wgpu::Device e wgpu::Queue com Slint.
-- Criar e atualizar textura de teste.
-- Importar/compor textura na janela Slint.
+- Criar a aplicação isolada em `native/sega_desktop`, sem dependência do runtime SMS.
+- Habilitar `backend-winit`, `renderer-femtovg-wgpu` e `unstable-wgpu-30` no Slint 1.18.
+- Inicializar WGPU 30 com Vulkan explícito por `WGPUSettings.backends`.
+- Obter o wgpu::Device e wgpu::Queue do renderer Slint pelo rendering notifier e confirmar backend com `Device::adapter_info()`.
+- Criar textura RGBA8 com TEXTURE_BINDING, RENDER_ATTACHMENT e COPY_DST.
+- Importar a textura via `Image::try_from`, atualizá-la pela queue compartilhada e compô-la com a UI Slint.
 - Validar resize, surface lifecycle, erros e shutdown.
 - Build e execução Release Windows x64.
 - Registrar adapter, backend, versões, features, comandos e limitações.
@@ -37,28 +38,37 @@ SmsTemporalWorker, FrameMailbox, ROM, CPU, VDP, PSG, Scheduler, menus de jogo, p
 | R1-06 | Composição | Textura e UI na mesma janela |
 | R1-07 | Lifecycle | Resize, surface recreation e shutdown |
 | R1-08 | Reprodutibilidade | Build Release e instruções reproduzíveis |
+| R1-09 | Backend Slint | Renderer FemtoVG WGPU selecionado, sem fallback |
+| R1-10 | Teardown | Recursos externos liberados/recriados sem uso após teardown |
 
 Documentação das APIs comprova viabilidade teórica, não substitui os testes R1-01 a R1-08.
 
 ## Plano
 
-1. Confirmar feature/API Slint WGPU 30, configuração manual e importação de textura.
-2. Fixar dependências e features no manifest/lockfile.
-3. Implementar janela e inicialização WGPU/Vulkan.
-4. Comprovar device/queue compartilhados.
-5. Atualizar textura animada e compor com Slint.
-6. Tratar resize, surface lifecycle e shutdown.
-7. Executar fmt, Clippy e testes aplicáveis antes da CI.
-8. Build e execução Release Windows x64.
-9. Registrar logs, SHA, ambiente e limitações.
+1. Confirmar APIs Slint 1.18/WGPU 30 e renderer FemtoVG WGPU.
+2. Adicionar `native/sega_desktop` ao workspace Rust, com dependência Slint apenas no target Windows.
+3. Selecionar explicitamente `winit` + `femtovg-wgpu`, restringir WGPU a Vulkan e validar adapter/backend no rendering notifier.
+4. Criar/importar textura externa e atualizá-la pela queue compartilhada.
+5. Exibir textura e UI na mesma janela e solicitar redraw periódico.
+6. Tratar teardown/recriação do renderer, resize e shutdown.
+7. Executar fmt, Clippy e testes direcionados.
+8. Build Release Windows x64 no CI.
+9. Executar manualmente em hardware Windows/Vulkan; registrar GPU, driver, SHA e logs.
 10. Abrir PR; merge exige autorização explícita.
+
+## Atualização operacional — 2026-11-11
+
+- `Cargo.lock` da workspace raiz foi regenerado com `cargo update --workspace` e verificado com `cargo metadata --locked --format-version 1 --no-deps`.
+- O conteúdo gerado corresponde exatamente ao arquivo entregue para integração (138818 bytes; Git blob SHA `de69e313a1a6822c297f989888545113b53f8bc3`; SHA-256 `c5ea77bbe0fcaa7b6d98cb4aaa9dad74e8e148a715c2bb4ccc77dfe4f777ad1a`).
+- A atualização está no branch da PR #747. A CI precisa reexecutar Clippy, testes e build Release no HEAD atualizado.
+- A execução física em GPU Vulkan continua NOT RUN até validação no Windows x64.
 
 ## Gates
 
 cargo fmt --all -- --check
 cargo clippy --release --workspace --all-targets --locked -- -D warnings
 cargo test --release --workspace --locked
-Build Release Windows x64; execução Vulkan real; composição Slint/WGPU; atualização contínua da textura.
+Build Release Windows x64; execução Vulkan real; composição Slint/WGPU; atualização contínua da textura. O CI comprova compilação/testes de unidade, mas não substitui a execução manual com GPU e driver Vulkan.
 
 Classificar cada item PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Sem GPU/driver compatível, execução física fica BLOCKED/NOT RUN.
 
@@ -71,7 +81,8 @@ Classificar cada item PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED não é PASS. Sem 
 - [ ] Textura externa atualizada.
 - [ ] Composição na mesma janela.
 - [ ] Resize e shutdown validados.
-- [ ] Build/execução Release Windows x64.
+- [ ] Build Release Windows x64 no CI.
+- [ ] Execução física Windows/Vulkan registrada.
 - [ ] Evidência e PR revisadas.
 
 R2 (frames SMS) começa somente após aprovação de R1. CPAL permanece R3.

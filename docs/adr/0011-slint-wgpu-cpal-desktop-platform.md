@@ -32,7 +32,7 @@ Essas camadas não executam instruções, avançam clocks, implementam VDP/PSG, 
 ## 3. Versões e compatibilidade
 
 Versões de referência:
-- Slint 1.18.x; integração WGPU 30 exposta como API/feature instável.
+- Slint 1.18.x; integração WGPU 30 exposta como API/feature instável. A POC habilita explicitamente `renderer-femtovg-wgpu` e `unstable-wgpu-30`, além de `backend-winit`, `std` e `compat-1-18`.
 - WGPU 30.x.
 - CPAL 0.18.2.
 
@@ -52,14 +52,15 @@ R1 verifica as possibilidades reais das APIs. Não integra o runtime SMS nem con
 Critérios:
 1. Aplicação mínima Slint 1.18.
 2. Inicialização WGPU 30.
-3. Vulkan explicitamente selecionado no Windows x64 e adapter/backend registrados.
-4. Mesmo wgpu::Device e wgpu::Queue compartilhados com a integração Slint.
-5. Textura externa produzida por WGPU e atualizada continuamente.
-6. Composição da textura na mesma janela Slint.
-7. Resize, recriação de surface e shutdown limpo.
-8. Build e execução Release no Windows x64.
+3. Slint usa o renderer FemtoVG baseado em WGPU 30 (`renderer-femtovg-wgpu`).
+4. Vulkan explicitamente selecionado por `WGPUSettings.backends = Backends::VULKAN`; confirmar `Device::adapter_info().backend`.
+5. Mesmo wgpu::Device e wgpu::Queue compartilhados, obtidos pelo rendering notifier Slint.
+6. Textura externa RGBA8 com TEXTURE_BINDING, RENDER_ATTACHMENT e COPY_DST, atualizada continuamente pela queue compartilhada.
+7. Composição da textura e UI Slint na mesma janela.
+8. Resize, recriação de surface e shutdown limpo.
+9. Build e execução Release no Windows x64.
 
-Avaliar os caminhos oficiais de integração Slint/WGPU 30, incluindo configuração manual, rendering notifier e importação de textura. Não presumir compatibilidade apenas pela documentação.
+A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via `BackendSelector::backend_name()` e `renderer_name()`, além de usar `WGPUConfiguration::Automatic(WGPUSettings)` para restringir o backend WGPU subjacente a Vulkan. `Window::set_rendering_notifier()` fornece o device/queue efetivos do renderer. A textura é importada por `Image::try_from<wgpu::Texture>()` e recuperada para atualização por `Image::to_wgpu_30_texture()`. O caminho manual permanece uma alternativa a avaliar se o renderer automático não satisfizer o ciclo de vida/presentação. Não presumir compatibilidade apenas pela documentação.
 
 **Fora de R1:** SmsTemporalWorker, ROM real, FrameMailbox, menu de jogo, pausa do Scheduler, HUD, CPAL, SDL3, HDR, VRR e paridade do frontend. Não alterar runtime, CPU, VDP, PSG ou Scheduler. Não exigir zero-copy físico; evitar cópias redundantes e demonstrar ownership correto.
 
@@ -74,18 +75,31 @@ Avaliar os caminhos oficiais de integração Slint/WGPU 30, incluindo configura�
 
 Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores.
 
-## 6. Preservação
+## 6. Matriz de validação CI
+
+A CI é orientada pelo impacto real dos arquivos alterados, não por uma matriz fixa de todas as APIs históricas.
+
+- Mudanças em `native/sega_desktop/**` executam o gate Windows x64 Release da POC Slint/WGPU 30/Vulkan.
+- Mudanças no runtime e nos componentes compartilhados continuam sujeitas aos gates Rust de workspace e aos testes focados correspondentes.
+- egui/eframe, D3D12 e WASAPI/XAudio2 são hosts transitórios. Seus gates só executam quando os respectivos diretórios de implementação são alterados ou quando a validação legada é solicitada manualmente.
+- O job de input valida o runtime genérico de entrada; não representa validação de SDL3, que ainda não foi integrado.
+- CPAL e SDL3 terão gates próprios quando suas integrações forem implementadas. Não executar nem declarar PASS de APIs ainda ausentes.
+- Alterações exclusivas em workflows não acionam por si só a bateria completa de testes de hardware. Alterações globais de manifests/lockfiles continuam executando a regressão Rust de workspace.
+
+A matriz não remove a baseline legada nem declara paridade. Ela evita que uma POC da nova arquitetura dependa de APIs que não fazem parte do seu escopo.
+
+## 7. Preservação
 
 MachineScheduler permanece autoridade de clocks/eventos. UI, renderização, áudio físico e input não comandam tempo virtual. Preservar ordem causal, WAIT states, operações retomáveis e estado necessário à restauração. Execução contínua e em blocos deve ser equivalente. Não duplicar worker, CPU, PSG, VDP ou Scheduler.
 
-## 7. Licenças
+## 8. Licenças
 
 Antes de distribuir binários, revisar licenças/notices de Slint, WGPU, CPAL e dependências transitivas. Registrar obrigações em THIRD_PARTY_NOTICES.md; confirmar termos oficiais vigentes para o uso pretendido.
 
-## 8. Estado
+## 9. Estado
 
 - Arquitetura e capacidades documentadas justificam a POC.
-- POC integrada compilada/executada: NOT RUN.
+- POC integrada compilada/executada: NOT RUN na revisão inicial; implementação submetida em PR própria para validação Windows Release.
 - Vulkan em hardware Windows: NOT RUN.
 - Textura externa e composição: NOT RUN.
 - Frames reais SMS: NOT RUN.
