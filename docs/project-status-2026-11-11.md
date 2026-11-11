@@ -47,6 +47,10 @@ PR Draft não é integração. Reconsultar estado e SHA antes de qualquer ação
 
 CI #6423 validou a revisão documental anterior, não a POC gráfica. No HEAD 5e928f1b2a8639e5c23fd0b957a33481e7800efc, a verificação de higiene documental do CI #6426 passou; a conclusão global ainda estava pendente nesta fotografia. CI #6424 valida os jobs aplicáveis ao diff do worker, não WGPU/Vulkan.
 
+## POC R1 em desenvolvimento
+
+A implementação isolada está na PR #747 (`feat/r1-slint-wgpu-vulkan-poc`). `native/sega_desktop` pertence à workspace raiz; o único lockfile autoritativo para ela é `Cargo.lock` na raiz do repositório. A compilação e execução Windows/Vulkan ainda dependem dos gates dessa PR.
+
 ## Próxima tarefa
 
 Concluir a sprint R1 — POC Slint + WGPU 30 + Vulkan, isolada do runtime. Após R1 aprovada, avançar para R2 e conectar frames SMS sem alterar Scheduler ou hardware.
