@@ -1853,8 +1853,9 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
-        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
+        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FramePacingSample, FramePacingWindow,
+        FRAME_PACING_WINDOW_CAPACITY, Ordering, SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker,
+        SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
         execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
@@ -2594,6 +2595,18 @@ mod tests {
         assert_eq!(worker.frame_number(), 1);
         assert!(worker.video_output_error().is_some());
         assert_eq!(worker.runtime_error(), None);
+    }
+
+    #[test]
+    fn frame_pacing_window_records_actual_worker_wait_after_wakeup() {
+        let mut window = FramePacingWindow::default();
+        window.push(FramePacingSample::default());
+        window.record_actual_wait(Duration::from_millis(21));
+
+        assert_eq!(
+            window.snapshot().pacing_wait_elapsed_p50_ns,
+            21_000_000
+        );
     }
 
     #[test]
