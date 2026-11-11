@@ -660,7 +660,15 @@ mod windows_host {
         "#;
 
         let output = Command::new("powershell.exe")
-            .args(["-NoLogo", "-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", SCRIPT])
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-STA",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                SCRIPT,
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|error| format!("não foi possível iniciar o seletor do Windows: {error}"))?;
@@ -670,7 +678,8 @@ mod windows_host {
         }
 
         let selected = String::from_utf8_lossy(&output.stdout);
-        let selected = selected.trim_end_matches(|character| character == '\r' || character == '\n');
+        let selected =
+            selected.trim_end_matches(|character| character == '\r' || character == '\n');
         if selected.is_empty() {
             Ok(None)
         } else {
@@ -889,21 +898,19 @@ mod windows_host {
         });
 
         let browse_app = app.as_weak();
-        app.on_browse_rom_requested(move || {
-            match pick_rom_file() {
-                Ok(Some(path)) => {
-                    if let Some(app) = browse_app.upgrade() {
-                        let selected_path = path.to_string_lossy().into_owned();
-                        app.set_rom_path_input(selected_path.clone().into());
-                        app.set_active_menu("none".into());
-                        app.invoke_load_rom_requested(selected_path.into());
-                    }
+        app.on_browse_rom_requested(move || match pick_rom_file() {
+            Ok(Some(path)) => {
+                if let Some(app) = browse_app.upgrade() {
+                    let selected_path = path.to_string_lossy().into_owned();
+                    app.set_rom_path_input(selected_path.clone().into());
+                    app.set_active_menu("none".into());
+                    app.invoke_load_rom_requested(selected_path.into());
                 }
-                Ok(None) => {}
-                Err(error) => {
-                    if let Some(app) = browse_app.upgrade() {
-                        app.set_rom_status(format!("Seletor de arquivos indisponível: {error}").into());
-                    }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                if let Some(app) = browse_app.upgrade() {
+                    app.set_rom_status(format!("Seletor de arquivos indisponível: {error}").into());
                 }
             }
         });
