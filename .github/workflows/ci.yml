@@ -391,7 +391,7 @@ jobs:
           git diff --check "$range"
 
   windows-d3d12:
-    name: Windows x64 D3D12 compile
+    name: Legacy Windows x64 D3D12 compile
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
@@ -454,7 +454,7 @@ jobs:
         run: cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
 
   windows-audio:
-    name: Windows WASAPI and XAudio2 validation
+    name: Legacy Windows WASAPI and XAudio2 validation
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
@@ -477,7 +477,7 @@ jobs:
         run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
 
   linux-audio:
-    name: Linux audio-output host validation
+    name: Legacy Linux audio-output host validation
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
@@ -499,7 +499,7 @@ jobs:
         run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml
 
   windows-input:
-    name: Windows SDL3 input validation
+    name: Windows input runtime compile (SDL3 not integrated)
     needs: [changes]
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.validate_legacy_hosts) ||
@@ -513,9 +513,9 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Clippy native SDL3 input runtime
+      - name: Clippy native input runtime
         run: cargo clippy --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc -- -D warnings
-      - name: Test native SDL3 input runtime
+      - name: Test native input runtime
         run: cargo test --release --locked --all-targets -p sega-input-runtime --target x86_64-pc-windows-msvc
 
   windows-tooling:
