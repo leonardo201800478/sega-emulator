@@ -781,7 +781,10 @@ mod windows_host {
             if entry.is_dir() {
                 continue;
             }
-            let name = entry.name().to_owned();
+            let name = entry
+                .name()
+                .map_err(|error| format!("não foi possível ler o nome da entrada ZIP: {error}"))?
+                .into_owned();
             let is_rom = std::path::Path::new(&name)
                 .extension()
                 .and_then(|extension| extension.to_str())
