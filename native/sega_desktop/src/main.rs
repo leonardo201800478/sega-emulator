@@ -670,6 +670,9 @@ mod windows_host {
         poll_interval_max_ns: u64,
         consumed_interval_sum_ns: u128,
         consumed_interval_max_ns: u64,
+        mailbox_residence_count: u64,
+        mailbox_residence_sum_ns: u128,
+        mailbox_residence_max_ns: u64,
         conversion_count: u64,
         conversion_sum_ns: u128,
         conversion_max_ns: u64,
@@ -693,6 +696,9 @@ mod windows_host {
                 poll_interval_max_ns: 0,
                 consumed_interval_sum_ns: 0,
                 consumed_interval_max_ns: 0,
+                mailbox_residence_count: 0,
+                mailbox_residence_sum_ns: 0,
+                mailbox_residence_max_ns: 0,
                 conversion_count: 0,
                 conversion_sum_ns: 0,
                 conversion_max_ns: 0,
@@ -719,7 +725,7 @@ mod windows_host {
             self.empty_polls = self.empty_polls.saturating_add(1);
         }
 
-        fn record_frame(&mut self, now: Instant, sequence: u64) {
+        fn record_frame(&mut self, now: Instant, sequence: u64, published_at: Instant) {
             self.consumed = self.consumed.saturating_add(1);
             if let Some(previous) = self.last_consumed {
                 let elapsed = now.saturating_duration_since(previous).as_nanos()
@@ -733,6 +739,13 @@ mod windows_host {
                     .sequence_gaps
                     .saturating_add(sequence - self.last_sequence - 1);
             }
+            let residence = now.saturating_duration_since(published_at).as_nanos()
+                .min(u128::from(u64::MAX)) as u64;
+            self.mailbox_residence_count = self.mailbox_residence_count.saturating_add(1);
+            self.mailbox_residence_sum_ns = self
+                .mailbox_residence_sum_ns
+                .saturating_add(u128::from(residence));
+            self.mailbox_residence_max_ns = self.mailbox_residence_max_ns.max(residence);
             self.last_sequence = sequence;
             self.last_consumed = Some(now);
         }
@@ -783,7 +796,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 elapsed.as_millis(),
                 self.polls,
                 self.empty_polls,
@@ -793,6 +806,8 @@ mod windows_host {
                 self.poll_interval_max_ns / 1_000,
                 average_us(self.consumed_interval_sum_ns, self.consumed.saturating_sub(1)),
                 self.consumed_interval_max_ns / 1_000,
+                average_us(self.mailbox_residence_sum_ns, self.mailbox_residence_count),
+                self.mailbox_residence_max_ns / 1_000,
                 average_us(self.conversion_sum_ns, self.conversion_count),
                 self.conversion_max_ns / 1_000,
                 average_us(self.queue_write_sum_ns, self.queue_write_count),
@@ -826,6 +841,9 @@ mod windows_host {
             self.poll_interval_max_ns = 0;
             self.consumed_interval_sum_ns = 0;
             self.consumed_interval_max_ns = 0;
+            self.mailbox_residence_count = 0;
+            self.mailbox_residence_sum_ns = 0;
+            self.mailbox_residence_max_ns = 0;
             self.conversion_count = 0;
             self.conversion_sum_ns = 0;
             self.conversion_max_ns = 0;
@@ -862,7 +880,7 @@ mod windows_host {
                 return;
             };
 
-            let frame = match mailbox.take_latest() {
+            let (frame, published_at) = match mailbox.take_latest_with_timestamp() {
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
                     host_pacing.record_empty_poll();
@@ -892,7 +910,7 @@ mod windows_host {
             }
 
             let now = Instant::now();
-            host_pacing.record_frame(now, frame.sequence());
+            host_pacing.record_frame(now, frame.sequence(), published_at);
             let elapsed = now.saturating_duration_since(last_sample);
             if elapsed >= Duration::from_millis(500) {
                 let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence))
