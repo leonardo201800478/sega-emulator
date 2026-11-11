@@ -179,14 +179,23 @@ impl FramePacingWindow {
             values[rank.min(values.len() - 1)]
         }
 
-        let mut intervals: Vec<_> = samples.iter().map(|sample| sample.frame_interval_ns)
-            .filter(|value| *value > 0).collect();
-        let mut machine_ticks: Vec<_> = samples.iter().map(|sample| sample.machine_ticks_per_frame)
-            .filter(|value| *value > 0).collect();
+        let mut intervals: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.frame_interval_ns)
+            .filter(|value| *value > 0)
+            .collect();
+        let mut machine_ticks: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.machine_ticks_per_frame)
+            .filter(|value| *value > 0)
+            .collect();
         let mut steps: Vec<_> = samples.iter().map(|sample| sample.step_frame_ns).collect();
         let mut publishes: Vec<_> = samples.iter().map(|sample| sample.video_publish_ns).collect();
         let mut audio: Vec<_> = samples.iter().map(|sample| sample.audio_submit_ns).collect();
-        let mut processing: Vec<_> = samples.iter().map(|sample| sample.frame_processing_ns).collect();
+        let mut processing: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.frame_processing_ns)
+            .collect();
         let mut waits: Vec<_> = samples.iter().map(|sample| sample.pacing_wait_ns).collect();
 
         SmsFramePacingMetrics {
@@ -267,7 +276,10 @@ impl FrameTimingState {
 
     fn record_frame_completed(&mut self, completed_at: Instant) -> Option<u64> {
         let interval_ns = self.last_completed.map(|previous| {
-            completed_at.saturating_duration_since(previous).as_nanos().min(u128::from(u64::MAX)) as u64
+            completed_at
+                .saturating_duration_since(previous)
+                .as_nanos()
+                .min(u128::from(u64::MAX)) as u64
         });
         self.metrics.completed_frames = self.metrics.completed_frames.saturating_add(1);
         if let Some(previous) = self.last_completed {
@@ -361,7 +373,10 @@ impl WorkerTelemetry {
     }
 
     fn record_frame_completed(&self, completed_at: Instant) -> Option<u64> {
-        self.frame_timing.lock().ok().and_then(|mut timing| timing.record_frame_completed(completed_at))
+        self.frame_timing
+            .lock()
+            .ok()
+            .and_then(|mut timing| timing.record_frame_completed(completed_at))
     }
 
     fn record_frame_pacing_sample(&self, sample: FramePacingSample) {
