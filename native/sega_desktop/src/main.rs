@@ -165,7 +165,7 @@ mod windows_host {
                     row.len()
                 ));
             }
-            for rgb in row.chunks_exact(3) {
+            for rgb in row.as_chunks::<3>().0 {
                 rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
             }
         }
@@ -435,19 +435,19 @@ mod windows_host {
 
         let start_worker = Rc::clone(&worker);
         app.on_start_requested(move || {
-            if let Some(worker) = start_worker.borrow().as_ref() {
-                if let Err(error) = worker.start() {
-                    eprintln!("R2_CONTROL action=start error={error}");
-                }
+            if let Some(worker) = start_worker.borrow().as_ref()
+                && let Err(error) = worker.start()
+            {
+                eprintln!("R2_CONTROL action=start error={error}");
             }
         });
 
         let pause_worker = Rc::clone(&worker);
         app.on_pause_requested(move || {
-            if let Some(worker) = pause_worker.borrow().as_ref() {
-                if let Err(error) = worker.pause() {
-                    eprintln!("R2_CONTROL action=pause error={error}");
-                }
+            if let Some(worker) = pause_worker.borrow().as_ref()
+                && let Err(error) = worker.pause()
+            {
+                eprintln!("R2_CONTROL action=pause error={error}");
             }
         });
 
