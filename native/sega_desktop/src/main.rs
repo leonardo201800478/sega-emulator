@@ -220,13 +220,17 @@ mod windows_host {
     /// Carrega preferências com fallback individual para valores seguros e conhecidos.
     fn load_desktop_preferences() -> DesktopPreferences {
         let mut preferences = DesktopPreferences::default();
-        let Some(directory) = app_data_directory() else { return preferences; };
+        let Some(directory) = app_data_directory() else {
+            return preferences;
+        };
         let Ok(contents) = fs::read_to_string(directory.join("slint_ui_settings.txt")) else {
             return preferences;
         };
 
         for line in contents.lines() {
-            let Some((key, value)) = line.split_once('=') else { continue; };
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
             match key.trim() {
                 "region" if ["usa", "brazil", "europe", "japan"].contains(&value.trim()) => {
                     preferences.region = value.trim().to_owned();
@@ -235,10 +239,14 @@ mod windows_host {
                     preferences.aspect = value.trim().to_owned();
                 }
                 "show_fps" => {
-                    if let Ok(value) = value.trim().parse() { preferences.show_fps = value; }
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.show_fps = value;
+                    }
                 }
                 "show_status_footer" => {
-                    if let Ok(value) = value.trim().parse() { preferences.show_status_footer = value; }
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.show_status_footer = value;
+                    }
                 }
                 "fps_size" if ["small", "medium", "large"].contains(&value.trim()) => {
                     preferences.fps_size = value.trim().to_owned();
@@ -251,7 +259,8 @@ mod windows_host {
 
     /// Salva as preferências em arquivo simples, sem serializar estado do hardware.
     fn save_desktop_preferences(preferences: &DesktopPreferences) -> Result<(), String> {
-        let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
+        let directory =
+            app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = format!(
             "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\n",
@@ -267,7 +276,9 @@ mod windows_host {
 
     /// Carrega até dez ROMs recentes, removendo entradas duplicadas e vazias.
     fn load_recent_roms() -> Vec<PathBuf> {
-        let Some(directory) = app_data_directory() else { return Vec::new(); };
+        let Some(directory) = app_data_directory() else {
+            return Vec::new();
+        };
         let Ok(contents) = fs::read_to_string(directory.join("recent_roms.txt")) else {
             return Vec::new();
         };
@@ -277,7 +288,9 @@ mod windows_host {
             if !recent.contains(&path) {
                 recent.push(path);
             }
-            if recent.len() == MAX_RECENT_ROMS { break; }
+            if recent.len() == MAX_RECENT_ROMS {
+                break;
+            }
         }
         recent
     }
@@ -286,8 +299,13 @@ mod windows_host {
     fn save_recent_roms(recent: &[PathBuf]) -> Result<(), String> {
         let directory = app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        let contents = recent.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join("\n");
-        fs::write(directory.join("recent_roms.txt"), contents).map_err(|error| error.to_string())
+        let contents = recent
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(directory.join("recent_roms.txt"), contents)
+            .map_err(|error| error.to_string())
     }
 
     /// Move uma ROM para o início da lista e limita o histórico a dez entradas.
@@ -302,7 +320,10 @@ mod windows_host {
 
     /// Converte a lista de caminhos em um modelo imutável para o menu Slint.
     fn recent_roms_model(recent: &[PathBuf]) -> Vec<slint::SharedString> {
-        recent.iter().map(|path| path.display().to_string().into()).collect()
+        recent
+            .iter()
+            .map(|path| path.display().to_string().into())
+            .collect()
     }
 
     /// Inicializa o renderer Slint sobre WGPU 30, restringindo a instância ao backend Vulkan.
@@ -697,12 +718,30 @@ mod windows_host {
         app.set_show_fps(preferences.show_fps);
         app.set_show_status_footer(preferences.show_status_footer);
         app.set_fps_size(preferences.fps_size.clone().into());
-        app.set_fps_font_size(match preferences.fps_size.as_str() { "small" => 13, "large" => 24, _ => 18 });
-        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(recent_roms_model(&recent_roms.borrow()))));
+        app.set_fps_font_size(match preferences.fps_size.as_str() {
+            "small" => 13,
+            "large" => 24,
+            _ => 18,
+        });
+        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(
+            recent_roms_model(&recent_roms.borrow()),
+        )));
         match preferences.aspect.as_str() {
-            "1:1" => { app.set_selected_aspect("1:1".into()); app.set_video_width(576.0.into()); app.set_video_height(576.0.into()); }
-            "16:9" => { app.set_selected_aspect("16:9".into()); app.set_video_width(768.0.into()); app.set_video_height(432.0.into()); }
-            _ => { app.set_selected_aspect("4:3".into()); app.set_video_width(768.0.into()); app.set_video_height(576.0.into()); }
+            "1:1" => {
+                app.set_selected_aspect("1:1".into());
+                app.set_video_width(576.0.into());
+                app.set_video_height(576.0.into());
+            }
+            "16:9" => {
+                app.set_selected_aspect("16:9".into());
+                app.set_video_width(768.0.into());
+                app.set_video_height(432.0.into());
+            }
+            _ => {
+                app.set_selected_aspect("4:3".into());
+                app.set_video_width(768.0.into());
+                app.set_video_height(576.0.into());
+            }
         }
         app.set_has_rom(worker.borrow().is_some());
         if let Some(path) = rom_path.as_ref() {
@@ -784,7 +823,9 @@ mod windows_host {
                     *open_recent.borrow_mut() = Some(path.clone());
                     record_recent_rom(&mut open_recent_list.borrow_mut(), path.clone());
                     if let Some(app) = open_app.upgrade() {
-                        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(recent_roms_model(&open_recent_list.borrow()))));
+                        app.set_recent_roms(slint::ModelRc::new(slint::VecModel::from(
+                            recent_roms_model(&open_recent_list.borrow()),
+                        )));
                         app.set_has_rom(true);
                         app.set_rom_status(
                             format!("ROM: {} | região: {region}", path.display()).into(),
@@ -869,7 +910,9 @@ mod windows_host {
 
         let preferences_app = app.as_weak();
         app.on_preferences_changed(move || {
-            let Some(app) = preferences_app.upgrade() else { return; };
+            let Some(app) = preferences_app.upgrade() else {
+                return;
+            };
             let prefs = DesktopPreferences {
                 region: app.get_selected_region().to_string(),
                 aspect: app.get_selected_aspect().to_string(),
