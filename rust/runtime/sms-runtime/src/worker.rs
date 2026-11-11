@@ -47,6 +47,10 @@ struct FramePacingDeadline {
 }
 
 impl FramePacingDeadline {
+    fn set(&mut self, deadline: Option<Instant>) {
+        self.deadline = deadline;
+    }
+
     fn schedule_after(&mut self, now: Instant, wait: Duration) {
         self.deadline = (!wait.is_zero()).then(|| now + wait);
     }
@@ -1004,7 +1008,7 @@ fn execute_frame(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
-) -> Result<(usize, Duration, bool), String> {
+) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
     let diagnostics_enabled = telemetry.diagnostics_enabled();
     let diagnostic_machine_start = diagnostics_enabled.then(|| machine.now().ticks());
@@ -1110,8 +1114,13 @@ fn execute_frame(
     let pacing_sample_count = sample_count.max(1) as f64;
     let frame_duration =
         Duration::from_secs_f64(pacing_sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
-    let processing_elapsed = frame_started.elapsed();
-    let frame_wait = frame_duration.saturating_sub(processing_elapsed);
+    // Anchor the pacing deadline to the beginning of this frame's host work.
+    // Time spent publishing diagnostics after this point must consume the same
+    // budget instead of shifting every subsequent frame later.
+    let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
+    let frame_wait = frame_deadline
+        .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+        .unwrap_or(Duration::ZERO);
 
     // Per-frame timing instrumentation is sampled and emitted only for a
     // completed SMS frame, never for a breakpoint-truncated execution.
@@ -1137,7 +1146,7 @@ fn execute_frame(
         );
     }
 
-    Ok((instructions, frame_wait, breakpoint_hit))
+    Ok((instructions, frame_deadline, breakpoint_hit))
 }
 
 fn worker_loop(
@@ -1218,7 +1227,7 @@ fn worker_loop(
             &mut video_sequence,
             &telemetry,
         ) {
-            Ok((_, frame_wait, breakpoint_hit)) => {
+            Ok((_, next_frame_deadline, breakpoint_hit)) => {
                 drain_machine_trace(&mut machine, &mut trace_history);
                 if breakpoint_hit {
                     running = false;
@@ -1234,7 +1243,7 @@ fn worker_loop(
                     }
                 }
                 if running {
-                    frame_deadline.schedule_after(Instant::now(), frame_wait);
+                    frame_deadline.set(next_frame_deadline);
                 } else {
                     frame_deadline.clear();
                 }
