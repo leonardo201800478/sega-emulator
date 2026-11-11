@@ -244,6 +244,7 @@ mod windows_host {
             }
         }
     }
+    }
 
     /// Preferências persistidas exclusivamente para a camada de apresentação.
     #[derive(Debug, Clone)]
