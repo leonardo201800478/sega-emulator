@@ -46,7 +46,7 @@ As alterações em `.github/workflows/**`, `.github/actions/**` ou `.github/scri
 | SMS debugger GUI egui | `NOT RUN`; o núcleo debugger_core continua coberto no workspace Rust | Nenhum gate padrão | Host de desenvolvimento legado; reativação exige lockfile e gate opt-in |
 | Documentação | `git diff --check` | CI / Documentation | Alterações Markdown, MDX, RST ou TXT |
 | Workflows | actionlint e validação do gate agregado | CI / Workflow lint | Alterações nos workflows e arquivos auxiliares |
-| PowerShell tooling | Parser PowerShell nos scripts alterados | CI / Windows tooling | Alterações em `scripts/**/*.ps1` |
+| PowerShell tooling | Parser PowerShell nos scripts alterados e auditoria de workspaces/lockfiles | CI / Windows tooling | Alterações em `scripts/**/*.ps1` ou `atualizar_recompilar_sega_emulator.ps1` |
 | Lockfiles | `cargo metadata --locked` e existência dos lockfiles | CI / Rust workspace e lockfile artifact | Alterações de manifests, lockfiles ou refresh manual |
 
 ## 4. Regras de impacto e dependências
@@ -75,6 +75,16 @@ CPAL ainda não possui integração funcional nesta baseline. Não criar testes 
 ### SDL3
 
 SDL3 ainda não está integrado. O runtime portátil de input existente continua testado como núcleo, mas isso não é validação SDL3. Não chamar os testes atuais de testes SDL3 nem testar APIs inexistentes.
+
+### Scripts de desenvolvimento e hosts legados
+
+- `scripts/project.ps1` é a referência para auditoria de workspaces e lockfiles.
+- `scripts/build-app.ps1` e `atualizar_recompilar_sega_emulator.ps1` constroem o shell egui legado; não são gates da nova GUI Slint.
+- `scripts/compile-fast.ps1` é uma verificação local de conveniência, não substitui os gates Release da CI.
+- `scripts/install_sdl3_runtime.ps1` apenas prepara manualmente a DLL SDL3 oficial com checksum fixado. Não comprova integração SDL3 e não é executado pela CI.
+- `scripts/common.ps1` fornece a inicialização MSVC compartilhada pelos scripts Windows.
+
+A CI analisa sintaticamente scripts PowerShell alterados, incluindo o helper de build na raiz, e executa `project.ps1 audit` e `project.ps1 locks` no gate de tooling.
 
 ## 6. Testes que devem permanecer protegidos
 
