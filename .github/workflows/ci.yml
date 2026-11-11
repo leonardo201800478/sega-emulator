@@ -585,7 +585,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Legacy SDL3 host intentionally not run
-        run: echo "SKIPPED: SDL3 is not integrated; portable input core has its own gate."
+        run: |
+          echo "SKIPPED: SDL3 is not integrated; portable input core has its own gate."
 
   windows-tooling:
     name: Windows PowerShell tooling syntax
