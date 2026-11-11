@@ -64,6 +64,21 @@ A UI envia somente comandos de alto nível (`load_rom`, `start`, `pause`, `stop`
 
 A thread proprietária da máquina permanece responsável pelo `SmsTemporalMachine`, CPU, Scheduler, VDP, áudio e avanço do tempo. A UI nunca recebe referências mutáveis a esses objetos.
 
+
+### 3.2 Política normativa de pausa do menu
+
+A abertura de qualquer menu de sistema do emulador (incluindo menu principal, overlay, configurações e menu invocado por Guide) pausa a emulação, tanto em fullscreen quanto em modo janela. Essa regra é independente da composição visual e vale para todos os sistemas suportados.
+
+- O evento de abertura solicita a pausa imediatamente; o runtime efetiva a suspensão na primeira fronteira segura e determinística, sem interromper uma operação de barramento ou transação temporal pela metade.
+- Depois de confirmada a pausa, nenhum ciclo, instrução, evento do Scheduler, avanço de VDP/PSG, frame emulado ou produção de áudio emulado pode progredir.
+- O último frame completo permanece apresentado. A saída de áudio do host deve ser silenciada/interrompida de forma controlada, sem avançar os chips nem descartar estado temporal; buffers já enfileirados devem ser drenados ou descartados segundo política explícita do adaptador.
+- O estado integral da máquina e do Scheduler é preservado. Fechar o menu retoma a partir desse estado, sem reset, compensação artificial de ciclos ou avanço retroativo do relógio virtual.
+- A pausa do menu utiliza o mesmo mecanismo central de pausa da sessão; a UI não implementa uma segunda pausa paralela.
+- O estado de execução anterior ao menu deve ser preservado: fechar um menu não pode iniciar uma sessão que já estava pausada por outro motivo.
+- O botão Guide é um comando do host e nunca é encaminhado ao controle emulado. Enquanto o menu estiver aberto, os comandos de navegação são consumidos pela UI.
+
+A pausa da emulação não exige suspender a thread de UI, o renderer ou a apresentação do último frame. O host continua responsivo para desenhar e navegar no menu, mas o tempo virtual da máquina permanece parado.
+
 ### 3.1 Risco conhecido: integração Slint/WGPU
 
 A integração externa WGPU 30 do Slint é atualmente exposta sob `unstable-wgpu-30`. A API pode mudar em uma atualização minor do Slint. Portanto:
@@ -199,8 +214,8 @@ O objetivo final é um workspace Rust coerente, com um único lockfile e versõe
 - HUD esquerdo: FPS de emulação, FPS de apresentação, frame time, input-to-frame, resolução interna e proporção;
 - HUD direito: adapter/backend efetivo, present mode, refresh rate quando obtido de fonte confiável, estado HDR/capacidades, estado VRR como medido ou não verificável, sample rate e métricas de underrun/drop do áudio;
 - botão SDL3 SDL_GAMEPAD_BUTTON_GUIDE abre/fecha o menu; borda de pressionamento evita alternância repetida; Guide nunca é enviado ao controle emulado;
-- menu translúcido sobre o jogo, sem pausar a máquina; D-pad e botões de confirmação/cancelamento navegam no menu e são consumidos pelo host enquanto ele estiver aberto;
-- testar aspect ratio 4:3 e 16:9, navegação integral pelo gamepad, retorno ao jogo e continuidade da execução do SMS;
+- menu translúcido sobre o último frame apresentado; ao abrir o menu, o host solicita imediatamente a pausa da máquina e o Scheduler interrompe o avanço em uma fronteira segura e determinística. CPU, VDP, PSG, áudio emulado e demais domínios temporais permanecem congelados enquanto o menu estiver aberto; D-pad e botões de confirmação/cancelamento navegam no menu e são consumidos pelo host;
+- testar aspect ratio 4:3 e 16:9, navegação integral pelo gamepad, pausa efetiva ao abrir o menu e retomada do SMS a partir do estado exato preservado ao fechá-lo;
 - nenhuma alteração de semântica, clock ou Scheduler do runtime SMS.
 
 ### R2 — Prova de conceito de áudio e integração com o SMS
@@ -315,7 +330,7 @@ A prova de conceito R1/R2 deverá ser executada com o runtime SMS temporal real 
 ### 12.1 Composição visual e controle
 
 - O viewport do jogo é a camada de fundo da mesma janela fullscreen Slint/WGPU.
-- O menu abre sobre o jogo com fundo translúcido/escurecimento; a sessão continua rodando e o Scheduler continua avançando normalmente.
+- O menu abre sobre o último frame do jogo com fundo translúcido/escurecimento. A abertura solicita imediatamente a pausa da sessão; o Scheduler conclui apenas a operação em andamento até uma fronteira segura e então deixa de avançar o tempo virtual. Não há execução de CPU, avanço de VDP/PSG, frame emulado ou produção de áudio emulado enquanto o menu estiver aberto.
 - O botão Guide do gamepad alterna o menu por transição de botão (pressed edge), sem ser encaminhado ao controle do Master System.
 - Com o menu aberto, D-pad, confirmação e cancelamento são consumidos pela UI; ao fechar, o mapeamento de jogo volta a receber os controles.
 - Para conteúdo 4:3 em monitor 16:9, centralizar o viewport sem deformação e utilizar os espaços laterais para telemetria compacta esquerda/direita. Para conteúdo 16:9 ou quando não houver área lateral suficiente, posicionar telemetria nos cantos sobre o vídeo, com fundo translúcido e margens seguras.
@@ -346,7 +361,7 @@ A prova será considerada aprovada somente se:
 1. O SMS temporal real inicia e executa uma ROM de teste, produzindo imagem e áudio.
 2. A janela Slint permanece fullscreen e o menu sobrepõe o jogo na mesma composição.
 3. Guide abre/fecha o menu e o controle navega nele sem enviar os mesmos comandos ao jogo.
-4. O jogo continua executando com o menu aberto e retoma o recebimento de input ao fechar.
+4. Com o menu aberto, o estado da máquina permanece congelado e o último frame continua visível; ao fechar, a máquina retoma do ponto temporal preservado e volta a receber os controles do jogo.
 5. HUD mostra valores de origem identificada, sem misturar FPS do emulador com FPS do monitor.
 6. Áudio CPAL permanece estável durante gameplay, abertura do menu, fechamento, pausa, reset e shutdown.
 7. VRR e HDR são testados em equipamento compatível e seus resultados são classificados separadamente, incluindo BLOCKED/NOT RUN quando o hardware não permite a comprovação.
