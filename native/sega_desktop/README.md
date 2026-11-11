@@ -13,6 +13,10 @@ This crate is an isolated feasibility application for the desktop replatforming 
 
 The code deliberately does not depend on the runtime, FrameMailbox, CPAL, SDL3, D3D12 or WASAPI/XAudio2.
 
+## Workspace and lockfile ownership
+
+This package is a member of the repository root Cargo workspace. Its Slint/WGPU dependencies are resolved by the root `Cargo.lock`; do not create a separate lockfile under `native/sega_desktop`.
+
 ## Build and checks
 
 Run from the repository root:
