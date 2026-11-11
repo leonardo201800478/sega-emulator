@@ -680,7 +680,8 @@ mod windows_host {
         let debug_app = app.as_weak();
         let debug_worker = Rc::clone(&worker);
         app.on_debug_snapshot_requested(move || {
-            let Some(worker) = debug_worker.borrow().as_ref() else {
+            let worker_guard = debug_worker.borrow();
+            let Some(worker) = worker_guard.as_ref() else {
                 return;
             };
             let result = worker.debug_snapshot().map(|snapshot| {
