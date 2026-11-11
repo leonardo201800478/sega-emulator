@@ -6,6 +6,7 @@ mod windows_host {
         cell::{Cell, RefCell},
         error::Error,
         fs,
+        io::{Cursor, Read},
         path::PathBuf,
         process::Command,
         rc::Rc,
@@ -26,6 +27,9 @@ mod windows_host {
     const PRESENT_INTERVAL: Duration = Duration::from_millis(16);
     const APP_DATA_DIRECTORY: &str = "Sega Emulator";
     const MAX_RECENT_ROMS: usize = 10;
+    const MAX_ROM_ARCHIVE_BYTES: usize = 32 * 1024 * 1024;
+    const MAX_ROM_BYTES: u64 = 16 * 1024 * 1024;
+    const MAX_ZIP_ENTRIES: usize = 4_096;
 
     slint::slint! {
         import { Button, LineEdit } from "std-widgets.slint";
@@ -688,7 +692,7 @@ mod windows_host {
             [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
             $dialog = New-Object System.Windows.Forms.OpenFileDialog
             $dialog.Title = 'Selecionar ROM do Sega Master System'
-            $dialog.Filter = 'ROM Sega 8-bit (*.sms;*.bin)|*.sms;*.bin|Todos os arquivos (*.*)|*.*'
+            $dialog.Filter = 'ROM Sega 8-bit (*.sms;*.bin;*.zip)|*.sms;*.bin;*.zip|Todos os arquivos (*.*)|*.*'
             $dialog.Multiselect = $false
             $dialog.CheckFileExists = $true
             if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -723,6 +727,99 @@ mod windows_host {
         }
     }
 
+    /// Read a raw SMS ROM or a ZIP containing exactly one supported ROM entry.
+    ///
+    /// ZIP data is decompressed in memory only. No archive path is ever written to disk,
+    /// and entry count, archive size and uncompressed ROM size are bounded.
+    fn read_rom_image(path: &PathBuf) -> Result<Vec<u8>, String> {
+        let bytes = fs::read(path)
+            .map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        let is_zip = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"));
+        if is_zip {
+            extract_rom_from_zip(&bytes)
+        } else if bytes.len() > MAX_ROM_BYTES as usize {
+            Err(format!(
+                "ROM excede o limite de {MAX_ROM_BYTES} bytes"
+            ))
+        } else {
+            Ok(bytes)
+        }
+    }
+
+    /// Extract a single .sms/.bin entry without writing archive-controlled paths.
+    fn extract_rom_from_zip(bytes: &[u8]) -> Result<Vec<u8>, String> {
+        if bytes.len() > MAX_ROM_ARCHIVE_BYTES {
+            return Err(format!(
+                "arquivo ZIP excede o limite de {MAX_ROM_ARCHIVE_BYTES} bytes"
+            ));
+        }
+
+        let mut archive = ZipArchive::new(Cursor::new(bytes))
+            .map_err(|error| format!("arquivo ZIP inválido: {error}"))?;
+        if archive.len() > MAX_ZIP_ENTRIES {
+            return Err(format!(
+                "arquivo ZIP contém mais de {MAX_ZIP_ENTRIES} entradas"
+            ));
+        }
+
+        let mut candidates = Vec::new();
+        for index in 0..archive.len() {
+            let entry = archive
+                .by_index(index)
+                .map_err(|error| format!("não foi possível inspecionar entrada ZIP: {error}"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry.name().to_owned();
+            let is_rom = std::path::Path::new(&name)
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case("sms")
+                        || extension.eq_ignore_ascii_case("bin")
+                });
+            if is_rom {
+                candidates.push((index, name, entry.size()));
+            }
+        }
+
+        if candidates.is_empty() {
+            return Err("ZIP não contém uma ROM .sms ou .bin.".to_owned());
+        }
+        if candidates.len() != 1 {
+            return Err(
+                "ZIP contém múltiplas ROMs; mantenha somente uma entrada .sms ou .bin."
+                    .to_owned(),
+            );
+        }
+
+        let (index, name, expected_size) = candidates.pop().expect("one candidate was checked");
+        if expected_size == 0 || expected_size > MAX_ROM_BYTES {
+            return Err(format!(
+                "ROM compactada '{name}' tem tamanho inválido ou excede {MAX_ROM_BYTES} bytes"
+            ));
+        }
+
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| format!("não foi possível abrir ROM '{name}': {error}"))?;
+        let mut rom = Vec::with_capacity(expected_size as usize);
+        entry
+            .by_ref()
+            .take(MAX_ROM_BYTES + 1)
+            .read_to_end(&mut rom)
+            .map_err(|error| format!("falha ao descompactar ROM '{name}': {error}"))?;
+        if rom.len() as u64 != expected_size {
+            return Err(format!(
+                "tamanho descompactado inconsistente para ROM '{name}'"
+            ));
+        }
+        Ok(rom)
+    }
+
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
     fn create_sms_worker(
         rom: Vec<u8>,
@@ -741,7 +838,7 @@ mod windows_host {
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
         mailbox: &FrameMailbox,
     ) -> Result<(), String> {
-        let rom = fs::read(path).map_err(|error| format!("não foi possível ler a ROM: {error}"))?;
+        let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
 
         let previous = worker_slot.borrow_mut().take();
@@ -788,7 +885,7 @@ mod windows_host {
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let worker = if let Some(path) = rom_path.as_ref() {
-            let worker = create_sms_worker(fs::read(path)?, &region, &mailbox)?;
+            let worker = create_sms_worker(read_rom_image(path)?, &region, &mailbox)?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
@@ -914,7 +1011,7 @@ mod windows_host {
             let path = PathBuf::from(path.as_str());
             if path.as_os_str().is_empty() {
                 if let Some(app) = open_app.upgrade() {
-                    app.set_rom_status("Informe o caminho completo da ROM (.sms ou .bin).".into());
+                    app.set_rom_status("Informe o caminho completo da ROM (.sms, .bin ou .zip).".into());
                 }
                 return;
             }
@@ -1198,6 +1295,43 @@ mod windows_host {
                     255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
                 ]
             );
+        }
+
+        fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
+            use std::io::Write;
+            use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options = SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Stored);
+            for (name, contents) in entries {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(contents).unwrap();
+            }
+            writer.finish().unwrap().into_inner()
+        }
+
+        #[test]
+        fn zip_rom_loader_reads_single_sms_entry_in_memory() {
+            let bytes = zip_archive(&[("games/sonic.sms", b"SMS-ROM")]);
+            assert_eq!(extract_rom_from_zip(&bytes).unwrap(), b"SMS-ROM");
+        }
+
+        #[test]
+        fn zip_rom_loader_rejects_archives_without_roms_or_with_multiple_roms() {
+            let no_rom = zip_archive(&[("readme.txt", b"not a rom")]);
+            assert!(extract_rom_from_zip(&no_rom).is_err());
+
+            let multiple = zip_archive(&[
+                ("sonic.sms", b"first"),
+                ("alex-kidd.bin", b"second"),
+            ]);
+            assert!(extract_rom_from_zip(&multiple).is_err());
+        }
+
+        #[test]
+        fn zip_rom_loader_rejects_invalid_archive_bytes() {
+            assert!(extract_rom_from_zip(b"not a ZIP archive").is_err());
         }
 
         #[test]
