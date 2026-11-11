@@ -633,14 +633,6 @@ impl SmsTemporalWorker {
         self.request_unit(|reply| WorkerCommand::SetSpriteLimitMode(mode, reply))
     }
 
-    /// Change the active SMS VDP sprite rendering limit through the machine worker.
-    ///
-    /// The setting changes presentation compatibility only; VDP timing, overflow
-    /// reporting and Scheduler progression remain owned by the emulated machine.
-    pub fn set_sprite_limit_mode(&self, mode: SpriteLimitMode) -> Result<(), String> {
-        self.request_unit(|reply| WorkerCommand::SetSpriteLimitMode(mode, reply))
-    }
-
     /// Read at most 256 bytes through the active mapper without advancing time.
     pub fn inspect_memory(&self, start: u16, length: usize) -> Result<Vec<u8>, String> {
         if length > DEBUG_MEMORY_READ_LIMIT {
