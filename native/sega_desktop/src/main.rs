@@ -41,7 +41,7 @@ mod windows_host {
             in property <string> rom-path;
             callback activated();
             width: 100%;
-            height: path-label.preferred-height + 12px;
+            height: path_label.preferred-height + 12px;
             background: #263541;
             border-radius: 3px;
             path_label := Text {
