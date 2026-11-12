@@ -122,6 +122,19 @@ O WAV contém a fonte mono crua do PSG, sem dual-mono, volume de host, bass mana
 
 A validação `psg-focused` da CI executa automaticamente a captura histórica e atual, compara SMS/SG-1000 e a invariância contínua/segmentada, e publica o artefato `psg-audio-ab-reference` com WAVs e relatórios JSON/Markdown.
 
+**Primeira captura A/B executada:** workflow run [#43257109307](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257109307), concluído com sucesso. Artefato: [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257109307/artifacts/13960099897).
+
+| Perfil | Baseline RMS | Atual RMS | Variação RMS | Baseline pico | Atual pico |
+|---|---:|---:|---:|---:|---:|
+| SMS | 0.172599373762 | 0.172461161075 | -0.0801% | 0.397550894086 | 0.397454108505 |
+| SG-1000 | 0.172297929358 | 0.172143498764 | -0.0896% | 0.392257659209 | 0.385046547730 |
+
+Todas as capturas tiveram 48.000 amostras a 48 kHz (1 segundo). A execução atual contínua e a segmentada em blocos de 997 clocks produziram hashes FNV-1a idênticos por perfil:
+- SMS: `5b201d6d69672384`
+- SG-1000: `00dc449c11e4e6c0`
+
+Os níveis RMS e pico mostram uma diferença pequena, mas mensurável entre baseline e atual; o pico SG-1000 caiu cerca de 1,84%. Isso **não determina qual versão soa melhor**: a avaliação depende também do erro amostra a amostra, espectro/transientes e escuta controlada. O relatório JSON/Markdown e os WAVs foram anexados ao artefato; a análise auditiva e espectral continua pendente.
+
 **Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
