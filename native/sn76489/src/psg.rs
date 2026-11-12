@@ -2052,8 +2052,7 @@ mod tests {
 
     #[test]
     fn versioned_state_codec_round_trips_sg1000_profile_and_rejects_invalid_profile_tag() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
         device.write_inner(0xE4);
         device.advance_clocks(4_321);
         let state = device.snapshot_state();
@@ -2066,9 +2065,7 @@ mod tests {
 
         let mut invalid_tag = encoded;
         let body_start = 14;
-        let body_len = u32::from_le_bytes(
-            invalid_tag[10..14].try_into().unwrap(),
-        ) as usize;
+        let body_len = u32::from_le_bytes(invalid_tag[10..14].try_into().unwrap()) as usize;
         let body_end = body_start + body_len;
         invalid_tag[body_start] = 0xFF;
         let checksum = super::state_crc32(&invalid_tag[body_start..body_end]);
@@ -2078,5 +2075,4 @@ mod tests {
             Err(super::PsgStateError::InvalidTag(0xFF))
         );
     }
-
 }
