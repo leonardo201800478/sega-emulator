@@ -121,6 +121,72 @@ fn event_tone(profile: PsgProfile, period: u16, chunk: Option<u64>) -> (Vec<f64>
     (output,events.len())
 }
 
+fn filtered_output_at_delay(psg: &Sn76489Core, delay: usize) -> f64 {
+    let taps = psg.filter_coefficients.len();
+    let newest = (psg.filter_position + taps - 1 - delay % taps) % taps;
+    let mut output = 0.0;
+    for index in 0..taps {
+        let history = (newest + taps - index) % taps;
+        output += psg.filter_coefficients[index] * psg.filter_history[history];
+    }
+    output
+}
+
+fn interpolate_sinc8(psg: &Sn76489Core, fraction: f64) -> f64 {
+    let mut weighted = 0.0;
+    let mut weight_sum = 0.0;
+    for delay in 0..8 {
+        let distance = 4.0 - delay as f64 - fraction;
+        let normalized = distance / 4.5;
+        let window = 0.42
+            + 0.5 * (PI * normalized).cos()
+            + 0.08 * (2.0 * PI * normalized).cos();
+        let sinc = if distance.abs() < 1.0e-12 {
+            1.0
+        } else {
+            (PI * distance).sin() / (PI * distance)
+        };
+        let weight = sinc * window;
+        weighted += filtered_output_at_delay(psg, delay) * weight;
+        weight_sum += weight;
+    }
+    weighted / weight_sum
+}
+
+fn sinc8_tone(profile: PsgProfile, period: u16, chunk_clocks: Option<u64>) -> Vec<f64> {
+    let mut psg = Sn76489Core::new_with_profile(CLOCK, RATE, profile).unwrap();
+    setup_tone(&mut psg, period);
+    let mut output = Vec::new();
+    let mut remaining = CLOCKS;
+    while remaining > 0 {
+        let clocks = chunk_clocks
+            .map(|limit| limit.max(1).min(remaining))
+            .unwrap_or(remaining);
+        let (ticks, divider_phase) =
+            super::split_clock_advance(clocks, psg.clock_divider_phase);
+        psg.clock_divider_phase = divider_phase;
+        for _ in 0..ticks {
+            let previous_phase = psg.output_phase;
+            let (sample_count, next_phase) =
+                super::advance_output_phase(previous_phase, RATE, CLOCK);
+            psg.tick_internal_clock();
+            psg.push_filter_sample();
+            psg.output_phase = next_phase;
+            if sample_count > 0 {
+                let increment = u128::from(RATE) * u128::from(super::CLOCK_DIVIDER);
+                for sample_index in 0..sample_count {
+                    let crossing = u128::from(CLOCK - previous_phase)
+                        + u128::from(sample_index) * u128::from(CLOCK);
+                    let fraction = crossing as f64 / increment as f64;
+                    output.push(interpolate_sinc8(&psg, fraction));
+                }
+            }
+        }
+        remaining -= clocks;
+    }
+    output
+}
+
 fn write_wav(path: &Path, samples: &[f64]) -> std::io::Result<()> {
     let bytes=u32::try_from(samples.len().checked_mul(4).ok_or_else(||std::io::Error::other("WAV overflow"))?)
         .map_err(|_|std::io::Error::other("WAV too large"))?;
@@ -299,7 +365,7 @@ fn exhaustive_period_sweep_verifies_divider_and_period_zero_one_semantics() {
 
 #[test]
 fn event_reconstruction_is_chunk_invariant_and_compared_with_linear_output() {
-    let mut report=String::from("profile,period,frequency_hz,event_count,linear_fundamental,event_fundamental,linear_thd,event_thd,linear_peak,event_peak,event_mean,event_max_delta\n");
+    let mut report=String::from("profile,period,frequency_hz,event_count,linear_fundamental,event_fundamental,sinc8_fundamental,linear_thd,event_thd,sinc8_thd,linear_peak,event_peak,sinc8_peak,event_mean,event_max_delta,sinc8_group_delay_master_clocks\n");
     let mut wavs=Vec::new();
     for profile in [PsgProfile::Sms,PsgProfile::Sg1000] {
         for period in [5_u16,6,7,9,14,28,56,112] {
@@ -307,16 +373,23 @@ fn event_reconstruction_is_chunk_invariant_and_compared_with_linear_output() {
             let (segmented,seg_events)=event_tone(profile,period,Some(997));
             assert_eq!(events,seg_events); assert_eq!(event,segmented);
             let linear=linear_tone(profile,period);
+            let sinc=sinc8_tone(profile,period,None);
+            let sinc_chunked=sinc8_tone(profile,period,Some(997));
+            assert_eq!(sinc,sinc_chunked,"sinc8 chunk invariance {profile:?} p={period}");
             assert_eq!(event.len(),linear.len());
+            assert_eq!(sinc.len(),linear.len());
             assert!(event.iter().all(|x|x.is_finite()));
-            let es=stats(&event); let ls=stats(&linear);
+            assert!(sinc.iter().all(|x|x.is_finite()));
+            let es=stats(&event); let ls=stats(&linear); let ss=stats(&sinc);
             assert!(es.peak<1.0);
+            assert!(ss.peak<1.0);
             let hz=CLOCK as f64/(32.0*f64::from(period));
-            report.push_str(&format!("{},{},{:.9},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12}\n",
-                name(profile),period,hz,events,amplitude(&linear,hz),amplitude(&event,hz),thd(&linear,hz),thd(&event,hz),ls.peak,es.peak,es.mean,es.max_delta));
+            report.push_str(&format!("{},{},{:.9},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},64\n",
+                name(profile),period,hz,events,amplitude(&linear,hz),amplitude(&event,hz),amplitude(&sinc,hz),thd(&linear,hz),thd(&event,hz),thd(&sinc,hz),ls.peak,es.peak,ss.peak,es.mean,es.max_delta));
             if [5,14,56].contains(&period) {
                 wavs.push((format!("event-{}-p{}.wav",name(profile),period),event.clone()));
                 wavs.push((format!("linear-{}-p{}.wav",name(profile),period),linear));
+                wavs.push((format!("sinc8-{}-p{}.wav",name(profile),period),sinc));
             }
         }
     }
