@@ -2875,13 +2875,13 @@ mod tests {
         for _ in 0..20 {
             window.push(FramePacingSample {
                 frame_budget_ns: 20_000_000,
-                audio_samples: 882,
+                audio_samples: 960,
                 ..FramePacingSample::default()
             });
         }
         window.push(FramePacingSample {
             frame_budget_ns: 20_000_000,
-            audio_samples: 882,
+            audio_samples: 960,
             ..FramePacingSample::default()
         });
         window.record_timeout_lateness(Duration::from_micros(750));
