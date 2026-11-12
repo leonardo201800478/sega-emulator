@@ -106,9 +106,9 @@ Os tempos de CI são medições de referência, não gates rígidos de performan
 
 ## 10. Resultados reproduzíveis da CI — 2026-11-12
 
-**Execução:** [CI #43289661184](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661184), concluída com sucesso.  
-**SMS Debugger Runtime:** [#43289661057](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661057), concluído com sucesso.  
-**HEAD validada:** `4dc0a906da1f5795c3078e59fb627ed2fda71f00`.  
+**Execução:** [CI #43289661184](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661184), concluída com sucesso.
+**SMS Debugger Runtime:** [#43289661057](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661057), concluído com sucesso.
+**HEAD validada:** `4dc0a906da1f5795c3078e59fb627ed2fda71f00`.
 **Artefato:** `psg-audio-ab-reference`, ID `13977310503`, SHA-256 `ffaa58a1ffa3bf467a585cafdc3eb636f30c61b7712a7b08778ff9d5b0fafd4a`.
 
 ### 10.1 Comparação integral dos traces
