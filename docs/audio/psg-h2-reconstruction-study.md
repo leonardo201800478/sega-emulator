@@ -1,8 +1,8 @@
 # Estudo de reconstrução PSG — H2
 
 **Escopo:** SN76489 compartilhado por SG-1000 e Master System.
-**Implementação:** protótipo exclusivamente de teste; nenhuma mudança na síntese de produção.  
-**Referência histórica:** f47f71830344b85f72329376505d400bfbfaae69.  
+**Implementação:** protótipo exclusivamente de teste; nenhuma mudança na síntese de produção.
+**Referência histórica:** f47f71830344b85f72329376505d400bfbfaae69.
 **Baseline de integração:** b375d4bb85149678b82ab39a497177d1a1cd2319.
 
 ## 1. Hipótese
