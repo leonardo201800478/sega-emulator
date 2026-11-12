@@ -1,6 +1,5 @@
 //! Pure PCM16 mono sample conversion at the native output boundary.
 
-#[cfg(any(windows, test))]
 use crate::StereoFrame;
 
 /// Convert one signed mono PCM16 sample into an interleaved stereo frame.
@@ -11,7 +10,6 @@ use crate::StereoFrame;
 /// - +100 routes entirely to the right channel.
 ///
 /// Callers validate the balance setting when constructing the output device.
-#[cfg(any(windows, test))]
 pub(crate) fn mono_sample_to_stereo_frame(sample: i16, balance: i8) -> StereoFrame {
     let value = i32::from(sample);
     let left_gain = if balance > 0 {
