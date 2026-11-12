@@ -144,7 +144,7 @@ pub struct Sg1000Machine {
 
 impl Sg1000Machine {
     pub fn new(rom: &[u8], memory_config: MemoryConfig) -> Result<Self, MachineError> {
-        Self::new_with_audio(rom, memory_config, 3_579_545, 44_100)
+        Self::new_with_audio(rom, memory_config, 3_579_545, 48_000)
     }
 
     /// Construct a machine with an explicit PSG master clock and output rate.
