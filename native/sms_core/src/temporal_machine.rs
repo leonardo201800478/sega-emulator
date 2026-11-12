@@ -302,10 +302,11 @@ impl SmsTemporalMachine {
         })
     }
 
-    /// Construct the temporal SMS slice with an explicit PSG clock and output rate.
+    /// Construct the temporal SMS slice with an explicit PSG clock and internal PCM source rate.
     ///
     /// The PSG clock must match the selected SMS CPU/PSG hardware profile.
-    /// The sample rate controls resampling only; scheduler time owns chip clocks.
+    /// The sample rate controls PSG sample generation only; Scheduler time owns chip clocks.
+    /// Host endpoint conversion is independent and belongs to the native audio session.
     pub fn new_with_psg_config(
         rom: impl Into<Vec<u8>>,
         master_ticks_per_tstate: u64,
