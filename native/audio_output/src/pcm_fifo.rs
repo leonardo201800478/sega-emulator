@@ -259,6 +259,18 @@ mod tests {
     };
 
     #[test]
+    fn fifo_preserves_normalized_f64_precision() {
+        let (mut producer, mut consumer) = pcm_frame_queue(2).unwrap();
+        let input = [[0.123_456_789_012_345, -0.987_654_321_098_765]];
+        assert_eq!(producer.push_frames(&input).accepted_frames, 1);
+
+        let mut output = [[0.0, 0.0]];
+        let report = consumer.read_frames(&mut output);
+        assert_eq!(report.queued_frames, 1);
+        assert_eq!(output, input);
+    }
+
+    #[test]
     fn rejects_zero_capacity() {
         assert_eq!(
             pcm_frame_queue(0).err(),
