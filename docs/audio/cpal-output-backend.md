@@ -46,7 +46,7 @@ Esse limite não altera a timeline emulada e não autoriza compensar atraso modi
 Mantidas no contrato genérico:
 
 - sample rate efetivo;
-- formato CPAL real (I16/I24/F32 ou fallback do default) e flag de fallback;
+- log `R3_AUDIO CPAL output opened` informa formato CPAL real (I16/I24/F32 ou fallback) e flag `default_config_fallback`;
 - capacidade, ocupação e high-water da FIFO;
 - frames aceitos, consumidos e descartados;
 - underrun em frames e eventos;
