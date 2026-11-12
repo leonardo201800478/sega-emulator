@@ -10,7 +10,7 @@ pub use session::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
 use std::f64::consts::PI;
 
-const INPUT_RATE: u32 = 44_100;
+const DEFAULT_TEST_INPUT_RATE: u32 = 48_000;
 const TAPS: usize = 63;
 const HALF: isize = 31;
 const PHASES: usize = 1024;
@@ -24,7 +24,7 @@ pub enum AudioError {
 impl std::fmt::Display for AudioError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidSampleRate => write!(f, "output sample rate must be positive"),
+            Self::InvalidSampleRate => write!(f, "input and output sample rates must be positive"),
             Self::InvalidVolume => write!(f, "volume must be in 0..=100"),
         }
     }
@@ -34,7 +34,8 @@ impl std::error::Error for AudioError {}
 
 #[derive(Debug, Clone)]
 pub struct PcmResampler {
-    rate: u32,
+    input_rate: u32,
+    output_rate: u32,
     step: f64,
     volume: u8,
     coefficients: Vec<[f64; TAPS]>,
@@ -47,15 +48,15 @@ pub struct PcmResampler {
 }
 
 impl PcmResampler {
-    pub fn new(rate: u32, volume: u8) -> Result<Self, AudioError> {
-        if rate == 0 {
+    pub fn new(input_rate: u32, output_rate: u32, volume: u8) -> Result<Self, AudioError> {
+        if input_rate == 0 || output_rate == 0 {
             return Err(AudioError::InvalidSampleRate);
         }
         if volume > 100 {
             return Err(AudioError::InvalidVolume);
         }
 
-        let cutoff = (rate as f64 / INPUT_RATE as f64).min(1.0) * 0.94;
+        let cutoff = (output_rate as f64 / input_rate as f64).min(1.0) * 0.94;
         let mut coefficients = Vec::with_capacity(PHASES);
         for phase in 0..PHASES {
             let fraction = phase as f64 / PHASES as f64;
@@ -83,15 +84,16 @@ impl PcmResampler {
 
         sega_observability::tracing::info!(
             target: "sega::audio::dsp",
-            input_rate = INPUT_RATE,
-            output_rate = rate,
+            input_rate,
+            output_rate,
             volume,
             filter_taps = coefficients.len(),
             "PCM resampler initialized"
         );
         Ok(Self {
-            rate,
-            step: INPUT_RATE as f64 / rate as f64,
+            input_rate,
+            output_rate,
+            step: input_rate as f64 / output_rate as f64,
             volume,
             coefficients,
             buffer: Vec::new(),
@@ -119,7 +121,7 @@ impl PcmResampler {
     }
 
     pub fn output_rate(&self) -> u32 {
-        self.rate
+        self.output_rate
     }
 
     pub fn volume(&self) -> u8 {
@@ -140,7 +142,7 @@ impl PcmResampler {
             return Vec::new();
         }
 
-        let output = if self.rate == INPUT_RATE {
+        let output = if self.output_rate == self.input_rate {
             self.encode(input.iter().copied())
         } else {
             self.buffer.extend_from_slice(input);
@@ -155,7 +157,7 @@ impl PcmResampler {
             input_samples = input.len(),
             output_pcm_bytes = output.len(),
             output_samples = output.len() / 2,
-            output_rate = self.rate,
+            output_rate = self.output_rate,
             buffered_samples = self.available.saturating_sub(self.start),
             "PCM resampler processed sample batch"
         );
@@ -163,7 +165,7 @@ impl PcmResampler {
     }
 
     pub fn flush(&mut self) -> Vec<u8> {
-        if self.rate == INPUT_RATE || self.real == 0 {
+        if self.output_rate == INPUT_RATE || self.real == 0 {
             self.reset();
             return Vec::new();
         }
@@ -183,7 +185,7 @@ impl PcmResampler {
 
     fn emit(&mut self, flushing: bool) -> Vec<u8> {
         let target =
-            (self.real as f64 * self.rate as f64 / INPUT_RATE as f64).round_ties_even() as usize;
+            (self.real as f64 * self.output_rate as f64 / self.input_rate as f64).round_ties_even() as usize;
         let mut output = Vec::new();
 
         loop {
@@ -242,7 +244,7 @@ mod tests {
 
     #[test]
     fn pcm16_clips_and_scales() {
-        let mut resampler = PcmResampler::new(INPUT_RATE, 100).unwrap();
+        let mut resampler = PcmResampler::new(DEFAULT_TEST_INPUT_RATE, DEFAULT_TEST_INPUT_RATE, 100).unwrap();
         let bytes = resampler.process(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         let values: Vec<i16> = bytes
             .as_chunks::<2>()
@@ -260,8 +262,8 @@ mod tests {
     #[test]
     fn resampling_is_repeatable() {
         let input: Vec<f64> = (0..2048).map(|index| (index as f64 * 0.03).sin()).collect();
-        let mut whole = PcmResampler::new(48_000, 100).unwrap();
-        let mut chunked = PcmResampler::new(48_000, 100).unwrap();
+        let mut whole = PcmResampler::new(48_000, 44_100, 100).unwrap();
+        let mut chunked = PcmResampler::new(48_000, 44_100, 100).unwrap();
         let expected = [whole.process(&input), whole.flush()].concat();
 
         let mut actual = Vec::new();
@@ -279,11 +281,11 @@ mod tests {
             .collect();
 
         for rate in [22_050, 44_100, 48_000, 96_000] {
-            let mut whole = PcmResampler::new(rate, 100).unwrap();
+            let mut whole = PcmResampler::new(48_000, rate, 100).unwrap();
             let expected = [whole.process(&input), whole.flush()].concat();
 
             for chunk_size in [1, 17, 113, 1024] {
-                let mut chunked = PcmResampler::new(rate, 100).unwrap();
+                let mut chunked = PcmResampler::new(48_000, rate, 100).unwrap();
                 let mut actual = Vec::new();
                 for block in input.chunks(chunk_size) {
                     actual.extend(chunked.process(block));
@@ -302,16 +304,16 @@ mod tests {
         let input = vec![1.0; 2048];
 
         for rate in [22_050, 44_100, 48_000] {
-            let mut resampler = PcmResampler::new(rate, 100).unwrap();
+            let mut resampler = PcmResampler::new(48_000, rate, 100).unwrap();
             let mut pcm = resampler.process(&input);
             pcm.extend(resampler.flush());
 
             let expected_samples =
-                (input.len() as f64 * rate as f64 / INPUT_RATE as f64).round_ties_even() as usize;
+                (input.len() as f64 * rate as f64 / 48_000.0).round_ties_even() as usize;
             assert_eq!(pcm.len(), expected_samples * 2);
 
             let first_sample = i16::from_le_bytes([pcm[0], pcm[1]]);
-            if rate != INPUT_RATE {
+            if rate != 48_000 {
                 assert!(
                     first_sample > 10_000,
                     "FIR output should be centered on the first input sample; rate={rate}, first={first_sample}"
@@ -322,8 +324,9 @@ mod tests {
 
     #[test]
     fn rejects_bad_configuration() {
-        assert!(PcmResampler::new(0, 100).is_err());
-        assert!(PcmResampler::new(44_100, 101).is_err());
+        assert!(PcmResampler::new(0, 48_000, 100).is_err());
+        assert!(PcmResampler::new(48_000, 0, 100).is_err());
+        assert!(PcmResampler::new(48_000, 44_100, 101).is_err());
     }
     #[test]
     fn downsampling_fir_attenuates_tones_above_output_nyquist() {
@@ -335,8 +338,8 @@ mod tests {
             .map(|index| 0.5 * (std::f64::consts::TAU * 0.35 * index as f64).sin())
             .collect();
 
-        let mut low_resampler = PcmResampler::new(22_050, 100).unwrap();
-        let mut high_resampler = PcmResampler::new(22_050, 100).unwrap();
+        let mut low_resampler = PcmResampler::new(48_000, 22_050, 100).unwrap();
+        let mut high_resampler = PcmResampler::new(48_000, 22_050, 100).unwrap();
         let low_pcm = [low_resampler.process(&low_tone), low_resampler.flush()].concat();
         let high_pcm = [high_resampler.process(&high_tone), high_resampler.flush()].concat();
         let decode = |pcm: &[u8]| -> Vec<i16> {
