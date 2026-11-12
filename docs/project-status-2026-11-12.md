@@ -2,14 +2,16 @@
 
 **Repositório:** https://github.com/leonardo201800478/sega-emulator
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
-**Main auditada:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
+**Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
+
+**Main atual após a atualização desta fotografia:** `44e167b7d17973b8d634198951fec298a50dddf7`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
 > Esta é uma fotografia remota do GitHub. CI PASS significa apenas que os jobs executados passaram no SHA indicado. SKIPPED/queued/NOT RUN não são PASS. Validação física só é considerada realizada quando há evidência de execução no hardware/ambiente correspondente.
 
 ## 1. Resumo executivo
 
-A main está atualizada até o merge da PR #774 (H3 — PCM SMS/SG-1000 com taxa interna explícita de 48 kHz). O backend Rust, o MachineScheduler e o runtime SMS/SG-1000 devem continuar preservados.
+A fotografia inicial estava atualizada até a PR #774. Esta atualização incorpora os merges #775, #776, #780 e #784, com baseline atual `44e167b7d17973b8d634198951fec298a50dddf7`. O backend Rust, o MachineScheduler e o runtime SMS/SG-1000 continuam preservados.
 
 **Entregas integradas relevantes:**
 - PR #747: POC Slint 1.18 + WGPU 30 + Vulkan (R1).
@@ -17,6 +19,10 @@ A main está atualizada até o merge da PR #774 (H3 — PCM SMS/SG-1000 com taxa
 - PR #754: preferências persistentes do desktop.
 - PR #770: saída física CPAL 0.18.2.
 - PR #774: fonte PCM interna SMS/SG-1000 em 48 kHz, taxa de entrada/saída explícita e prova de que a taxa PCM não altera a progressão do Scheduler.
+- PR #775: consolidação documental do estado do projeto.
+- PR #776: preservação de `SpriteLimitMode` após Reset.
+- PR #780: contrato portátil de `FrameMailbox`.
+- PR #784: vetores diferenciais independentes de ruído SMS A1.2/A1.3.
 
 **Conclusão principal:** a base de runtime e as entregas incrementais estão integradas, mas R2 ainda tem aceite manual incompleto; a estabilidade de frame pacing é P0; CPAL está integrado em software, mas validação física prolongada, hotplug e formatos Hi-Fi adaptativos ainda não estão demonstrados; SDL3 e R5 permanecem pendentes.
 
@@ -143,3 +149,59 @@ Os documentos `docs/z80-completion-scorecard.md` e `docs/z80-dd-fd-semantic-matr
 - As validações físicas adicionais de R1/R2/R3 não foram executadas nesta auditoria.
 - Issues antigas foram triadas por metadados e descrição; não se declara que cada bug foi reproduzido no HEAD atual.
 - Branches antigas não foram apagadas, rebased ou integradas.
+
+
+## 10. Atualização operacional — 2026-11-12, pós PR #784
+
+Esta seção supersede os estados históricos das seções 5 e 8 quando houver divergência. Baseline consultado: `main` em `44e167b7d17973b8d634198951fec298a50dddf7`.
+
+### Integrações confirmadas
+
+- PR #775 — consolidação documental, integrada.
+- PR #776 — preservação de `SpriteLimitMode` após Reset, integrada.
+- PR #780 — contrato portátil de `FrameMailbox`, integrada.
+- PR #784 — vetores independentes de ruído SMS A1.2/A1.3 e reconciliação documental, integrada.
+- PR #774 — PCM interno SMS/SG-1000 em 48 kHz, permanece integrado.
+- PR #770 — CPAL 0.18.2, permanece integrado.
+
+### PRs de apresentação e frame pacing
+
+- PR #783 — viewport `image-fit: contain` e sincronização de fullscreen com `Window::is_fullscreen()`. CI aplicável PASS no HEAD da PR; ainda não integrada porque falta aceite visual físico Windows/Vulkan para 4:3, 1:1, 16:9, resize contínuo, centralização e alternância F11/botão/estado real da janela.
+- PR #785 — instrumentação P0: handler de comando contabilizado mesmo após deadline expirado, com TRACE por tipo/duração. CI no HEAD exato em execução; não contar jobs queued/skipped como PASS.
+- Issue #755 permanece aberta. A captura `SMS-QPC-20261112-002914` antecede PR #766 e não contém a instrumentação complementar. Após #785, repetir captura Release Windows/Vulkan e correlacionar worker, mailbox, callback Slint e PresentMon/QPC. Nenhuma alteração no MachineScheduler foi autorizada por esses dados.
+
+### Áudio
+
+- H2: investigação concluída, sem DSP alternativo de produção. PR #772 foi fechada como supersedida; artifact do run `43270057505` foi inspecionado e resumido em `docs/audio/modern-hifi-audio-roadmap.md`. O modelo event-based permanece test-only.
+- A1: PR #784 integrou os vetores independentes de ruído branco/periódico e a continuidade de Tone 2. A1 permanece PARTIAL: oráculo de períodos 0/1, fase inicial absoluta do ruído, fase após escrita e validação física Master System continuam pendentes.
+- A antiga PR #767 foi fechada após o port seletivo. O DTO `Sn76489StateV1` permanece preservado na branch histórica para revisão separada A1.4; decoder/restore precisam de hardening antes de novo port.
+- H3: integrado pela PR #774; validação de software e CI aplicável passaram. Validação física prolongada de endpoint permanece pendente.
+- H4: não implementado. O caminho atual ainda quantiza PCM em 16 bits antes do CPAL; falta preservar precisão até a fronteira física e negociar tuplas suportadas de taxa/formato, com I16 fallback, I24/F32 quando anunciados e 48/88,2/96 kHz quando suportados.
+
+### Backlog antigo — decisões de auditoria
+
+- PRs #746/#757/#758: branches históricas fechadas após port seletivo para #780/#783/#776; histórico preservado.
+- PR #744: fechada como obsoleta para o frontend eframe; telemetria/HUD futuro deve ser portado para Slint.
+- PR #749: fechada; anotação documental substituída pela consolidação #775.
+- PR #769: não integrar o HEAD histórico; CI falhou por rustfmt e duplicidade de aliases do mesmo pacote `windows v0.62.2`. O isolamento D3D12 ainda é útil, mas exige port corrigido com dependência única e gates de módulo separados.
+- PR #619: documentação de auditoria SRAM já existe na main; o delta documental útil será portado seletivamente, com baseline atual.
+- PR #533: contrato de conclusão permanece Draft e precisa ser reescrito para Rust + Slint/WGPU/CPAL e roadmap R1–R5; o texto atual menciona PySide6/PyO3 e fases incompatíveis.
+- PRs #643/#645: não fazer merge integral. Port SRAM deve excluir `media_runtime`, `save_runtime`, shell antigo e otimizações temporais; validar bits de mapper, espelhamento, bancos e persistência separadamente.
+- PR #639: otimização do Scheduler bloqueada até conclusão causal da issue #755.
+- PR #644: diretórios configuráveis pertencem a R5 e permanecem adiados.
+
+### R1–R5 e Z80
+
+- R1: POC Slint/WGPU/Vulkan integrada; counters de setup/teardown existem, mas falta evidência física de ciclo teardown/recriação.
+- R2: integração de frames e preferências concluída; aceite funcional permanece condicionado ao teste manual da PR #783 e à matriz da issue #756.
+- R3: CPAL integrado; negociação adaptativa, reconexão/hotplug e validação física prolongada pendentes.
+- R4/R5: não antecipar enquanto P0 e aceite R2 estiverem abertos.
+- Z80: nenhuma etapa reaberta ou avançada nesta atualização; consultar scorecard e matriz antes de qualquer alteração.
+
+### Estado de validação
+
+- PASS: checks aplicáveis nos HEADs integrados #776, #780 e #784.
+- PASS: checks aplicáveis da PR #783; aceite visual físico ainda BLOCKED.
+- IN PROGRESS: CI da PR #785.
+- BLOCKED: captura física pós-#766/#785, aceite Windows/Vulkan R2 e validação física CPAL/PSG.
+- NOT RUN: build local/Windows nesta sessão, teardown/recriação física R1 e testes físicos de PSG/CPAL.

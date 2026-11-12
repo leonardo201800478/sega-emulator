@@ -72,11 +72,14 @@ This diagnostic increment adds bounded, rolling worker fields:
 - pacing_timeout_lateness_p50/p95/p99_us and pacing_timeout_count_total: time by which recv_timeout returns after the absolute frame deadline and the number of timeout returns; only waits that began with a positive remaining deadline budget are counted, excluding zero-timeout polls after an already-expired deadline; percentiles include only frames with a qualifying timeout return;
 - pacing_command_wakeups_total: command wakeups attributed to the preceding completed frame;
 - pacing_command_remaining_p95_us: remaining deadline budget when command wakeups occurred; its percentile includes only frames with command wakeups;
-- command_handler_p95_us: accumulated command-handler time attributed to a frame; its percentile includes only frames with measured command-handler work.
+- command_handler_p95_us: p95 of the per-frame accumulated time spent in command handlers while the worker was running. It includes handlers processed after an expired deadline through the zero-timeout poll, because that work can delay the next frame.
+- A trace-level event `SMS worker command handler` on target `sega::audio::pacing` records each `command_kind`, `command_handler_ns`, `worker_was_running` and `pacing_wait_active`; this provides per-command type/duration without adding per-command INFO log volume.
+- For command-type capture, enable TRACE only for `sega::audio::pacing`; do not enable global TRACE, which would add unrelated log volume.
+- pacing_command_wakeups_total remains narrower: it counts commands received while a positive pacing wait was active. A command processed after deadline is handler work, but not a pacing wakeup.
 
 The host summary also records total Slint timer callback duration and FrameMailbox::take_latest_with_timestamp duration (average and maximum). Existing timer interval, mailbox residence, conversion and queue-write metrics remain separate.
 
-These additions are diagnostic only. They do not change the deadline, wait duration, command policy, Scheduler, frame production, mailbox policy, redraw request, or presentation API. They deliberately stop short of per-dispatch timing: the physical pilot did not establish that Scheduler dispatch itself is the bottleneck, and timing every dispatch would risk observer overhead. Reconsider sampled dispatch counters only if the new per-frame measurements show unexplained step_frame_until cost or high variance after host wakeup and command handling are separated.
+These additions are diagnostic only. They do not change the deadline, wait duration, command policy, Scheduler, frame production, mailbox policy, redraw request, or presentation API. Per-command type/duration is emitted only at TRACE level to avoid per-command INFO log volume; the bounded per-frame aggregate remains the normal INFO diagnostic. The physical pilot did not establish that Scheduler dispatch itself is the bottleneck, so sampled per-dispatch timing remains deferred until the new measurements show unexplained step_frame_until cost or high variance after host wakeup and command handling are separated.
 
 ## Existing pacing policy — audit target, not changed here
 

@@ -152,9 +152,10 @@ Repetir cenários críticos com janela em foco e fora de foco. Registrar taxa de
 
 ## Dependências e bloqueios
 
-- A PR #763 fornece instrumentação diagnóstica e deadline integrado; deve ser validada no seu HEAD exato antes de depender de suas métricas.
-- Corrigir falhas de compilação, whitespace e workflow da PR #763 é trabalho de desbloqueio da telemetria, não correção do FPS.
-- Testes locais, benchmarks Release e captura Windows/Vulkan ainda precisam ser executados; nenhum resultado é marcado PASS neste plano.
+- PR #763 (deadline absoluto e instrumentação base) e PR #766 (timeout lateness, wakeups, callback Slint e mailbox) estão integradas; seus HEADs tiveram CI e SMS Debugger Runtime PASS.
+- A captura física `SMS-QPC-20261112-002914` é anterior à PR #766 e não contém as novas métricas. Ela não substitui uma nova captura correlacionada.
+- PR #785 complementa a medição do handler: inclui comandos processados após deadline e emite TRACE por tipo/duração. É instrumentação observacional; não altera Scheduler nem política de pacing.
+- Benchmarks Release e captura Windows/Vulkan após #766/#785 ainda precisam ser executados; nenhum resultado físico novo é marcado PASS.
 
 ## Fora de escopo
 
@@ -237,12 +238,17 @@ All worker P50/P95/P99 values above are rolling-window statistics emitted approx
 
 The pilot does not include per-frame PSG sample count, actual deadline wakeup lateness, command-handler duration, or full Slint callback duration. Therefore it cannot yet distinguish Windows timeout overshoot, command handling, worker processing variance, and event-loop callback cost. It also does not include captured display metadata sufficient to assert the monitor refresh rate. The apparent approximately 144 Hz cadence inferred from the median display-change interval remains an inference, not a confirmed display-mode fact.
 
-### Next diagnostic increment
+### Next diagnostic increment — post PR #766 / PR #785
 
-The follow-up branch adds:
+PR #766 is integrated and provides:
 - per-frame target budget and PSG sample-count distributions;
 - timeout wakeup lateness relative to the absolute worker deadline;
-- command wakeup count, remaining budget at wakeup, and aggregate command-handler duration;
+- command wakeup count and remaining budget at wakeup;
 - total Slint timer callback duration and mailbox take duration.
 
-These measurements are observational and do not modify pacing or virtual time. Per-dispatch Scheduler instrumentation is deferred until these measurements show that step_frame_until remains the unexplained dominant cost after wakeup and command handling are separated.
+PR #785 closes a measurement gap in the previous handler metric:
+- aggregate handler duration now includes every command processed while the worker was running, including zero-timeout polls after an expired deadline;
+- a TRACE event records `command_kind`, `command_handler_ns`, `worker_was_running` and `pacing_wait_active` for each command;
+- `pacing_command_wakeups_total` remains limited to commands that interrupted a positive wait, so wakeups and handler work are not conflated.
+
+These measurements are observational and do not modify pacing or virtual time. The existing physical bundle predates #766; repeat the capture matrix after #785 before drawing a causal conclusion. Per-dispatch Scheduler instrumentation remains deferred until these measurements show that step_frame_until is still the unexplained dominant cost after wakeup and command handling are separated.

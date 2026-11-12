@@ -278,11 +278,11 @@ Essa diferença pode decorrer da convenção de direção/representação do reg
 | Períodos 0/1 | CONFLICT / ORACLE REQUIRED |
 | Fase Noise Rate = Tone 2 | PARTIAL / TRACE REQUIRED |
 | Convenção temporal do bit de saída LFSR | CONFLICT / ORACLE REQUIRED |
-| Novos testes de código | IMPLEMENTED — port seletivo A1.2/A1.3; CI do HEAD atual pendente |
-| Cargo fmt / Clippy / testes | PENDING — executar na branch de port e no HEAD exato |
+| Novos testes de código | PASS — PR #784, HEAD `2dcccbd64065e5e39327c31e0b99ad2fd218e407` |
+| Cargo fmt / Clippy / testes | PASS — PSG core/console integration, SMS Runtime Release e Windows CPAL output; SMS Debugger Windows Release validation SKIPPED, não contado como PASS |
 | Validação física Master System | BLOCKED / NOT RUN |
 
-A1.1 está concluída como **atualização do inventário de evidências**, não como fechamento do PSG. Os vetores independentes A1.2 e o teste de continuidade A1.3 foram portados seletivamente para a branch atual; a aprovação depende da CI no novo HEAD. Nenhuma correção do core deve preceder a definição explícita do oráculo correspondente.
+A1.1 está concluída como **atualização do inventário de evidências**, não como fechamento do PSG. Os vetores independentes A1.2 e o teste de continuidade A1.3 foram portados e integrados pela PR #784; os checks aplicáveis passaram no HEAD indicado. Nenhuma correção do core deve preceder a definição explícita do oráculo correspondente.
 
 
 ## 10. A1.2 — vetores diferenciais SMS de ruído (2026-11-12)
@@ -316,15 +316,15 @@ Os testes exercitam explicitamente o perfil `PsgProfile::Sms`; não usam o const
 
 | Item | Estado |
 |---|---|
-| Vetor SMS white noise (16-bit, taps 0/3) | IMPLEMENTED — aguardando CI do HEAD |
-| Vetor SMS periodic noise | IMPLEMENTED — aguardando CI do HEAD |
+| Vetor SMS white noise (16-bit, taps 0/3) | PASS — PR #784, HEAD `2dcccbd64065e5e39327c31e0b99ad2fd218e407` |
+| Vetor SMS periodic noise | PASS — PR #784, HEAD `2dcccbd64065e5e39327c31e0b99ad2fd218e407` |
 | Convenção temporal pre-shift do bit de saída | REFERÊNCIA DIFERENCIAL ADICIONADA |
 | Noise Rate = Tone 2 / fase relativa | NOT CLOSED — A1.3 |
 | Períodos de tom 0/1 | CONFLICT / ORACLE REQUIRED |
 | Reset completo e estado versionado | A1.4 |
 | Teste físico em Master System | BLOCKED / NOT RUN |
 
-A1.2 permanece parcial: os vetores de ruído foram adicionados, mas só serão promovidos a PASS após CI verde no mesmo SHA. A sequência de LFSR não fecha por si só a temporização do divisor, o alinhamento do Noise Rate = Tone 2 nem o modelo analógico de saída.
+A1.2 permanece parcial quanto ao fechamento global: os dois vetores digitais passaram na CI do HEAD indicado, mas não fecham a temporização do divisor, o alinhamento absoluto Noise Rate = Tone 2 nem o modelo analógico de saída.
 
 
 ## 11. A1.3 — caracterização parcial do divisor Noise Rate = Tone 2 (2026-11-12)
@@ -357,9 +357,9 @@ O teste não compara a fase inicial absoluta com hardware e não prova acoplamen
 
 | Propriedade | Estado |
 |---|---|
-| Noise period acompanha o valor de Tone 2 | TEST ADDED |
-| Shift a cada duas expirações após alinhamento conhecido | TEST ADDED |
-| Escrita Tone 2 preserva contador parcial | TEST ADDED |
+| Noise period acompanha o valor de Tone 2 | PASS — teste integrado em #784 |
+| Shift a cada duas expirações após alinhamento conhecido | PASS — teste integrado em #784 |
+| Escrita Tone 2 preserva contador parcial | PASS — teste integrado em #784 |
 | Fase inicial após power-on/reset | ORACLE REQUIRED |
 | Fase após escrita Noise Register | PARTIAL — precisa trace independente |
 | Fase após escrita Tone 2 em todos os boundaries | PARTIAL |
