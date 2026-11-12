@@ -62,11 +62,13 @@ pub trait PcmSink {
     /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
     fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
 
-    /// Invalidate queued and submitted host audio before acknowledging a
-    /// pause, stop, reset or content/ROM transition.
+    /// Suspend the host stream and invalidate PCM still queued in the
+    /// application-owned transport before acknowledging a lifecycle transition.
     ///
-    /// The implementation must perform the operation on the backend-owning
-    /// thread and return only after old-epoch audio can no longer be emitted.
+    /// Backends that expose a portable endpoint flush should use it. CPAL only
+    /// guarantees that no further application PCM is submitted after suspension;
+    /// samples already buffered by the OS/device may drain according to the
+    /// device's own latency. This operation never advances emulated time.
     fn suspend_and_flush(&mut self) -> Result<(), String>;
 
     /// Allow the backend to begin a new audio epoch. Device playback may wait
