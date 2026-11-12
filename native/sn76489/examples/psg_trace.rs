@@ -11,8 +11,7 @@ use sega_sn76489::{PsgProfile, Sn76489Core};
 const CLOCK_HZ: u64 = 3_579_545;
 const SAMPLE_RATE: u64 = 48_000;
 const TOTAL_CLOCKS: u64 = 16_000_000;
-const USAGE: &str =
-    "usage: psg_trace <sms|sg1000> <output.wav> [chunk-clocks] [tone-period]";
+const USAGE: &str = "usage: psg_trace <sms|sg1000> <output.wav> [chunk-clocks] [tone-period]";
 
 // Clock-stamped PSG register writes. Keep this sequence identical when running
 // the tool against the historical baseline and the current implementation.
@@ -108,10 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|value| value.parse::<u64>())
         .transpose()?
         .filter(|value| *value > 0);
-    let tone_period = args
-        .next()
-        .map(|value| value.parse::<u16>())
-        .transpose()?;
+    let tone_period = args.next().map(|value| value.parse::<u16>()).transpose()?;
     if tone_period.is_some_and(|period| period == 0 || period > 0x03ff) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -164,7 +160,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("profile={profile_name}");
     if let Some(period) = tone_period {
         println!("scenario=tone-period-{period}");
-        println!("tone_frequency_hz={:.9}", CLOCK_HZ as f64 / (32.0 * f64::from(period)));
+        println!(
+            "tone_frequency_hz={:.9}",
+            CLOCK_HZ as f64 / (32.0 * f64::from(period))
+        );
     } else {
         println!("scenario=register-mix-trace");
     }
