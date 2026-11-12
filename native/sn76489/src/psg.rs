@@ -180,6 +180,152 @@ impl PsgProfile {
         }
     }
 }
+/// Current version of the complete, deterministic PSG persistence state.
+pub const SN76489_STATE_FORMAT_VERSION: u16 = 1;
+
+/// Complete versioned state required to resume the digital PSG at an arbitrary clock boundary.
+///
+/// FIR coefficients are derived from the immutable clock/sample-rate configuration;
+/// FIR history, resampler phase, pending PCM and all mutable chip counters are retained.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sn76489StateV1 {
+    pub format_version: u16,
+    pub profile: PsgProfile,
+    pub clock_hz: u64,
+    pub sample_rate: u64,
+    pub sample_buffer_capacity: usize,
+    pub dropped_samples: u64,
+    pub tone_periods: [u16; TONE_CHANNELS],
+    pub attenuations: [u8; 4],
+    pub noise_control: u8,
+    pub latched_register: u8,
+    pub tone_counters: [u16; TONE_CHANNELS],
+    pub tone_outputs: [u8; TONE_CHANNELS],
+    pub noise_counter: u16,
+    pub noise_counter_phase: u8,
+    pub lfsr: u16,
+    pub noise_output: u8,
+    pub clock_divider_phase: u64,
+    pub output_phase: u64,
+    pub noise_period: u16,
+    pub filter_history: Vec<f64>,
+    pub filter_position: usize,
+    pub pending_samples: Vec<f64>,
+    pub render_pending: Vec<f64>,
+}
+
+/// Failure while validating or restoring a PSG persistence state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PsgStateError {
+    UnsupportedVersion { expected: u16, actual: u16 },
+    InvalidConfiguration(PsgError),
+    InvalidState(&'static str),
+}
+
+impl fmt::Display for PsgStateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedVersion { expected, actual } => write!(
+                f,
+                "SN76489 state version {actual} is unsupported (expected {expected})"
+            ),
+            Self::InvalidConfiguration(error) => {
+                write!(f, "SN76489 state configuration is invalid: {error}")
+            }
+            Self::InvalidState(reason) => write!(f, "SN76489 state is invalid: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for PsgStateError {}
+
+impl Sn76489StateV1 {
+    fn validate_for(&self, core: &Sn76489Core) -> Result<(), PsgStateError> {
+        if self.format_version != SN76489_STATE_FORMAT_VERSION {
+            return Err(PsgStateError::UnsupportedVersion {
+                expected: SN76489_STATE_FORMAT_VERSION,
+                actual: self.format_version,
+            });
+        }
+        if self.sample_buffer_capacity != core.sample_buffer_capacity {
+            return Err(PsgStateError::InvalidState(
+                "sample buffer capacity does not match the configured sample rate",
+            ));
+        }
+        if self.tone_periods.iter().any(|period| *period > 0x03FF)
+            || self.tone_counters.iter().any(|counter| *counter > 0x03FF)
+        {
+            return Err(PsgStateError::InvalidState(
+                "tone period or counter exceeds the 10-bit hardware range",
+            ));
+        }
+        if self.attenuations.iter().any(|level| *level > 0x0F)
+            || self.noise_control > 0x07
+            || self.latched_register > 0x07
+        {
+            return Err(PsgStateError::InvalidState(
+                "register value exceeds its hardware bit width",
+            ));
+        }
+        if self.tone_outputs.iter().any(|output| *output > 1)
+            || self.noise_output > 1
+            || self.noise_counter_phase > 1
+        {
+            return Err(PsgStateError::InvalidState(
+                "oscillator output or noise divider phase is not binary",
+            ));
+        }
+        if self.lfsr == 0 || self.lfsr & !self.profile.lfsr_mask() != 0 {
+            return Err(PsgStateError::InvalidState(
+                "LFSR state is zero or exceeds the selected hardware profile",
+            ));
+        }
+        let expected_noise_period = if self.noise_control & 0x03 == 3 {
+            self.tone_periods[2].max(1)
+        } else {
+            0x10_u16 << (self.noise_control & 0x03)
+        };
+        if self.noise_period != expected_noise_period || self.noise_counter == 0 {
+            return Err(PsgStateError::InvalidState(
+                "noise divider period or counter is inconsistent",
+            ));
+        }
+        if self.clock_divider_phase >= CLOCK_DIVIDER
+            || self.output_phase >= self.clock_hz
+        {
+            return Err(PsgStateError::InvalidState(
+                "clock divider or output sampling phase is out of range",
+            ));
+        }
+        if self.filter_history.len() != core.filter_coefficients.len()
+            || self.filter_position >= self.filter_history.len()
+        {
+            return Err(PsgStateError::InvalidState(
+                "FIR history length or cursor is inconsistent with the filter configuration",
+            ));
+        }
+        if self.pending_samples.len() > self.sample_buffer_capacity
+            || self.render_pending.len() > self.sample_buffer_capacity
+        {
+            return Err(PsgStateError::InvalidState(
+                "pending PCM exceeds the configured sample buffer capacity",
+            ));
+        }
+        if self
+            .filter_history
+            .iter()
+            .chain(self.pending_samples.iter())
+            .chain(self.render_pending.iter())
+            .any(|sample| !sample.is_finite())
+        {
+            return Err(PsgStateError::InvalidState(
+                "FIR history or pending PCM contains a non-finite sample",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sn76489Core {
     profile: PsgProfile,
@@ -346,6 +492,69 @@ impl Sn76489Core {
 
     pub fn output_phase(&self) -> u64 {
         self.output_phase
+    }
+
+    /// Capture every mutable chip, divider, resampler, FIR and PCM-queue field.
+    pub fn snapshot_state(&self) -> Sn76489StateV1 {
+        Sn76489StateV1 {
+            format_version: SN76489_STATE_FORMAT_VERSION,
+            profile: self.profile,
+            clock_hz: self.clock_hz,
+            sample_rate: self.sample_rate,
+            sample_buffer_capacity: self.sample_buffer_capacity,
+            dropped_samples: self.dropped_samples,
+            tone_periods: self.tone_periods,
+            attenuations: self.attenuations,
+            noise_control: self.noise_control,
+            latched_register: self.latched_register,
+            tone_counters: self.tone_counters,
+            tone_outputs: self.tone_outputs,
+            noise_counter: self.noise_counter,
+            noise_counter_phase: self.noise_counter_phase,
+            lfsr: self.lfsr,
+            noise_output: self.noise_output,
+            clock_divider_phase: self.clock_divider_phase,
+            output_phase: self.output_phase,
+            noise_period: self.noise_period,
+            filter_history: self.filter_history.clone(),
+            filter_position: self.filter_position,
+            pending_samples: self.pending_samples.iter().copied().collect(),
+            render_pending: self.render_pending.iter().copied().collect(),
+        }
+    }
+
+    /// Construct a PSG from a validated state without losing any partial phase.
+    pub fn from_state(state: Sn76489StateV1) -> Result<Self, PsgStateError> {
+        let mut core = Self::new_with_profile(state.clock_hz, state.sample_rate, state.profile)
+            .map_err(PsgStateError::InvalidConfiguration)?;
+        state.validate_for(&core)?;
+
+        core.dropped_samples = state.dropped_samples;
+        core.tone_periods = state.tone_periods;
+        core.attenuations = state.attenuations;
+        core.noise_control = state.noise_control;
+        core.latched_register = state.latched_register;
+        core.tone_counters = state.tone_counters;
+        core.tone_outputs = state.tone_outputs;
+        core.noise_counter = state.noise_counter;
+        core.noise_counter_phase = state.noise_counter_phase;
+        core.lfsr = state.lfsr;
+        core.noise_output = state.noise_output;
+        core.clock_divider_phase = state.clock_divider_phase;
+        core.output_phase = state.output_phase;
+        core.noise_period = state.noise_period;
+        core.filter_history = state.filter_history;
+        core.filter_position = state.filter_position;
+        core.pending_samples = state.pending_samples.into_iter().collect();
+        core.render_pending = state.render_pending.into_iter().collect();
+        Ok(core)
+    }
+
+    /// Restore atomically: invalid state leaves the current device untouched.
+    pub fn restore_state(&mut self, state: Sn76489StateV1) -> Result<(), PsgStateError> {
+        let restored = Self::from_state(state)?;
+        *self = restored;
+        Ok(())
     }
 
     pub fn reset(&mut self) {
