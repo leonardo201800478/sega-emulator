@@ -74,6 +74,7 @@ This diagnostic increment adds bounded, rolling worker fields:
 - pacing_command_remaining_p95_us: remaining deadline budget when command wakeups occurred; its percentile includes only frames with command wakeups;
 - command_handler_p95_us: p95 of the per-frame accumulated time spent in command handlers while the worker was running. It includes handlers processed after an expired deadline through the zero-timeout poll, because that work can delay the next frame.
 - A trace-level event `SMS worker command handler` on target `sega::audio::pacing` records each `command_kind`, `command_handler_ns`, `worker_was_running` and `pacing_wait_active`; this provides per-command type/duration without adding per-command INFO log volume.
+- For command-type capture, enable TRACE only for `sega::audio::pacing`; do not enable global TRACE, which would add unrelated log volume.
 - pacing_command_wakeups_total remains narrower: it counts commands received while a positive pacing wait was active. A command processed after deadline is handler work, but not a pacing wakeup.
 
 The host summary also records total Slint timer callback duration and FrameMailbox::take_latest_with_timestamp duration (average and maximum). Existing timer interval, mailbox residence, conversion and queue-write metrics remain separate.
