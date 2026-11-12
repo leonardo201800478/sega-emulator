@@ -36,6 +36,31 @@ const WORKER_FRAME_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const WORKER_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Absolute host-clock deadline for the next SMS frame.
+///
+/// This is presentation pacing only. It never advances or modifies virtual
+/// machine time; non-pausing worker commands consume the existing budget
+/// instead of restarting it.
+#[derive(Debug, Default, Clone, Copy)]
+struct FramePacingDeadline {
+    deadline: Option<Instant>,
+}
+
+impl FramePacingDeadline {
+    fn set(&mut self, deadline: Option<Instant>) {
+        self.deadline = deadline;
+    }
+
+    fn remaining(&self, now: Instant) -> Option<Duration> {
+        self.deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
+    }
+
+    fn clear(&mut self) {
+        self.deadline = None;
+    }
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -121,6 +146,172 @@ pub struct SmsPerformanceMetrics {
     pub completed_frames: u64,
 }
 
+const FRAME_PACING_WINDOW_CAPACITY: usize = 512;
+
+#[derive(Debug, Clone, Copy, Default)]
+struct FramePacingSample {
+    frame_interval_ns: u64,
+    machine_ticks_per_frame: u64,
+    step_frame_ns: u64,
+    video_publish_ns: u64,
+    audio_submit_ns: u64,
+    frame_processing_ns: u64,
+    pacing_wait_budget_ns: u64,
+    pacing_wait_elapsed_ns: u64,
+}
+
+#[derive(Debug, Clone)]
+struct FramePacingWindow {
+    samples: [FramePacingSample; FRAME_PACING_WINDOW_CAPACITY],
+    len: usize,
+    next: usize,
+    total: u64,
+}
+
+impl Default for FramePacingWindow {
+    fn default() -> Self {
+        Self {
+            samples: [FramePacingSample::default(); FRAME_PACING_WINDOW_CAPACITY],
+            len: 0,
+            next: 0,
+            total: 0,
+        }
+    }
+}
+
+impl FramePacingWindow {
+    fn push(&mut self, sample: FramePacingSample) {
+        self.samples[self.next] = sample;
+        self.next = (self.next + 1) % FRAME_PACING_WINDOW_CAPACITY;
+        self.len = (self.len + 1).min(FRAME_PACING_WINDOW_CAPACITY);
+        self.total = self.total.saturating_add(1);
+    }
+
+    fn record_actual_wait(&mut self, elapsed: Duration) {
+        if self.len == 0 {
+            return;
+        }
+        let last = (self.next + FRAME_PACING_WINDOW_CAPACITY - 1) % FRAME_PACING_WINDOW_CAPACITY;
+        let elapsed_ns = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+        self.samples[last].pacing_wait_elapsed_ns = self.samples[last]
+            .pacing_wait_elapsed_ns
+            .saturating_add(elapsed_ns);
+    }
+
+    fn snapshot(&self) -> SmsFramePacingMetrics {
+        let samples: Vec<_> = (0..self.len)
+            .map(|offset| {
+                let index = (self.next + FRAME_PACING_WINDOW_CAPACITY - self.len + offset)
+                    % FRAME_PACING_WINDOW_CAPACITY;
+                self.samples[index]
+            })
+            .collect();
+
+        fn percentile(values: &mut [u64], percentile: usize) -> u64 {
+            if values.is_empty() {
+                return 0;
+            }
+            values.sort_unstable();
+            let rank = (values.len() * percentile).div_ceil(100).max(1) - 1;
+            values[rank.min(values.len() - 1)]
+        }
+
+        let mut intervals: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.frame_interval_ns)
+            .filter(|value| *value > 0)
+            .collect();
+        let mut machine_ticks: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.machine_ticks_per_frame)
+            .collect();
+        let mut steps: Vec<_> = samples.iter().map(|sample| sample.step_frame_ns).collect();
+        let mut publishes: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.video_publish_ns)
+            .collect();
+        let mut audio: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.audio_submit_ns)
+            .collect();
+        let mut processing: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.frame_processing_ns)
+            .collect();
+        let mut wait_budgets: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.pacing_wait_budget_ns)
+            .collect();
+        let mut wait_elapsed: Vec<_> = samples
+            .iter()
+            .map(|sample| sample.pacing_wait_elapsed_ns)
+            .collect();
+
+        SmsFramePacingMetrics {
+            sample_count: self.len as u64,
+            total_samples: self.total,
+            frame_interval_p50_ns: percentile(&mut intervals, 50),
+            frame_interval_p95_ns: percentile(&mut intervals, 95),
+            frame_interval_p99_ns: percentile(&mut intervals, 99),
+            machine_ticks_per_frame_min: machine_ticks.iter().copied().min().unwrap_or(0),
+            machine_ticks_per_frame_p50: percentile(&mut machine_ticks, 50),
+            machine_ticks_per_frame_max: machine_ticks.iter().copied().max().unwrap_or(0),
+            step_frame_p50_ns: percentile(&mut steps, 50),
+            step_frame_p95_ns: percentile(&mut steps, 95),
+            step_frame_p99_ns: percentile(&mut steps, 99),
+            video_publish_p50_ns: percentile(&mut publishes, 50),
+            video_publish_p95_ns: percentile(&mut publishes, 95),
+            video_publish_p99_ns: percentile(&mut publishes, 99),
+            audio_submit_p50_ns: percentile(&mut audio, 50),
+            audio_submit_p95_ns: percentile(&mut audio, 95),
+            audio_submit_p99_ns: percentile(&mut audio, 99),
+            frame_processing_p50_ns: percentile(&mut processing, 50),
+            frame_processing_p95_ns: percentile(&mut processing, 95),
+            frame_processing_p99_ns: percentile(&mut processing, 99),
+            pacing_wait_budget_p50_ns: percentile(&mut wait_budgets, 50),
+            pacing_wait_budget_p95_ns: percentile(&mut wait_budgets, 95),
+            pacing_wait_budget_p99_ns: percentile(&mut wait_budgets, 99),
+            pacing_wait_elapsed_p50_ns: percentile(&mut wait_elapsed, 50),
+            pacing_wait_elapsed_p95_ns: percentile(&mut wait_elapsed, 95),
+            pacing_wait_elapsed_p99_ns: percentile(&mut wait_elapsed, 99),
+        }
+    }
+}
+
+/// Bounded rolling diagnostics for the SMS worker's completed-frame path.
+///
+/// Durations use the host monotonic clock; machine ticks remain virtual time.
+/// These metrics observe execution and never feed back into Scheduler progression.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SmsFramePacingMetrics {
+    pub sample_count: u64,
+    pub total_samples: u64,
+    pub frame_interval_p50_ns: u64,
+    pub frame_interval_p95_ns: u64,
+    pub frame_interval_p99_ns: u64,
+    pub machine_ticks_per_frame_min: u64,
+    pub machine_ticks_per_frame_p50: u64,
+    pub machine_ticks_per_frame_max: u64,
+    pub step_frame_p50_ns: u64,
+    pub step_frame_p95_ns: u64,
+    pub step_frame_p99_ns: u64,
+    pub video_publish_p50_ns: u64,
+    pub video_publish_p95_ns: u64,
+    pub video_publish_p99_ns: u64,
+    pub audio_submit_p50_ns: u64,
+    pub audio_submit_p95_ns: u64,
+    pub audio_submit_p99_ns: u64,
+    pub frame_processing_p50_ns: u64,
+    pub frame_processing_p95_ns: u64,
+    pub frame_processing_p99_ns: u64,
+    pub pacing_wait_budget_p50_ns: u64,
+    pub pacing_wait_budget_p95_ns: u64,
+    pub pacing_wait_budget_p99_ns: u64,
+    pub pacing_wait_elapsed_p50_ns: u64,
+    pub pacing_wait_elapsed_p95_ns: u64,
+    pub pacing_wait_elapsed_p99_ns: u64,
+}
+
 #[derive(Debug, Default)]
 struct FrameTimingState {
     last_completed: Option<Instant>,
@@ -128,6 +319,7 @@ struct FrameTimingState {
     sample_frames: u64,
     metrics: SmsPerformanceMetrics,
     pending_input: Option<Instant>,
+    pacing_window: FramePacingWindow,
 }
 
 impl FrameTimingState {
@@ -137,7 +329,13 @@ impl FrameTimingState {
         self.pending_input = Some(detected_at);
     }
 
-    fn record_frame_completed(&mut self, completed_at: Instant) {
+    fn record_frame_completed(&mut self, completed_at: Instant) -> Option<u64> {
+        let interval_ns = self.last_completed.map(|previous| {
+            completed_at
+                .saturating_duration_since(previous)
+                .as_nanos()
+                .min(u128::from(u64::MAX)) as u64
+        });
         self.metrics.completed_frames = self.metrics.completed_frames.saturating_add(1);
         if let Some(previous) = self.last_completed {
             self.metrics.frame_time_ms = Some(
@@ -167,6 +365,11 @@ impl FrameTimingState {
                     * 1_000.0,
             );
         }
+        interval_ns
+    }
+
+    fn record_pacing_sample(&mut self, sample: FramePacingSample) {
+        self.pacing_window.push(sample);
     }
 
     fn metrics_at(&self, now: Instant) -> SmsPerformanceMetrics {
@@ -224,10 +427,36 @@ impl WorkerTelemetry {
         }
     }
 
-    fn record_frame_completed(&self, completed_at: Instant) {
+    fn record_frame_completed(&self, completed_at: Instant) -> Option<u64> {
+        self.frame_timing
+            .lock()
+            .ok()
+            .and_then(|mut timing| timing.record_frame_completed(completed_at))
+    }
+
+    fn record_frame_pacing_sample(&self, sample: FramePacingSample) {
         if let Ok(mut timing) = self.frame_timing.lock() {
-            timing.record_frame_completed(completed_at);
+            timing.record_pacing_sample(sample);
         }
+    }
+
+    fn record_actual_pacing_wait(&self, elapsed: Duration) {
+        if !self.diagnostics_enabled() {
+            return;
+        }
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.pacing_window.record_actual_wait(elapsed);
+        }
+    }
+
+    fn frame_pacing_metrics(&self) -> SmsFramePacingMetrics {
+        // Clone the fixed-size window under the mutex, then sort/allocate outside
+        // the worker's frame-completion critical section.
+        let window = self.frame_timing.lock().map_or_else(
+            |_| FramePacingWindow::default(),
+            |timing| timing.pacing_window.clone(),
+        );
+        window.snapshot()
     }
 
     fn performance_metrics(&self) -> SmsPerformanceMetrics {
@@ -693,6 +922,11 @@ impl SmsTemporalWorker {
         self.telemetry.performance_metrics()
     }
 
+    /// Return bounded stage-by-stage frame pacing diagnostics from the worker.
+    pub fn frame_pacing_metrics(&self) -> SmsFramePacingMetrics {
+        self.telemetry.frame_pacing_metrics()
+    }
+
     pub fn request_nmi(&self) -> Result<(), String> {
         enqueue_worker_command(&self.commands, WorkerCommand::RequestNmi)
     }
@@ -979,7 +1213,7 @@ fn execute_frame(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
-) -> Result<(usize, Duration, bool), String> {
+) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
     let diagnostics_enabled = telemetry.diagnostics_enabled();
     let diagnostic_machine_start = diagnostics_enabled.then(|| machine.now().ticks());
@@ -1001,15 +1235,18 @@ fn execute_frame(
     // A breakpoint may stop this call at an instruction boundary before the
     // VDP advances to the next frame. Such a partial execution is not a frame:
     // do not increment frame telemetry or publish its incomplete framebuffer.
-    if frame_completed {
-        telemetry.record_frame_completed(Instant::now());
-    }
+    let frame_interval_ns = if frame_completed {
+        telemetry.record_frame_completed(Instant::now())
+    } else {
+        None
+    };
     telemetry.set_frame_number(machine.frame_number());
     telemetry.machine_time_ticks.store(
         u64::try_from(machine.now().ticks()).unwrap_or(u64::MAX),
         Ordering::Release,
     );
 
+    let diagnostic_publish_start = diagnostics_enabled.then(Instant::now);
     if frame_completed {
         *video_sequence = video_sequence
             .checked_add(1)
@@ -1050,6 +1287,9 @@ fn execute_frame(
         }
     }
 
+    let video_publish_elapsed =
+        diagnostic_publish_start.map_or(Duration::ZERO, |started| started.elapsed());
+
     // Do not send audio generated by a partial frame stopped at a breakpoint.
     // Drain it through the discard path so paused single-step state stays bounded.
     let samples = machine.drain_audio_samples(None);
@@ -1085,8 +1325,30 @@ fn execute_frame(
     let pacing_sample_count = sample_count.max(1) as f64;
     let frame_duration =
         Duration::from_secs_f64(pacing_sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
+    // Anchor the pacing deadline to the beginning of this frame's host work.
+    // Time spent publishing diagnostics after this point consumes the same budget
+    // instead of shifting every subsequent frame later.
     let processing_elapsed = frame_started.elapsed();
-    let frame_wait = frame_duration.saturating_sub(processing_elapsed);
+    let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
+    let frame_wait = frame_deadline
+        .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+        .unwrap_or(Duration::ZERO);
+
+    if frame_completed && diagnostics_enabled && publish_audio {
+        let machine_ticks_per_frame = diagnostic_machine_start
+            .zip(diagnostic_machine_end)
+            .map_or(0, |(start, end)| end.saturating_sub(start));
+        telemetry.record_frame_pacing_sample(FramePacingSample {
+            frame_interval_ns: frame_interval_ns.unwrap_or_default(),
+            machine_ticks_per_frame: u64::try_from(machine_ticks_per_frame).unwrap_or(u64::MAX),
+            step_frame_ns: step_frame_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            video_publish_ns: video_publish_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            audio_submit_ns: audio_submit_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            frame_processing_ns: processing_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            pacing_wait_budget_ns: frame_wait.as_nanos().min(u128::from(u64::MAX)) as u64,
+            pacing_wait_elapsed_ns: 0,
+        });
+    }
 
     // Per-frame timing instrumentation is sampled and emitted only for a
     // completed SMS frame, never for a breakpoint-truncated execution.
@@ -1102,17 +1364,19 @@ fn execute_frame(
             machine_time_delta_ticks = machine_time_end.saturating_sub(machine_time_start),
             instructions,
             psg_samples = sample_count,
+            frame_interval_ns = frame_interval_ns.unwrap_or_default(),
             step_frame_elapsed_ns = step_frame_elapsed.as_nanos(),
+            video_publish_elapsed_ns = video_publish_elapsed.as_nanos(),
             audio_submit_elapsed_ns = audio_submit_elapsed.as_nanos(),
             frame_processing_elapsed_ns = processing_elapsed.as_nanos(),
             pacing_budget_ns = frame_duration.as_nanos(),
-            pacing_wait_ns = frame_wait.as_nanos(),
+            pacing_wait_budget_ns = frame_wait.as_nanos(),
             publish_audio,
             "SMS frame pacing diagnostic"
         );
     }
 
-    Ok((instructions, frame_wait, breakpoint_hit))
+    Ok((instructions, frame_deadline, breakpoint_hit))
 }
 
 fn worker_loop(
@@ -1129,18 +1393,29 @@ fn worker_loop(
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
+    let mut frame_deadline = FramePacingDeadline::default();
 
     loop {
         if telemetry.shutdown.load(Ordering::Acquire) {
             break;
         }
         let command = if running {
-            match commands.recv_timeout(Duration::from_millis(0)) {
+            let timeout = frame_deadline
+                .remaining(Instant::now())
+                .unwrap_or(Duration::ZERO);
+            let wait_started = Instant::now();
+            let wait_result = commands.recv_timeout(timeout);
+            telemetry.record_actual_pacing_wait(wait_started.elapsed());
+            match wait_result {
                 Ok(command) => Some(command),
-                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Timeout) => {
+                    frame_deadline.clear();
+                    None
+                }
                 Err(RecvTimeoutError::Disconnected) => break,
             }
         } else {
+            frame_deadline.clear();
             match commands.recv_timeout(WORKER_IDLE_POLL_INTERVAL) {
                 Ok(command) => Some(command),
                 Err(RecvTimeoutError::Timeout) => continue,
@@ -1149,6 +1424,7 @@ fn worker_loop(
         };
 
         if let Some(command) = command {
+            let was_running = running;
             if !handle_command(
                 command,
                 &mut machine,
@@ -1165,6 +1441,11 @@ fn worker_loop(
             ) {
                 break;
             }
+            // Pause/reset/load/power transitions invalidate the previous
+            // frame's wall-clock epoch. Non-pausing commands retain it.
+            if was_running != running || !running {
+                frame_deadline.clear();
+            }
             drain_machine_trace(&mut machine, &mut trace_history);
             continue;
         }
@@ -1179,11 +1460,12 @@ fn worker_loop(
             &mut video_sequence,
             &telemetry,
         ) {
-            Ok((_, frame_wait, breakpoint_hit)) => {
+            Ok((_, next_frame_deadline, breakpoint_hit)) => {
                 drain_machine_trace(&mut machine, &mut trace_history);
                 if breakpoint_hit {
                     running = false;
                     telemetry.running.store(false, Ordering::Release);
+                    frame_deadline.clear();
                     if let Some(session) = audio_session.as_mut() {
                         if let Err(error) = session.suspend_and_flush() {
                             telemetry.set_audio_error(Some(error));
@@ -1193,35 +1475,16 @@ fn worker_loop(
                         }
                     }
                 }
-                if running && !frame_wait.is_zero() {
-                    match commands.recv_timeout(frame_wait) {
-                        Ok(command) => {
-                            if !handle_command(
-                                command,
-                                &mut machine,
-                                &mut breakpoints,
-                                &mut rom,
-                                &region,
-                                &mut running,
-                                &mut audio_session,
-                                &mut video_mailbox,
-                                &mut video_sequence,
-                                &telemetry,
-                                &mut trace_history,
-                                &mut trace_enabled,
-                            ) {
-                                break;
-                            }
-                            drain_machine_trace(&mut machine, &mut trace_history);
-                        }
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(RecvTimeoutError::Disconnected) => break,
-                    }
+                if running {
+                    frame_deadline.set(next_frame_deadline);
+                } else {
+                    frame_deadline.clear();
                 }
             }
             Err(error) => {
                 running = false;
                 telemetry.running.store(false, Ordering::Release);
+                frame_deadline.clear();
                 telemetry.set_runtime_error(Some(error));
                 if let Some(mut session) = audio_session.take() {
                     session.close();
@@ -1624,16 +1887,17 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, Ordering, SMS_TEMPORAL_SAMPLE_RATE,
-        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
-        execute_frame,
+        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
+        FramePacingDeadline, FramePacingSample, FramePacingWindow, Ordering,
+        SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
+        build_sms_temporal_machine, execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn frame_timing_uses_worker_completion_timestamps_not_video_presentation() {
@@ -2365,5 +2629,111 @@ mod tests {
         assert_eq!(worker.frame_number(), 1);
         assert!(worker.video_output_error().is_some());
         assert_eq!(worker.runtime_error(), None);
+    }
+
+    #[test]
+    fn frame_pacing_deadline_preserves_remaining_budget_across_commands() {
+        let frame_completed = Instant::now();
+        let mut pacing = FramePacingDeadline::default();
+        pacing.set(Some(frame_completed + Duration::from_millis(16)));
+
+        assert_eq!(
+            pacing.remaining(frame_completed),
+            Some(Duration::from_millis(16))
+        );
+
+        // A command wakes the worker 5 ms into the wait. Its 3 ms handler
+        // consumes time from the original budget; it must not restart 16 ms.
+        let command_received = frame_completed + Duration::from_millis(5);
+        assert_eq!(
+            pacing.remaining(command_received),
+            Some(Duration::from_millis(11))
+        );
+        let command_completed = command_received + Duration::from_millis(3);
+        assert_eq!(
+            pacing.remaining(command_completed),
+            Some(Duration::from_millis(8))
+        );
+
+        // A second queued command also consumes the same absolute budget.
+        let second_command_completed = command_completed + Duration::from_millis(2);
+        assert_eq!(
+            pacing.remaining(second_command_completed),
+            Some(Duration::from_millis(6))
+        );
+        assert_eq!(
+            pacing.remaining(frame_completed + Duration::from_millis(16)),
+            Some(Duration::ZERO)
+        );
+    }
+
+    #[test]
+    fn clearing_deadline_prevents_carryover_to_a_new_worker_epoch() {
+        let now = Instant::now();
+        let mut pacing = FramePacingDeadline::default();
+        pacing.set(Some(now + Duration::from_millis(16)));
+        assert!(pacing.remaining(now).is_some());
+
+        // Pause, stop, reset and successful ROM replacement leave the old epoch.
+        pacing.clear();
+        assert_eq!(pacing.remaining(now), None);
+
+        pacing.set(Some(now + Duration::from_millis(62)));
+        assert_eq!(
+            pacing.remaining(now + Duration::from_millis(50)),
+            Some(Duration::from_millis(12))
+        );
+    }
+
+    #[test]
+    fn expired_frame_deadline_has_no_remaining_wait() {
+        let now = Instant::now();
+        let mut pacing = FramePacingDeadline::default();
+        pacing.set(Some(now));
+        assert_eq!(pacing.remaining(now), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn frame_pacing_window_accumulates_wait_across_command_wakeups() {
+        let mut window = FramePacingWindow::default();
+        window.push(FramePacingSample::default());
+        window.record_actual_wait(Duration::from_millis(5));
+        window.record_actual_wait(Duration::from_millis(3));
+
+        assert_eq!(window.snapshot().pacing_wait_elapsed_p50_ns, 8_000_000);
+    }
+
+    #[test]
+    fn frame_pacing_window_records_actual_worker_wait_after_wakeup() {
+        let mut window = FramePacingWindow::default();
+        window.push(FramePacingSample::default());
+        window.record_actual_wait(Duration::from_millis(21));
+
+        assert_eq!(window.snapshot().pacing_wait_elapsed_p50_ns, 21_000_000);
+    }
+
+    #[test]
+    fn frame_pacing_window_is_bounded_and_reports_rolling_percentiles() {
+        let mut window = FramePacingWindow::default();
+        for value in 1..=(FRAME_PACING_WINDOW_CAPACITY as u64 + 1) {
+            window.push(FramePacingSample {
+                frame_interval_ns: value,
+                machine_ticks_per_frame: value,
+                step_frame_ns: value * 10,
+                ..FramePacingSample::default()
+            });
+        }
+
+        let metrics = window.snapshot();
+        assert_eq!(metrics.sample_count, FRAME_PACING_WINDOW_CAPACITY as u64);
+        assert_eq!(
+            metrics.total_samples,
+            FRAME_PACING_WINDOW_CAPACITY as u64 + 1
+        );
+        assert_eq!(metrics.frame_interval_p50_ns, 257);
+        assert_eq!(metrics.frame_interval_p95_ns, 488);
+        assert_eq!(metrics.frame_interval_p99_ns, 508);
+        assert_eq!(metrics.machine_ticks_per_frame_min, 2);
+        assert_eq!(metrics.machine_ticks_per_frame_max, 513);
     }
 }

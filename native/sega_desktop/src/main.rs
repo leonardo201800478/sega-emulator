@@ -653,33 +653,248 @@ mod windows_host {
         Ok(())
     }
 
+    /// Bounded host-side measurements for mailbox consumption and WGPU upload.
+    ///
+    /// This deliberately stops at queue.write_texture: Slint owns the Winit surface
+    /// and physical present operation, so this host cannot claim a GPU-present timestamp.
+    struct HostFramePacingWindow {
+        started: Instant,
+        last_poll: Option<Instant>,
+        last_consumed: Option<Instant>,
+        last_sequence: u64,
+        polls: u64,
+        empty_polls: u64,
+        consumed: u64,
+        sequence_gaps: u64,
+        poll_interval_sum_ns: u128,
+        poll_interval_max_ns: u64,
+        consumed_interval_sum_ns: u128,
+        consumed_interval_max_ns: u64,
+        mailbox_residence_count: u64,
+        mailbox_residence_sum_ns: u128,
+        mailbox_residence_max_ns: u64,
+        conversion_count: u64,
+        conversion_sum_ns: u128,
+        conversion_max_ns: u64,
+        queue_write_count: u64,
+        queue_write_sum_ns: u128,
+        queue_write_max_ns: u64,
+    }
+
+    impl HostFramePacingWindow {
+        fn new() -> Self {
+            Self {
+                started: Instant::now(),
+                last_poll: None,
+                last_consumed: None,
+                last_sequence: 0,
+                polls: 0,
+                empty_polls: 0,
+                consumed: 0,
+                sequence_gaps: 0,
+                poll_interval_sum_ns: 0,
+                poll_interval_max_ns: 0,
+                consumed_interval_sum_ns: 0,
+                consumed_interval_max_ns: 0,
+                mailbox_residence_count: 0,
+                mailbox_residence_sum_ns: 0,
+                mailbox_residence_max_ns: 0,
+                conversion_count: 0,
+                conversion_sum_ns: 0,
+                conversion_max_ns: 0,
+                queue_write_count: 0,
+                queue_write_sum_ns: 0,
+                queue_write_max_ns: 0,
+            }
+        }
+
+        fn record_poll(&mut self, now: Instant) {
+            self.polls = self.polls.saturating_add(1);
+            if let Some(previous) = self.last_poll {
+                let elapsed = now
+                    .saturating_duration_since(previous)
+                    .as_nanos()
+                    .min(u128::from(u64::MAX)) as u64;
+                self.poll_interval_sum_ns = self
+                    .poll_interval_sum_ns
+                    .saturating_add(u128::from(elapsed));
+                self.poll_interval_max_ns = self.poll_interval_max_ns.max(elapsed);
+            }
+            self.last_poll = Some(now);
+        }
+
+        fn record_empty_poll(&mut self) {
+            self.empty_polls = self.empty_polls.saturating_add(1);
+        }
+
+        fn record_frame(&mut self, now: Instant, sequence: u64, published_at: Instant) {
+            self.consumed = self.consumed.saturating_add(1);
+            if let Some(previous) = self.last_consumed {
+                let elapsed = now
+                    .saturating_duration_since(previous)
+                    .as_nanos()
+                    .min(u128::from(u64::MAX)) as u64;
+                self.consumed_interval_sum_ns = self
+                    .consumed_interval_sum_ns
+                    .saturating_add(u128::from(elapsed));
+                self.consumed_interval_max_ns = self.consumed_interval_max_ns.max(elapsed);
+            }
+            if self.last_sequence > 0 && sequence > self.last_sequence.saturating_add(1) {
+                self.sequence_gaps = self
+                    .sequence_gaps
+                    .saturating_add(sequence - self.last_sequence - 1);
+            }
+            let residence = now
+                .saturating_duration_since(published_at)
+                .as_nanos()
+                .min(u128::from(u64::MAX)) as u64;
+            self.mailbox_residence_count = self.mailbox_residence_count.saturating_add(1);
+            self.mailbox_residence_sum_ns = self
+                .mailbox_residence_sum_ns
+                .saturating_add(u128::from(residence));
+            self.mailbox_residence_max_ns = self.mailbox_residence_max_ns.max(residence);
+            self.last_sequence = sequence;
+            self.last_consumed = Some(now);
+        }
+
+        fn record_conversion(&mut self, elapsed: Duration) {
+            self.conversion_count = self.conversion_count.saturating_add(1);
+            let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+            self.conversion_sum_ns = self.conversion_sum_ns.saturating_add(u128::from(nanos));
+            self.conversion_max_ns = self.conversion_max_ns.max(nanos);
+        }
+
+        fn record_queue_write(&mut self, elapsed: Duration) {
+            self.queue_write_count = self.queue_write_count.saturating_add(1);
+            let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+            self.queue_write_sum_ns = self.queue_write_sum_ns.saturating_add(u128::from(nanos));
+            self.queue_write_max_ns = self.queue_write_max_ns.max(nanos);
+        }
+
+        fn report_if_due(&mut self, worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>) {
+            let elapsed = self.started.elapsed();
+            if elapsed < Duration::from_secs(1) {
+                return;
+            }
+
+            let (runtime, replaced_frames, machine_clock_hz) = {
+                let guard = worker_slot.borrow();
+                guard.as_ref().map_or(
+                    (sega_sms_runtime::SmsFramePacingMetrics::default(), 0, 0),
+                    |worker| {
+                        (
+                            worker.frame_pacing_metrics(),
+                            worker.video_replaced_frames(),
+                            worker.machine_clock_hz(),
+                        )
+                    },
+                )
+            };
+            let average_us = |total_ns: u128, count: u64| -> u64 {
+                if count == 0 {
+                    0
+                } else {
+                    (total_ns / u128::from(count) / 1_000).min(u128::from(u64::MAX)) as u64
+                }
+            };
+            eprintln!(
+                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                elapsed.as_millis(),
+                self.polls,
+                self.empty_polls,
+                self.consumed,
+                self.sequence_gaps,
+                average_us(self.poll_interval_sum_ns, self.polls.saturating_sub(1)),
+                self.poll_interval_max_ns / 1_000,
+                average_us(
+                    self.consumed_interval_sum_ns,
+                    self.consumed.saturating_sub(1)
+                ),
+                self.consumed_interval_max_ns / 1_000,
+                average_us(self.mailbox_residence_sum_ns, self.mailbox_residence_count),
+                self.mailbox_residence_max_ns / 1_000,
+                average_us(self.conversion_sum_ns, self.conversion_count),
+                self.conversion_max_ns / 1_000,
+                average_us(self.queue_write_sum_ns, self.queue_write_count),
+                self.queue_write_max_ns / 1_000,
+                replaced_frames,
+                runtime.sample_count,
+                runtime.total_samples,
+                runtime.frame_interval_p50_ns / 1_000,
+                runtime.frame_interval_p95_ns / 1_000,
+                runtime.frame_interval_p99_ns / 1_000,
+                runtime.machine_ticks_per_frame_min,
+                runtime.machine_ticks_per_frame_p50,
+                runtime.machine_ticks_per_frame_max,
+                runtime.step_frame_p95_ns / 1_000,
+                runtime.video_publish_p95_ns / 1_000,
+                runtime.audio_submit_p95_ns / 1_000,
+                runtime.frame_processing_p95_ns / 1_000,
+                runtime.pacing_wait_budget_p95_ns / 1_000,
+                runtime.pacing_wait_elapsed_p95_ns / 1_000,
+                machine_clock_hz,
+            );
+
+            self.started = Instant::now();
+            self.last_poll = None;
+            self.last_consumed = None;
+            self.polls = 0;
+            self.empty_polls = 0;
+            self.consumed = 0;
+            self.sequence_gaps = 0;
+            self.poll_interval_sum_ns = 0;
+            self.poll_interval_max_ns = 0;
+            self.consumed_interval_sum_ns = 0;
+            self.consumed_interval_max_ns = 0;
+            self.mailbox_residence_count = 0;
+            self.mailbox_residence_sum_ns = 0;
+            self.mailbox_residence_max_ns = 0;
+            self.conversion_count = 0;
+            self.conversion_sum_ns = 0;
+            self.conversion_max_ns = 0;
+            self.queue_write_count = 0;
+            self.queue_write_sum_ns = 0;
+            self.queue_write_max_ns = 0;
+        }
+    }
+
     /// Consome somente o frame mais recente e atualiza a textura sem bloquear o worker.
     fn start_frame_presentation(
         app: &MainWindow,
         queue_slot: Rc<RefCell<Option<wgpu::Queue>>>,
         mailbox: FrameMailbox,
+        worker_slot: Rc<RefCell<Option<SmsTemporalWorker>>>,
     ) -> Timer {
         let timer = Timer::default();
         let app_weak = app.as_weak();
         let mut last_sequence = 0_u64;
         let mut last_sample = Instant::now();
+        let mut host_pacing = HostFramePacingWindow::new();
 
         timer.start(TimerMode::Repeated, PRESENT_INTERVAL, move || {
+            host_pacing.record_poll(Instant::now());
             let Some(app) = app_weak.upgrade() else {
                 return;
             };
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
+                host_pacing.report_if_due(&worker_slot);
                 return;
             };
             let Some(texture) = app.get_gpu_texture().to_wgpu_30_texture() else {
+                host_pacing.report_if_due(&worker_slot);
                 return;
             };
 
-            let frame = match mailbox.take_latest() {
+            let (frame, published_at) = match mailbox.take_latest_with_timestamp() {
                 Ok(Some(frame)) => frame,
-                Ok(None) => return,
+                Ok(None) => {
+                    host_pacing.record_empty_poll();
+                    host_pacing.report_if_due(&worker_slot);
+                    return;
+                }
                 Err(error) => {
                     app.set_frame_status(format!("Erro no mailbox: {error}").into());
+                    host_pacing.report_if_due(&worker_slot);
                     return;
                 }
             };
@@ -695,10 +910,12 @@ mod windows_host {
                     )
                     .into(),
                 );
+                host_pacing.report_if_due(&worker_slot);
                 return;
             }
 
             let now = Instant::now();
+            host_pacing.record_frame(now, frame.sequence(), published_at);
             let elapsed = now.saturating_duration_since(last_sample);
             if elapsed >= Duration::from_millis(500) {
                 let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence))
@@ -709,14 +926,18 @@ mod windows_host {
                 last_sample = now;
             }
 
+            let conversion_started = Instant::now();
             match convert_rgb888_to_rgba8(&frame) {
                 Ok(pixels) => {
+                    host_pacing.record_conversion(conversion_started.elapsed());
+                    let queue_write_started = Instant::now();
                     queue.write_texture(
                         texture.as_image_copy(),
                         &pixels,
                         texture_data_layout(),
                         texture_extent(),
                     );
+                    host_pacing.record_queue_write(queue_write_started.elapsed());
                     app.set_frame_status(
                         format!(
                             "VDP frame: {} | {}x{} RGB888 → RGBA8",
@@ -729,9 +950,11 @@ mod windows_host {
                     app.window().request_redraw();
                 }
                 Err(error) => {
+                    host_pacing.record_conversion(conversion_started.elapsed());
                     app.set_frame_status(format!("Falha ao converter frame: {error}").into());
                 }
             }
+            host_pacing.report_if_due(&worker_slot);
         });
         timer
     }
@@ -891,6 +1114,7 @@ mod windows_host {
     ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
         worker.attach_video_mailbox(mailbox.clone())?;
+        worker.set_diagnostics_enabled(true);
         Ok(worker)
     }
 
@@ -903,6 +1127,7 @@ mod windows_host {
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
+        next.set_diagnostics_enabled(true);
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -1360,7 +1585,8 @@ mod windows_host {
             setup_counter,
             teardown_counter,
         )?;
-        let _frame_timer = start_frame_presentation(&app, queue_slot, mailbox.clone());
+        let _frame_timer =
+            start_frame_presentation(&app, queue_slot, mailbox.clone(), Rc::clone(&worker));
 
         app.run()?;
         let final_preferences = DesktopPreferences {

@@ -8,5 +8,6 @@ mod worker;
 pub use audio::AudioSession;
 pub use sega_sms_core::SpriteLimitMode;
 pub use worker::{
-    SmsDebugSnapshot, SmsTemporalWorker, SmsTemporalWorkerDebugHandle, sms_temporal_region_profile,
+    SmsDebugSnapshot, SmsFramePacingMetrics, SmsTemporalWorker, SmsTemporalWorkerDebugHandle,
+    sms_temporal_region_profile,
 };
