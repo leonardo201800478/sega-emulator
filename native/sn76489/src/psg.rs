@@ -1193,4 +1193,44 @@ mod tests {
         assert_eq!(whole, chunked);
         assert!(!whole.drain_samples(None).is_empty());
     }
+
+    #[test]
+    fn sms_attenuation_levels_match_independent_reference_table() {
+        // Normalized from the 16-level voltage table published by SMS Power.
+        // The reference values are integer amplitudes relative to 32767.
+        const REFERENCE: [f64; 16] = [
+            32767.0 / 32767.0,
+            26028.0 / 32767.0,
+            20675.0 / 32767.0,
+            16422.0 / 32767.0,
+            13045.0 / 32767.0,
+            10362.0 / 32767.0,
+            8231.0 / 32767.0,
+            6568.0 / 32767.0,
+            5193.0 / 32767.0,
+            4125.0 / 32767.0,
+            3277.0 / 32767.0,
+            2603.0 / 32767.0,
+            2067.0 / 32767.0,
+            1642.0 / 32767.0,
+            1304.0 / 32767.0,
+            0.0,
+        ];
+
+        let mut psg =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        psg.tone_outputs = [1; 3];
+        psg.noise_output = 1;
+        psg.attenuations = [15; 4];
+
+        for (level, expected) in REFERENCE.into_iter().enumerate() {
+            psg.attenuations[0] = level as u8;
+            let measured = psg.mix() * 4.0;
+            assert!(
+                (measured - expected).abs() < 0.000_01,
+                "SMS attenuation level {level}: expected {expected:.8}, got {measured:.8}"
+            );
+        }
+    }
+
 }
