@@ -208,6 +208,7 @@ pub struct Sn76489StateV1 {
     pub clock_divider_phase: u64,
     pub output_phase: u64,
     pub noise_period: u16,
+    pub filter_coefficients: Vec<f64>,
     pub filter_history: Vec<f64>,
     pub filter_position: usize,
     pub pending_samples: Vec<f64>,
@@ -415,6 +416,7 @@ impl Sn76489StateV1 {
             u64::try_from(self.filter_position)
                 .map_err(|_| PsgStateError::InvalidState("FIR cursor is too large"))?,
         );
+        body.f64_vec(&self.filter_coefficients)?;
         body.f64_vec(&self.filter_history)?;
         body.f64_vec(&self.pending_samples)?;
         body.f64_vec(&self.render_pending)?;
@@ -492,6 +494,7 @@ impl Sn76489StateV1 {
         let noise_period = reader.u16()?;
         let filter_position = usize::try_from(reader.u64()?)
             .map_err(|_| PsgStateError::InvalidState("FIR cursor is invalid"))?;
+        let filter_coefficients = reader.f64_vec(MAX_STATE_FILTER_TAPS)?;
         let filter_history = reader.f64_vec(MAX_STATE_FILTER_TAPS)?;
         let pending_samples = reader.f64_vec(sample_buffer_capacity)?;
         let render_pending = reader.f64_vec(sample_buffer_capacity)?;
@@ -519,6 +522,7 @@ impl Sn76489StateV1 {
             clock_divider_phase,
             output_phase,
             noise_period,
+            filter_coefficients,
             filter_history,
             filter_position,
             pending_samples,
@@ -591,11 +595,34 @@ impl Sn76489StateV1 {
                 "clock divider or output sampling phase is out of range",
             ));
         }
-        if self.filter_history.len() != core.filter_coefficients.len()
+        if self.filter_coefficients.len() != core.filter_coefficients.len()
+            || self.filter_coefficients.len() < MIN_FILTER_TAPS
+            || self.filter_coefficients.len().is_multiple_of(2)
+            || self.filter_history.len() != self.filter_coefficients.len()
             || self.filter_position >= self.filter_history.len()
         {
             return Err(PsgStateError::InvalidState(
-                "FIR history length or cursor is inconsistent with the filter configuration",
+                "FIR coefficient/history length or cursor is inconsistent with the filter configuration",
+            ));
+        }
+        if self
+            .filter_coefficients
+            .iter()
+            .any(|coefficient| !coefficient.is_finite())
+        {
+            return Err(PsgStateError::InvalidState(
+                "FIR coefficients contain a non-finite value",
+            ));
+        }
+        let coefficient_sum: f64 = self.filter_coefficients.iter().sum();
+        if (coefficient_sum - 1.0).abs() > 1.0e-9
+            || self.filter_coefficients.iter().enumerate().any(|(index, coefficient)| {
+                let mirrored = self.filter_coefficients.len() - 1 - index;
+                (coefficient - self.filter_coefficients[mirrored]).abs() > 1.0e-12
+            })
+        {
+            return Err(PsgStateError::InvalidState(
+                "FIR coefficients are not normalized and symmetric",
             ));
         }
         if self.pending_samples.len() > self.sample_buffer_capacity
@@ -810,6 +837,7 @@ impl Sn76489Core {
             clock_divider_phase: self.clock_divider_phase,
             output_phase: self.output_phase,
             noise_period: self.noise_period,
+            filter_coefficients: self.filter_coefficients.clone(),
             filter_history: self.filter_history.clone(),
             filter_position: self.filter_position,
             pending_samples: self.pending_samples.iter().copied().collect(),
@@ -837,6 +865,7 @@ impl Sn76489Core {
         core.clock_divider_phase = state.clock_divider_phase;
         core.output_phase = state.output_phase;
         core.noise_period = state.noise_period;
+        core.filter_coefficients = state.filter_coefficients;
         core.filter_history = state.filter_history;
         core.filter_position = state.filter_position;
         core.pending_samples = state.pending_samples.into_iter().collect();
