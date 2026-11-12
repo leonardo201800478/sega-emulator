@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          PSG_H2_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" cargo test --release --locked -p sega-sn76489 --all-targets -- --nocapture
+          PSG_AUDIO_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" PSG_H2_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" cargo test --release --locked -p sega-sn76489 --all-targets -- --nocapture
       - name: Fetch historical PSG baseline
         shell: bash
         run: |
