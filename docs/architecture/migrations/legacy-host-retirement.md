@@ -26,7 +26,7 @@ O frontend não implementa hardware, instruções, ciclos, temporização nem ca
 | R2 — preferências persistentes | MERGED | PR #754, merge 22ea3a44cd66bcd7e5c4edbd98007ca59eef9858 |
 | R3 — áudio físico CPAL | INTEGRADO EM SOFTWARE | PR #770 merged; H3 48 kHz PR #774 merged. Validação física prolongada, hotplug/reconexão, underruns e formatos adaptativos ainda pendentes. |
 | R4 — input SDL3 | PENDING | Auditoria e integração de teclado/gamepads/hotplug. |
-| R5 — consolidação e corte | PENDING | Paridade, regressão, remoção de consumidores e validação Release. | Paridade, regressão, remoção de consumidores e validação Release |
+| R5 — consolidação e corte | PENDING | Paridade, regressão, remoção de consumidores e validação Release. |
 
 Merge de R1/R2 não prova áudio físico, input SDL3, paridade integral de frontend nem encerramento da migração.
 
@@ -36,8 +36,8 @@ A auditoria da árvore main em 2026-11-12 encontrou:
 
 - native/sega_app: shell anterior ainda presente e com integração ao runtime/host gráfico anterior.
 - native/video_runtime: módulo de apresentação Windows ainda expõe implementação anterior; há consumidores em código do shell/worker.
-- native/audio_output: na main ainda contém os adaptadores próprios WASAPI/XAudio2. A candidata PR #770 os substitui por CPAL 0.18.2, preservando a FIFO SPSC e o contrato PcmSink.
-- native/sega_desktop: na main ainda não possui saída física; a candidata PR #770 conecta o worker SMS ao adaptador CPAL.
+- native/audio_output: a main já usa CPAL 0.18.2 após PR #770; preservar FIFO SPSC e o contrato de sink.
+- native/sega_desktop / runtime SMS: o caminho CPAL está integrado por PR #770 e a linha PCM interna de 48 kHz por PR #774; faltam gates de operação física prolongada, hotplug e formatos adaptativos.
 - .github/workflows/ci.yml: existem nomes de checks de compatibilidade exigidos pela proteção da branch; os jobs correspondentes ficam SKIPPED em eventos normais e não validam os hosts antigos.
 
 **Conclusão:** as referências nos documentos normativos foram corrigidas para refletir a arquitetura-alvo. A remoção de WASAPI/XAudio2 está proposta na PR #770 junto com a substituição CPAL, mas a main mantém o baseline anterior até a validação exigida. Não integrar a remoção antes de CI e comprovação funcional; não apagar código apenas para eliminar ocorrências textuais.
