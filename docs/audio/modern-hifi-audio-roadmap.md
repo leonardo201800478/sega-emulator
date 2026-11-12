@@ -148,6 +148,23 @@ O NRMSE de aproximadamente 5,3% e o erro máximo próximo de 0,096 demonstram um
 
 O centróide espectral diminuiu 13,328 Hz no SMS e 12,459 Hz no SG-1000. A diferença concentra-se nas bandas altas, sobretudo 20–24 kHz; as bandas até 8 kHz praticamente não mudam neste trace. Isso é compatível com maior suavização da reconstrução fracionária, mas não prova que ela cause a percepção subjetiva do usuário: é preciso separar transientes, tons e ruído e também auditar o caminho downstream (resampler/mixer/PCM16).
 
+**Varredura de tons isolados:** na captura [#43259328531](https://github.com/leonardo201800478/sega-emulator/actions/runs/43259328531), o mesmo tom quadrado SMS foi renderizado em baseline e atual para oito períodos, com os outros três canais silenciados.
+
+| Período | Fundamental | Delta de energia fundamental | Delta RMS |
+|---:|---:|---:|---:|
+| 5 | 22.372 kHz | -0,1436 dB | -3,24% |
+| 6 | 18.643 kHz | -0,0997 dB | -2,26% |
+| 7 | 15.980 kHz | -0,0730 dB | -1,66% |
+| 9 | 12.429 kHz | -0,0439 dB | -1,01% |
+| 14 | 7.990 kHz | -0,0183 dB | -0,42% |
+| 28 | 3.995 kHz | -0,0046 dB | -0,27% |
+| 56 | 1.998 kHz | -0,0011 dB | -0,12% |
+| 112 | 999 Hz | -0,0003 dB | -0,06% |
+
+A diferença de amplitude cresce de forma consistente com a frequência. Isso sustenta a hipótese de que a interpolação linear atual introduz uma pequena atenuação adicional no topo da banda. Ainda não prova regressão perceptiva: a amostragem anterior tinha erro temporal de até um tick interno, e a comparação não mede aliasing/jitter nem qualidade de transientes. O próximo experimento será comparar interpolação linear com uma interpolação causal de ordem superior (4 pontos Lagrange), sem trocar o algoritmo de produção antes de medir resposta, overshoot, transientes e determinismo.
+
+Artefato com os WAVs da varredura e relatório: [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43259328531/artifacts/13963581557).
+
 **Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
