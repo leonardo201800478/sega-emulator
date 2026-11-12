@@ -203,11 +203,27 @@ def tone_response_summary(
     rms = math.sqrt(
         math.fsum(value * value for value in steady_state) / len(steady_state)
     )
+    mean = math.fsum(samples) / len(samples)
+    peak_index = max(range(len(samples)), key=lambda index: abs(samples[index]))
+    peak = abs(samples[peak_index])
+    startup_window = samples[: min(256, len(samples))]
+    startup_peak = max((abs(value) for value in startup_window), default=0.0)
+    steady_peak = max((abs(value) for value in steady_state), default=0.0)
+    max_delta = max(
+        (abs(samples[index] - samples[index - 1]) for index in range(1, len(samples))),
+        default=0.0,
+    )
     return {
         "expected_frequency_hz": expected_hz,
         "peak_frequency_hz": peak_bin * sample_rate / fft_size,
         "frequency_error_hz": peak_bin * sample_rate / fft_size - expected_hz,
         "rms": rms,
+        "mean": mean,
+        "peak": peak,
+        "peak_index": peak_index,
+        "startup_peak": startup_peak,
+        "steady_peak": steady_peak,
+        "max_delta": max_delta,
         "fundamental_power": fundamental_power,
         "fundamental_relative_db": (
             10.0 * math.log10(fundamental_power / total_power)
@@ -738,8 +754,8 @@ def main() -> None:
             [
                 "## Experimental windowed-sinc fractional interpolation",
                 "",
-                "| Period | Baseline THD | Linear THD | Sinc8 THD | Sinc8 vs. baseline | Sinc8 vs. linear |",
-                "|---:|---:|---:|---:|---:|---:|",
+                "| Period | Baseline THD | Linear THD | Sinc8 THD | Baseline peak | Linear peak | Sinc8 peak | Sinc8 vs. baseline | Sinc8 vs. linear |",
+                "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
             ]
         )
         for period, data in sorted(
@@ -751,6 +767,9 @@ def main() -> None:
                 f"{data['baseline']['thd_percent']:.4f}% | "
                 f"{data['linear']['thd_percent']:.4f}% | "
                 f"{data['sinc8']['thd_percent']:.4f}% | "
+                f"{data['baseline']['peak']:.6f} | "
+                f"{data['linear']['peak']:.6f} | "
+                f"{data['sinc8']['peak']:.6f} | "
                 f"{data['sinc8_vs_baseline_db']:.4f} dB | "
                 f"{data['sinc8_vs_linear_db']:.4f} dB |"
             )
