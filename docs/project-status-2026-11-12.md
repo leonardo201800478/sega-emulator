@@ -4,7 +4,9 @@
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
 **Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
 
-**Main atual após a atualização desta fotografia:** `6130cb42f1d76648552a5a0cd510e3a84c7efb42`
+**Main atual (HEAD após a PR documental #786):** `9d54702d07d3a6040cc8d0c8894a144bc555dd47`
+
+**Baseline funcional de código (pós PR #785):** `6130cb42f1d76648552a5a0cd510e3a84c7efb42`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
 > Esta é uma fotografia remota do GitHub. CI PASS significa apenas que os jobs executados passaram no SHA indicado. SKIPPED/queued/NOT RUN não são PASS. Validação física só é considerada realizada quando há evidência de execução no hardware/ambiente correspondente.
@@ -153,7 +155,7 @@ Os documentos `docs/z80-completion-scorecard.md` e `docs/z80-dd-fd-semantic-matr
 
 ## 10. Atualização operacional — 2026-11-12, pós PR #784
 
-Esta seção supersede os estados históricos das seções 5 e 8 quando houver divergência. Baseline consultado: `main` em `6130cb42f1d76648552a5a0cd510e3a84c7efb42`.
+Esta seção supersede os estados históricos das seções 5 e 8 quando houver divergência. Baseline funcional de código consultado: `6130cb42f1d76648552a5a0cd510e3a84c7efb42` (HEAD atual da main inclui apenas a atualização documental #786).
 
 ### Integrações confirmadas
 
@@ -176,7 +178,7 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 - A1: PR #784 integrou os vetores independentes de ruído branco/periódico e a continuidade de Tone 2. A1 permanece PARTIAL: oráculo de períodos 0/1, fase inicial absoluta do ruído, fase após escrita e validação física Master System continuam pendentes.
 - A antiga PR #767 foi fechada após o port seletivo. O DTO `Sn76489StateV1` permanece preservado na branch histórica para revisão separada A1.4; decoder/restore precisam de hardening antes de novo port.
 - H3: integrado pela PR #774; validação de software e CI aplicável passaram. Validação física prolongada de endpoint permanece pendente.
-- H4: não implementado. O caminho atual ainda quantiza PCM em 16 bits antes do CPAL; falta preservar precisão até a fronteira física e negociar tuplas suportadas de taxa/formato, com I16 fallback, I24/F32 quando anunciados e 48/88,2/96 kHz quando suportados.
+- H4: implementação submetida na PR #787; main ainda não contém o código. A branch remove quantização PCM16 intermediária, mantém f64 até o callback, negocia F32/I24/I16 e taxas 48/88,2/96 kHz. CI e validação física pendentes.
 
 ### Backlog antigo — decisões de auditoria
 
