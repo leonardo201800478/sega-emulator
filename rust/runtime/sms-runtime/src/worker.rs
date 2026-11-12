@@ -2923,7 +2923,7 @@ mod tests {
 
     #[test]
     fn frame_pacing_window_records_command_handler_without_wait_wakeup() {
-        let mut window = FramePacingWindow::new();
+        let mut window = FramePacingWindow::default();
         window.push(FramePacingSample::default());
         window.record_command_handler(Duration::from_micros(250));
 
