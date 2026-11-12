@@ -715,26 +715,23 @@ mod tests {
         }
     }
 
-    fn render_register_trace(
-        profile: PsgProfile,
-        max_advance_chunk: Option<u64>,
-    ) -> Vec<f64> {
+    fn render_register_trace(profile: PsgProfile, max_advance_chunk: Option<u64>) -> Vec<f64> {
         // Deterministic PSG bus trace: tone/volume setup, then live register
         // changes while the chip is running. Times are source PSG clocks.
         const TRACE: [(u64, u8); 14] = [
-            (0, 0x85),       // Tone 0 period low = 5.
-            (0, 0x12),       // Tone 0 period high = 0x12.
-            (0, 0x90),       // Tone 0 full volume.
-            (0, 0xA8),       // Tone 1 period low = 8.
-            (0, 0x05),       // Tone 1 period high = 5.
-            (0, 0xB4),       // Tone 1 attenuation = 4.
-            (0, 0xC0),       // Tone 2 period low = 0.
-            (0, 0x10),       // Tone 2 period high = 1.
-            (0, 0xD8),       // Tone 2 attenuation = 8.
-            (0, 0xE4),       // White noise, fixed divider.
-            (0, 0xF6),       // Noise attenuation = 6.
-            (250_000, 0x94), // Change tone 0 volume during playback.
-            (750_000, 0xE7), // White noise, tone-2-derived divider.
+            (0, 0x85),         // Tone 0 period low = 5.
+            (0, 0x12),         // Tone 0 period high = 0x12.
+            (0, 0x90),         // Tone 0 full volume.
+            (0, 0xA8),         // Tone 1 period low = 8.
+            (0, 0x05),         // Tone 1 period high = 5.
+            (0, 0xB4),         // Tone 1 attenuation = 4.
+            (0, 0xC0),         // Tone 2 period low = 0.
+            (0, 0x10),         // Tone 2 period high = 1.
+            (0, 0xD8),         // Tone 2 attenuation = 8.
+            (0, 0xE4),         // White noise, fixed divider.
+            (0, 0xF6),         // Noise attenuation = 6.
+            (250_000, 0x94),   // Change tone 0 volume during playback.
+            (750_000, 0xE7),   // White noise, tone-2-derived divider.
             (1_250_000, 0xF2), // Raise noise level during playback.
         ];
         const TOTAL_CLOCKS: u64 = 2_000_000;
@@ -804,7 +801,10 @@ mod tests {
 
             assert!(peak > 0.001, "{profile:?}: trace unexpectedly silent");
             assert!(rms > 0.001, "{profile:?}: trace RMS unexpectedly low");
-            assert!(peak <= 1.25, "{profile:?}: unexpected reconstruction overshoot {peak}");
+            assert!(
+                peak <= 1.25,
+                "{profile:?}: unexpected reconstruction overshoot {peak}"
+            );
             assert!(mean.abs() < 0.1, "{profile:?}: unexpected DC offset {mean}");
         }
 
