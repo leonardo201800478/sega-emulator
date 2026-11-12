@@ -172,7 +172,12 @@ impl NativeCpalOutput {
 
     /// Wrap this sink in the shared Rust DSP/resampler session.
     pub fn into_audio_session(self, volume: u8) -> Result<NativeAudioSession<Self>, String> {
-        NativeAudioSession::new(DEFAULT_PCM_SOURCE_RATE_HZ, self.sample_rate_hz, volume, self)
+        NativeAudioSession::new(
+            DEFAULT_PCM_SOURCE_RATE_HZ,
+            self.sample_rate_hz,
+            volume,
+            self,
+        )
     }
 
     fn check_callback_error(&self) -> Result<(), String> {
