@@ -73,3 +73,5 @@ D3D12 é tecnologia de vídeo e não integra o subsistema de áudio. Suas refer�
 7. Verificação de que áudio físico não altera Scheduler, determinismo ou equivalência contínua/em blocos.
 
 Até a conclusão desses gates, R3 permanece **IN_PROGRESS**, não concluída.
+
+**Lockfiles:** root workspace, `native/audio_output` and `native/sega_app` lockfiles were regenerated with the pinned Rust toolchain and committed in the candidate branch by CI (`d0e2401`). This resolves the `--locked` dependency graph mismatch; it does not substitute for compile/test validation.
