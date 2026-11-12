@@ -89,7 +89,7 @@ Não registrar cada instrução Z80 nem cada T-state por padrão. A instrumenta�
 | `sega::vdp` | configuração, modo, VBlank e Line IRQ |
 | `sega::psg` | configuração, registradores e fila de amostras |
 | `sega::audio::dsp` | resampling, volume e lotes de amostras |
-| `sega::audio::backend` | WASAPI/XAudio2, buffers, underruns, descartes e reconexões |
+| `sega::audio::output` | CPAL stream, formato/taxa negociados, FIFO, underruns, descartes e falhas de dispositivo |
 | `sega::video::d3d12` | adaptador, device, swapchain, HWND e falhas de Present |
 | `sega::rom` | formato e tamanho da imagem |
 | `sega::mapper` | mapper, BIOS, memória e trocas de banco |

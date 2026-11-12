@@ -24,7 +24,7 @@ O frontend não implementa hardware, instruções, ciclos, temporização nem ca
 | R1 — POC Slint/WGPU/Vulkan | MERGED | PR #747, merge ef6398eeaf12edf663846a5bf8392dd0033b6ea1 |
 | R2 — frames SMS no desktop Slint/WGPU | MERGED | PR #752, merge 5706e9125e345230b1b9ddda860654ce9d0789a3 |
 | R2 — preferências persistentes | MERGED | PR #754, merge 22ea3a44cd66bcd7e5c4edbd98007ca59eef9858 |
-| R3 — áudio físico CPAL | PENDING | Saída física, enumeração, formatos, lifecycle, reconexão, underruns e captura física ainda exigem integração/validação |
+| R3 — áudio físico CPAL | IN_PROGRESS (candidata PR #770; não merged) | Adaptador e integração de software implementados na branch; CI, dispositivo físico, reconexão, underruns e captura ainda pendentes |
 | R4 — input SDL3 | PENDING | Auditoria e integração de teclado/gamepads/hotplug |
 | R5 — consolidação e corte | PENDING | Paridade, regressão, remoção de consumidores e validação Release |
 
@@ -36,11 +36,11 @@ A auditoria da árvore main em 2026-11-12 encontrou:
 
 - native/sega_app: shell anterior ainda presente e com integração ao runtime/host gráfico anterior.
 - native/video_runtime: módulo de apresentação Windows ainda expõe implementação anterior; há consumidores em código do shell/worker.
-- native/audio_output: crate de saída física anterior ainda possui adaptadores Windows e é consumido pelo runtime/integração do shell anterior.
-- native/sega_desktop: caminho Slint/WGPU atual; controles físicos de áudio continuam desabilitados até R3.
+- native/audio_output: na main ainda contém os adaptadores próprios WASAPI/XAudio2. A candidata PR #770 os substitui por CPAL 0.18.2, preservando a FIFO SPSC e o contrato PcmSink.
+- native/sega_desktop: na main ainda não possui saída física; a candidata PR #770 conecta o worker SMS ao adaptador CPAL.
 - .github/workflows/ci.yml: existem nomes de checks de compatibilidade exigidos pela proteção da branch; os jobs correspondentes ficam SKIPPED em eventos normais e não validam os hosts antigos.
 
-**Conclusão:** as referências nos documentos normativos foram corrigidas para refletir a arquitetura-alvo. A remoção integral de módulos e dependências ainda não é segura enquanto existirem consumidores e antes de R3/R5. Não se deve apagar código apenas para eliminar ocorrências textuais.
+**Conclusão:** as referências nos documentos normativos foram corrigidas para refletir a arquitetura-alvo. A remoção de WASAPI/XAudio2 está proposta na PR #770 junto com a substituição CPAL, mas a main mantém o baseline anterior até a validação exigida. Não integrar a remoção antes de CI e comprovação funcional; não apagar código apenas para eliminar ocorrências textuais.
 
 ## 4. Critérios obrigatórios para retirada física
 
@@ -59,7 +59,7 @@ Antes de excluir o módulo e suas dependências:
 
 ### 4.2 Saída física de áudio anterior
 
-Não remover a implementação de saída existente antes de CPAL estar funcional. R3 deve comprovar:
+A PR #770 é a candidata de substituição: implementa CPAL e remove os adaptadores próprios WASAPI/XAudio2 no mesmo conjunto revisável. Ela permanece Draft. A implementação antiga na main deve ser preservada até a candidata comprovar a funcionalidade correspondente. R3 deve comprovar:
 
 1. enumeração de dispositivos e formatos suportados;
 2. seleção e abertura de stream;
@@ -71,7 +71,7 @@ Não remover a implementação de saída existente antes de CPAL estar funcional
 8. execução física prolongada em Windows Release, com logs e captura reproduzível;
 9. testes headless determinísticos e CI no SHA exato.
 
-Somente após R3 PASS e R5 aprovado será permitido retirar os adaptadores antigos, dependências Windows, configurações, testes e documentação operacional correspondente.
+Somente após R3 PASS e R5 aprovado será permitido integrar a retirada definitiva dos adaptadores antigos, dependências Windows, configurações, testes e documentação operacional correspondente. Até lá, a PR #770 não pode ser merged.
 
 ### 4.3 CI e proteção de branch
 

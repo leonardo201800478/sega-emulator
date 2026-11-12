@@ -12,7 +12,7 @@
 | SMS core temporal | Base temporal Rust integrada | Precisão VDP ainda parcial; WAIT por fixture; Save States persistentes completos pendentes |
 | SMS runtime worker | Worker Rust puro integrado | Lifecycle e áudio físico precisam de validação no mesmo SHA |
 | Vídeo / Slint + WGPU | Frames SMS integrados ao desktop Slint/WGPU (R2) | Validação física Vulkan e campanha de frame pacing continuam exigindo captura Windows Release; ver plano R2 |
-| Áudio / PSG | SN76489 e geração PCM no runtime Rust | Saída física CPAL 0.18.2 ainda não integrada (R3); não declarar áudio físico concluído |
+| Áudio / PSG | SN76489 e geração PCM no runtime Rust; main ainda usa adaptadores legados | Candidata PR #770 introduz CPAL 0.18.2 e remove WASAPI/XAudio2 próprios; CI e validação física NOT RUN |
 | Input | Runtime de entrada existente | SDL3 na arquitetura desktop-alvo aguarda R4; teclado/gamepad físico NOT RUN |
 | SG-1000 | Implementação preservada fora da trilha de expansão SMS atual | Regressão obrigatória em cada alteração compartilhada; não criar fallback duplicado |
 | ZEXDOC / ZEXALL | NOT RUN | E8 bloqueada até fechamento E7 e harness Rust completo |
@@ -23,7 +23,7 @@
 Consultar [scorecard de confiabilidade de áudio](audio/audio-reliability-scorecard.md) e [auditoria consolidada](audits/audio-reliability-consolidated-2026-11-08.md).
 
 - AUDIO-00 a AUDIO-05 são a trilha imediata.
-- A investigação histórica da qualidade de áudio permanece arquivada; a nova integração física deve validar PCM, formatos, lifecycle, underruns e latência ponta a ponta no CPAL.
+- Candidata PR #770: adaptador CPAL, enumeração por ID estável, conversão de formatos e integração aos workers SMS do Slint e shell anterior. Ainda não merged; validar PCM, lifecycle, desconexão, underruns e latência ponta a ponta.
 - A issue #640 permanece aberta; contagem de underrun isolada não prova causa raiz.
 - Não ajustar clocks do PSG/Scheduler, pitch, velocidade, buffer ou prebuffer sem evidência reproduzível.
 - Não considerar `consumed_frames` como frames reproduzidos nem `queue_duration_micros` como latência ponta a ponta.
@@ -37,11 +37,11 @@ Consultar [scorecard de confiabilidade de áudio](audio/audio-reliability-scorec
 | [PR #657](https://github.com/leonardo201800478/sega-emulator/pull/657) | CLOSED / NOT MERGED | Não atribuir a esta PR a integração do código atual |
 | [PR #658](https://github.com/leonardo201800478/sega-emulator/pull/658) | MERGED | Descarte da cauda do resampler após invalidação de epoch |
 | [PR #661](https://github.com/leonardo201800478/sega-emulator/pull/661) | MERGED | Amostragem SN76489 em posições fracionárias do clock de saída |
-| R3 — CPAL | PENDING | Saída física, dispositivos, formatos, lifecycle e validação de áudio ainda não integrados |
+| [PR #770](https://github.com/leonardo201800478/sega-emulator/pull/770) | CANDIDATE | CPAL 0.18.2; CI Windows e validação física pendentes |
 | [PR #643](https://github.com/leonardo201800478/sega-emulator/pull/643) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #644](https://github.com/leonardo201800478/sega-emulator/pull/644) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #645](https://github.com/leonardo201800478/sega-emulator/pull/645) | OPEN / mergeable=false | Base antiga; não integrada |
-| R3 — CPAL | PENDING | Integração de saída física, dispositivos, formatos, lifecycle e underruns |
+| R3 — CPAL | IN_PROGRESS | Implementação candidata #770; não contar como concluída antes de CI e validação física |
 | [Issue #659](https://github.com/leonardo201800478/sega-emulator/issues/659) | OPEN | Distorção/descompasso em ambos os backends; causa não determinada |
 | [Issue #641](https://github.com/leonardo201800478/sega-emulator/issues/641) | OPEN | Corrupção visual; fora da trilha de áudio |
 

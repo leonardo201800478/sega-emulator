@@ -236,13 +236,8 @@ mod windows_host {
                         if root.active-menu == "audio": VerticalLayout {
                             Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
                             CompactButton { text: "Áudio ativo"; enabled: false; }
-                            FlexboxLayout {
-                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
-                                CompactButton { text: "WASAPI Shared"; enabled: false; }
-                                CompactButton { text: "XAudio2"; enabled: false; }
-                            }
-                            Text { font-size: 12px; text: "Volume: 100%"; color: #b9c5ce; }
-                            Text { font-size: 12px; text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
+                            CompactButton { text: "CPAL 0.18.2 — dispositivo padrão"; enabled: false; }
+                            Text { font-size: 12px; text: "A sessão PCM do worker SMS utiliza CPAL; seleção manual de dispositivo e controle de volume na GUI permanecem pendentes."; color: #9baab6; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
                             Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
@@ -1187,12 +1182,34 @@ mod windows_host {
     }
 
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
+    fn configure_sms_audio(worker: &SmsTemporalWorker) {
+        const BUFFER_FRAMES: u32 = 512;
+        const QUEUE_BLOCKS: usize = 8;
+        let result = worker.configure_audio_output(
+            || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
+                let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
+                eprintln!(
+                    "R3_AUDIO CPAL output opened: sample_rate={} Hz, channels={}, queue_capacity={} frames",
+                    sink.sample_rate_hz(),
+                    sink.channels(),
+                    BUFFER_FRAMES as usize * QUEUE_BLOCKS
+                );
+                let session = sink.into_audio_session(100)?;
+                Ok(Box::new(session))
+            },
+        );
+        if let Err(error) = result {
+            eprintln!("R3_AUDIO CPAL unavailable; continuing without physical audio: {error}");
+        }
+    }
+
     fn create_sms_worker(
         rom: Vec<u8>,
         region: &str,
         mailbox: &FrameMailbox,
     ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
+        configure_sms_audio(&worker);
         worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok(worker)
@@ -1207,6 +1224,7 @@ mod windows_host {
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
+        configure_sms_audio(&next);
         next.set_diagnostics_enabled(true);
 
         let previous = worker_slot.borrow_mut().take();

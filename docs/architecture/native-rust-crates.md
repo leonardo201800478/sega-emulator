@@ -167,7 +167,7 @@ Para validar o workspace principal, usar os comandos Rust registrados acima e ve
 
 ## Runtime de áudio — decisão atual
 
-Os crates audio_runtime e audio_output já são conectados por NativeAudioSession no adaptador nativo: a sessão possui resampler e backend WASAPI/XAudio2 e é acionada pelo wrapper da máquina após run_frame. A primeira fatia ainda usa o PSG e resampler mono existentes; mixer multi-fonte/estéreo, desacoplamento do timer Qt e remoção das APIs PyO3 antigas permanecem pendentes. WASAPI Shared é o default; XAudio2 é a alternativa existente. Ver [Runtime de áudio nativo](native-audio-runtime.md).
+Na candidata PR #770, `native/audio_output` fornece `NativeCpalOutput`, um único adaptador CPAL 0.18.2 que consome `PcmSink` via FIFO SPSC. `native/audio_runtime` mantém mixer, resampler e lifecycle independentes do host. O callback CPAL não acessa Scheduler nem hardware emulado. CPAL usa o backend nativo do sistema (WASAPI internamente no Windows), sem adaptador WASAPI próprio nem XAudio2. A validação física e reconexão ainda estão pendentes. Ver [Saída física CPAL](../audio/cpal-output-backend.md).
 
 
 ### Atualização — crates de áudio na PR #299

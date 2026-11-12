@@ -2,7 +2,7 @@
 
 # Contrato de configuração para saída de áudio
 
-> Estado: nesta branch, o frontend Qt usa uma fachada PyO3 para o backend WASAPI compartilhado implementado em Rust via crate wasapi. O fluxo é event-driven e usa uma fila limitada. SDL3 como backend de saída ainda não está implementado. WASAPI e XAudio2 precisam passar CI e validação física de estabilidade, reconexão e latência em Windows antes de serem considerados validados.
+ > **DOCUMENTO HISTÓRICO / SUPERSEDED:** descreve a arquitetura anterior Qt + WASAPI/XAudio2. Não usar como especificação operacional. A arquitetura candidata CPAL 0.18.2 está em [cpal-output-backend.md](../audio/cpal-output-backend.md).
 
 ## Objetivo
 

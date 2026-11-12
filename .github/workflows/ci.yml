@@ -14,7 +14,7 @@ on:
         options: [none, short, long]
         default: none
       refresh_cargo_lockfiles:
-        description: "Refresh tracked workspace lockfiles and upload them as an artifact"
+        description: "Refresh and commit Cargo lockfiles for the current PR"
         required: false
         type: boolean
         default: false
@@ -158,6 +158,10 @@ jobs:
               - 'native/sg1000_core/src/psg.rs'
               - 'native/audio_output/**'
               - 'native/audio_runtime/**'
+              - 'native/sega_app/src/app.rs'
+              - 'native/sega_app/Cargo.toml'
+              - 'native/sega_desktop/src/main.rs'
+              - 'native/sega_desktop/Cargo.toml'
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
               - 'native/observability/**'
@@ -221,7 +225,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Validate active Cargo workspaces and lockfiles
         shell: bash
         run: |
@@ -540,7 +543,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Compile deterministic stress replay
         run: cargo test --release --locked -p sega-machine-scheduler --test stress_replay --no-run
@@ -556,6 +559,7 @@ jobs:
 
   refresh-lockfiles:
     name: Generate Cargo lockfiles (manual artifact; no repository writes)
+    needs: [changes]
     if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     permissions:
       contents: read
@@ -613,6 +617,7 @@ jobs:
       - windows-tooling
       - scheduler-stress
       - refresh-lockfiles
+      - windows-cpal-output
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
@@ -642,6 +647,8 @@ jobs:
           WINDOWS_TOOLING: ${{ needs.windows-tooling.result }}
           EXPECT_SCHEDULER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') || (github.event.action == 'labeled' && (github.event.label.name == 'scheduler-stress-short' || github.event.label.name == 'scheduler-stress-long')))) }}
           SCHEDULER: ${{ needs.scheduler-stress.result }}
+          EXPECT_WINDOWS_CPAL_OUTPUT: ${{ needs.changes.outputs.audio == 'true' }}
+          WINDOWS_CPAL_OUTPUT: ${{ needs.windows-cpal-output.result }}
         run: |
           set -euo pipefail
           check_job() {
@@ -677,6 +684,7 @@ jobs:
           check_job "Retired SDL3 host context" "$EXPECT_WINDOWS_INPUT_RETIRED" "$WINDOWS_INPUT_RETIRED"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
+          check_job "Windows x64 CPAL audio output" "$EXPECT_WINDOWS_CPAL_OUTPUT" "$WINDOWS_CPAL_OUTPUT"
 
   windows-d3d12-retired:
     name: Windows x64 D3D12 compile
@@ -686,10 +694,30 @@ jobs:
       - name: Retired host validation (intentionally not executed)
         run: echo "D3D12 validation is retired; this job exists only for the legacy required-check name."
 
-  windows-audio-retired:
-    name: Windows WASAPI and XAudio2 validation
-    if: github.event_name == 'repository_dispatch'
+  windows-cpal-output:
+    name: Windows x64 CPAL audio output
+    needs: [changes]
+    if: needs.changes.outputs.audio == 'true'
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
-      - name: Retired host validation (intentionally not executed)
-        run: echo "WASAPI/XAudio2 validation is retired; this job exists only for the legacy required-check name."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format CPAL output crate
+        run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
+      - name: Clippy CPAL output crate (Windows x64 Release)
+        run: cargo clippy --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test CPAL output crate (Windows x64 Release)
+        run: cargo test --release --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Format legacy shell using CPAL
+        run: cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
+      - name: Clippy legacy shell using CPAL (Windows x64 Release)
+        run: cargo clippy --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test legacy shell using CPAL (Windows x64 Release)
+        run: cargo test --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Build legacy shell using CPAL (Windows x64 Release)
+        run: cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc

@@ -12,7 +12,7 @@ use crate::debugger_window::{
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rfd::FileDialog;
-use sega_audio_output::{NativeWasapiOutput, NativeXAudio2Output};
+use sega_audio_output::NativeCpalOutput;
 use sega_input_runtime::{
     ActionBinding, ActionId, ActionState, AxisDirection, DeviceClass, DeviceDescriptor, DeviceId,
     DeviceState, InputBackend, InputBuffers, InputProfile, PhysicalControl,
@@ -59,7 +59,6 @@ pub struct SegaApp {
     footer_mode: FooterMode,
     aspect_ratio: AspectRatioMode,
     audio_state: AudioState,
-    audio_backend: AudioBackend,
     audio_volume: u8,
     last_controller: Option<ControllerButtons>,
     pause_key_down: bool,
@@ -111,7 +110,6 @@ impl Default for SegaApp {
             footer_mode: FooterMode::Visible,
             aspect_ratio: AspectRatioMode::FourThree,
             audio_state: AudioState::Enabled,
-            audio_backend: AudioBackend::Wasapi,
             audio_volume: 100,
             last_controller: None,
             pause_key_down: false,
@@ -338,12 +336,6 @@ impl AudioState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AudioBackend {
-    Wasapi,
-    XAudio2,
-}
-
 #[derive(Debug, Clone, Copy)]
 enum AudioCommand {
     Configure,
@@ -567,13 +559,6 @@ impl SegaApp {
                 AudioState::Enabled
             };
         }
-        if let Some(backend) = saved_ui_setting(contents, "audio_backend") {
-            self.audio_backend = if backend == "xaudio2" {
-                AudioBackend::XAudio2
-            } else {
-                AudioBackend::Wasapi
-            };
-        }
         if let Some(volume) =
             saved_ui_setting(contents, "audio_volume").and_then(|value| value.parse::<u8>().ok())
         {
@@ -661,10 +646,6 @@ impl SegaApp {
         } else {
             "disabled"
         };
-        let audio_backend = match self.audio_backend {
-            AudioBackend::Wasapi => "wasapi",
-            AudioBackend::XAudio2 => "xaudio2",
-        };
         let fps_size = match self.fps_overlay_size {
             FpsOverlaySize::Small => "small",
             FpsOverlaySize::Medium => "medium",
@@ -700,7 +681,7 @@ impl SegaApp {
             .join(",");
 
         let contents = format!(
-            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_backend={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
+            "rom_path={}\ndebugger_breakpoints_rom={}\ndebugger_memory_address={}\ndebugger_breakpoint_input={}\ndebugger_breakpoints={}\ndebugger_trace_enabled={}\nregion={}\naspect_ratio={}\nfooter={}\naudio_state={}\naudio_volume={}\ndiagnostics_enabled={}\nfps_overlay_enabled={}\nfps_overlay_size={}\nfps_overlay_position={}\ndebugger_open={}\ndebugger_position={}\ndebugger_size={}\nmain_window_position={}\nmain_window_size={}\nmain_window_maximized={}\nmain_window_fullscreen={}\n",
             self.rom_path,
             debugger_window.breakpoint_rom_path,
             debugger_window.memory_address,
@@ -711,7 +692,6 @@ impl SegaApp {
             aspect_ratio,
             footer,
             audio_state,
-            audio_backend,
             self.audio_volume,
             self.diagnostics_enabled,
             self.fps_overlay_enabled,
@@ -887,7 +867,6 @@ impl SegaApp {
                 region: &mut self.region,
                 aspect_ratio: &mut self.aspect_ratio,
                 audio_state: &mut self.audio_state,
-                audio_backend: &mut self.audio_backend,
                 audio_volume: &mut self.audio_volume,
                 audio_command: &mut audio_command,
                 viewport: &self.native_viewport,
@@ -1051,7 +1030,6 @@ impl SegaApp {
                                     region: &mut self.region,
                                     aspect_ratio: &mut self.aspect_ratio,
                                     audio_state: &mut self.audio_state,
-                                    audio_backend: &mut self.audio_backend,
                                     audio_volume: &mut self.audio_volume,
                                     audio_command: &mut actions.audio_command,
                                     viewport: &self.native_viewport,
@@ -1295,9 +1273,7 @@ impl SegaApp {
             return;
         };
         let result = match command {
-            AudioCommand::Configure => {
-                configure_audio_output(worker, self.audio_backend, self.audio_volume)
-            }
+            AudioCommand::Configure => configure_audio_output(worker, self.audio_volume),
             AudioCommand::SetVolume(volume) => worker.set_audio_volume(volume),
             AudioCommand::Disable => worker.close_audio_output(),
         };
@@ -2386,7 +2362,6 @@ struct HeaderState<'a> {
     region: &'a mut String,
     aspect_ratio: &'a mut AspectRatioMode,
     audio_state: &'a mut AudioState,
-    audio_backend: &'a mut AudioBackend,
     audio_volume: &'a mut u8,
     audio_command: &'a mut Option<AudioCommand>,
     viewport: &'a NativeViewportState,
@@ -2735,17 +2710,7 @@ fn render_audio_menu(ui: &mut egui::Ui, state: &mut HeaderState<'_>) {
         });
     }
     ui.separator();
-    ui.label("Saída");
-    if ui
-        .radio_value(state.audio_backend, AudioBackend::Wasapi, "WASAPI Shared")
-        .changed()
-        || ui
-            .radio_value(state.audio_backend, AudioBackend::XAudio2, "XAudio2")
-            .changed()
-    {
-        *state.audio_state = AudioState::Enabled;
-        *state.audio_command = Some(AudioCommand::Configure);
-    }
+    ui.label("Saída física: CPAL (dispositivo padrão)");
     if ui
         .add(egui::Slider::new(state.audio_volume, 0..=100).text("Volume"))
         .changed()
@@ -3010,19 +2975,11 @@ fn render_audio_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     ));
     ui.end_row();
 
-    ui.label("Áudio — starvation endpoint XAudio2");
-    ui.label(audio.endpoint_starvation_events.to_string());
-    ui.end_row();
-
     ui.label("Áudio — descartes (overflow / flush)");
     ui.label(format!(
         "{} / {} frames",
         audio.dropped_frames, audio.flushed_frames
     ));
-    ui.end_row();
-
-    ui.label("Áudio — perdas em SubmitSourceBuffer");
-    ui.label(format!("{} frames", audio.submission_failed_frames));
     ui.end_row();
 
     ui.label("Áudio — blocos com overflow");
@@ -3058,32 +3015,14 @@ fn render_audio_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     ui.end_row();
 }
 
-fn configure_audio_output(
-    worker: &SmsTemporalWorker,
-    backend: AudioBackend,
-    volume: u8,
-) -> Result<(), String> {
-    const OUTPUT_SAMPLE_RATE: u32 = 44_100;
+fn configure_audio_output(worker: &SmsTemporalWorker, volume: u8) -> Result<(), String> {
     const BUFFER_FRAMES: u32 = 512;
     const QUEUE_BLOCKS: usize = 8;
     worker.configure_audio_output(
         move || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
-            match backend {
-                AudioBackend::Wasapi => {
-                    let sink =
-                        NativeWasapiOutput::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
-                            .map_err(|error| error.to_string())?;
-                    let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
-                    Ok(Box::new(session))
-                }
-                AudioBackend::XAudio2 => {
-                    let sink =
-                        NativeXAudio2Output::new(OUTPUT_SAMPLE_RATE, BUFFER_FRAMES, QUEUE_BLOCKS)
-                            .map_err(|error| error.to_string())?;
-                    let session = sink.into_audio_session(OUTPUT_SAMPLE_RATE, volume)?;
-                    Ok(Box::new(session))
-                }
-            }
+            let sink = NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
+            let session = sink.into_audio_session(volume)?;
+            Ok(Box::new(session))
         },
     )
 }

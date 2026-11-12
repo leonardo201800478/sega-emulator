@@ -33,20 +33,11 @@ cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --targ
 cargo test --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
 ```
 
-## Dependências nativas Windows — versões verificadas em 2026-11-07
+## APIs nativas e hosts
 
-| Componente | Implementação / pacote | Versão |
-|---|---|---:|
-| WASAPI | crate Rust `wasapi` | 0.26.0 |
-| XAudio2 | API Windows via crate `windows` | 0.62.2 |
-| SDL3 | DLL nativa carregada pela ABI C | 3.4.20 |
-| Direct3D 12 / DXGI | API Windows via crate `windows` | 0.62.2 |
-
-XAudio2 e Direct3D 12 não usam crates separados neste projeto: ambos são
-projetados pelos bindings oficiais `windows-rs`, com as features específicas
-habilitadas nos crates `sega-audio-output` e `sega-video-runtime`.
-As versões WASAPI e Windows estão fixadas exatamente no `Cargo.toml`;
-os lockfiles já continham essas versões.
+- Áudio: CPAL 0.18.2; o projeto não mantém bindings próprios de WASAPI ou XAudio2. No Windows, o backend WASAPI é interno ao CPAL.
+- Vídeo: D3D12/DXGI permanece exclusivamente neste shell legado até a consolidação R5.
+- Entrada: SDL3 3.4.20, carregada dinamicamente pela ABI C.
 
 O SDL3 é carregado dinamicamente, sem dependência Cargo `sdl3`. Para instalar
 a DLL oficial x64 verificada por SHA-256, execute na raiz do repositório:
@@ -75,14 +66,14 @@ the fitted viewport rectangle.
 
 ## Áudio e controles do SMS
 
-- WASAPI Shared é o backend de áudio padrão; XAudio2 pode ser selecionado como alternativa.
+- CPAL 0.18.2 é o único backend de saída física. O shell não seleciona nem instancia WASAPI/XAudio2 diretamente.
 - A sessão DSP/resampler e o envio PCM permanecem em Rust. A factory do sink é executada pelo worker SMS; o frontend não transporta amostras PCM.
 - O áudio pode ser habilitado/desabilitado e o volume ajustado entre 0 e 100. Underruns e blocos descartados são exibidos na telemetria.
 - Se a abertura do dispositivo falhar, a falha é reportada pelo subsistema de áudio; não deve interromper o runtime de vídeo/máquina.
 - Mapeamento inicial de teclado: setas direcionais, Z (Botão 1), X (Botão 2) e P (borda de Pause/NMI).
 - Polling do teclado ocorre na fronteira do frame da UI e somente envia snapshot quando o estado muda. O Pause é enviado como NMI de borda, não como pausa do worker.
 
-**Validação física registrada pelo mantenedor:** controles testados em hardware real; saída sonora confirmada em WASAPI e XAudio2. Essa evidência é manual e não é reproduzida pelo CI. Repetir a validação física após alterações nos backends ou no ciclo de vida do host.
+**Validação física:** evidência histórica de WASAPI/XAudio2 pertence à implementação anterior e não valida CPAL. A nova saída CPAL precisa de validação física Windows x64.
 
 **Limites desta fatia:** remapeamento configurável, jogador 2, analógicos específicos de consoles Sega, volante/pedais, gyro, touchpad e lightguns ainda não estão ligados ao shell.
 
