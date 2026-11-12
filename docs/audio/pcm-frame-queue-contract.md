@@ -22,7 +22,7 @@ A implementação utiliza rtrb 0.3, que já é dependência do crate. Não há a
 
 ## Fora do escopo desta etapa
 
-- A fila ainda não substitui os transports Vec<u8> usados pelos backends WASAPI/XAudio2.
+- A fila frame-based é o transporte usado pelo adaptador CPAL; os transports Vec<u8> específicos de WASAPI/XAudio2 foram removidos da implementação candidata.
 - Não há flush concorrente nem comando de mute nesta etapa.
 - Não há prebuffer ou política de retomada.
 - Não há mudança no worker SMS, na sessão DSP, nos chips ou no Scheduler.
@@ -54,6 +54,6 @@ O contrato de OUT-A foi estendido sem violar a propriedade SPSC:
 - O número de frames descartados é acumulado em `flushed_frames`; não é somado a `consumed_frames` nem a `dropped_frames`.
 - O produtor não limpa nem reposiciona o cursor da FIFO.
 - O worker SMS atualiza o snapshot de métricas após Start/Pause/Stop/Reset/Load ROM, depois de a operação do backend retornar.
-- A telemetria distingue flush de overflow, underrun da FIFO e starvation do endpoint XAudio2.
+- A telemetria distingue flush da FIFO, overflow e underrun; não há métricas específicas de endpoint XAudio2 no contrato genérico.
 
 A extensão é coberta por testes unitários no crate de saída. A validação em dispositivo físico continua separada.
