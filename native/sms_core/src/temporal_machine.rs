@@ -3247,6 +3247,37 @@ mod temporal_frame_tests {
     use super::{SmsTemporalMachine, SmsVdpProfile, Territory};
 
     #[test]
+    fn pcm_source_rate_does_not_change_scheduler_or_cpu_progress() {
+        let rom = vec![0; 0x4000];
+        let mut at_44k =
+            SmsTemporalMachine::new_with_psg_config(rom.clone(), 1, 3_579_545, 44_100)
+                .unwrap();
+        let mut at_48k =
+            SmsTemporalMachine::new_with_psg_config(rom, 1, 3_579_545, 48_000).unwrap();
+
+        let instructions_44k = at_44k.step_frame(100_000).unwrap();
+        let instructions_48k = at_48k.step_frame(100_000).unwrap();
+
+        assert_eq!(instructions_44k, instructions_48k);
+        assert_eq!(at_44k.now(), at_48k.now());
+        assert_eq!(at_44k.frame_number(), at_48k.frame_number());
+        assert_eq!(
+            at_44k.cpu().export_architectural_state().registers,
+            at_48k.cpu().export_architectural_state().registers
+        );
+        assert_eq!(at_44k.framebuffer(), at_48k.framebuffer());
+        assert_eq!(
+            at_44k.psg().clock_divider_phase(),
+            at_48k.psg().clock_divider_phase()
+        );
+        assert_eq!(at_44k.psg().tone_counters(), at_48k.psg().tone_counters());
+
+        let samples_44k = at_44k.drain_audio_samples(None);
+        let samples_48k = at_48k.drain_audio_samples(None);
+        assert_ne!(samples_44k.len(), samples_48k.len());
+    }
+
+    #[test]
     fn step_frame_returns_a_complete_sms1_rgb24_frame() {
         let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
 
