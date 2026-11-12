@@ -680,7 +680,7 @@ jobs:
 
   windows-d3d12-retired:
     name: Windows x64 D3D12 compile
-    if: ${{ false }}
+    if: github.event_name == 'repository_dispatch'
     runs-on: windows-latest
     steps:
       - name: Retired host validation (intentionally not executed)
@@ -688,7 +688,7 @@ jobs:
 
   windows-audio-retired:
     name: Windows WASAPI and XAudio2 validation
-    if: ${{ false }}
+    if: github.event_name == 'repository_dispatch'
     runs-on: windows-latest
     steps:
       - name: Retired host validation (intentionally not executed)
