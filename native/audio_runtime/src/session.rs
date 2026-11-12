@@ -347,14 +347,15 @@ mod tests {
         session.process_samples(&input).unwrap();
         session.close();
 
-        let output_bytes: usize = session.sink.blocks.iter().map(Vec::len).sum();
-        assert_eq!(output_bytes / 2, 4_410);
+        let output_samples: usize = session.sink.blocks.iter().map(Vec::len).sum();
+        assert_eq!(output_samples, 4_410);
         assert!(
             session
                 .sink
                 .blocks
                 .iter()
-                .all(|block| block.len().is_multiple_of(2))
+                .flatten()
+                .all(|sample| sample.is_finite() && (-1.0..=1.0).contains(sample))
         );
     }
 
