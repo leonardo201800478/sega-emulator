@@ -1523,22 +1523,28 @@ fn worker_loop(
         if telemetry.shutdown.load(Ordering::Acquire) {
             break;
         }
+        let mut pacing_wait_active = false;
         let command = if running {
             let timeout = frame_deadline
                 .remaining(Instant::now())
                 .unwrap_or(Duration::ZERO);
             let wait_deadline = frame_deadline.deadline;
+            pacing_wait_active = wait_deadline.is_some();
             let wait_started = Instant::now();
             let wait_result = commands.recv_timeout(timeout);
             let wait_finished = Instant::now();
-            telemetry
-                .record_actual_pacing_wait(wait_finished.saturating_duration_since(wait_started));
+            if pacing_wait_active {
+                telemetry.record_actual_pacing_wait(
+                    wait_finished.saturating_duration_since(wait_started),
+                );
+            }
             match wait_result {
                 Ok(command) => {
-                    let remaining = wait_deadline
-                        .map(|deadline| deadline.saturating_duration_since(wait_finished))
-                        .unwrap_or(Duration::ZERO);
-                    telemetry.record_pacing_command_wakeup(remaining);
+                    if let Some(deadline) = wait_deadline {
+                        telemetry.record_pacing_command_wakeup(
+                            deadline.saturating_duration_since(wait_finished),
+                        );
+                    }
                     Some(command)
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -1578,7 +1584,7 @@ fn worker_loop(
                 &mut trace_history,
                 &mut trace_enabled,
             );
-            if was_running {
+            if was_running && pacing_wait_active {
                 telemetry.record_command_handler(command_handler_started.elapsed());
             }
             if !command_continues {
