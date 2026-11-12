@@ -175,7 +175,7 @@ O protótipo foi finito, permaneceu abaixo do limite de pico do teste e foi inva
 
 **Correção metodológica:** os relatórios antigos [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528) e [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796) capturavam apenas a janela final de um segundo e ficam substituídos pela captura integral acima.
 
-**Gate H1:** <badge color="success">CONCLUÍDO</badge> Trace determinístico, exportação PCM integral, comparação histórica SMS/SG-1000, métricas de forma de onda/espectro e invariância contínua/segmentada foram executados. A CI da revisão [#43260895841](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841) passou em PSG, Clippy, formatação, regressão Rust, documentação e validação de workflows.
+**Gate H1 — CONCLUÍDO:** trace determinístico, exportação PCM integral, comparação histórica SMS/SG-1000, métricas de forma de onda/espectro e invariância contínua/segmentada foram executados. A CI da revisão [#43260895841](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841) passou em PSG, Clippy, formatação, regressão Rust, documentação e validação de workflows.
 
 ### H2 — Fechamento da síntese e reconstrução
 
