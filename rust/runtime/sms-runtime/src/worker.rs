@@ -2804,7 +2804,7 @@ mod tests {
             blocks_before_close
                 .iter()
                 .flatten()
-                .any(|sample| *sample != 0),
+                .any(|sample| *sample != 0.0),
             "worker must submit non-silent PCM, not only initialize the sink"
         );
         drop(blocks_before_close);
