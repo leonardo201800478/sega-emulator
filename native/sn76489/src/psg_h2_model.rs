@@ -157,11 +157,19 @@ impl EventBasedKernel {
             if settled < sample_count {
                 settled_deltas[settled] += event.delta;
             }
-            for sample_index in first.min(sample_count)..settled.min(sample_count) {
+            let start = first.min(sample_count);
+            let end = settled.min(sample_count);
+            for (sample_index, contribution) in transition_contributions
+                .iter_mut()
+                .enumerate()
+                .take(end)
+                .skip(start)
+            {
                 let sample_time = sample_index as f64 + 1.0;
-                let position = sample_time - event_position - EVENT_HALF - EVENT_FRACTIONAL_DELAY;
-                transition_contributions[sample_index] +=
-                    event.delta * self.response_to_step(position);
+                let position = sample_time - event_position
+                    - EVENT_HALF
+                    - EVENT_FRACTIONAL_DELAY;
+                *contribution += event.delta * self.response_to_step(position);
             }
         }
 
@@ -518,14 +526,66 @@ fn event_capture_and_reconstruction_are_invariant_to_clock_chunking() {
     let kernel = EventBasedKernel::new();
     for profile in [PsgProfile::Sms, PsgProfile::Sg1000] {
         let contiguous = capture_events(profile, &TRACE, TOTAL_CLOCKS, None);
-        let segmented = capture_events(profile, &TRACE, TOTAL_CLOCKS, Some(7));
-        assert_eq!(segmented, contiguous, "{profile:?}");
-        assert_eq!(
-            kernel.render(&segmented, 0.0, TOTAL_CLOCKS),
-            kernel.render(&contiguous, 0.0, TOTAL_CLOCKS),
-            "{profile:?}"
-        );
+        let reference_pcm = kernel.render(&contiguous, 0.0, TOTAL_CLOCKS);
+        for chunk_size in [1_u64, 7, 997, 16_384] {
+            let segmented =
+                capture_events(profile, &TRACE, TOTAL_CLOCKS, Some(chunk_size));
+            assert_eq!(segmented, contiguous, "{profile:?}, chunk={chunk_size}");
+            assert_eq!(
+                kernel.render(&segmented, 0.0, TOTAL_CLOCKS),
+                reference_pcm,
+                "{profile:?}, chunk={chunk_size}"
+            );
+        }
     }
+}
+
+#[test]
+fn event_reconstruction_handles_sample_boundaries_simultaneous_deltas_and_end_edges() {
+    let kernel = EventBasedKernel::new();
+    const SAMPLE_BOUNDARY_CLOCK: u64 = 715_909;
+    const TOTAL_CLOCKS: u64 = SAMPLE_BOUNDARY_CLOCK * 2;
+    let ordered = [
+        PsgAmplitudeEvent {
+            clock: 0,
+            delta: 0.25,
+        },
+        PsgAmplitudeEvent {
+            clock: SAMPLE_BOUNDARY_CLOCK - 1,
+            delta: -0.25,
+        },
+        PsgAmplitudeEvent {
+            clock: SAMPLE_BOUNDARY_CLOCK,
+            delta: 0.125,
+        },
+        PsgAmplitudeEvent {
+            clock: SAMPLE_BOUNDARY_CLOCK,
+            delta: -0.125,
+        },
+        PsgAmplitudeEvent {
+            clock: SAMPLE_BOUNDARY_CLOCK + 1,
+            delta: 0.25,
+        },
+        PsgAmplitudeEvent {
+            clock: TOTAL_CLOCKS,
+            delta: -0.125,
+        },
+    ];
+    let reordered = [
+        ordered[0],
+        ordered[1],
+        ordered[3],
+        ordered[2],
+        ordered[4],
+        ordered[5],
+    ];
+
+    let first = kernel.render(&ordered, 0.0, TOTAL_CLOCKS);
+    let second = kernel.render(&reordered, 0.0, TOTAL_CLOCKS);
+    assert_eq!(first, second);
+    assert_eq!(first.len(), 19_200);
+    assert!(first.iter().all(|sample| sample.is_finite()));
+    assert!(first.iter().map(|sample| sample.abs()).fold(0.0, f64::max) < 1.0);
 }
 
 #[test]
