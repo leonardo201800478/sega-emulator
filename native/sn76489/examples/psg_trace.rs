@@ -11,6 +11,7 @@ use sega_sn76489::{PsgProfile, Sn76489Core};
 const CLOCK_HZ: u64 = 3_579_545;
 const SAMPLE_RATE: u64 = 48_000;
 const TOTAL_CLOCKS: u64 = 16_000_000;
+const TONE_CLOCKS: u64 = 4_000_000;
 const USAGE: &str = "usage: psg_trace <sms|sg1000> <output.wav> [chunk-clocks] [tone-period]";
 
 // Clock-stamped PSG register writes. Keep this sequence identical when running
@@ -129,6 +130,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let mut psg = Sn76489Core::new_with_profile(CLOCK_HZ, SAMPLE_RATE, profile)?;
+    let total_clocks = if tone_period.is_some() {
+        TONE_CLOCKS
+    } else {
+        TOTAL_CLOCKS
+    };
     if let Some(period) = tone_period {
         psg.write(0x80 | (period as u8 & 0x0f));
         psg.write((period >> 4) as u8);
@@ -136,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         psg.write(0xbf); // Mute tone 1.
         psg.write(0xdf); // Mute tone 2.
         psg.write(0xff); // Mute noise.
-        advance(&mut psg, TOTAL_CLOCKS, chunk_limit);
+        advance(&mut psg, total_clocks, chunk_limit);
     } else {
         let mut elapsed = 0_u64;
         for (clock, value) in TRACE {
@@ -170,7 +176,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("clock_hz={CLOCK_HZ}");
     println!("sample_rate={SAMPLE_RATE}");
     println!("channels=1 (raw PSG; dual-mono is a host concern)");
-    println!("total_clocks={TOTAL_CLOCKS}");
+    println!("total_clocks={total_clocks}");
     println!("samples={}", samples.len());
     println!(
         "duration_seconds={:.9}",
