@@ -595,8 +595,8 @@ impl Sn76489StateV1 {
                 "clock divider or output sampling phase is out of range",
             ));
         }
-        if self.filter_coefficients.len() != core.filter_coefficients.len()
-            || self.filter_coefficients.len() < MIN_FILTER_TAPS
+        if self.filter_coefficients.len() < MIN_FILTER_TAPS
+            || self.filter_coefficients.len() > MAX_STATE_FILTER_TAPS
             || self.filter_coefficients.len().is_multiple_of(2)
             || self.filter_history.len() != self.filter_coefficients.len()
             || self.filter_position >= self.filter_history.len()
