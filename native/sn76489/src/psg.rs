@@ -931,6 +931,92 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn sms_white_noise_trace_matches_independent_gear_system_reference() {
+        // Gearsystem Sms_Apu.cpp: seed 0x8000, 16-bit register, taps 0 and 3,
+        // output is the pre-shift bit 0, and feedback is inserted at bit 15.
+        const TRACE: [(u16, u8, u16); 32] = [
+            (0x8000, 0, 0x4000),
+            (0x4000, 0, 0x2000),
+            (0x2000, 0, 0x1000),
+            (0x1000, 0, 0x0800),
+            (0x0800, 0, 0x0400),
+            (0x0400, 0, 0x0200),
+            (0x0200, 0, 0x0100),
+            (0x0100, 0, 0x0080),
+            (0x0080, 0, 0x0040),
+            (0x0040, 0, 0x0020),
+            (0x0020, 0, 0x0010),
+            (0x0010, 0, 0x0008),
+            (0x0008, 0, 0x8004),
+            (0x8004, 0, 0x4002),
+            (0x4002, 0, 0x2001),
+            (0x2001, 1, 0x9000),
+            (0x9000, 0, 0x4800),
+            (0x4800, 0, 0x2400),
+            (0x2400, 0, 0x1200),
+            (0x1200, 0, 0x0900),
+            (0x0900, 0, 0x0480),
+            (0x0480, 0, 0x0240),
+            (0x0240, 0, 0x0120),
+            (0x0120, 0, 0x0090),
+            (0x0090, 0, 0x0048),
+            (0x0048, 0, 0x8024),
+            (0x8024, 0, 0x4012),
+            (0x4012, 0, 0x2009),
+            (0x2009, 1, 0x1004),
+            (0x1004, 0, 0x0802),
+            (0x0802, 0, 0x0401),
+            (0x0401, 1, 0x8200),
+        ];
+
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.write_inner(0xE4);
+
+        for (state, output, next_state) in TRACE {
+            assert_eq!(device.lfsr(), state);
+            device.shift_noise_register();
+            assert_eq!(device.noise_output(), output);
+            assert_eq!(device.lfsr(), next_state);
+        }
+    }
+
+    #[test]
+    fn sms_periodic_noise_trace_matches_independent_gear_system_reference() {
+        // Periodic mode feeds the outgoing bit 0 back into bit 15 without XOR.
+        const TRACE: [(u16, u8, u16); 16] = [
+            (0x8000, 0, 0x4000),
+            (0x4000, 0, 0x2000),
+            (0x2000, 0, 0x1000),
+            (0x1000, 0, 0x0800),
+            (0x0800, 0, 0x0400),
+            (0x0400, 0, 0x0200),
+            (0x0200, 0, 0x0100),
+            (0x0100, 0, 0x0080),
+            (0x0080, 0, 0x0040),
+            (0x0040, 0, 0x0020),
+            (0x0020, 0, 0x0010),
+            (0x0010, 0, 0x0008),
+            (0x0008, 0, 0x0004),
+            (0x0004, 0, 0x0002),
+            (0x0002, 0, 0x0001),
+            (0x0001, 1, 0x8000),
+        ];
+
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.write_inner(0xE0);
+
+        for (state, output, next_state) in TRACE {
+            assert_eq!(device.lfsr(), state);
+            device.shift_noise_register();
+            assert_eq!(device.noise_output(), output);
+            assert_eq!(device.lfsr(), next_state);
+        }
+    }
+
     #[test]
     fn white_noise_lfsr_visits_all_nonzero_fifteen_bit_states_once() {
         let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
