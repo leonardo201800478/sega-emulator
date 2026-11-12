@@ -2842,6 +2842,13 @@ mod tests {
     #[test]
     fn frame_pacing_window_records_deadline_wakeup_and_frame_budget_diagnostics() {
         let mut window = FramePacingWindow::default();
+        for _ in 0..20 {
+            window.push(FramePacingSample {
+                frame_budget_ns: 20_000_000,
+                audio_samples: 882,
+                ..FramePacingSample::default()
+            });
+        }
         window.push(FramePacingSample {
             frame_budget_ns: 20_000_000,
             audio_samples: 882,
