@@ -575,8 +575,8 @@ def main() -> None:
             [
                 "## Isolated SMS tone response",
                 "",
-                "| Period | Expected Hz | Baseline RMS | Current RMS | Fundamental energy delta |",
-                "|---:|---:|---:|---:|---:|",
+                "| Period | Expected Hz | Baseline RMS | Current RMS | Fundamental energy delta | Baseline THD | Current THD |",
+                "|---:|---:|---:|---:|---:|---:|---:|",
             ]
         )
         for period, data in sorted(
@@ -588,7 +588,9 @@ def main() -> None:
                 f"{data['baseline']['expected_frequency_hz']:.3f} | "
                 f"{data['baseline']['rms']:.9f} | "
                 f"{data['current']['rms']:.9f} | "
-                f"{data['fundamental_energy_delta_db']:.4f} dB |"
+                f"{data['fundamental_energy_delta_db']:.4f} dB | "
+                f"{data['baseline']['thd_percent']:.4f}% | "
+                f"{data['current']['thd_percent']:.4f}% |"
             )
         lines.append("")
 
@@ -597,7 +599,7 @@ def main() -> None:
             [
                 "## Experimental Lagrange4 interpolation",
                 "",
-                "| Period | Baseline RMS | Linear RMS | Lagrange4 RMS | Lagrange4 vs. linear |",
+                "| Period | Baseline THD | Linear THD | Lagrange4 THD | Lagrange4 vs. linear |",
                 "|---:|---:|---:|---:|---:|",
             ]
         )
@@ -607,9 +609,9 @@ def main() -> None:
         ):
             lines.append(
                 f"| {period} | "
-                f"{data['baseline']['rms']:.9f} | "
-                f"{data['linear']['rms']:.9f} | "
-                f"{data['lagrange4']['rms']:.9f} | "
+                f"{data['baseline']['thd_percent']:.4f}% | "
+                f"{data['linear']['thd_percent']:.4f}% | "
+                f"{data['lagrange4']['thd_percent']:.4f}% | "
                 f"{data['lagrange4_vs_linear_db']:.4f} dB |"
             )
         lines.append("")
