@@ -2695,6 +2695,16 @@ mod tests {
     }
 
     #[test]
+    fn frame_pacing_window_accumulates_wait_across_command_wakeups() {
+        let mut window = FramePacingWindow::default();
+        window.push(FramePacingSample::default());
+        window.record_actual_wait(Duration::from_millis(5));
+        window.record_actual_wait(Duration::from_millis(3));
+
+        assert_eq!(window.snapshot().pacing_wait_elapsed_p50_ns, 8_000_000);
+    }
+
+    #[test]
     fn frame_pacing_window_records_actual_worker_wait_after_wakeup() {
         let mut window = FramePacingWindow::default();
         window.push(FramePacingSample::default());
