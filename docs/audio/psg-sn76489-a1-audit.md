@@ -283,3 +283,45 @@ Essa diferença pode decorrer da convenção de direção/representação do reg
 | Validação física Master System | BLOCKED / NOT RUN |
 
 A1.1 está concluída como **atualização do inventário de evidências**, não como fechamento do PSG. A próxima alteração de código deve ser A1.2: vetores diferenciais independentes para registradores, tom, ruído, saída do LFSR, volume e reset. Nenhuma correção do core deve preceder a definição explícita do oráculo correspondente.
+
+
+## 10. A1.2 — vetores diferenciais SMS de ruído (2026-11-12)
+
+**Baseline de teste:** branch `feat/psg-a1-closure-20261112`.
+**Referência externa:** Gearsystem, commit `1be9a12b82cae84ddd6f9b7006d546abe2d58bd4`, arquivo `src/audio/Sms_Apu.cpp`, rotinas `Sms_Noise::reset`, `Sms_Noise::run` e `Sms_Apu::write_data`.
+**Escopo:** testes do traço digital SMS; nenhuma alteração no core de produção.
+
+### 10.1 Modelo de referência usado
+
+O código independente do Gearsystem representa o perfil SMS com:
+- seed `0x8000`;
+- registrador de deslocamento de 16 bits;
+- feedback branco derivado dos taps 0 e 3, inserido no bit 15;
+- saída do mixer baseada no bit 0 do estado anterior ao shift;
+- feedback periódico igual ao bit 0 deslocado para o bit 15, sem XOR.
+
+A referência é uma implementação independente de emulação, não uma medição elétrica do VDP. Ela é usada para comparação diferencial do traço, não para declarar equivalência física absoluta.
+
+Fonte fixada: https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Apu.cpp
+
+### 10.2 Testes adicionados
+
+Em `native/sn76489/src/psg.rs`:
+- `sms_white_noise_trace_matches_independent_gear_system_reference`: 32 tuplas estado anterior / bit de saída / próximo estado.
+- `sms_periodic_noise_trace_matches_independent_gear_system_reference`: ciclo periódico completo de 16 deslocamentos, incluindo retorno ao seed.
+
+Os testes exercitam explicitamente o perfil `PsgProfile::Sms`; não usam o construtor padrão SG-1000. A comparação inclui o bit de saída no mesmo boundary do deslocamento, evitando validar apenas o período ou o estado final.
+
+### 10.3 Resultado A1.2 parcial
+
+| Item | Estado |
+|---|---|
+| Vetor SMS white noise (16-bit, taps 0/3) | IMPLEMENTED — aguardando CI do HEAD |
+| Vetor SMS periodic noise | IMPLEMENTED — aguardando CI do HEAD |
+| Convenção temporal pre-shift do bit de saída | REFERÊNCIA DIFERENCIAL ADICIONADA |
+| Noise Rate = Tone 2 / fase relativa | NOT CLOSED — A1.3 |
+| Períodos de tom 0/1 | CONFLICT / ORACLE REQUIRED |
+| Reset completo e estado versionado | A1.4 |
+| Teste físico em Master System | BLOCKED / NOT RUN |
+
+A1.2 permanece parcial: os vetores de ruído foram adicionados, mas só serão promovidos a PASS após CI verde no mesmo SHA. A sequência de LFSR não fecha por si só a temporização do divisor, o alinhamento do Noise Rate = Tone 2 nem o modelo analógico de saída.
