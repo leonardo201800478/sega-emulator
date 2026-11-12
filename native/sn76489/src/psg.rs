@@ -675,10 +675,8 @@ mod tests {
         let total_clocks = 1_000_000_u64;
 
         for profile in [PsgProfile::Sms, PsgProfile::Sg1000] {
-            let mut whole =
-                Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
-            let mut chunked =
-                Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
+            let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
+            let mut chunked = Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
 
             for device in [&mut whole, &mut chunked] {
                 device.write_inner(0x85);
