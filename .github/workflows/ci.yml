@@ -14,7 +14,7 @@ on:
         options: [none, short, long]
         default: none
       refresh_cargo_lockfiles:
-        description: "Refresh tracked workspace lockfiles and upload them as an artifact"
+        description: "Refresh and commit Cargo lockfiles for the current PR"
         required: false
         type: boolean
         default: false
@@ -223,8 +223,6 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Install Linux CPAL build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4f0fab8f12e0 # v2.9.3
