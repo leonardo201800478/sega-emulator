@@ -4,7 +4,7 @@
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
 **Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
 
-**Main atual após a atualização desta fotografia:** `44e167b7d17973b8d634198951fec298a50dddf7`
+**Main atual após a atualização desta fotografia:** `6130cb42f1d76648552a5a0cd510e3a84c7efb42`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
 > Esta é uma fotografia remota do GitHub. CI PASS significa apenas que os jobs executados passaram no SHA indicado. SKIPPED/queued/NOT RUN não são PASS. Validação física só é considerada realizada quando há evidência de execução no hardware/ambiente correspondente.
@@ -153,7 +153,7 @@ Os documentos `docs/z80-completion-scorecard.md` e `docs/z80-dd-fd-semantic-matr
 
 ## 10. Atualização operacional — 2026-11-12, pós PR #784
 
-Esta seção supersede os estados históricos das seções 5 e 8 quando houver divergência. Baseline consultado: `main` em `44e167b7d17973b8d634198951fec298a50dddf7`.
+Esta seção supersede os estados históricos das seções 5 e 8 quando houver divergência. Baseline consultado: `main` em `6130cb42f1d76648552a5a0cd510e3a84c7efb42`.
 
 ### Integrações confirmadas
 
@@ -167,7 +167,7 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 ### PRs de apresentação e frame pacing
 
 - PR #783 — viewport `image-fit: contain` e sincronização de fullscreen com `Window::is_fullscreen()`. CI aplicável PASS no HEAD da PR; ainda não integrada porque falta aceite visual físico Windows/Vulkan para 4:3, 1:1, 16:9, resize contínuo, centralização e alternância F11/botão/estado real da janela.
-- PR #785 — instrumentação P0: handler de comando contabilizado mesmo após deadline expirado, com TRACE por tipo/duração. CI no HEAD exato em execução; não contar jobs queued/skipped como PASS.
+- PR #785 — instrumentação P0: handler de comando contabilizado mesmo após deadline expirado, com TRACE por tipo/duração. Integrada em `6130cb42f1d76648552a5a0cd510e3a84c7efb42`; SMS Runtime Release, rustfmt, Clippy, workspace regression, testes e observability runtime PASS. Jobs não aplicáveis ficaram SKIPPED e não foram contados como PASS.
 - Issue #755 permanece aberta. A captura `SMS-QPC-20261112-002914` antecede PR #766 e não contém a instrumentação complementar. Após #785, repetir captura Release Windows/Vulkan e correlacionar worker, mailbox, callback Slint e PresentMon/QPC. Nenhuma alteração no MachineScheduler foi autorizada por esses dados.
 
 ### Áudio
@@ -202,6 +202,6 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 
 - PASS: checks aplicáveis nos HEADs integrados #776, #780 e #784.
 - PASS: checks aplicáveis da PR #783; aceite visual físico ainda BLOCKED.
-- IN PROGRESS: CI da PR #785.
+- PASS: PR #785 integrada; CI aplicável no HEAD `58dcdca5cb3a3d674dec7e09b699dafecba8466b`.
 - BLOCKED: captura física pós-#766/#785, aceite Windows/Vulkan R2 e validação física CPAL/PSG.
 - NOT RUN: build local/Windows nesta sessão, teardown/recriação física R1 e testes físicos de PSG/CPAL.
