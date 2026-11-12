@@ -1555,9 +1555,7 @@ fn worker_loop(
                 Err(RecvTimeoutError::Timeout) => {
                     // A zero-timeout poll after an expired deadline is not an
                     // OS wakeup-lateness sample; only measure an active wait.
-                    if pacing_wait_active
-                        && let Some(deadline) = wait_deadline
-                    {
+                    if pacing_wait_active && let Some(deadline) = wait_deadline {
                         telemetry.record_pacing_timeout_lateness(
                             wait_finished.saturating_duration_since(deadline),
                         );
