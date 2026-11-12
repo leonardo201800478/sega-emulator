@@ -400,6 +400,18 @@ Os coeficientes FIR não são duplicados no DTO: são reconstruídos determinist
 - `invalid_versioned_state_is_rejected_without_mutating_live_device`: versão desconhecida e restauração atômica.
 - `invalid_lfsr_state_is_rejected_without_partial_restore`: rejeição de estado impossível sem mutação parcial.
 
-### 12.4 Limite atual
+### 12.4 Codec binário e resultado
 
-<badge>PARTIAL</badge> O DTO versionado e a restauração in-memory foram implementados; a serialização binária canônica (magic, comprimento, checksum e decode estrito) ainda não foi adicionada. A1.4 só poderá ser promovida a PASS depois do codec, dos testes de corrupção/truncamento e do CI no mesmo SHA. A validação física continua separada.
+O DTO agora possui `encode()` e `decode()` em formato canônico little-endian:
+- magic `SN76489\\0`, versão e comprimento explícitos;
+- checksum CRC-32 sobre o corpo;
+- tags estritas para o perfil;
+- vetores de FIR/PCM com comprimentos limitados antes da alocação;
+- rejeição de magic inválido, versão desconhecida, truncamento, dados excedentes, checksum divergente e invariantes inválidas.
+
+Testes adicionais:
+- `versioned_state_codec_round_trip_is_canonical`;
+- `versioned_state_codec_rejects_corruption_truncation_and_trailing_data`;
+- `versioned_state_codec_rejects_unknown_schema_version`.
+
+**Status A1.4:** IMPLEMENTED — aguardando CI no HEAD atual. A validação física continua separada; o codec confirma persistência digital, não equivalência analógica nem saída física.
