@@ -51,6 +51,7 @@ jobs:
       input: ${{ steps.filter.outputs.input }}
       slint_desktop: ${{ steps.filter.outputs.slint_desktop }}
       slint_desktop_present: ${{ steps.slint_manifest.outputs.present }}
+      legacy_host: ${{ steps.filter.outputs.legacy_host }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
       full: ${{ steps.filter.outputs.full }}
@@ -168,10 +169,16 @@ jobs:
               - 'native/observability/**'
             slint_desktop:
               - 'native/sega_desktop/**'
+              - 'native/video_runtime/**'
+              - 'rust/runtime/sms-runtime/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain*'
               - '.cargo/**'
+            legacy_host:
+              - 'native/sega_app/**'
+              - 'native/video_runtime/**'
+              - 'rust/runtime/sms-runtime/**'
             scheduler:
               - 'native/machine_scheduler/**'
               - 'native/temporal_core/**'
@@ -451,6 +458,30 @@ jobs:
       - name: Build Slint desktop POC (Windows x64 Release)
         run: cargo build --release --locked --manifest-path native/sega_desktop/Cargo.toml --target x86_64-pc-windows-msvc
 
+  windows-legacy-d3d12-host:
+    name: Windows x64 legacy D3D12 host compatibility
+    needs: [changes]
+    if: needs.changes.outputs.legacy_host == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format legacy Windows host
+        run: cargo fmt --manifest-path native/sega_app/Cargo.toml -- --check
+      - name: Clippy legacy Windows host (Release)
+        run: cargo clippy --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Test legacy Windows host (Release)
+        run: cargo test --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Build legacy Windows host (Release)
+        run: cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
+      - name: Validate opt-in D3D12 runtime and smoke examples
+        run: cargo test --release --locked --all-targets --manifest-path native/video_runtime/Cargo.toml --features d3d12-host --target x86_64-pc-windows-msvc
+
   windows-input-retired:
     # Preserve the protected legacy check context without claiming SDL3 coverage.
     # The portable input core remains tested by input-focused; SDL3 is not integrated.
@@ -609,6 +640,7 @@ jobs:
       - docs-format
       - workflow-lint
       - windows-slint-wgpu
+      - windows-legacy-d3d12-host
       - windows-input-retired
       - windows-tooling
       - scheduler-stress
@@ -636,6 +668,8 @@ jobs:
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
           EXPECT_WINDOWS_SLINT_WGPU: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles && inputs.validate_slint_desktop) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.slint_desktop == 'true' && needs.changes.outputs.slint_desktop_present == 'true') }}
           WINDOWS_SLINT_WGPU: ${{ needs.windows-slint-wgpu.result }}
+          EXPECT_WINDOWS_LEGACY_D3D12: ${{ needs.changes.outputs.legacy_host == 'true' }}
+          WINDOWS_LEGACY_D3D12: ${{ needs.windows-legacy-d3d12-host.result }}
           EXPECT_WINDOWS_INPUT_RETIRED: false
           WINDOWS_INPUT_RETIRED: ${{ needs.windows-input-retired.result }}
           EXPECT_WINDOWS_TOOLING: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.tooling == 'true') }}
@@ -674,6 +708,7 @@ jobs:
           check_job "Documentation" "$EXPECT_DOCS" "$DOCS"
           check_job "Workflow lint" "$EXPECT_WORKFLOW_LINT" "$WORKFLOW_LINT"
           check_job "Windows Slint WGPU Vulkan POC" "$EXPECT_WINDOWS_SLINT_WGPU" "$WINDOWS_SLINT_WGPU"
+          check_job "Windows legacy D3D12 host compatibility" "$EXPECT_WINDOWS_LEGACY_D3D12" "$WINDOWS_LEGACY_D3D12"
           check_job "Retired SDL3 host context" "$EXPECT_WINDOWS_INPUT_RETIRED" "$WINDOWS_INPUT_RETIRED"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
