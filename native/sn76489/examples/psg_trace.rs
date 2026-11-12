@@ -11,7 +11,8 @@ use sega_sn76489::{PsgProfile, Sn76489Core};
 const CLOCK_HZ: u64 = 3_579_545;
 const SAMPLE_RATE: u64 = 48_000;
 const TOTAL_CLOCKS: u64 = 16_000_000;
-const USAGE: &str = "usage: psg_trace <sms|sg1000> <output.wav> [chunk-clocks]";
+const USAGE: &str =
+    "usage: psg_trace <sms|sg1000> <output.wav> [chunk-clocks] [tone-period]";
 
 // Clock-stamped PSG register writes. Keep this sequence identical when running
 // the tool against the historical baseline and the current implementation.
@@ -107,6 +108,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|value| value.parse::<u64>())
         .transpose()?
         .filter(|value| *value > 0);
+    let tone_period = args
+        .next()
+        .map(|value| value.parse::<u16>())
+        .transpose()?;
+    if tone_period.is_some_and(|period| period == 0 || period > 0x03ff) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "tone-period must be in 1..=1023",
+        )
+        .into());
+    }
 
     let profile = match profile_name.as_str() {
         "sms" => PsgProfile::Sms,
@@ -121,13 +133,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let mut psg = Sn76489Core::new_with_profile(CLOCK_HZ, SAMPLE_RATE, profile)?;
-    let mut elapsed = 0_u64;
-    for (clock, value) in TRACE {
-        advance(&mut psg, clock - elapsed, chunk_limit);
-        psg.write(value);
-        elapsed = clock;
+    if let Some(period) = tone_period {
+        psg.write(0x80 | (period as u8 & 0x0f));
+        psg.write((period >> 4) as u8);
+        psg.write(0x90); // Tone 0 full volume.
+        psg.write(0xbf); // Mute tone 1.
+        psg.write(0xdf); // Mute tone 2.
+        psg.write(0xff); // Mute noise.
+        advance(&mut psg, TOTAL_CLOCKS, chunk_limit);
+    } else {
+        let mut elapsed = 0_u64;
+        for (clock, value) in TRACE {
+            advance(&mut psg, clock - elapsed, chunk_limit);
+            psg.write(value);
+            elapsed = clock;
+        }
+        advance(&mut psg, TOTAL_CLOCKS - elapsed, chunk_limit);
     }
-    advance(&mut psg, TOTAL_CLOCKS - elapsed, chunk_limit);
 
     let samples = psg.drain_samples(None);
     let peak = samples
@@ -140,6 +162,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     write_wav(&output_path, &samples)?;
     println!("profile={profile_name}");
+    if let Some(period) = tone_period {
+        println!("scenario=tone-period-{period}");
+        println!("tone_frequency_hz={:.9}", CLOCK_HZ as f64 / (32.0 * f64::from(period)));
+    } else {
+        println!("scenario=register-mix-trace");
+    }
     println!("clock_hz={CLOCK_HZ}");
     println!("sample_rate={SAMPLE_RATE}");
     println!("channels=1 (raw PSG; dual-mono is a host concern)");
