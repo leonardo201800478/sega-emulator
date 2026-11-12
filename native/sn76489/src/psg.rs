@@ -2049,4 +2049,34 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn versioned_state_codec_round_trips_sg1000_profile_and_rejects_invalid_profile_tag() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
+        device.write_inner(0xE4);
+        device.advance_clocks(4_321);
+        let state = device.snapshot_state();
+        assert!(state.lfsr <= 0x7FFF);
+
+        let encoded = state.encode().unwrap();
+        let decoded = super::Sn76489StateV1::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        assert_eq!(decoded.profile, PsgProfile::Sg1000);
+
+        let mut invalid_tag = encoded;
+        let body_start = 14;
+        let body_len = u32::from_le_bytes(
+            invalid_tag[10..14].try_into().unwrap(),
+        ) as usize;
+        let body_end = body_start + body_len;
+        invalid_tag[body_start] = 0xFF;
+        let checksum = super::state_crc32(&invalid_tag[body_start..body_end]);
+        invalid_tag[body_end..body_end + 4].copy_from_slice(&checksum.to_le_bytes());
+        assert_eq!(
+            super::Sn76489StateV1::decode(&invalid_tag),
+            Err(super::PsgStateError::InvalidTag(0xFF))
+        );
+    }
+
 }
