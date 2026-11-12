@@ -174,7 +174,7 @@ def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
 
 def tone_response_summary(
     samples: list[float], sample_rate: int, period: int
-) -> dict[str, float | int]:
+) -> dict[str, Any]:
     """Measure an isolated tone's RMS and energy around its expected fundamental."""
     steady_state = samples[min(256, len(samples) // 4) :]
     power, fft_size = fft_power(steady_state)
