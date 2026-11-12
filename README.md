@@ -2,7 +2,7 @@
 
 Emulador Sega multissistema com runtime de hardware integralmente em Rust. A arquitetura desktop de destino é **Slint 1.18.x + WGPU 30.x + CPAL 0.18.2**, com Vulkan como backend gráfico inicial preferencial no Windows x64.
 
-**Arquitetura-alvo atual:** backend Rust determinístico; desktop Slint 1.18.x; apresentação WGPU 30.x com Vulkan inicial no Windows x64; áudio físico CPAL 0.18.2; SDL3 após auditoria. A migração está em R2, com vídeo SMS integrado ao caminho Slint/WGPU. CPAL (R3), SDL3 (R4) e consolidação final (R5) permanecem pendentes.
+**Arquitetura-alvo atual:** backend Rust determinístico; desktop Slint 1.18.x; apresentação WGPU 30.x com Vulkan inicial no Windows x64; áudio físico CPAL 0.18.2; SDL3 após auditoria. A migração está em R2, com vídeo SMS integrado ao caminho Slint/WGPU. R3 — CPAL está em implementação candidata na PR #770; não integrada nem validada fisicamente. SDL3 (R4) e consolidação final (R5) permanecem pendentes.
 
 ## Migração
 
