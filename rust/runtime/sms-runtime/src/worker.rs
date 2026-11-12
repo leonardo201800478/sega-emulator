@@ -1553,10 +1553,14 @@ fn worker_loop(
                     Some(command)
                 }
                 Err(RecvTimeoutError::Timeout) => {
-                    if let Some(deadline) = wait_deadline {
-                        telemetry.record_pacing_timeout_lateness(
-                            wait_finished.saturating_duration_since(deadline),
-                        );
+                    // A zero-timeout poll after an expired deadline is not an
+                    // OS wakeup-lateness sample; only measure an active wait.
+                    if pacing_wait_active {
+                        if let Some(deadline) = wait_deadline {
+                            telemetry.record_pacing_timeout_lateness(
+                                wait_finished.saturating_duration_since(deadline),
+                            );
+                        }
                     }
                     frame_deadline.clear();
                     None
