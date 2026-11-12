@@ -330,13 +330,7 @@ mod tests {
     #[test]
     fn overflow_drops_newest_frames_and_counts_exact_loss() {
         let (mut producer, mut consumer) = pcm_frame_queue(3).unwrap();
-        let input: [StereoFrame; 5] = [
-            [0.1, 0.1],
-            [0.2, 0.2],
-            [0.3, 0.3],
-            [0.4, 0.4],
-            [0.5, 0.5],
-        ];
+        let input: [StereoFrame; 5] = [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3], [0.4, 0.4], [0.5, 0.5]];
 
         assert_eq!(
             producer.push_frames(&input).unwrap(),
@@ -375,15 +369,7 @@ mod tests {
                 producer_closed: false,
             }
         );
-        assert_eq!(
-            output,
-            [
-                [0.5, -0.5],
-                [0.75, -0.75],
-                [0.0, 0.0],
-                [0.0, 0.0]
-            ]
-        );
+        assert_eq!(output, [[0.5, -0.5], [0.75, -0.75], [0.0, 0.0], [0.0, 0.0]]);
 
         let metrics = consumer.metrics();
         assert_eq!(metrics.underrun_frames, 2);
