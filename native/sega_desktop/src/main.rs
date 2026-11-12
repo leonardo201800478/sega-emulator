@@ -907,7 +907,10 @@ mod windows_host {
                 self.poll_interval_distribution.percentile_ns(50) / 1_000,
                 self.poll_interval_distribution.percentile_ns(95) / 1_000,
                 self.poll_interval_distribution.percentile_ns(99) / 1_000,
-                self.poll_interval_distribution.percentile_ns(95).saturating_sub(self.poll_interval_distribution.percentile_ns(50)) / 1_000,
+                self.poll_interval_distribution
+                    .percentile_ns(95)
+                    .saturating_sub(self.poll_interval_distribution.percentile_ns(50))
+                    / 1_000,
                 average_us(
                     self.consumed_interval_sum_ns,
                     self.consumed.saturating_sub(1)
@@ -917,7 +920,10 @@ mod windows_host {
                 self.consumed_interval_distribution.percentile_ns(50) / 1_000,
                 self.consumed_interval_distribution.percentile_ns(95) / 1_000,
                 self.consumed_interval_distribution.percentile_ns(99) / 1_000,
-                self.consumed_interval_distribution.percentile_ns(95).saturating_sub(self.consumed_interval_distribution.percentile_ns(50)) / 1_000,
+                self.consumed_interval_distribution
+                    .percentile_ns(95)
+                    .saturating_sub(self.consumed_interval_distribution.percentile_ns(50))
+                    / 1_000,
                 average_us(self.mailbox_residence_sum_ns, self.mailbox_residence_count),
                 self.mailbox_residence_max_ns / 1_000,
                 self.mailbox_residence_distribution.len(),
@@ -954,7 +960,10 @@ mod windows_host {
                 runtime.frame_interval_p50_ns / 1_000,
                 runtime.frame_interval_p95_ns / 1_000,
                 runtime.frame_interval_p99_ns / 1_000,
-                runtime.frame_interval_p95_ns.saturating_sub(runtime.frame_interval_p50_ns) / 1_000,
+                runtime
+                    .frame_interval_p95_ns
+                    .saturating_sub(runtime.frame_interval_p50_ns)
+                    / 1_000,
                 runtime.machine_ticks_per_frame_min,
                 runtime.machine_ticks_per_frame_p50,
                 runtime.machine_ticks_per_frame_max,
@@ -1852,7 +1861,10 @@ mod windows_host {
                 start + Duration::from_millis(1),
             );
             assert_eq!(window.consumed_interval_distribution.len(), 1);
-            assert_eq!(window.consumed_interval_distribution.percentile_ns(50), 1_000_000);
+            assert_eq!(
+                window.consumed_interval_distribution.percentile_ns(50),
+                1_000_000
+            );
             assert_eq!(window.mailbox_residence_distribution.len(), 2);
         }
 
