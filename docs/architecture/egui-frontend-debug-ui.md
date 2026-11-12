@@ -9,7 +9,7 @@ The native frontend exposes one consistent menu bar:
 - **Sistema** — identifies the active machine, exposes SMS territory/video standard, and lists systems not wired to this frontend as disabled.
 - **Arquivo** — ROM selection, recent ROMs, close machine and exit.
 - **Vídeo** — aspect ratio and FPS overlay visibility.
-- **Áudio** — audio enablement, WASAPI/XAudio2 backend and volume.
+- **Áudio** — audio enablement, CPAL output and volume.
 - **Controles** — SDL3 device selection, remappable keyboard actions, and remappable gamepad buttons. Bindings are persisted under the user's `%APPDATA%/Sega Emulator/` directory.
 - **Opções** — fullscreen, footer visibility, and FPS HUD visibility, size (small/medium/large), and position (four viewport corners).
 - **DEBUG** — opt-in diagnostic logging and optional runtime telemetry.
