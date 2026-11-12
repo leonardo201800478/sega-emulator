@@ -1,7 +1,7 @@
 # Saída física de áudio — CPAL 0.18.2
 
-**Estado:** CPAL 0.18.2 integrado pela PR #770; adaptação Hi-Fi H4 em implementação na branch `feat/audio-h4-float-pcm-cpal-negotiation-20261112`.
-**Validação automatizada H4:** pendente no HEAD final da PR.
+**Estado:** CPAL 0.18.2 (#770) e pipeline H4 integrados na main pela PR #787.
+**Validação automatizada H4:** PASS no HEAD da PR `a1b8774acf39101ecb1a3697571a526a98160f32` (Windows x64 CPAL, workspace regression, PSG integration, Slint/WGPU/Vulkan POC, Rust quality, rustfmt/Clippy e patch hygiene).
 **Validação física Windows x64:** NOT RUN.
 **Escopo:** substituir os adaptadores próprios WASAPI/XAudio2 por um único adaptador CPAL, mantendo a geração PCM e o runtime DSP independentes do dispositivo.
 
@@ -66,14 +66,15 @@ D3D12 é tecnologia de vídeo e não integra o subsistema de áudio. Suas refer�
 
 ## Critérios ainda pendentes para concluir R3/H4
 
-1. CI H4 no HEAD exato: fmt, Clippy, testes de resampler, seleção de configurações, conversões e build Windows x64.
-2. Testar em endpoint físico que anuncia F32, I24 e I16; confirmar que a seleção respeita as capacidades reais e reporta o formato.
+1. Testar em endpoint físico que anuncia F32, I24 e I16; confirmar que a seleção respeita as capacidades reais e reporta o formato.
 3. Reprodução SMS em 48/88,2/96 kHz quando disponíveis e fallback para PCM16/44,1 kHz quando necessário.
 4. Pause, stop, reset, troca de ROM e retomada sem vazamento de epoch.
 5. Remoção/erro de stream: o worker já desanexa e fecha a sessão de áudio ao receber erro do sink, sem parar a emulação; o host pode reconfigurar pelo comando coarse-grained `ConfigureAudio`. Detecção automática de hotplug e reabertura automática ainda pendentes.
 6. Campanha prolongada, underruns, latência e loopback físico.
 7. Verificação de que áudio físico não altera Scheduler, determinismo ou equivalência contínua/em blocos.
 
-Até a conclusão desses gates, R3 permanece **IN_PROGRESS**, não concluída.
+A PR #787 foi integrada por squash em `323f295f459feaed457550db2b8d2c2e4188d81e`. Os jobs SDL3, D3D12, stress do Scheduler, Z80 e VDP ficaram SKIPPED por não serem aplicáveis ao diff; não foram contabilizados como PASS. A CI de PR não substitui validação física.
+
+Até a conclusão dos gates físicos/lifecycle restantes, R3 permanece **IN_PROGRESS**, não concluída.
 
 **Lockfiles:** CPAL 0.18.2 e os lockfiles aplicáveis foram integrados pela PR #770. A branch H4 não altera dependências nem lockfiles; a CI `--locked` deve confirmar a consistência.
