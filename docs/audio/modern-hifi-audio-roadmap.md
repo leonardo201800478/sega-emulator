@@ -173,6 +173,22 @@ A atenuação adicional cresce com a frequência e é pequena até 8 kHz. Isso c
 
 O protótipo foi finito, permaneceu abaixo do limite de pico do teste e foi invariável ao particionamento em blocos de 997 clocks no período 5. Ele ultrapassa ligeiramente o nível fundamental do baseline nas frequências altas; portanto, **não deve ser promovido à produção ainda**. Falta avaliar THD/harmônicos, ringing, transientes de escrita e comportamento de ruído.
 
+**THD e harmônicos:** a análise de tons mostra que a interpolação linear reduz ligeiramente a energia harmônica em relação ao baseline; Lagrange4 recupera essa energia, mas ultrapassa o baseline nos períodos baixos:
+| Período | THD baseline | THD linear | THD Lagrange4 |
+|---:|---:|---:|---:|
+| 14 | 0,0079% | 0,0052% | 0,0054% |
+| 28 | 38,8751% | 38,6266% | 39,1592% |
+| 56 | 43,1834% | 43,0583% | 43,3206% |
+| 112 | 45,9140% | 45,8449% | 45,9893% |
+
+Isso indica que Lagrange4 não é uma correção neutra: restaura harmônicos, mas também altera o balanço harmônico e excede o baseline em parte da faixa. Nenhum interpolador foi promovido à produção.
+
+**Transientes do trace completo:** as janelas de 2 ms antes/depois e 5–10 ms após as escritas mostram RMS assentado praticamente igual. Entretanto, no SMS, o delta entre amostras adjacentes caiu de 0.08157 para 0.07013 no reset do ruído (-14,0%) e de 0.05224 para 0.04964 na mudança do período do tom (-5,0%). É evidência de bordas mais suaves na versão linear, não prova isolada de ringing nem de inferioridade auditiva.
+
+**Integração temporal isolada:** o teste `scheduled_psg_matches_direct_core_for_identical_register_timestamps` dirige `ScheduledPsg` através de `MachineScheduler` com os mesmos timestamps de escrita do trace e compara com avanço direto do SN76489. PCM completo e estado final são idênticos. CI [#43262267964](https://github.com/leonardo201800478/sega-emulator/actions/runs/43262267964) passou.
+
+A comparação de implementação entre `f47f718` e a revisão atual confirmou que `tick_internal_clock`, `push_filter_sample`, `filtered_output`, `mix_output`, `write_inner`, `update_noise`, `clock_tone` e `design_lowpass` permanecem idênticos. A diferença funcional identificada no core está em `advance_clocks_inner`, no instante de reconstrução/interpolação das amostras. Isso, junto com o teste ScheduledPsg/direct, concentra a investigação no método de reconstrução, não na semântica digital do chip nem no wrapper do Scheduler.
+
 **Correção metodológica:** os relatórios antigos [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528) e [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796) capturavam apenas a janela final de um segundo e ficam substituídos pela captura integral acima.
 
 **Gate H1 — CONCLUÍDO:** trace determinístico, exportação PCM integral, comparação histórica SMS/SG-1000, métricas de forma de onda/espectro e invariância contínua/segmentada foram executados. A CI da revisão [#43260895841](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841) passou em PSG, Clippy, formatação, regressão Rust, documentação e validação de workflows.
