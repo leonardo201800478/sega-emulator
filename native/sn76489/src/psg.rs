@@ -931,7 +931,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn sms_white_noise_trace_matches_independent_gear_system_reference() {
         // Gearsystem Sms_Apu.cpp: seed 0x8000, 16-bit register, taps 0 and 3,
@@ -971,8 +970,7 @@ mod tests {
             (0x0401, 1, 0x8200),
         ];
 
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.write_inner(0xE4);
 
         for (state, output, next_state) in TRACE {
@@ -1005,8 +1003,7 @@ mod tests {
             (0x0001, 1, 0x8000),
         ];
 
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.write_inner(0xE0);
 
         for (state, output, next_state) in TRACE {
