@@ -5,7 +5,7 @@ The SMS core and machine scheduler do not depend on this crate's D3D12 module.
 
 ## Host feature boundary
 
-`FrameMailbox`, `VideoFrame`, `PixelFormat`, and `FrameQueue` are available without enabling a native presentation API. The legacy Windows D3D12 host and its diagnostics are opt-in through the `d3d12-host` Cargo feature, disabled by default. The legacy `sega-app` explicitly enables this feature; the Slint `sega-desktop` consumes only the portable frame contract. The D3D12 smoke examples also require this feature.
+`FrameMailbox`, `VideoFrame`, `PixelFormat`, and `FrameQueue` are available without enabling a native presentation API. The legacy Windows D3D12 host is opt-in through the `d3d12-host` Cargo feature, disabled by default. QPC diagnostics are independently gated by `windows_diagnostics`, allowing the Slint `sega-desktop` to use host telemetry without compiling the legacy D3D12 host. The legacy `sega-app` explicitly enables `d3d12-host`; the Slint desktop enables only `windows_diagnostics` and consumes the portable frame contract. The D3D12 smoke examples also require this feature.
 
 ## Windows x64 Direct3D 12 smoke test
 
