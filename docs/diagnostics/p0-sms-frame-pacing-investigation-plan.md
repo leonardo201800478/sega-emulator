@@ -187,3 +187,62 @@ Testes determinísticos adicionados ao helper de deadline verificam:
 **Limite da evidência:** esses testes validam a política de deadline implementada, mas não demonstram ainda a melhoria de FPS no Windows nem substituem o benchmark físico de cinco minutos. A PR #763 permanece sujeita às gates Release do SMS Runtime e à regressão geral.
 
 O critério T1 só poderá ser marcado integralmente concluído após revisão do fluxo integrado e aprovação dos testes no HEAD final da PR #763. T3, T4 e T6 continuam pendentes de captura real.
+
+
+## Physical QPC pilot — 2026-11-12
+
+**Capture bundle:** `SMS-QPC-20261112-002914`
+**Tested executable commit:** `f74389189ca83dc35475100e32ca7977600d74be`
+**PR #765 merge base:** `3703b9d5b12e654d4f2a50e6ebb9d12915b4c1f1`
+**Build/source delta:** the tested `f74389189ca83dc35475100e32ca7977600d74be` commit differs from the PR #765 merge base only in `.gitignore` (`test-results/`); no runtime source delta was found.
+**Hardware:** Windows 11 build 26300, RTX 5070, Vulkan; PresentMon 2.6.0.
+**ROM:** Sonic the Hedgehog 2 (Europe, Brazil) (En) (Rev 1), SHA-256 recorded in capture-metadata.json.
+**Audio:** no physical audio session is represented by the capture; audio-submit timing is zero and must not be interpreted as CPAL validation.
+
+### Raw capture integrity
+
+- NTSC CSV: 32,534 PresentMon records over 299.949 s.
+- Europe/PAL CSV: 27,389 PresentMon records over 299.939 s.
+- QPC frequency: 10,000,000 ticks/s in both captures.
+- Both CSVs identify PresentRuntime=DXGI and PresentMode=Composed: Flip, SyncInterval=1, AllowsTearing=0.
+- The emulator log contains QPC markers throughout both captures. PAL telemetry spans the preceding NTSC run as well because the same process remained alive; only QPC timestamps within the PAL CSV interval are relevant to the PAL comparison.
+- The NTSC focus-restoration interaction is retained as a manual intervention. Its 110.443 ms PresentMon interval is not removed from the raw dataset.
+- The earlier `002854` directory is an incomplete ETW startup attempt and is excluded from performance statistics.
+
+### Preliminary measurements
+
+Worker production rate is estimated by interpolating/extrapolating the cumulative worker frame counter to the CSV's QPC start/end boundaries; it is not a PresentMon present rate.
+
+| Metric | USA/NTSC | Europe/PAL |
+|---|---:|---:|
+| Worker completed frames/s (QPC-correlated estimate) | 57.52 | 47.39 |
+| Nominal cadence from regional ticks | 59.92 Hz | 49.70 Hz |
+| Worker frame-interval P50 (median of 1 s summaries) | 17.369 ms | 20.806 ms |
+| Worker frame-interval P95 (median of rolling P95 summaries) | 18.842 ms | 23.158 ms |
+| step_frame_until P95 (median of rolling P95 summaries) | 14.366 ms | 19.579 ms |
+| frame-processing P95 (median of rolling P95 summaries) | 14.387 ms | 19.598 ms |
+| actual wait P95 (median of rolling P95 summaries) | 5.330 ms | 6.206 ms |
+| host timer poll interval (mean of 1 s averages) | 17.905 ms | 18.840 ms |
+| consumed-frame interval (mean of 1 s averages) | 18.133 ms | 21.143 ms |
+
+Virtual ticks/frame remain tightly grouped around 59,736 NTSC and 71,364 PAL. This supports the conclusion that the virtual frame boundary is stable in these captures; it does not establish complete hardware accuracy.
+
+PresentMon `MsBetweenPresents` P95/P99/P99.9 were 13.383/24.849/31.769 ms NTSC and 15.463/30.523/33.435 ms PAL. The isolated NTSC focus event explains the maximum 110.443 ms interval but does not explain the broader tail. PAL has a separate 48.311 ms maximum interval without a matching click marker.
+
+GPU Busy P95 was below 0.8 ms in both runs; Present API P95 was approximately 0.265 ms. These measurements do not show a dominant GPU execution or Present API call cost, but they do not measure physical scanout latency.
+
+### Interpretation limits and correction to preliminary chat estimates
+
+All worker P50/P95/P99 values above are rolling-window statistics emitted approximately once per second. The table reports the median of those one-second summaries; it does not treat each summary as a per-frame raw sample. Earlier conversational estimates that described the PAL step P95 as 22.732 ms or the PAL timer poll interval as 20.17 ms are superseded by this raw-log recalculation.
+
+The pilot does not include per-frame PSG sample count, actual deadline wakeup lateness, command-handler duration, or full Slint callback duration. Therefore it cannot yet distinguish Windows timeout overshoot, command handling, worker processing variance, and event-loop callback cost. It also does not include captured display metadata sufficient to assert the monitor refresh rate. The apparent approximately 144 Hz cadence inferred from the median display-change interval remains an inference, not a confirmed display-mode fact.
+
+### Next diagnostic increment
+
+The follow-up branch adds:
+- per-frame target budget and PSG sample-count distributions;
+- timeout wakeup lateness relative to the absolute worker deadline;
+- command wakeup count, remaining budget at wakeup, and aggregate command-handler duration;
+- total Slint timer callback duration and mailbox take duration.
+
+These measurements are observational and do not modify pacing or virtual time. Per-dispatch Scheduler instrumentation is deferred until these measurements show that step_frame_until remains the unexplained dominant cost after wakeup and command handling are separated.

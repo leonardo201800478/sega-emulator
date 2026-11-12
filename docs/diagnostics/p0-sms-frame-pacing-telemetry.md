@@ -60,6 +60,24 @@ Each host summary also includes `qpc_available`, `qpc_ticks`, and `qpc_frequency
 
 The host report is deliberately explicit that physical present timestamps are unavailable through the current Slint-owned surface. sequence_gaps is a per-window count and mailbox_replaced_total is cumulative; neither is automatically a defect: the mailbox is latest-frame-wins, so replacements can be expected if the consumer is slower. They must be interpreted alongside produced and consumed cadence.
 
+## Follow-up diagnostics — worker wakeup and Slint callback
+
+The physical QPC pilot (2026-11-12) showed stable virtual ticks per frame but a lower wall-clock worker cadence than the regional nominal cadence. The existing one-second summaries do not pair each frame's target budget with the actual timeout wakeup, so they cannot distinguish OS wakeup lateness from command-handler time or variable frame processing.
+
+This diagnostic increment adds bounded, rolling worker fields:
+
+- frame_budget_p50/p95/p99_us: target host duration derived from the number of PSG samples drained for each completed frame;
+- worker_step_p50/p95/p99_us, frame_processing_p50/p95/p99_us, pacing_wait_budget_p50/p95/p99_us and pacing_wait_elapsed_p50/p95/p99_us: distributions for the emulation step, complete frame processing and worker wait path;
+- psg_samples_p50/p95/p99: generated sample count per completed frame, needed to verify the budget input;
+- pacing_timeout_lateness_p50/p95/p99_us and pacing_timeout_count_total: time by which recv_timeout returns after the absolute frame deadline and the number of timeout returns; only waits that began with a positive remaining deadline budget are counted, excluding zero-timeout polls after an already-expired deadline; percentiles include only frames with a qualifying timeout return;
+- pacing_command_wakeups_total: command wakeups attributed to the preceding completed frame;
+- pacing_command_remaining_p95_us: remaining deadline budget when command wakeups occurred; its percentile includes only frames with command wakeups;
+- command_handler_p95_us: accumulated command-handler time attributed to a frame; its percentile includes only frames with measured command-handler work.
+
+The host summary also records total Slint timer callback duration and FrameMailbox::take_latest_with_timestamp duration (average and maximum). Existing timer interval, mailbox residence, conversion and queue-write metrics remain separate.
+
+These additions are diagnostic only. They do not change the deadline, wait duration, command policy, Scheduler, frame production, mailbox policy, redraw request, or presentation API. They deliberately stop short of per-dispatch timing: the physical pilot did not establish that Scheduler dispatch itself is the bottleneck, and timing every dispatch would risk observer overhead. Reconsider sampled dispatch counters only if the new per-frame measurements show unexplained step_frame_until cost or high variance after host wakeup and command handling are separated.
+
 ## Existing pacing policy — audit target, not changed here
 
 The current worker computes a wall-time frame budget from the number of drained PSG samples (sample_count / SMS_TEMPORAL_SAMPLE_RATE) and waits for the remainder after processing. This is an existing pacing policy and is now measured separately as pacing_wait_budget (requested timeout) and pacing_wait_elapsed (actual time spent in recv_timeout, including early command wake-up or host wake-up overshoot); this PR does not assume it is correct or incorrect. In particular, it must not be replaced by a guessed PAL/NTSC sleep, GUI timer, VSync callback, or audio-device callback before comparing measured virtual ticks, generated sample counts, processing cost, and host intervals.
