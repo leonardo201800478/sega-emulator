@@ -1568,7 +1568,9 @@ fn worker_loop(
                 &mut trace_history,
                 &mut trace_enabled,
             );
-            telemetry.record_command_handler(command_handler_started.elapsed());
+            if was_running {
+                telemetry.record_command_handler(command_handler_started.elapsed());
+            }
             if !command_continues {
                 break;
             }
