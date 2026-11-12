@@ -331,7 +331,7 @@ fn select_preferred_output_config(
                     }
                     if let Some(config) = range
                         .clone()
-                        .try_with_sample_rate(cpal::SampleRate(rate))
+                        .try_with_sample_rate(rate)
                     {
                         return Some(config);
                     }
@@ -483,8 +483,8 @@ mod tests {
     ) -> cpal::SupportedStreamConfigRange {
         cpal::SupportedStreamConfigRange::new(
             channels,
-            cpal::SampleRate(min_rate),
-            cpal::SampleRate(max_rate),
+            min_rate,
+            max_rate,
             cpal::SupportedBufferSize::Unknown,
             format,
         )
