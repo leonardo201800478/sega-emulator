@@ -400,6 +400,9 @@ jobs:
             --current-sg1000 artifacts/current-sg1000.wav \
             --event-sg1000 artifacts/event-sg1000.wav \
             --event-model-metrics artifacts/psg-h2-model-metrics.json \
+            --full-tone-sweep artifacts/psg-h2-tone-sweep.json \
+            --runtime-metrics-sms artifacts/psg-h2-runtime-sms.json \
+            --runtime-metrics-sg1000 artifacts/psg-h2-runtime-sg1000.json \
             --event-tone 2 artifacts/baseline-tone-p2.wav artifacts/current-tone-p2.wav artifacts/event-tone-p2.wav \
             --event-tone 3 artifacts/baseline-tone-p3.wav artifacts/current-tone-p3.wav artifacts/event-tone-p3.wav \
             --event-tone 4 artifacts/baseline-tone-p4.wav artifacts/current-tone-p4.wav artifacts/event-tone-p4.wav \
