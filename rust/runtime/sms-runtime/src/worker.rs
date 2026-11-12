@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
-use sega_audio_runtime::AudioOutputMetrics;
+use sega_audio_runtime::{AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
@@ -23,7 +23,7 @@ use sega_sms_core::{
 use sega_video_runtime::d3d12::D3d12MailboxSession;
 use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
-const SMS_INTERNAL_AUDIO_SAMPLE_RATE: u64 = 48_000;
+const SMS_INTERNAL_AUDIO_SAMPLE_RATE: u64 = DEFAULT_PCM_SOURCE_RATE_HZ as u64;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
@@ -2559,7 +2559,7 @@ mod tests {
         worker
             .configure_audio_output(move || -> Result<Box<dyn super::AudioSession>, String> {
                 let sink = ControlSink(Arc::clone(&factory_events));
-                let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink)?;
+                let session = NativeAudioSession::new(DEFAULT_PCM_SOURCE_RATE_HZ, DEFAULT_PCM_SOURCE_RATE_HZ, 100, sink)?;
                 Ok(Box::new(session))
             })
             .unwrap();
@@ -2673,7 +2673,7 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(DEFAULT_PCM_SOURCE_RATE_HZ, DEFAULT_PCM_SOURCE_RATE_HZ, 100, sink).unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
@@ -2704,7 +2704,7 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(DEFAULT_PCM_SOURCE_RATE_HZ, DEFAULT_PCM_SOURCE_RATE_HZ, 100, sink).unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
