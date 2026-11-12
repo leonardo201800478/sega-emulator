@@ -73,6 +73,113 @@ def summarize(samples: list[float], sample_rate: int) -> dict[str, Any]:
     }
 
 
+def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
+    """Calculate Hann-windowed spectral energy using a dependency-free radix-2 FFT."""
+    sample_count = len(samples)
+    fft_size = 1 << (sample_count - 1).bit_length()
+    values = [
+        complex(
+            sample
+            * (0.5 - 0.5 * math.cos(math.tau * index / (sample_count - 1))),
+            0.0,
+        )
+        for index, sample in enumerate(samples)
+    ]
+    values.extend([0j] * (fft_size - sample_count))
+
+    reversed_index = 0
+    for index in range(1, fft_size):
+        bit = fft_size >> 1
+        while reversed_index & bit:
+            reversed_index ^= bit
+            bit >>= 1
+        reversed_index ^= bit
+        if index < reversed_index:
+            values[index], values[reversed_index] = (
+                values[reversed_index],
+                values[index],
+            )
+
+    size = 2
+    while size <= fft_size:
+        angle = -math.tau / size
+        twiddle_step = complex(math.cos(angle), math.sin(angle))
+        half_size = size // 2
+        for start in range(0, fft_size, size):
+            twiddle = 1.0 + 0.0j
+            for offset in range(half_size):
+                even = values[start + offset]
+                odd = values[start + offset + half_size] * twiddle
+                values[start + offset] = even + odd
+                values[start + offset + half_size] = even - odd
+                twiddle *= twiddle_step
+        size *= 2
+
+    power = [
+        value.real * value.real + value.imag * value.imag
+        for value in values[: fft_size // 2 + 1]
+    ]
+    total_power = math.fsum(power[1:])
+    centroid = (
+        math.fsum(
+            index * sample_rate / fft_size * value
+            for index, value in enumerate(power[1:], start=1)
+        )
+        / total_power
+        if total_power > 0.0
+        else 0.0
+    )
+    bands: dict[str, dict[str, float | None]] = {}
+    for low_hz, high_hz in (
+        (20, 200),
+        (200, 1_000),
+        (1_000, 4_000),
+        (4_000, 8_000),
+        (8_000, 12_000),
+        (12_000, 16_000),
+        (16_000, 20_000),
+        (20_000, 24_000),
+    ):
+        first_bin = max(1, math.ceil(low_hz * fft_size / sample_rate))
+        end_bin = min(
+            fft_size // 2 + 1,
+            math.ceil(high_hz * fft_size / sample_rate),
+        )
+        band_power = math.fsum(power[first_bin:end_bin])
+        relative_db = (
+            10.0 * math.log10(band_power / total_power)
+            if band_power > 0.0 and total_power > 0.0
+            else None
+        )
+        bands[f"{low_hz}-{high_hz} Hz"] = {
+            "power": band_power,
+            "relative_db": relative_db,
+        }
+
+    return {
+        "fft_size": fft_size,
+        "window": "Hann",
+        "spectral_centroid_hz": centroid,
+        "bands": bands,
+    }
+
+
+def spectral_delta(
+    baseline: dict[str, Any], current: dict[str, Any]
+) -> dict[str, float | None]:
+    """Return the current-to-baseline band-energy change in decibels."""
+    changes: dict[str, float | None] = {}
+    for band, baseline_values in baseline["bands"].items():
+        baseline_power = baseline_values["power"]
+        current_power = current["bands"][band]["power"]
+        changes[band] = (
+            10.0 * math.log10(current_power / baseline_power)
+            if baseline_power > 0.0 and current_power > 0.0
+            else None
+        )
+    return changes
+
+
 def compare(
     reference: list[float], candidate: list[float]
 ) -> dict[str, Any]:
@@ -163,6 +270,8 @@ def main() -> None:
             raise ValueError(f"{profile}: baseline/current sample counts differ")
         if not chunk_comparison["exactly_equal"]:
             raise ValueError(f"{profile}: continuous and segmented PCM differ")
+        baseline_spectrum = spectral_summary(baseline, sample_rate)
+        current_spectrum = spectral_summary(current, sample_rate)
 
         report["profiles"][profile] = {
             "baseline": summarize(baseline, sample_rate),
@@ -170,6 +279,11 @@ def main() -> None:
             "current_chunked": summarize(chunked, sample_rate),
             "baseline_vs_current": baseline_comparison,
             "current_vs_chunked": chunk_comparison,
+            "baseline_spectrum": baseline_spectrum,
+            "current_spectrum": current_spectrum,
+            "spectral_band_delta_db": spectral_delta(
+                baseline_spectrum, current_spectrum
+            ),
         }
 
     args.json.parent.mkdir(parents=True, exist_ok=True)
@@ -219,6 +333,32 @@ def main() -> None:
                 "",
                 f"- Baseline vs current: `{json.dumps(data['baseline_vs_current'], sort_keys=True)}`",
                 f"- Continuous vs segmented: `{json.dumps(data['current_vs_chunked'], sort_keys=True)}`",
+                "",
+                "### Spectral band energy",
+                "",
+                "| Band | Baseline (dB rel.) | Current (dB rel.) | Energy delta (dB) |",
+                "|---|---:|---:|---:|",
+            ]
+        )
+        for band, baseline_values in data["baseline_spectrum"]["bands"].items():
+            current_values = data["current_spectrum"]["bands"][band]
+            baseline_db = baseline_values["relative_db"]
+            current_db = current_values["relative_db"]
+            delta_db = data["spectral_band_delta_db"][band]
+            values = (baseline_db, current_db, delta_db)
+            formatted = [
+                f"{value:.3f}" if value is not None else "n/a"
+                for value in values
+            ]
+            lines.append(f"| {band} | " + " | ".join(formatted) + " |")
+        lines.extend(
+            [
+                "",
+                (
+                    "Spectral centroid (Hz): "
+                    f"baseline={data['baseline_spectrum']['spectral_centroid_hz']:.3f}, "
+                    f"current={data['current_spectrum']['spectral_centroid_hz']:.3f}"
+                ),
                 "",
             ]
         )
