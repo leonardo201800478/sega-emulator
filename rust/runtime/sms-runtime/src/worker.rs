@@ -531,23 +531,39 @@ impl WorkerTelemetry {
     }
 
     fn record_actual_pacing_wait(&self, elapsed: Duration) {
-        if !self.diagnostics_enabled() { return; }
-        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_actual_wait(elapsed); }
+        if !self.diagnostics_enabled() {
+            return;
+        }
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.pacing_window.record_actual_wait(elapsed);
+        }
     }
 
     fn record_pacing_timeout_lateness(&self, lateness: Duration) {
-        if !self.diagnostics_enabled() { return; }
-        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_timeout_lateness(lateness); }
+        if !self.diagnostics_enabled() {
+            return;
+        }
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.pacing_window.record_timeout_lateness(lateness);
+        }
     }
 
     fn record_pacing_command_wakeup(&self, remaining: Duration) {
-        if !self.diagnostics_enabled() { return; }
-        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_command_wakeup(remaining); }
+        if !self.diagnostics_enabled() {
+            return;
+        }
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.pacing_window.record_command_wakeup(remaining);
+        }
     }
 
     fn record_command_handler(&self, elapsed: Duration) {
-        if !self.diagnostics_enabled() { return; }
-        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_command_handler(elapsed); }
+        if !self.diagnostics_enabled() {
+            return;
+        }
+        if let Ok(mut timing) = self.frame_timing.lock() {
+            timing.pacing_window.record_command_handler(elapsed);
+        }
     }
 
     fn frame_pacing_metrics(&self) -> SmsFramePacingMetrics {
