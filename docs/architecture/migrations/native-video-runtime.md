@@ -1,4 +1,6 @@
-# Runtime de vídeo nativo em Rust — migração Direct3D 12
+# Registro histórico — host gráfico anterior e sua substituição por Slint/WGPU
+
+> **Status:** SUPERSEDED para a arquitetura-alvo pela ADR 0011. Este documento preserva decisões, implementação e evidências históricas; não deve orientar novas implementações. A rota atual é Slint 1.18 + WGPU 30/Vulkan.
 
 ## Estado e decisão
 
