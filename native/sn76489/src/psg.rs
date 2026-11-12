@@ -1195,25 +1195,26 @@ mod tests {
     }
 
     #[test]
+    #[test]
     fn sms_attenuation_levels_match_independent_reference_table() {
-        // Normalized from the 16-level voltage table published by SMS Power.
-        // The reference values are integer amplitudes relative to 32767.
+        // SMS Power specifies a 2 dB attenuation step. Voltage ratios are
+        // therefore 10^(-0.1 * level), with level 15 forced to silence.
         const REFERENCE: [f64; 16] = [
-            32767.0 / 32767.0,
-            26028.0 / 32767.0,
-            20675.0 / 32767.0,
-            16422.0 / 32767.0,
-            13045.0 / 32767.0,
-            10362.0 / 32767.0,
-            8231.0 / 32767.0,
-            6568.0 / 32767.0,
-            5193.0 / 32767.0,
-            4125.0 / 32767.0,
-            3277.0 / 32767.0,
-            2603.0 / 32767.0,
-            2067.0 / 32767.0,
-            1642.0 / 32767.0,
-            1304.0 / 32767.0,
+            1.0,
+            0.794_328_23,
+            0.630_957_34,
+            0.501_187_23,
+            0.398_107_17,
+            0.316_227_77,
+            0.251_188_64,
+            0.199_526_23,
+            0.158_489_32,
+            0.125_892_54,
+            0.1,
+            0.079_432_82,
+            0.063_095_73,
+            0.050_118_72,
+            0.039_810_72,
             0.0,
         ];
 
@@ -1227,12 +1228,11 @@ mod tests {
             psg.attenuations[0] = level as u8;
             let measured = psg.mix() * 4.0;
             assert!(
-                (measured - expected).abs() < 0.000_01,
+                (measured - expected).abs() < 0.000_001,
                 "SMS attenuation level {level}: expected {expected:.8}, got {measured:.8}"
             );
         }
     }
-
 
     #[test]
     fn sms_reference_latch_data_vectors_update_registers_immediately() {
