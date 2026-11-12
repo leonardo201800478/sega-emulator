@@ -669,6 +669,331 @@ mod tests {
     }
 
     #[test]
+    fn output_samples_are_invariant_to_scheduler_clock_chunking_at_48khz_for_both_profiles() {
+        let clock_hz = 3_579_545_u64;
+        let sample_rate = 48_000_u64;
+        let total_clocks = 1_000_000_u64;
+
+        for profile in [PsgProfile::Sms, PsgProfile::Sg1000] {
+            let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
+            let mut chunked = Sn76489::new_with_profile(clock_hz, sample_rate, profile).unwrap();
+
+            for device in [&mut whole, &mut chunked] {
+                device.write_inner(0x85);
+                device.write_inner(0x12);
+                device.write_inner(0x90);
+                device.write_inner(0xE4);
+            }
+
+            whole.advance_clocks(total_clocks);
+            let chunk_sizes = [1_u64, 7, 15, 16, 17, 113, 257, 4_096];
+            let mut remaining = total_clocks;
+            let mut chunk_index = 0;
+            while remaining > 0 {
+                let clocks = chunk_sizes[chunk_index % chunk_sizes.len()].min(remaining);
+                chunked.advance_clocks(clocks);
+                remaining -= clocks;
+                chunk_index += 1;
+            }
+
+            let expected_internal_ticks = total_clocks / super::CLOCK_DIVIDER;
+            let expected_samples = (u128::from(expected_internal_ticks)
+                * u128::from(sample_rate)
+                * u128::from(super::CLOCK_DIVIDER)
+                / u128::from(clock_hz)) as usize;
+            let whole_samples = whole.drain_samples(None);
+            let chunked_samples = chunked.drain_samples(None);
+
+            assert_eq!(whole_samples.len(), expected_samples, "{profile:?}");
+            assert_eq!(chunked_samples, whole_samples, "{profile:?}");
+            assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
+            assert_eq!(chunked.output_phase, whole.output_phase);
+            assert_eq!(chunked.filter_history, whole.filter_history);
+            assert_eq!(chunked.filter_position, whole.filter_position);
+            assert_eq!(chunked.tone_counters, whole.tone_counters);
+            assert_eq!(chunked.lfsr, whole.lfsr);
+        }
+    }
+
+    fn filtered_output_at_delay(psg: &Sn76489, delay: usize) -> f64 {
+        let taps = psg.filter_coefficients.len();
+        let newest_index = (psg.filter_position + taps - 1 - delay % taps) % taps;
+        let mut total = 0.0;
+        for (index, coefficient) in psg.filter_coefficients.iter().enumerate() {
+            let history_index = (newest_index + taps - index) % taps;
+            total += coefficient * psg.filter_history[history_index];
+        }
+        total
+    }
+
+    fn interpolate_lagrange4(samples: [f64; 4], fraction: f64) -> f64 {
+        let x = fraction;
+        let weights = [
+            -((x + 1.0) * x * (x - 1.0)) / 6.0,
+            ((x + 2.0) * x * (x - 1.0)) / 2.0,
+            -((x + 2.0) * (x + 1.0) * (x - 1.0)) / 2.0,
+            ((x + 2.0) * (x + 1.0) * x) / 6.0,
+        ];
+        samples
+            .iter()
+            .zip(weights)
+            .map(|(sample, weight)| sample * weight)
+            .sum()
+    }
+
+    fn interpolate_lagrange3(samples: [f64; 3], fraction: f64) -> f64 {
+        let x = fraction;
+        let weights = [x * (x - 1.0) / 2.0, 1.0 - x * x, x * (x + 1.0) / 2.0];
+        samples
+            .iter()
+            .zip(weights)
+            .map(|(sample, weight)| sample * weight)
+            .sum()
+    }
+
+    fn render_lagrange4_tone(period: u16, max_advance_chunk: Option<u64>) -> Vec<f64> {
+        render_interpolated_tone(period, max_advance_chunk, interpolate_lagrange4)
+    }
+
+    fn render_lagrange3_tone(period: u16, max_advance_chunk: Option<u64>) -> Vec<f64> {
+        render_interpolated_tone(period, max_advance_chunk, |samples, fraction| {
+            interpolate_lagrange3([samples[1], samples[2], samples[3]], fraction)
+        })
+    }
+
+    fn render_interpolated_tone<F>(
+        period: u16,
+        max_advance_chunk: Option<u64>,
+        interpolate: F,
+    ) -> Vec<f64>
+    where
+        F: Fn([f64; 4], f64) -> f64,
+    {
+        const CLOCK_HZ: u64 = 3_579_545;
+        const SAMPLE_RATE: u64 = 48_000;
+        const TOTAL_CLOCKS: u64 = 4_000_000;
+
+        let mut psg = Sn76489::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
+        psg.write_inner(0x80 | (period as u8 & 0x0f));
+        psg.write_inner((period >> 4) as u8);
+        psg.write_inner(0x90);
+        psg.write_inner(0xbf);
+        psg.write_inner(0xdf);
+        psg.write_inner(0xff);
+
+        let mut output = Vec::new();
+        let mut remaining = TOTAL_CLOCKS;
+        while remaining > 0 {
+            let clocks = max_advance_chunk
+                .map(|limit| remaining.min(limit))
+                .unwrap_or(remaining);
+            let (internal_clocks, divider_phase) =
+                super::split_clock_advance(clocks, psg.clock_divider_phase);
+            psg.clock_divider_phase = divider_phase;
+
+            for _ in 0..internal_clocks {
+                let previous_phase = psg.output_phase;
+                let (sample_count, next_phase) =
+                    super::advance_output_phase(previous_phase, SAMPLE_RATE, CLOCK_HZ);
+
+                psg.tick_internal_clock();
+                psg.push_filter_sample();
+                psg.output_phase = next_phase;
+
+                if sample_count > 0 {
+                    let samples = [
+                        filtered_output_at_delay(&psg, 3),
+                        filtered_output_at_delay(&psg, 2),
+                        filtered_output_at_delay(&psg, 1),
+                        filtered_output_at_delay(&psg, 0),
+                    ];
+                    let increment = u128::from(SAMPLE_RATE) * u128::from(super::CLOCK_DIVIDER);
+                    for sample_index in 0..sample_count {
+                        let crossing = u128::from(CLOCK_HZ - previous_phase)
+                            + u128::from(sample_index) * u128::from(CLOCK_HZ);
+                        let fraction = crossing as f64 / increment as f64;
+                        output.push(interpolate(samples, fraction));
+                    }
+                }
+            }
+            remaining -= clocks;
+        }
+        output
+    }
+
+    fn write_experiment_float_wav(path: &std::path::Path, samples: &[f64]) -> std::io::Result<()> {
+        use std::io::Write;
+
+        const SAMPLE_RATE: u32 = 48_000;
+        let data_bytes = u32::try_from(samples.len() * 4).expect("test WAV fits in u32");
+        let mut writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+        writer.write_all(b"RIFF")?;
+        writer.write_all(&(36_u32 + data_bytes).to_le_bytes())?;
+        writer.write_all(b"WAVEfmt ")?;
+        writer.write_all(&16_u32.to_le_bytes())?;
+        writer.write_all(&3_u16.to_le_bytes())?;
+        writer.write_all(&1_u16.to_le_bytes())?;
+        writer.write_all(&SAMPLE_RATE.to_le_bytes())?;
+        writer.write_all(&(SAMPLE_RATE * 4).to_le_bytes())?;
+        writer.write_all(&4_u16.to_le_bytes())?;
+        writer.write_all(&32_u16.to_le_bytes())?;
+        writer.write_all(b"data")?;
+        writer.write_all(&data_bytes.to_le_bytes())?;
+        for sample in samples {
+            writer.write_all(&(*sample as f32).to_le_bytes())?;
+        }
+        writer.flush()
+    }
+
+    #[test]
+    fn experimental_lagrange_tone_sweep_is_chunk_invariant_and_exports_ci_wavs() {
+        const PERIODS: [u16; 8] = [5, 6, 7, 9, 14, 28, 56, 112];
+        let artifact_dir = std::env::var_os("PSG_AUDIO_ARTIFACT_DIR").map(std::path::PathBuf::from);
+        if let Some(directory) = &artifact_dir {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+
+        for period in PERIODS {
+            let lagrange4 = render_lagrange4_tone(period, None);
+            let lagrange3 = render_lagrange3_tone(period, None);
+            for (name, samples) in [("Lagrange4", &lagrange4), ("Lagrange3", &lagrange3)] {
+                assert!(samples.iter().all(|sample| sample.is_finite()));
+                let peak = samples
+                    .iter()
+                    .map(|sample| sample.abs())
+                    .fold(0.0_f64, f64::max);
+                assert!(peak > 0.001, "period={period}: {name} tone is silent");
+                assert!(peak < 1.0, "period={period}: {name} overshoot {peak}");
+            }
+
+            if period == 5 {
+                assert_eq!(
+                    render_lagrange4_tone(period, Some(997)),
+                    lagrange4,
+                    "Lagrange4 output changed with Scheduler chunking"
+                );
+                assert_eq!(
+                    render_lagrange3_tone(period, Some(997)),
+                    lagrange3,
+                    "Lagrange3 output changed with Scheduler chunking"
+                );
+            }
+
+            if let Some(directory) = &artifact_dir {
+                write_experiment_float_wav(
+                    &directory.join(format!("lagrange4-tone-p{period}.wav")),
+                    &lagrange4,
+                )
+                .unwrap();
+                write_experiment_float_wav(
+                    &directory.join(format!("lagrange3-tone-p{period}.wav")),
+                    &lagrange3,
+                )
+                .unwrap();
+            }
+        }
+    }
+
+    fn render_register_trace(profile: PsgProfile, max_advance_chunk: Option<u64>) -> Vec<f64> {
+        // Deterministic PSG bus trace: tone/volume setup, then live register
+        // changes while the chip is running. Times are source PSG clocks.
+        const TRACE: [(u64, u8); 14] = [
+            (0, 0x85),         // Tone 0 period low = 5.
+            (0, 0x12),         // Tone 0 period high = 0x12.
+            (0, 0x90),         // Tone 0 full volume.
+            (0, 0xA8),         // Tone 1 period low = 8.
+            (0, 0x05),         // Tone 1 period high = 5.
+            (0, 0xB4),         // Tone 1 attenuation = 4.
+            (0, 0xC0),         // Tone 2 period low = 0.
+            (0, 0x10),         // Tone 2 period high = 1.
+            (0, 0xD8),         // Tone 2 attenuation = 8.
+            (0, 0xE4),         // White noise, fixed divider.
+            (0, 0xF6),         // Noise attenuation = 6.
+            (250_000, 0x94),   // Change tone 0 volume during playback.
+            (750_000, 0xE7),   // White noise, tone-2-derived divider.
+            (1_250_000, 0xF2), // Raise noise level during playback.
+        ];
+        const TOTAL_CLOCKS: u64 = 2_000_000;
+
+        let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, profile).unwrap();
+        let mut elapsed = 0_u64;
+
+        for (clock, value) in TRACE {
+            let mut remaining = clock - elapsed;
+            while remaining > 0 {
+                let clocks = max_advance_chunk
+                    .map(|limit| remaining.min(limit))
+                    .unwrap_or(remaining);
+                psg.advance_clocks(clocks);
+                remaining -= clocks;
+            }
+            psg.write(value);
+            elapsed = clock;
+        }
+
+        let mut remaining = TOTAL_CLOCKS - elapsed;
+        while remaining > 0 {
+            let clocks = max_advance_chunk
+                .map(|limit| remaining.min(limit))
+                .unwrap_or(remaining);
+            psg.advance_clocks(clocks);
+            remaining -= clocks;
+        }
+
+        psg.drain_samples(None)
+    }
+
+    #[test]
+    fn sms_and_sg1000_register_traces_produce_finite_deterministic_48khz_pcm() {
+        const CLOCK_HZ: u64 = 3_579_545;
+        const TOTAL_CLOCKS: u64 = 2_000_000;
+        const SAMPLE_RATE: u64 = 48_000;
+        let expected_samples = (u128::from(TOTAL_CLOCKS / super::CLOCK_DIVIDER)
+            * u128::from(SAMPLE_RATE)
+            * u128::from(super::CLOCK_DIVIDER)
+            / u128::from(CLOCK_HZ)) as usize;
+
+        let sms_contiguous = render_register_trace(PsgProfile::Sms, None);
+        let sms_segmented = render_register_trace(PsgProfile::Sms, Some(997));
+        let sg_contiguous = render_register_trace(PsgProfile::Sg1000, None);
+        let sg_segmented = render_register_trace(PsgProfile::Sg1000, Some(997));
+
+        for (profile, contiguous, segmented) in [
+            (PsgProfile::Sms, &sms_contiguous, &sms_segmented),
+            (PsgProfile::Sg1000, &sg_contiguous, &sg_segmented),
+        ] {
+            assert_eq!(contiguous.len(), expected_samples, "{profile:?}");
+            assert_eq!(segmented, contiguous, "{profile:?}");
+            assert!(
+                contiguous.iter().all(|sample| sample.is_finite()),
+                "{profile:?}"
+            );
+
+            let peak = contiguous
+                .iter()
+                .map(|sample| sample.abs())
+                .fold(0.0_f64, f64::max);
+            let mean = contiguous.iter().sum::<f64>() / contiguous.len() as f64;
+            let rms = (contiguous.iter().map(|sample| sample * sample).sum::<f64>()
+                / contiguous.len() as f64)
+                .sqrt();
+
+            assert!(peak > 0.001, "{profile:?}: trace unexpectedly silent");
+            assert!(rms > 0.001, "{profile:?}: trace RMS unexpectedly low");
+            assert!(
+                peak <= 1.25,
+                "{profile:?}: unexpected reconstruction overshoot {peak}"
+            );
+            assert!(mean.abs() < 0.1, "{profile:?}: unexpected DC offset {mean}");
+        }
+
+        assert_ne!(
+            sms_contiguous, sg_contiguous,
+            "SMS and SG-1000 profiles must retain their distinct noise behavior"
+        );
+    }
+
+    #[test]
     fn fractional_output_sampling_reduces_clock_quantization_error() {
         let clock_hz = 3_579_545_u64;
         let sample_rate = 44_100_u64;
@@ -1194,3 +1519,8 @@ mod tests {
         assert!(!whole.drain_samples(None).is_empty());
     }
 }
+
+
+#[cfg(test)]
+#[path = "psg_h2_model.rs"]
+mod h2_model;
