@@ -1201,7 +1201,6 @@ mod tests {
         assert_eq!(chunked.lfsr, whole.lfsr);
     }
 
-
     #[test]
     fn output_samples_are_chunk_invariant_across_ntsc_pal_and_host_rates() {
         const CHUNK_SIZES: [u64; 9] = [1, 3, 15, 16, 17, 29, 257, 1_021, 4_093];
@@ -1211,10 +1210,8 @@ mod tests {
 
         for clock_hz in CLOCK_RATES {
             for sample_rate in SAMPLE_RATES {
-                let mut whole =
-                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
-                let mut chunked =
-                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                let mut chunked = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
                 for device in [&mut whole, &mut chunked] {
                     device.write_inner(0x85);
                     device.write_inner(0x12);
