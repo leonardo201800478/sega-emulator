@@ -68,7 +68,7 @@ A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via
 
 ## 5. R2–R5
 
-- **R2 — vídeo real:** integrar frames SMS pelo FrameMailbox/contrato portátil, preservando SmsTemporalWorker e Scheduler; validar formato, ownership, sincronização e lifecycle sem alterar timing.
+- **R2 — vídeo real:** INTEGRADO pelas PRs #752 e #754. Frames SMS chegam ao desktop Slint/WGPU por contrato portátil/FrameMailbox; SmsTemporalWorker e Scheduler foram preservados. Validação física e frame pacing permanecem gates independentes.
 - **R3 — CPAL:** enumerar dispositivos/formatos; criar, executar e encerrar streams; reproduzir PCM real; tratar remoção/reconexão, erros e underruns. Callback eficiente; thread de áudio não controla Scheduler.
 - **R4 — SDL3:** auditar e integrar teclado/gamepads, hotplug e mapeamentos.
 - **R5 — frontend:** consolidar launcher, biblioteca, configurações, menus, HUD, logs e telemetria. Demonstrar paridade antes de remover egui/eframe e hosts antigos.
@@ -81,12 +81,12 @@ A CI é orientada pelo impacto real dos arquivos alterados, não por uma matriz 
 
 - Mudanças em `native/sega_desktop/**` executam o gate Windows x64 Release da POC Slint/WGPU 30/Vulkan.
 - Mudanças no runtime e nos componentes compartilhados continuam sujeitas aos gates Rust de workspace e aos testes focados correspondentes.
-- egui/eframe, D3D12 e WASAPI/XAudio2 são hosts transitórios. Seus gates só executam quando os respectivos diretórios de implementação são alterados ou quando a validação legada é solicitada manualmente.
+- Os checks de compatibilidade remanescentes não validam a arquitetura-alvo. Não os interpretar como gates funcionais de Slint/WGPU, CPAL ou SDL3; a retirada dos shims depende de atualização da proteção de branch.
 - O job de input valida o runtime genérico de entrada; não representa validação de SDL3, que ainda não foi integrado.
 - CPAL e SDL3 terão gates próprios quando suas integrações forem implementadas. Não executar nem declarar PASS de APIs ainda ausentes.
 - Alterações exclusivas em workflows não acionam por si só a bateria completa de testes de hardware. Alterações globais de manifests/lockfiles continuam executando a regressão Rust de workspace.
 
-A matriz não remove a baseline legada nem declara paridade. Ela evita que uma POC da nova arquitetura dependa de APIs que não fazem parte do seu escopo.
+A matriz não declara paridade integral. O corte dos adaptadores anteriores é controlado pelo plano de retirada e só ocorre após R3/R5.
 
 ## 7. Preservação
 
