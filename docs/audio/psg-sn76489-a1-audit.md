@@ -403,7 +403,7 @@ Os coeficientes FIR não são duplicados no DTO: são reconstruídos determinist
 ### 12.4 Codec binário e resultado
 
 O DTO agora possui `encode()` e `decode()` em formato canônico little-endian:
-- magic `SN76489\\0`, versão e comprimento explícitos;
+- magic `SN76489\0`, versão e comprimento explícitos;
 - checksum CRC-32 sobre o corpo;
 - tags estritas para o perfil;
 - vetores de FIR/PCM com comprimentos limitados antes da alocação;
