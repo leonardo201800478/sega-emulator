@@ -237,6 +237,49 @@ def spectral_delta(
     return changes
 
 
+TRACE_EVENTS = (
+    ("tone0-volume", 2_000_000),
+    ("noise-divider", 4_000_000),
+    ("noise-volume", 6_000_000),
+    ("tone0-period", 8_000_000),
+    ("tone1-volume", 10_000_000),
+    ("noise-reset", 12_000_000),
+    ("noise-volume-final", 14_000_000),
+)
+
+
+def transient_summary(
+    samples: list[float], sample_rate: int, event_clock: int
+) -> dict[str, float | int]:
+    """Measure short pre-event, early-post-event, and settled windows."""
+    center = int(event_clock * sample_rate / 3_579_545)
+    pre_length = round(sample_rate * 0.002)
+    early_length = round(sample_rate * 0.002)
+    settle_start = round(sample_rate * 0.005)
+    settle_end = round(sample_rate * 0.010)
+    pre = samples[max(0, center - pre_length) : center]
+    early = samples[center : center + early_length]
+    settled = samples[
+        center + settle_start : min(len(samples), center + settle_end)
+    ]
+    if not pre or not early or not settled or center == 0:
+        raise ValueError(f"event at clock {event_clock} lacks complete analysis windows")
+
+    def rms(window: list[float]) -> float:
+        return math.sqrt(math.fsum(value * value for value in window) / len(window))
+
+    return {
+        "event_clock": event_clock,
+        "sample_index": center,
+        "pre_rms": rms(pre),
+        "early_rms": rms(early),
+        "settled_rms": rms(settled),
+        "early_peak": max(abs(value) for value in early),
+        "settled_peak": max(abs(value) for value in settled),
+        "edge_delta": abs(samples[center] - samples[center - 1]),
+    }
+
+
 def compare(
     reference: list[float], candidate: list[float]
 ) -> dict[str, Any]:
@@ -348,6 +391,14 @@ def main() -> None:
         baseline_spectrum = spectral_summary(baseline, sample_rate)
         current_spectrum = spectral_summary(current, sample_rate)
 
+        transient_events = [
+            {
+                "name": event_name,
+                "baseline": transient_summary(baseline, sample_rate, event_clock),
+                "current": transient_summary(current, sample_rate, event_clock),
+            }
+            for event_name, event_clock in TRACE_EVENTS
+        ]
         report["profiles"][profile] = {
             "baseline": summarize(baseline, sample_rate),
             "current": summarize(current, sample_rate),
@@ -359,6 +410,7 @@ def main() -> None:
             "spectral_band_delta_db": spectral_delta(
                 baseline_spectrum, current_spectrum
             ),
+            "transient_events": transient_events,
         }
 
     for period_text, baseline_path, current_path in args.tone:
@@ -499,8 +551,25 @@ def main() -> None:
                     f"current={data['current_spectrum']['spectral_centroid_hz']:.3f}"
                 ),
                 "",
+                "### Register-write transient windows",
+                "",
+                "| Event | Baseline early peak | Current early peak | Baseline settled RMS | Current settled RMS | Edge delta baseline/current |",
+                "|---|---:|---:|---:|---:|---:|",
             ]
         )
+        for event in data["transient_events"]:
+            baseline_event = event["baseline"]
+            current_event = event["current"]
+            lines.append(
+                f"| {event['name']} | "
+                f"{baseline_event['early_peak']:.9f} | "
+                f"{current_event['early_peak']:.9f} | "
+                f"{baseline_event['settled_rms']:.9f} | "
+                f"{current_event['settled_rms']:.9f} | "
+                f"{baseline_event['edge_delta']:.9f} / "
+                f"{current_event['edge_delta']:.9f} |"
+            )
+        lines.append("")
     if report["isolated_tone_response"]:
         lines.extend(
             [
