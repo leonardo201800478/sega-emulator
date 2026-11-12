@@ -1,7 +1,7 @@
 //! CPAL-backed physical PCM output for the Sega audio runtime.
 //!
 //! The emulated PSG and DSP remain upstream of this crate. The CPAL callback
-//! only consumes completed stereo PCM16 frames from a bounded SPSC queue,
+//! only consumes completed normalized-f64 stereo frames from a bounded SPSC queue,
 //! converts them to the negotiated device sample format, and fills missing
 //! frames with digital silence. It never advances emulated time or calls the
 //! MachineScheduler.
@@ -44,6 +44,8 @@ pub struct NativeCpalOutput {
     producer: PcmFrameProducer,
     sample_rate_hz: u32,
     channels: u16,
+    sample_format: cpal::SampleFormat,
+    used_default_fallback: bool,
     started: bool,
     closed: bool,
     flush_requested: Arc<AtomicBool>,
@@ -112,13 +114,29 @@ impl NativeCpalOutput {
             return Err("CPAL queue block count must be positive".to_owned());
         }
 
-        let supported = device
-            .default_output_config()
-            .map_err(|error| format!("CPAL default output configuration failed: {error}"))?;
+        let preferred = device
+            .supported_output_configs()
+            .ok()
+            .and_then(|ranges| select_preferred_output_config(&ranges.collect::<Vec<_>>()));
+        let (supported, used_default_fallback) = match preferred {
+            Some(config) => (config, false),
+            None => (
+                device.default_output_config().map_err(|error| {
+                    format!("CPAL default output configuration failed: {error}")
+                })?,
+                true,
+            ),
+        };
         let sample_rate_hz = supported.sample_rate();
         let channels = supported.channels();
+        let sample_format = supported.sample_format();
         if channels == 0 {
             return Err("CPAL output device reported zero channels".to_owned());
+        }
+        if sample_format.is_dsd() {
+            return Err(format!(
+                "CPAL endpoint selected a DSD format unsupported by PCM output: {sample_format:?}"
+            ));
         }
 
         let config: cpal::StreamConfig = supported.into();
@@ -138,7 +156,7 @@ impl NativeCpalOutput {
         let stream = build_stream_for_format(
             &device,
             config,
-            supported.sample_format(),
+            sample_format,
             channels,
             consumer,
             Arc::clone(&flush_requested),
@@ -151,6 +169,8 @@ impl NativeCpalOutput {
             producer,
             sample_rate_hz,
             channels,
+            sample_format,
+            used_default_fallback,
             started: false,
             closed: false,
             flush_requested,
@@ -168,6 +188,16 @@ impl NativeCpalOutput {
     /// Return the channel count selected by the output device.
     pub const fn channels(&self) -> u16 {
         self.channels
+    }
+
+    /// Return the actual sample format selected by the output device.
+    pub const fn sample_format(&self) -> cpal::SampleFormat {
+        self.sample_format
+    }
+
+    /// Whether CPAL's default configuration was used because no preferred PCM tuple was advertised.
+    pub const fn used_default_config_fallback(&self) -> bool {
+        self.used_default_fallback
     }
 
     /// Wrap this sink in the shared Rust DSP/resampler session.
@@ -194,21 +224,17 @@ impl NativeCpalOutput {
 }
 
 impl PcmSink for NativeCpalOutput {
-    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+    fn write_samples(&mut self, samples: Vec<f64>) -> Result<(), String> {
         if self.closed {
             return Err("CPAL output is closed".to_owned());
         }
         self.check_callback_error()?;
-        if !pcm.len().is_multiple_of(2) {
-            return Err("PCM16 block contains an incomplete sample".to_owned());
-        }
 
         self.frame_scratch.clear();
-        self.frame_scratch.reserve(pcm.len() / 2);
-        for sample in pcm.as_chunks::<2>().0 {
-            let mono = i16::from_le_bytes(*sample);
+        self.frame_scratch.reserve(samples.len());
+        for sample in samples {
             self.frame_scratch
-                .push(mono_sample_to_stereo_frame(mono, 0));
+                .push(mono_sample_to_stereo_frame(sample, 0));
         }
 
         let report = self
@@ -289,6 +315,38 @@ impl PcmSink for NativeCpalOutput {
     }
 }
 
+fn select_preferred_output_config(
+    ranges: &[cpal::SupportedStreamConfigRange],
+) -> Option<cpal::SupportedStreamConfig> {
+    // Prefer stereo, then mono; format priority is F32 > I24 > I16. Within each
+    // format, prefer 48 kHz, then 88.2/96 kHz, then 44.1 kHz. I16 is the
+    // mandatory PCM16 fallback when no higher-precision format is advertised.
+    const CHANNELS: [u16; 2] = [2, 1];
+    const FORMATS: [cpal::SampleFormat; 3] = [
+        cpal::SampleFormat::F32,
+        cpal::SampleFormat::I24,
+        cpal::SampleFormat::I16,
+    ];
+    const RATES: [u32; 4] = [48_000, 88_200, 96_000, 44_100];
+
+    for channels in CHANNELS {
+        for format in FORMATS {
+            for rate in RATES {
+                for range in ranges {
+                    if range.channels() != channels || range.sample_format() != format {
+                        continue;
+                    }
+                    if let Some(config) = (*range).try_with_sample_rate(rate) {
+                        return Some(config);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 fn build_stream<T>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
@@ -298,10 +356,10 @@ fn build_stream<T>(
     callback_error: Arc<Mutex<Option<String>>>,
 ) -> Result<cpal::Stream, cpal::Error>
 where
-    T: SizedSample + Sample + FromSample<i16>,
+    T: SizedSample + Sample + FromSample<f64>,
 {
     let channel_count = usize::from(channels);
-    let mut scratch = vec![[0_i16; 2]; CALLBACK_SCRATCH_FRAMES];
+    let mut scratch = vec![[0.0_f64; 2]; CALLBACK_SCRATCH_FRAMES];
 
     device.build_output_stream(
         config,
@@ -324,7 +382,7 @@ where
                     .zip(output_chunk.chunks_exact_mut(channel_count))
                 {
                     if channel_count == 1 {
-                        let mono = ((i32::from(frame[0]) + i32::from(frame[1])) / 2) as i16;
+                        let mono = (frame[0] + frame[1]) * 0.5;
                         destination[0] = T::from_sample(mono);
                     } else {
                         destination[0] = T::from_sample(frame[0]);
@@ -415,9 +473,76 @@ mod tests {
     }
 
     #[test]
-    fn mono_pcm16_conversion_preserves_signed_extremes() {
-        for sample in [i16::MIN, -1, 0, 1, i16::MAX] {
+    fn mono_float_conversion_preserves_normalized_precision() {
+        for sample in [-1.0, -0.123_456_789, 0.0, 0.123_456_789, 1.0] {
             assert_eq!(mono_sample_to_stereo_frame(sample, 0), [sample, sample]);
         }
+    }
+
+    fn range(
+        channels: u16,
+        min_rate: u32,
+        max_rate: u32,
+        format: cpal::SampleFormat,
+    ) -> cpal::SupportedStreamConfigRange {
+        cpal::SupportedStreamConfigRange::new(
+            channels,
+            min_rate,
+            max_rate,
+            cpal::SupportedBufferSize::Unknown,
+            format,
+        )
+    }
+
+    #[test]
+    fn config_negotiation_prefers_f32_then_i24_then_i16() {
+        let ranges = [
+            range(2, 48_000, 96_000, cpal::SampleFormat::I16),
+            range(2, 48_000, 96_000, cpal::SampleFormat::I24),
+            range(2, 48_000, 96_000, cpal::SampleFormat::F32),
+        ];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.channels(), 2);
+        assert_eq!(selected.sample_format(), cpal::SampleFormat::F32);
+        assert_eq!(selected.sample_rate(), 48_000);
+    }
+
+    #[test]
+    fn config_negotiation_supports_88200_and_96000_when_48000_is_unavailable() {
+        let ranges = [range(2, 88_200, 96_000, cpal::SampleFormat::F32)];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_rate(), 88_200);
+    }
+
+    #[test]
+    fn config_negotiation_selects_i24_when_f32_is_unavailable() {
+        let ranges = [
+            range(2, 48_000, 48_000, cpal::SampleFormat::I24),
+            range(2, 48_000, 96_000, cpal::SampleFormat::I16),
+        ];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_format(), cpal::SampleFormat::I24);
+        assert_eq!(selected.sample_rate(), 48_000);
+    }
+
+    #[test]
+    fn config_negotiation_supports_96000_when_88200_is_unavailable() {
+        let ranges = [range(2, 96_000, 96_000, cpal::SampleFormat::F32)];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_rate(), 96_000);
+    }
+
+    #[test]
+    fn config_negotiation_keeps_pcm16_as_fallback() {
+        let ranges = [range(2, 48_000, 48_000, cpal::SampleFormat::I16)];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_format(), cpal::SampleFormat::I16);
+        assert_eq!(selected.sample_rate(), 48_000);
+    }
+
+    #[test]
+    fn config_negotiation_returns_none_when_only_other_formats_are_advertised() {
+        let ranges = [range(2, 48_000, 96_000, cpal::SampleFormat::I32)];
+        assert!(select_preferred_output_config(&ranges).is_none());
     }
 }

@@ -135,12 +135,12 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingSink {
-        blocks: Arc<Mutex<Vec<Vec<u8>>>>,
+        blocks: Arc<Mutex<Vec<Vec<f64>>>>,
     }
 
     impl PcmSink for RecordingSink {
-        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
-            self.blocks.lock().unwrap().push(pcm);
+        fn write_samples(&mut self, samples: Vec<f64>) -> Result<(), String> {
+            self.blocks.lock().unwrap().push(samples);
             Ok(())
         }
         fn suspend_and_flush(&mut self) -> Result<(), String> {

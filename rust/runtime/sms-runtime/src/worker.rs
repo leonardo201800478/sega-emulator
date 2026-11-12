@@ -2292,14 +2292,14 @@ mod tests {
     }
 
     #[derive(Clone, Default)]
-    struct RecordingSink(Arc<Mutex<Vec<Vec<u8>>>>);
+    struct RecordingSink(Arc<Mutex<Vec<Vec<f64>>>>);
 
     impl PcmSink for RecordingSink {
-        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        fn write_samples(&mut self, samples: Vec<f64>) -> Result<(), String> {
             self.0
                 .lock()
                 .map_err(|_| "recording sink lock poisoned".to_owned())?
-                .push(pcm);
+                .push(samples);
             Ok(())
         }
 
@@ -2322,7 +2322,7 @@ mod tests {
     struct ControlSink(Arc<Mutex<Vec<&'static str>>>);
 
     impl PcmSink for ControlSink {
-        fn write_pcm(&mut self, _pcm: Vec<u8>) -> Result<(), String> {
+        fn write_samples(&mut self, _samples: Vec<f64>) -> Result<(), String> {
             Ok(())
         }
 
@@ -2804,7 +2804,7 @@ mod tests {
             blocks_before_close
                 .iter()
                 .flatten()
-                .any(|sample| *sample != 0),
+                .any(|sample| *sample != 0.0),
             "worker must submit non-silent PCM, not only initialize the sink"
         );
         drop(blocks_before_close);
