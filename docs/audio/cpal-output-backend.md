@@ -70,7 +70,7 @@ D3D12 é tecnologia de vídeo e não integra o subsistema de áudio. Suas refer�
 2. Testar em endpoint físico que anuncia F32, I24 e I16; confirmar que a seleção respeita as capacidades reais e reporta o formato.
 3. Reprodução SMS em 48/88,2/96 kHz quando disponíveis e fallback para PCM16/44,1 kHz quando necessário.
 4. Pause, stop, reset, troca de ROM e retomada sem vazamento de epoch.
-5. Desconexão/reconexão e recuperação explícita (ainda não implementadas automaticamente).
+5. Remoção/erro de stream: o worker já desanexa e fecha a sessão de áudio ao receber erro do sink, sem parar a emulação; o host pode reconfigurar pelo comando coarse-grained `ConfigureAudio`. Detecção automática de hotplug e reabertura automática ainda pendentes.
 6. Campanha prolongada, underruns, latência e loopback físico.
 7. Verificação de que áudio físico não altera Scheduler, determinismo ou equivalência contínua/em blocos.
 
