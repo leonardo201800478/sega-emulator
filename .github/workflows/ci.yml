@@ -356,6 +356,10 @@ jobs:
           cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000.wav
           cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms artifacts/current-sms-chunked.wav 997
           cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000-chunked.wav 997
+          for period in 5 6 7 9 14 28 56 112; do
+            cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sms "artifacts/baseline-tone-p\${period}.wav" 0 "$period"
+            cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms "artifacts/current-tone-p\${period}.wav" 0 "$period"
+          done
       - name: Compare PCM traces and produce report
         run: |
           python tools/audio/compare_psg_wav.py \
@@ -365,6 +369,14 @@ jobs:
             --baseline-sg1000 artifacts/baseline-sg1000.wav \
             --current-sg1000 artifacts/current-sg1000.wav \
             --chunked-sg1000 artifacts/current-sg1000-chunked.wav
+            --tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav
+            --tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav
+            --tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav
+            --tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav
+            --tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav
+            --tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav
+            --tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav
+            --tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav
           cat artifacts/psg-audio-report.md
       - name: Upload WAV traces and comparison report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
