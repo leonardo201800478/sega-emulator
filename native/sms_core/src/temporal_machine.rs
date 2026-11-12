@@ -3250,8 +3250,7 @@ mod temporal_frame_tests {
     fn pcm_source_rate_does_not_change_scheduler_or_cpu_progress() {
         let rom = vec![0; 0x4000];
         let mut at_44k =
-            SmsTemporalMachine::new_with_psg_config(rom.clone(), 1, 3_579_545, 44_100)
-                .unwrap();
+            SmsTemporalMachine::new_with_psg_config(rom.clone(), 1, 3_579_545, 44_100).unwrap();
         let mut at_48k =
             SmsTemporalMachine::new_with_psg_config(rom, 1, 3_579_545, 48_000).unwrap();
 
