@@ -249,7 +249,7 @@ impl fmt::Display for PsgStateError {
 
 impl std::error::Error for PsgStateError {}
 
-const SN76489_STATE_MAGIC: [u8; 8] = *b"SN76489\\0";
+const SN76489_STATE_MAGIC: [u8; 8] = *b"SN76489\0";
 const MAX_STATE_FILTER_TAPS: usize = 1_000_000;
 
 #[derive(Default)]
