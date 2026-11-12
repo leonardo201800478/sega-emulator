@@ -346,6 +346,14 @@ def main() -> None:
         default=[],
         help="Compare experimental Lagrange3 interpolation against baseline and linear output",
     )
+    parser.add_argument(
+        "--sinc8-tone",
+        action="append",
+        nargs=4,
+        metavar=("PERIOD", "BASELINE_WAV", "LINEAR_WAV", "SINC8_WAV"),
+        default=[],
+        help="Compare the experimental windowed-sinc fractional interpolator",
+    )
     parser.add_argument("--json", type=Path, default=Path("artifacts/psg-audio-report.json"))
     parser.add_argument(
         "--markdown",
@@ -385,6 +393,7 @@ def main() -> None:
         "isolated_tone_response": {},
         "lagrange4_tone_response": {},
         "lagrange3_tone_response": {},
+        "sinc8_tone_response": {},
     }
 
     for profile in ("sms", "sg1000"):
@@ -521,6 +530,40 @@ def main() -> None:
             "lagrange3_vs_linear_db": (
                 10.0 * math.log10(lagrange_power / linear_power)
                 if linear_power > 0.0 and lagrange_power > 0.0
+                else None
+            ),
+        }
+
+    for period_text, baseline_path, linear_path, sinc_path in args.sinc8_tone:
+        period = int(period_text)
+        if not 1 <= period <= 1023:
+            raise ValueError(f"tone period must be in 1..=1023, got {period}")
+        baseline_rate, baseline_samples = read_float_wav(Path(baseline_path))
+        linear_rate, linear_samples = read_float_wav(Path(linear_path))
+        sinc_rate, sinc_samples = read_float_wav(Path(sinc_path))
+        if {baseline_rate, linear_rate, sinc_rate} != {sample_rate}:
+            raise ValueError(f"period {period}: sinc8 sample-rate mismatch")
+        if len({len(baseline_samples), len(linear_samples), len(sinc_samples)}) != 1:
+            raise ValueError(f"period {period}: sinc8 sample counts differ")
+
+        baseline_tone = tone_response_summary(baseline_samples, sample_rate, period)
+        linear_tone = tone_response_summary(linear_samples, sample_rate, period)
+        sinc_tone = tone_response_summary(sinc_samples, sample_rate, period)
+        baseline_power = baseline_tone["fundamental_power"]
+        linear_power = linear_tone["fundamental_power"]
+        sinc_power = sinc_tone["fundamental_power"]
+        report["sinc8_tone_response"][str(period)] = {
+            "baseline": baseline_tone,
+            "linear": linear_tone,
+            "sinc8": sinc_tone,
+            "sinc8_vs_baseline_db": (
+                10.0 * math.log10(sinc_power / baseline_power)
+                if baseline_power > 0.0 and sinc_power > 0.0
+                else None
+            ),
+            "sinc8_vs_linear_db": (
+                10.0 * math.log10(sinc_power / linear_power)
+                if linear_power > 0.0 and sinc_power > 0.0
                 else None
             ),
         }
@@ -683,6 +726,29 @@ def main() -> None:
                 f"{data['linear']['thd_percent']:.4f}% | "
                 f"{data['lagrange3']['thd_percent']:.4f}% | "
                 f"{data['lagrange3_vs_linear_db']:.4f} dB |"
+            )
+        lines.append("")
+
+    if report["sinc8_tone_response"]:
+        lines.extend(
+            [
+                "## Experimental windowed-sinc fractional interpolation",
+                "",
+                "| Period | Baseline THD | Linear THD | Sinc8 THD | Sinc8 vs. baseline | Sinc8 vs. linear |",
+                "|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for period, data in sorted(
+            report["sinc8_tone_response"].items(),
+            key=lambda item: int(item[0]),
+        ):
+            lines.append(
+                f"| {period} | "
+                f"{data['baseline']['thd_percent']:.4f}% | "
+                f"{data['linear']['thd_percent']:.4f}% | "
+                f"{data['sinc8']['thd_percent']:.4f}% | "
+                f"{data['sinc8_vs_baseline_db']:.4f} dB | "
+                f"{data['sinc8_vs_linear_db']:.4f} dB |"
             )
         lines.append("")
 
