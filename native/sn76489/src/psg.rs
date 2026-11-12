@@ -884,11 +884,9 @@ mod tests {
         assert_eq!(device.noise_period, 0x123);
     }
 
-
     #[test]
     fn sms_tone_two_noise_rate_tracks_period_without_resetting_partial_divider() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
 
         // Tone 2 period = 3; Noise Rate = Tone 2.
         device.write_inner(0xC3);
