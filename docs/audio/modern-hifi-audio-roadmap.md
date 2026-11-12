@@ -2,7 +2,7 @@
 
 **Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 ainda não implementado em produção.
 **Integração H3:** PR #774 — merge commit `f5a0b691824322ce56c1a921329d3aa0957c4963`.
-**Baseline de main:** `f5a0b691824322ce56c1a921329d3aa0957c4963` (merge da PR #774, 2026-11-12).
+**Baseline de main:** `16c7f5bd5083792f96318e45760589c23f4deb18` (após PR #780; H3 #774 permanece integrado).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
 **Integração contínua:** mudanças validadas devem ser integradas em incrementos curtos na main; branches divergentes exigem portabilidade seletiva e CI no HEAD atual.
@@ -208,7 +208,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 ### H3 — Linha de áudio de referência em 48 kHz
 
-**Status: IMPLEMENTAÇÃO INICIAL NA BRANCH H3; aguardando CI e revisão dos resultados.**
+**Status: INTEGRADO NA MAIN pela PR #774; CI e validações de software concluídas. A validação física de endpoint permanece no gate H6.**
 
 1. [x] Definir 48 kHz como taxa interna de produção SMS/SG-1000, independente da taxa física do endpoint.
 2. [x] Generalizar `PcmResampler` para taxas explícitas de entrada e saída; remover a taxa de entrada global implícita de 44,1 kHz.
@@ -216,21 +216,23 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 4. [x] Bypassar o FIR quando entrada e saída têm a mesma taxa, evitando resampling redundante em 48 kHz.
 5. [x] Atualizar o default SMS/SG-1000 e versionar o snapshot do barramento SMS para rejeitar snapshots antigos com configuração temporal de áudio incompatível.
 6. [x] Adicionar teste headless de conversão 48 kHz → 44,1 kHz e preservar testes de invariância por blocos/flush.
-7. [ ] Executar CI completa, incluindo Windows x64 CPAL e SMS Runtime, e corrigir regressões.
-8. [ ] Confirmar métricas de contagem de frames e invariância no runtime real; provar que os clocks e o estado final do Scheduler permanecem idênticos.
+7. [x] Executar CI aplicável, incluindo Windows x64 CPAL e SMS Runtime; checks do HEAD da PR #774 passaram.
+8. [x] Confirmar invariância contínua/segmentada e preservar clocks/estado do Scheduler por testes direcionados; validação física de endpoint permanece no H6.
 
 **Gate H3:** CI aplicável verde; 48 kHz end-to-end na fonte interna; equivalência entre blocos; nenhuma alteração nos clocks do Scheduler.
 
-### H4 — Contrato PCM moderno e saída 24-bit
+### H4 — Contrato PCM moderno e negociação adaptativa CPAL
 
-1. Substituir o contrato implícito PCM16 de `PcmSink` por frames/amostras com formato explícito, sem alocações no callback físico.
-2. Manter PCM em precisão elevada até a saída; aplicar volume e saturação uma única vez na fronteira correta.
-3. Negociar formato com o dispositivo: I24 quando suportado; F32 como alternativa de alta precisão; fallback documentado quando necessário.
-4. Confirmar a semântica de 24 bits de CPAL: `I24/U24` usam armazenamento de 4 bytes, com 24 bits significativos.
-5. Não assumir que todo endpoint suporta I24 ou 48 kHz.
-6. Atualizar contadores/telemetria para refletir taxa, canais, formato e bits efetivamente negociados.
+1. Substituir o contrato implícito PCM16 de `PcmSink` por frames/amostras em precisão elevada até a fronteira física; PCM16 não pode quantizar antecipadamente a fonte.
+2. Negociar a configuração como tupla realmente anunciada pelo endpoint: canais, taxa e formato devem pertencer ao mesmo `SupportedStreamConfigRange`.
+3. Priorizar F32/I24 quando efetivamente anunciados; manter I16 como fallback implementado e testado. Nunca exigir I24 nem presumir que todos os dispositivos o suportam.
+4. Preferir 48 kHz para evitar resampling quando disponível; aceitar 88,2 e 96 kHz quando anunciados e suportados pelo endpoint.
+5. Converter a fonte interna de 48 kHz para a taxa selecionada sem modificar MachineScheduler, PSG clocks ou cadência de frames.
+6. Aplicar volume, clipping e conversão de representação uma única vez na fronteira CPAL; I24/U24 usam armazenamento de 4 bytes com 24 bits significativos.
+7. Expor em telemetria a taxa, canais e formato realmente negociados; distinguir I24 de F32 e I16.
+8. Preservar callback sem locks ou alocações e a FIFO SPSC.
 
-**Gate H4:** testes de conversão, saturação, silêncio, dual-mono, fallback e callback sem locks/alocação; CI Windows x64.
+**Gate H4:** testes puros de seleção de configurações, conversão/saturação, silêncio, dual-mono, fallback PCM16 e callback sem locks/alocação; CI Windows x64.
 
 ### H5 — Integração CPAL e experiência de saída
 
@@ -318,10 +320,11 @@ H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental
 
 ## 10. Reconciliação operacional — 2026-11-12
 
-- CPAL 0.18.2 foi integrado pela PR #770 (merge anterior à H3).
-- H3 foi concluído e integrado pela PR #774 em `f5a0b691824322ce56c1a921329d3aa0957c4963`. A fonte interna SMS/SG-1000 é 48 kHz e a taxa do endpoint é explícita; a taxa PCM não altera a progressão do Scheduler.
-- H2 permanece fechado como investigação, não como aprovação de renderer alternativo. A PR #772 adiciona modelagem/testes test-only, tem CI verde no HEAD `2ec2d54a80de0d142a8868552c7c82abb74a903f`, mas está divergente da main (70 commits atrás); portar seletivamente se houver ganho comprovado.
-- A1 está em andamento na PR #767. CI estava verde no HEAD consultado, mas há gaps de oráculo e validação física; não declarar fechamento.
-- H4 deve implementar negociação adaptativa de formatos e taxas CPAL sem exigir 24 bits: PCM16 permanece fallback obrigatório; I24/F32 e taxas maiores são usados apenas quando anunciados pelo dispositivo. Preservar precisão interna e conversão na fronteira do endpoint.
-- A estabilidade temporal #755 precisa ser caracterizada antes de correções de áudio que possam mascarar jitter do Scheduler/worker/present.
-- A arquitetura futura multissistema (SG-1000, SMS, Game Gear e Mega Drive) usará core digital comum com perfis de placa/clock/roteamento próprios. Não iniciar até A1/H4 e dependências atuais estarem em condição adequada.
+- CPAL 0.18.2 foi integrado pela PR #770; H3/PCM interno 48 kHz foi integrado pela PR #774. No HEAD da PR #774, SMS Runtime, workspace regression, CPAL Windows x64 e PSG core/console passaram.
+- A fonte interna SMS/SG-1000 permanece em 48 kHz; a taxa do endpoint é explícita e não altera MachineScheduler.
+- H2 permanece fechado como investigação experimental. A PR #772 foi auditada e fechada como supersedida, sem promover DSP. O artifact do run `43270057505` (artifact `13968900493`) registrou continuous vs segmented bit-exact (correlation 1.0; 214.552 amostras) e baseline/current correlation 0.999235, normalized RMS error 3.90%. No modelo event-based, SMS period 5 produziu fundamental 0.284657 contra 0.105104 no modelo linear e 0.108649 no sinc8; a diferença impede promoção sem validação independente/auditiva. O modelo em main permanece test-only.
+- A1 continua PARTIAL. A antiga PR #767 foi auditada; os três vetores independentes A1.2/A1.3 foram portados seletivamente na PR #784. A CI no novo HEAD ainda precisa terminar. O DTO de estado da branch antiga foi separado e não foi incorporado neste incremento.
+- H4 permanece não implementado. O contrato atual ainda entrega PCM16 ao CPAL; a negociação explícita de tuplas taxa/formato e a preservação de precisão até a fronteira final são a próxima implementação.
+- A issue #755 já dispõe de métricas de worker e host, incluindo timeout lateness, comando, mailbox, conversão e queue submission. Falta nova captura física após a instrumentação complementar #766, com PresentMon/QPC correlacionado; não presumir causa de áudio ou alterar Scheduler sem evidência.
+- R2: FrameMailbox portátil foi integrado pela PR #780. A PR #783 reúne correção de aspecto e sincronização do estado fullscreen; CI está em execução e o aceite visual Windows/Vulkan ainda requer 4:3, 1:1, 16:9, resize contínuo e alternância F11/botão.
+- A arquitetura futura multissistema (SG-1000, SMS, Game Gear e Mega Drive) mantém core digital compartilhado com perfis de placa/clock/roteamento próprios. Não antecipar R4/R5 enquanto P0 e aceite R2 estiverem abertos.
