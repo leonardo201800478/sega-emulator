@@ -833,7 +833,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} callback_avg_us={} callback_max_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} callback_avg_us={} callback_max_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
                 qpc_frequency,
@@ -874,6 +874,18 @@ mod windows_host {
                 runtime.frame_processing_p95_ns / 1_000,
                 runtime.pacing_wait_budget_p95_ns / 1_000,
                 runtime.pacing_wait_elapsed_p95_ns / 1_000,
+                runtime.frame_budget_p50_ns / 1_000,
+                runtime.frame_budget_p95_ns / 1_000,
+                runtime.frame_budget_p99_ns / 1_000,
+                runtime.audio_samples_p50,
+                runtime.audio_samples_p95,
+                runtime.audio_samples_p99,
+                runtime.pacing_timeout_lateness_p50_ns / 1_000,
+                runtime.pacing_timeout_lateness_p95_ns / 1_000,
+                runtime.pacing_timeout_lateness_p99_ns / 1_000,
+                runtime.pacing_command_wakeups_total,
+                runtime.pacing_command_remaining_p95_ns / 1_000,
+                runtime.command_handler_p95_ns / 1_000,
                 machine_clock_hz,
             );
 
