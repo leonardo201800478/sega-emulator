@@ -1954,4 +1954,77 @@ mod tests {
         assert_eq!(device.snapshot_state(), before);
     }
 
+
+    #[test]
+    fn versioned_state_codec_round_trip_is_canonical() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.write_inner(0x85);
+        device.write_inner(0x12);
+        device.write_inner(0x90);
+        device.write_inner(0xE4);
+        device.write_inner(0xF0);
+        device.advance_clocks(123_457);
+        device.render_pending.push_back(0.125);
+
+        let state = device.snapshot_state();
+        let encoded = state.encode().unwrap();
+        let decoded = super::Sn76489StateV1::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        assert_eq!(decoded.encode().unwrap(), encoded);
+
+        let restored = Sn76489::from_state(decoded).unwrap();
+        assert_eq!(restored.snapshot_state(), state);
+    }
+
+    #[test]
+    fn versioned_state_codec_rejects_corruption_truncation_and_trailing_data() {
+        let device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let encoded = device.snapshot_state().encode().unwrap();
+
+        let mut corrupted = encoded.clone();
+        let checksum_offset = corrupted.len() - 1;
+        corrupted[checksum_offset] ^= 0x80;
+        assert_eq!(
+            super::Sn76489StateV1::decode(&corrupted),
+            Err(super::PsgStateError::ChecksumMismatch)
+        );
+
+        assert_eq!(
+            super::Sn76489StateV1::decode(&encoded[..encoded.len() - 1]),
+            Err(super::PsgStateError::Truncated)
+        );
+
+        let mut trailing = encoded.clone();
+        trailing.push(0);
+        assert_eq!(
+            super::Sn76489StateV1::decode(&trailing),
+            Err(super::PsgStateError::TrailingData)
+        );
+
+        let mut invalid_magic = encoded;
+        invalid_magic[0] ^= 0xFF;
+        assert_eq!(
+            super::Sn76489StateV1::decode(&invalid_magic),
+            Err(super::PsgStateError::InvalidMagic)
+        );
+    }
+
+    #[test]
+    fn versioned_state_codec_rejects_unknown_schema_version() {
+        let device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut encoded = device.snapshot_state().encode().unwrap();
+        encoded[8] = super::SN76489_STATE_FORMAT_VERSION as u8 + 1;
+
+        assert_eq!(
+            super::Sn76489StateV1::decode(&encoded),
+            Err(super::PsgStateError::UnsupportedVersion {
+                expected: super::SN76489_STATE_FORMAT_VERSION,
+                actual: super::SN76489_STATE_FORMAT_VERSION + 1,
+            })
+        );
+    }
+
 }
