@@ -10,8 +10,8 @@ mod pcm_convert;
 mod pcm_fifo;
 
 pub use pcm_fifo::{
-    PcmFrameQueueError, PcmFrameQueueMetrics, PcmFrameReadReport, PcmFrameWriteReport,
-    StereoFrame, pcm_frame_queue,
+    PcmFrameQueueError, PcmFrameQueueMetrics, PcmFrameReadReport, PcmFrameWriteReport, StereoFrame,
+    pcm_frame_queue,
 };
 
 use std::str::FromStr;
@@ -164,10 +164,7 @@ impl NativeCpalOutput {
     }
 
     /// Wrap this sink in the shared Rust DSP/resampler session.
-    pub fn into_audio_session(
-        self,
-        volume: u8,
-    ) -> Result<NativeAudioSession<Self>, String> {
+    pub fn into_audio_session(self, volume: u8) -> Result<NativeAudioSession<Self>, String> {
         NativeAudioSession::new(self.sample_rate_hz, volume, self)
     }
 
@@ -198,7 +195,8 @@ impl PcmSink for NativeCpalOutput {
         self.frame_scratch.reserve(pcm.len() / 2);
         for sample in pcm.chunks_exact(2) {
             let mono = i16::from_le_bytes([sample[0], sample[1]]);
-            self.frame_scratch.push(mono_sample_to_stereo_frame(mono, 0));
+            self.frame_scratch
+                .push(mono_sample_to_stereo_frame(mono, 0));
         }
 
         let report = self
@@ -372,7 +370,9 @@ fn build_stream_for_format(
         cpal::SampleFormat::U64 => build!(u64),
         cpal::SampleFormat::F32 => build!(f32),
         cpal::SampleFormat::F64 => build!(f64),
-        unsupported => Err(format!("unsupported CPAL output sample format: {unsupported}")),
+        unsupported => Err(format!(
+            "unsupported CPAL output sample format: {unsupported}"
+        )),
     }
 }
 
