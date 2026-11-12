@@ -3,6 +3,10 @@
 The crate owns immutable frame contracts and the Windows-native presentation backend.
 The SMS core and machine scheduler do not depend on this crate's D3D12 module.
 
+## Host feature boundary
+
+`FrameMailbox`, `VideoFrame`, `PixelFormat`, and `FrameQueue` are available without enabling a native presentation API. The legacy Windows D3D12 host and its diagnostics are opt-in through the `d3d12-host` Cargo feature, disabled by default. The legacy `sega-app` explicitly enables this feature; the Slint `sega-desktop` consumes only the portable frame contract. The D3D12 smoke examples also require this feature.
+
 ## Windows x64 Direct3D 12 smoke test
 
 On a Windows x64 machine with a D3D12-capable adapter and current graphics drivers:
