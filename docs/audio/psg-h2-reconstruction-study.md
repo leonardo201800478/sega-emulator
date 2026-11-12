@@ -43,13 +43,15 @@ A compensação fracionária é um parâmetro experimental de alinhamento com o 
 
 ## 3. Gates matemáticos e temporais
 
-- Varredura de todos os períodos válidos 2–1023 e cálculo da frequência/alias de saída.
+- Varredura efetiva por eventos de todos os períodos válidos 2–1023, com WAV checkpoints e relatório JSON de RMS, pico, energia fundamental no alias e ganho do kernel.
 - Períodos 0 e 1 preservados como casos especiais de saída constante.
 - Ganho DC unitário e resposta finita.
 - Resposta de passo com overshoot, undershoot e settling medidos.
 - Resposta contínua avaliada no limite de banda passante e em Nyquist.
 - Eventos com timestamp inteiro em clocks PSG e posição subamostral racional.
-- Captura segmentada e contínua comparadas bit a bit.
+- Captura segmentada e contínua comparadas bit a bit com limites de bloco 1, 7, 997 e 16.384 clocks.
+- Eventos simultâneos são coalescidos por timestamp com soma canônica, independente da ordem de escritas no mesmo clock.
+- Fronteiras exatas de amostragem e eventos a ±1 clock são testados (715.909 PSG clocks = 9.600 amostras a 48 kHz).
 - Protótipo isolado do caminho de produção.
 
 ## 4. Transientes
@@ -92,3 +94,11 @@ O estudo atual implementa um modelo independente, com kernel integrado em ponto 
 O protótipo event-based é candidato técnico para uma etapa posterior de produção, não uma substituição aprovada. A síntese atual permanece intacta até que os artefatos CI sejam inspecionados, os resultados por perfil e período sejam aceitos, a resposta de ruído e transientes seja aprovada e exista avaliação auditiva A/B controlada.
 
 H2 fecha a investigação e a seleção experimental. A promoção do candidato à síntese de produção não é parte desta alteração.
+
+## 9. Custo computacional e adequação a streaming
+
+A CI registra, separadamente para SMS e SG-1000, o tempo de captura de eventos, reconstrução em lote e renderização pelo core atual. O relatório estima a memória mantida pelo vetor de eventos, kernel e buffers temporários completos.
+
+O protótipo atual é deliberadamente offline: armazena a lista completa de eventos e aloca buffers para toda a duração. Não é adequado para callback de áudio nem deve ser promovido diretamente para produção. A resposta simétrica de 65 taps requer lookahead causal aproximado de 32 frames (0,667 ms a 48 kHz). Uma implementação de produção precisaria de fila de eventos limitada e acumulador circular, mantendo o callback CPAL sem locks e sem alocações.
+
+Os tempos de CI são medições de referência, não gates rígidos de performance; variam com runner e carga. A comparação de fator realtime não substitui medição física nem prova de latência ponta a ponta.
