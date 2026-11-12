@@ -1195,7 +1195,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn sms_attenuation_levels_match_independent_reference_table() {
         // SMS Power specifies a 2 dB attenuation step. Voltage ratios are
         // therefore 10^(-0.1 * level), with level 15 forced to silence.
