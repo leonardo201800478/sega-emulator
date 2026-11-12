@@ -182,6 +182,95 @@ fn event_kernel_step_response_reports_ringing_overshoot_undershoot_and_settling(
     }
 }
 
+fn fir_magnitude(coefficients: &[f64], normalized_frequency: f64) -> f64 {
+    let mut real = 0.0;
+    let mut imaginary = 0.0;
+    for (index, coefficient) in coefficients.iter().enumerate() {
+        let phase = std::f64::consts::TAU * normalized_frequency * index as f64;
+        real += coefficient * phase.cos();
+        imaginary -= coefficient * phase.sin();
+    }
+    real.hypot(imaginary)
+}
+
+fn analytic_period_sweep() -> String {
+    let coefficients = super::design_lowpass(CLOCK, RATE);
+    let coefficient_sum = coefficients.iter().sum::<f64>();
+    assert!((coefficient_sum - 1.0).abs() < 1.0e-10);
+    let internal_rate = CLOCK as f64 / 16.0;
+    let output_nyquist = RATE as f64 / 2.0;
+    let internal_nyquist = internal_rate / 2.0;
+    let mut report = String::from(
+        "profile,period,frequency_hz,nyquist_relation,fir_gain_db,linear_hold_min_db,current_fundamental_lower_db,thd_passband_db,alias_energy_relative_db\n",
+    );
+
+    for profile in [PsgProfile::Sms, PsgProfile::Sg1000] {
+        for period in 0_u16..=0x03ff {
+            if period <= 1 {
+                report.push_str(&format!("{},{period},0,constant-high,0,0,0,0,0\n", name(profile)));
+                continue;
+            }
+            let frequency = CLOCK as f64 / (32.0 * f64::from(period));
+            let normalized = frequency / internal_rate;
+            let fir_gain = fir_magnitude(&coefficients, normalized);
+            let hold_min = (PI * normalized).cos().abs();
+            let fir_db = 20.0 * fir_gain.max(1.0e-30).log10();
+            let hold_db = 20.0 * hold_min.max(1.0e-30).log10();
+            let fundamental = (4.0 / PI) * 0.25 * fir_gain;
+            let mut passband_harmonic_energy = 0.0;
+            let mut alias_harmonic_energy = 0.0;
+
+            for harmonic in [3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0] {
+                let harmonic_frequency = frequency * harmonic;
+                if harmonic_frequency > internal_nyquist {
+                    continue;
+                }
+                let gain = fir_magnitude(&coefficients, harmonic_frequency / internal_rate);
+                let amplitude = (4.0 / (PI * harmonic)) * 0.25 * gain;
+                if harmonic_frequency < output_nyquist {
+                    passband_harmonic_energy += amplitude * amplitude;
+                } else {
+                    alias_harmonic_energy += amplitude * amplitude;
+                }
+            }
+
+            let thd = if fundamental > f64::EPSILON {
+                passband_harmonic_energy.sqrt() / fundamental
+            } else {
+                0.0
+            };
+            let alias = if fundamental > f64::EPSILON {
+                alias_harmonic_energy.sqrt() / fundamental
+            } else {
+                0.0
+            };
+            let relation = if frequency >= output_nyquist { "above" } else { "below" };
+            report.push_str(&format!(
+                "{},{period},{frequency:.9},{relation},{fir_db:.9},{hold_db:.9},{:.9},{:.9},{:.9}\n",
+                name(profile),
+                fir_db + hold_db,
+                20.0 * thd.max(1.0e-30).log10(),
+                20.0 * alias.max(1.0e-30).log10()
+            ));
+        }
+    }
+    report
+}
+
+#[test]
+fn complete_period_sweep_exports_fir_hold_harmonic_and_aliasing_model() {
+    let report = analytic_period_sweep();
+    let rows = report.lines().count() - 1;
+    assert_eq!(rows, 2 * 1024);
+    assert!(report.contains("sms,5,22372.156250000,below"));
+    assert!(report.contains("sg1000,4,27965.195312500,above"));
+    if let Some(directory) = std::env::var_os("PSG_H2_ARTIFACT_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("psg-h2-period-sweep.csv"), report).unwrap();
+    }
+}
+
 #[test]
 fn exhaustive_period_sweep_verifies_divider_and_period_zero_one_semantics() {
     for profile in [PsgProfile::Sms,PsgProfile::Sg1000] {
