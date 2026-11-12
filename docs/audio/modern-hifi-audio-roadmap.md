@@ -122,59 +122,71 @@ O WAV contém a fonte mono crua do PSG, sem dual-mono, volume de host, bass mana
 
 A validação `psg-focused` da CI executa automaticamente a captura histórica e atual, compara SMS/SG-1000 e a invariância contínua/segmentada, e publica o artefato `psg-audio-ab-reference` com WAVs e relatórios JSON/Markdown.
 
-**Capturas A/B preliminares:** os workflows [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528) e [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796) concluíram e geraram artefatos. A auditoria posterior detectou que o exportador só drenava o buffer ao final; como o buffer do PSG é limitado a aproximadamente um segundo, o trace complexo de 16 milhões de clocks foi truncado para a janela final. Os números e espectros abaixo são, portanto, **preliminares de regime permanente**, não uma captura integral das transições. O exportador foi corrigido para drenar durante o avanço e agora exige contagem integral de amostras; os resultados definitivos serão os do workflow atualizado.
+**Captura integral A/B:** workflow [#43260895841](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841) concluído com sucesso; artefato [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841/artifacts/13962279974). O exportador agora drena o buffer a cada avanço de até 16.384 clocks e exige a contagem integral esperada de amostras.
 
-| Perfil | Baseline RMS | Atual RMS | Variação RMS | NRMSE | Correlação | Erro absoluto máximo |
-|---|---:|---:|---:|---:|---:|---:|
-| SMS | 0.172599373757 | 0.172461161101 | -0.0801% | 5.3096% | 0.998589 | 0.097151 |
-| SG-1000 | 0.172297929419 | 0.172143498796 | -0.0896% | 5.2957% | 0.998597 | 0.095782 |
+| Perfil | Amostras | Duração | Baseline RMS | Atual RMS | Variação RMS | NRMSE | Correlação |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SMS | 214.552 | 4,4698 s | 0.199967213421 | 0.199879217416 | -0,0440% | 3,9032% | 0.999235 |
+| SG-1000 | 214.552 | 4,4698 s | 0.199547399558 | 0.199470901369 | -0,0383% | 3,8742% | 0.999247 |
 
-O pico caiu 0,0243% no SMS e 1,8384% no SG-1000. As capturas anteriores continham 48.000 amostras a 48 kHz porque o buffer limitou o resultado a uma janela de 1 segundo. A execução atual contínua e segmentada em blocos de 997 clocks foi **idêntica amostra a amostra** nos dois perfis: correlação 1.0, erro RMS zero e erro máximo zero.
+Pico: SMS 0.512066 → 0.510672 (-0,2723%); SG-1000 0.512677 → 0.508157 (-0,8818%). Erro absoluto máximo: 0.108459 (SMS) e 0.108442 (SG-1000). O PCM atual contínuo e segmentado em blocos de 997 clocks é **idêntico amostra a amostra** nos dois perfis: erro RMS e erro máximo zero.
 
-O NRMSE de aproximadamente 5,3% e o erro máximo próximo de 0,096 demonstram uma mudança de forma de onda mensurável entre baseline e atual, apesar da correlação alta. Isso **não determina qual versão soa melhor**: ainda é necessário localizar em quais bandas e transientes a diferença ocorre e fazer escuta controlada. O relatório JSON/Markdown e os seis WAVs estão no artefato acima.
+**Delta de energia espectral (atual em relação ao baseline, FFT radix-2 com janela Hann):**
 
-**Análise espectral inicial (FFT radix-2 com janela Hann):** nova captura [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796), artefato [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796/artifacts/13962591609).
-
-| Banda | Delta SMS | Delta SG-1000 |
+| Banda | SMS | SG-1000 |
 |---|---:|---:|
-| 20–200 Hz | -0,009 dB | -0,007 dB |
-| 200 Hz–1 kHz | +0,001 dB | -0,000 dB |
-| 1–4 kHz | -0,004 dB | -0,005 dB |
-| 4–8 kHz | -0,017 dB | -0,010 dB |
-| 8–12 kHz | -0,047 dB | -0,037 dB |
-| 12–16 kHz | -0,177 dB | -0,168 dB |
-| 16–20 kHz | -0,139 dB | -0,132 dB |
-| 20–24 kHz | -0,985 dB | -0,910 dB |
+| 20–200 Hz | -0,000 dB | -0,000 dB |
+| 200 Hz–1 kHz | -0,001 dB | +0,001 dB |
+| 1–4 kHz | -0,001 dB | -0,002 dB |
+| 4–8 kHz | -0,019 dB | -0,015 dB |
+| 8–12 kHz | -0,042 dB | -0,040 dB |
+| 12–16 kHz | -0,146 dB | -0,140 dB |
+| 16–20 kHz | -0,150 dB | -0,151 dB |
+| 20–24 kHz | -0,498 dB | -0,497 dB |
 
-Na janela final capturada, o centróide espectral diminuiu 13,328 Hz no SMS e 12,459 Hz no SG-1000. A diferença concentra-se nas bandas altas, sobretudo 20–24 kHz; as bandas até 8 kHz praticamente não mudam neste trace. Isso é compatível com maior suavização da reconstrução fracionária, mas não prova que ela cause a percepção subjetiva do usuário: é preciso separar transientes, tons e ruído e também auditar o caminho downstream (resampler/mixer/PCM16).
+O centróide diminuiu 5,874 Hz no SMS e 5,804 Hz no SG-1000. A mudança concentra-se nas bandas altas; abaixo de 4 kHz a diferença é praticamente nula. RMS global e níveis médios permanecem muito próximos. Isso aponta para alteração na reconstrução/forma de onda, não para perda geral de volume.
 
-**Varredura de tons isolados:** na captura [#43259328531](https://github.com/leonardo201800478/sega-emulator/actions/runs/43259328531), o mesmo tom quadrado SMS foi renderizado em baseline e atual para oito períodos, com os outros três canais silenciados.
+**Varredura de tons isolados:** oito períodos, canal 0 ativo e demais canais silenciados. A energia fundamental atual em relação ao baseline foi:
+- período 5 (22,372 kHz): -0,1434 dB;
+- período 6 (18,643 kHz): -0,0994 dB;
+- período 7 (15,980 kHz): -0,0730 dB;
+- período 9 (12,429 kHz): -0,0442 dB;
+- período 14 (7,990 kHz): -0,0182 dB;
+- período 28 (3,995 kHz): -0,0046 dB;
+- período 56 (1,998 kHz): -0,0011 dB;
+- período 112 (999 Hz): -0,0003 dB.
 
-| Período | Fundamental | Delta de energia fundamental | Delta RMS |
+A atenuação adicional cresce com a frequência e é pequena até 8 kHz. Isso confirma a diferença de resposta do interpolador linear, mas ainda não estabelece inferioridade perceptiva.
+
+**Experimento Lagrange4 (somente testes, não produção):** o protótipo causal de quatro pontos recupera energia em relação à interpolação linear, sobretudo nas frequências altas:
+
+| Período | RMS linear | RMS Lagrange4 | Energia fundamental Lagrange4 vs. linear |
 |---:|---:|---:|---:|
-| 5 | 22.372 kHz | -0,1436 dB | -3,24% |
-| 6 | 18.643 kHz | -0,0997 dB | -2,26% |
-| 7 | 15.980 kHz | -0,0730 dB | -1,66% |
-| 9 | 12.429 kHz | -0,0439 dB | -1,01% |
-| 14 | 7.990 kHz | -0,0183 dB | -0,42% |
-| 28 | 3.995 kHz | -0,0046 dB | -0,27% |
-| 56 | 1.998 kHz | -0,0011 dB | -0,12% |
-| 112 | 999 Hz | -0,0003 dB | -0,06% |
+| 5 | 0.074326145 | 0.077072407 | +0,3162 dB |
+| 6 | 0.222515651 | 0.228053146 | +0,2140 dB |
+| 7 | 0.223195658 | 0.227192489 | +0,1545 dB |
+| 9 | 0.223936962 | 0.226306045 | +0,0915 dB |
+| 14 | 0.224603249 | 0.225562303 | +0,0370 dB |
+| 28 | 0.241155099 | 0.241843331 | +0,0091 dB |
+| 56 | 0.245019625 | 0.245317669 | +0,0023 dB |
+| 112 | 0.247590748 | 0.247742408 | +0,0006 dB |
 
-A diferença de amplitude cresce de forma consistente com a frequência. Isso sustenta a hipótese de que a interpolação linear atual introduz uma pequena atenuação adicional no topo da banda. Ainda não prova regressão perceptiva: a amostragem anterior tinha erro temporal de até um tick interno, e a comparação não mede aliasing/jitter nem qualidade de transientes. O próximo experimento será comparar interpolação linear com uma interpolação causal de ordem superior (4 pontos Lagrange), sem trocar o algoritmo de produção antes de medir resposta, overshoot, transientes e determinismo.
+O protótipo foi finito, permaneceu abaixo do limite de pico do teste e foi invariável ao particionamento em blocos de 997 clocks no período 5. Ele ultrapassa ligeiramente o nível fundamental do baseline nas frequências altas; portanto, **não deve ser promovido à produção ainda**. Falta avaliar THD/harmônicos, ringing, transientes de escrita e comportamento de ruído.
 
-Artefato com os WAVs da varredura e relatório: [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43259328531/artifacts/13963581557).
+**Correção metodológica:** os relatórios antigos [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528) e [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796) capturavam apenas a janela final de um segundo e ficam substituídos pela captura integral acima.
 
-**Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
+**Gate H1:** <badge color="success">CONCLUÍDO</badge> Trace determinístico, exportação PCM integral, comparação histórica SMS/SG-1000, métricas de forma de onda/espectro e invariância contínua/segmentada foram executados. A CI da revisão [#43260895841](https://github.com/leonardo201800478/sega-emulator/actions/runs/43260895841) passou em PSG, Clippy, formatação, regressão Rust, documentação e validação de workflows.
 
 ### H2 — Fechamento da síntese e reconstrução
 
-1. Auditar divisor, fase de amostragem, FIR, resposta de frequência e atraso de grupo.
-2. Validar a interpolação fracionária com o core real, não apenas com um sinal sintético auxiliar.
-3. Medir transientes de escrita de tom/volume/ruído e os limites de período 0/1.
-4. Comparar, com os mesmos traces, o FIR atual com um protótipo independente de síntese por eventos/Blip Buffer.
-5. Usar Gearsystem e ARES como referências comparativas, não como oráculos absolutos.
-6. Revisar licenças antes de qualquer reutilização de código; preferir implementação independente da arquitetura estudada.
+**Status: EM EXECUÇÃO — comparação Lagrange4 exploratória concluída; avaliação de distorção/transientes pendente.**
+
+1. [x] Auditar divisor, fase de amostragem, FIR e diferenças de resposta.
+2. [x] Validar a interpolação fracionária com o core real e comparar baseline, linear e protótipo Lagrange4.
+3. [ ] Medir THD/harmônicos, ringing, transientes de escrita de tom/volume/ruído e limites de período 0/1.
+4. [ ] Comparar, com os mesmos traces, o FIR atual com um protótipo independente de síntese por eventos/Blip Buffer.
+5. [ ] Usar Gearsystem e ARES como referências comparativas, não como oráculos absolutos.
+6. [ ] Revisar licenças antes de qualquer reutilização de código; preferir implementação independente da arquitetura estudada.
 
 **Gate H2:** resultado objetivo melhor ou equivalente ao baseline, sem mudança não fundamentada da semântica do PSG.
 
