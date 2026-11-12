@@ -445,13 +445,11 @@ fn write_runtime_metrics(
         + kernel.impulse_response.capacity()
         + kernel.discrete_coefficients.capacity())
         * std::mem::size_of::<f64>();
-    let renderer_scratch_bytes =
-        (sample_count * 3 + 1) * std::mem::size_of::<f64>();
+    let renderer_scratch_bytes = (sample_count * 3 + 1) * std::mem::size_of::<f64>();
     let peak_working_set_estimate_bytes =
         event_storage_bytes + kernel_storage_bytes + renderer_scratch_bytes;
     let audio_duration_seconds = sample_count as f64 / SAMPLE_RATE as f64;
-    let event_pipeline_seconds =
-        capture_elapsed.as_secs_f64() + event_render_elapsed.as_secs_f64();
+    let event_pipeline_seconds = capture_elapsed.as_secs_f64() + event_render_elapsed.as_secs_f64();
     let report = format!(
         concat!(
             "{{\n",
@@ -571,11 +569,20 @@ fn event_kernel_sweeps_all_tone_periods_and_preserves_period_zero_one() {
         };
         assert!(response.is_finite() && (0.0..=1.10).contains(&response));
         if period <= 4 {
-            assert!(response < 2.0e-4, "period={period}, stopband gain={response}");
+            assert!(
+                response < 2.0e-4,
+                "period={period}, stopband gain={response}"
+            );
         } else if period == 5 {
-            assert!((0.25..0.40).contains(&response), "transition gain={response}");
+            assert!(
+                (0.25..0.40).contains(&response),
+                "transition gain={response}"
+            );
         } else {
-            assert!(response > 0.999, "period={period}, passband gain={response}");
+            assert!(
+                response > 0.999,
+                "period={period}, passband gain={response}"
+            );
         }
     }
     for period in [0_u16, 1] {
@@ -710,7 +717,6 @@ fn event_reconstruction_handles_sample_boundaries_simultaneous_deltas_and_end_ed
     assert!(first.iter().map(|sample| sample.abs()).fold(0.0, f64::max) < 1.0);
 }
 
-
 #[test]
 fn event_based_full_tone_period_sweep_exports_2_through_1023() {
     const SWEEP_CLOCKS: u64 = 357_955;
@@ -735,9 +741,8 @@ fn event_based_full_tone_period_sweep_exports_2_through_1023() {
             kernel.discrete_frequency_response(alias_frequency / SAMPLE_RATE as f64)
         };
         let steady = &samples[256..];
-        let rms = (steady.iter().map(|sample| sample * sample).sum::<f64>()
-            / steady.len() as f64)
-            .sqrt();
+        let rms =
+            (steady.iter().map(|sample| sample * sample).sum::<f64>() / steady.len() as f64).sqrt();
         let peak = steady.iter().map(|sample| sample.abs()).fold(0.0, f64::max);
         let fundamental_power = goertzel_power(steady, alias_frequency);
 
