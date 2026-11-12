@@ -680,6 +680,12 @@ mod windows_host {
         queue_write_count: u64,
         queue_write_sum_ns: u128,
         queue_write_max_ns: u64,
+        callback_count: u64,
+        callback_sum_ns: u128,
+        callback_max_ns: u64,
+        mailbox_take_count: u64,
+        mailbox_take_sum_ns: u128,
+        mailbox_take_max_ns: u64,
     }
 
     impl HostFramePacingWindow {
@@ -707,6 +713,12 @@ mod windows_host {
                 queue_write_count: 0,
                 queue_write_sum_ns: 0,
                 queue_write_max_ns: 0,
+                callback_count: 0,
+                callback_sum_ns: 0,
+                callback_max_ns: 0,
+                mailbox_take_count: 0,
+                mailbox_take_sum_ns: 0,
+                mailbox_take_max_ns: 0,
             }
         }
 
@@ -773,6 +785,20 @@ mod windows_host {
             self.queue_write_max_ns = self.queue_write_max_ns.max(nanos);
         }
 
+        fn record_callback(&mut self, elapsed: Duration) {
+            self.callback_count = self.callback_count.saturating_add(1);
+            let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+            self.callback_sum_ns = self.callback_sum_ns.saturating_add(u128::from(nanos));
+            self.callback_max_ns = self.callback_max_ns.max(nanos);
+        }
+
+        fn record_mailbox_take(&mut self, elapsed: Duration) {
+            self.mailbox_take_count = self.mailbox_take_count.saturating_add(1);
+            let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+            self.mailbox_take_sum_ns = self.mailbox_take_sum_ns.saturating_add(u128::from(nanos));
+            self.mailbox_take_max_ns = self.mailbox_take_max_ns.max(nanos);
+        }
+
         fn report_if_due(&mut self, worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>) {
             let elapsed = self.started.elapsed();
             if elapsed < Duration::from_secs(1) {
@@ -807,7 +833,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} callback_avg_us={} callback_max_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
                 qpc_frequency,
@@ -829,6 +855,10 @@ mod windows_host {
                 self.conversion_max_ns / 1_000,
                 average_us(self.queue_write_sum_ns, self.queue_write_count),
                 self.queue_write_max_ns / 1_000,
+                average_us(self.callback_sum_ns, self.callback_count),
+                self.callback_max_ns / 1_000,
+                average_us(self.mailbox_take_sum_ns, self.mailbox_take_count),
+                self.mailbox_take_max_ns / 1_000,
                 replaced_frames,
                 runtime.sample_count,
                 runtime.total_samples,
@@ -867,6 +897,12 @@ mod windows_host {
             self.queue_write_count = 0;
             self.queue_write_sum_ns = 0;
             self.queue_write_max_ns = 0;
+            self.callback_count = 0;
+            self.callback_sum_ns = 0;
+            self.callback_max_ns = 0;
+            self.mailbox_take_count = 0;
+            self.mailbox_take_sum_ns = 0;
+            self.mailbox_take_max_ns = 0;
         }
     }
 
@@ -884,28 +920,37 @@ mod windows_host {
         let mut host_pacing = HostFramePacingWindow::new();
 
         timer.start(TimerMode::Repeated, PRESENT_INTERVAL, move || {
-            host_pacing.record_poll(Instant::now());
+            let callback_started = Instant::now();
+            host_pacing.record_poll(callback_started);
             let Some(app) = app_weak.upgrade() else {
+                host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
+                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
                 return;
             };
             let Some(texture) = app.get_gpu_texture().to_wgpu_30_texture() else {
+                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
                 return;
             };
 
-            let (frame, published_at) = match mailbox.take_latest_with_timestamp() {
+            let mailbox_take_started = Instant::now();
+            let take_result = mailbox.take_latest_with_timestamp();
+            host_pacing.record_mailbox_take(mailbox_take_started.elapsed());
+            let (frame, published_at) = match take_result {
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
                     host_pacing.record_empty_poll();
+                    host_pacing.record_callback(callback_started.elapsed());
                     host_pacing.report_if_due(&worker_slot);
                     return;
                 }
                 Err(error) => {
                     app.set_frame_status(format!("Erro no mailbox: {error}").into());
+                    host_pacing.record_callback(callback_started.elapsed());
                     host_pacing.report_if_due(&worker_slot);
                     return;
                 }
@@ -922,6 +967,7 @@ mod windows_host {
                     )
                     .into(),
                 );
+                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
                 return;
             }
@@ -966,6 +1012,7 @@ mod windows_host {
                     app.set_frame_status(format!("Falha ao converter frame: {error}").into());
                 }
             }
+            host_pacing.record_callback(callback_started.elapsed());
             host_pacing.report_if_due(&worker_slot);
         });
         timer
