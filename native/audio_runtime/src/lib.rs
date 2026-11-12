@@ -287,7 +287,7 @@ mod tests {
             .map(|index| 0.6 * (index as f64 * 0.017).sin())
             .collect();
 
-        for rate in [22_050, 44_100, 48_000, 96_000] {
+        for rate in [22_050, 44_100, 48_000, 88_200, 96_000] {
             let mut whole = PcmResampler::new(48_000, rate, 100).unwrap();
             let expected = [whole.process(&input), whole.flush()].concat();
 
@@ -310,7 +310,7 @@ mod tests {
     fn resampler_preserves_output_length_and_does_not_start_one_half_filter_early() {
         let input = vec![1.0; 2048];
 
-        for rate in [22_050, 44_100, 48_000] {
+        for rate in [22_050, 44_100, 48_000, 88_200, 96_000] {
             let mut resampler = PcmResampler::new(48_000, rate, 100).unwrap();
             let mut pcm = resampler.process(&input);
             pcm.extend(resampler.flush());
