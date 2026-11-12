@@ -43,3 +43,30 @@ Data: 2026-11-12
 - Não promover o protótipo event-based para produção sem aprovação dos gates.
 - Não iniciar H3–H6 antes do fechamento demonstrável de H2.
 - Compilar ou passar um teste sintético isolado não é critério suficiente para merge.
+
+
+## Atualização final H2 — 2026-11-12
+
+A auditoria foi retomada na PR #773, baseada na main `b375d4bb85149678b82ab39a497177d1a1cd2319`. O HEAD final validado é `4dc0a906da1f5795c3078e59fb627ed2fda71f00`.
+
+- PR #773: CI `43289661184` concluída com sucesso; SMS Debugger Runtime `43289661057` concluído com sucesso.
+- Windows x64: CPAL crate, shell legado, testes Release e build Release concluídos com sucesso.
+- PSG/core: testes, Clippy, rustfmt, sweep de tons, testes LFSR e integração/regressão SMS/SG-1000 concluídos com sucesso.
+- Artefato `psg-audio-ab-reference`, ID `13977310503`, SHA-256 `ffaa58a1ffa3bf467a585cafdc3eb636f30c61b7712a7b08778ff9d5b0fafd4a`, inspecionado. Contém WAVs e relatórios JSON/Markdown.
+
+### Resultados finais H2
+
+| Perfil | Baseline × atual | Baseline × evento |
+|---|---:|---:|
+| SMS NRMSE | 3,903223% | 3,066105% |
+| SG-1000 NRMSE | 3,874234% | 3,042106% |
+
+Ruído atual × evento: SMS periódico 4,595224%, SMS branco 9,273552%, SG-1000 periódico 4,754251%, SG-1000 branco 9,065867%. O ruído branco permanece uma diferença material e bloqueia promoção para produção.
+
+Kernel: 65 taps; Kaiser beta 7,85726; atraso de grupo 31,25 amostras; lookahead 32 frames; overshoot/undershoot aproximadamente ±8,9056%; settling a 0,1% em 51,785 amostras. Renderização offline estimada em 6,61 MB por perfil; não está pronta para streaming.
+
+### Decisão
+
+H2 está concluído como investigação e caracterização experimental reproduzível. O código permanece em módulo de teste. **Não promover a reconstrução event-based à síntese de produção.** O resultado não equivale a fidelidade de circuito nem a aprovação auditiva. A adoção exigiria tratar as diferenças de ruído, ringing e transientes, implementar renderer streaming de memória limitada e executar avaliação física/auditiva A/B.
+
+A main e o caminho de produção não foram alterados por esta etapa. H3 pode prosseguir como trabalho independente de padronização da linha PCM em 48 kHz, sem depender da promoção do candidato H2.
