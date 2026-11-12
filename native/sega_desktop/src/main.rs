@@ -1285,8 +1285,25 @@ mod windows_host {
         Ok(rom)
     }
 
+    /// Returns whether physical audio must be bypassed for a video-only diagnostic capture.
+    fn video_only_capture_requested(value: Option<&str>) -> bool {
+        value.is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+    }
+
+    fn video_only_capture_enabled() -> bool {
+        video_only_capture_requested(
+            std::env::var("SEGA_EMULATOR_VIDEO_ONLY").ok().as_deref(),
+        )
+    }
+
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
     fn configure_sms_audio(worker: &SmsTemporalWorker) {
+        if video_only_capture_enabled() {
+            eprintln!(
+                "R3_AUDIO skipped: SEGA_EMULATOR_VIDEO_ONLY enabled; digital PSG generation remains active"
+            );
+            return;
+        }
         const BUFFER_FRAMES: u32 = 512;
         const QUEUE_BLOCKS: usize = 8;
         let result = worker.configure_audio_output(
@@ -1817,6 +1834,17 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn video_only_capture_flag_accepts_only_explicit_true_values() {
+            assert!(video_only_capture_requested(Some("1")));
+            assert!(video_only_capture_requested(Some("true")));
+            assert!(video_only_capture_requested(Some("TRUE")));
+            assert!(!video_only_capture_requested(None));
+            assert!(!video_only_capture_requested(Some("0")));
+            assert!(!video_only_capture_requested(Some("false")));
+            assert!(!video_only_capture_requested(Some("")));
+        }
 
         #[test]
         fn host_duration_window_reports_nearest_rank_percentiles() {
