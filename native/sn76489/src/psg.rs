@@ -1344,10 +1344,8 @@ mod tests {
 
     #[test]
     fn sample_queue_overflow_drops_oldest_pcm_without_changing_psg_or_fir_state() {
-        let mut bounded =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
-        let mut reference =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut bounded = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut reference = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
 
         for device in [&mut bounded, &mut reference] {
             device.write_inner(0x85);
