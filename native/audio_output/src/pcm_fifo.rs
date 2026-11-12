@@ -282,11 +282,11 @@ mod tests {
     fn preserves_frame_order_across_different_write_and_read_sizes() {
         let (mut producer, mut consumer) = pcm_frame_queue(8).unwrap();
         let input: [StereoFrame; 5] = [
-            [1.0, -1.0],
-            [2.0, -2.0],
-            [3.0, -3.0],
-            [4.0, -4.0],
-            [5.0, -5.0],
+            [0.1, -0.1],
+            [0.2, -0.2],
+            [0.3, -0.3],
+            [0.4, -0.4],
+            [0.5, -0.5],
         ];
 
         assert_eq!(
@@ -331,11 +331,11 @@ mod tests {
     fn overflow_drops_newest_frames_and_counts_exact_loss() {
         let (mut producer, mut consumer) = pcm_frame_queue(3).unwrap();
         let input: [StereoFrame; 5] = [
-            [1.0, 1.0],
-            [2.0, 2.0],
-            [3.0, 3.0],
-            [4.0, 4.0],
-            [5.0, 5.0],
+            [0.1, 0.1],
+            [0.2, 0.2],
+            [0.3, 0.3],
+            [0.4, 0.4],
+            [0.5, 0.5],
         ];
 
         assert_eq!(
@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn underflow_silences_only_missing_frames_and_counts_exact_loss() {
         let (mut producer, mut consumer) = pcm_frame_queue(4).unwrap();
-        let input: [StereoFrame; 2] = [[100.0, -100.0], [200.0, -200.0]];
+        let input: [StereoFrame; 2] = [[0.5, -0.5], [0.75, -0.75]];
         producer.push_frames(&input).unwrap();
 
         let mut output = [[9.0, 9.0]; 4];
@@ -378,8 +378,8 @@ mod tests {
         assert_eq!(
             output,
             [
-                [100.0, -100.0],
-                [200.0, -200.0],
+                [0.5, -0.5],
+                [0.75, -0.75],
                 [0.0, 0.0],
                 [0.0, 0.0]
             ]
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn reports_disconnected_producer_after_draining_queued_frames() {
         let (mut producer, mut consumer) = pcm_frame_queue(2).unwrap();
-        producer.push_frames(&[[7.0, -7.0]]).unwrap();
+        producer.push_frames(&[[0.7, -0.7]]).unwrap();
         drop(producer);
 
         let mut output = [[0.0, 0.0]; 2];
@@ -419,14 +419,14 @@ mod tests {
                 producer_closed: true,
             }
         );
-        assert_eq!(output, [[7.0, -7.0], [0.0, 0.0]]);
+        assert_eq!(output, [[0.7, -0.7], [0.0, 0.0]]);
     }
 
     #[test]
     fn consumer_can_discard_old_epoch_and_read_new_frames_in_order() {
         let (mut producer, mut consumer) = pcm_frame_queue(4).unwrap();
         producer
-            .push_frames(&[[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]])
+            .push_frames(&[[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]])
             .unwrap();
 
         assert_eq!(consumer.discard_queued_frames(), 3);
@@ -434,12 +434,12 @@ mod tests {
         assert_eq!(consumer.metrics().consumed_frames, 0);
         assert_eq!(consumer.metrics().flushed_frames, 3);
 
-        producer.push_frames(&[[9.0, -9.0]]).unwrap();
+        producer.push_frames(&[[0.9, -0.9]]).unwrap();
         let mut output = [[0.0, 0.0]; 1];
         let report = consumer.read_frames(&mut output);
         assert_eq!(report.queued_frames, 1);
         assert_eq!(report.silence_frames, 0);
-        assert_eq!(output, [[9.0, -9.0]]);
+        assert_eq!(output, [[0.9, -0.9]]);
     }
 
     #[test]
@@ -447,7 +447,7 @@ mod tests {
         let (mut producer, consumer) = pcm_frame_queue(2).unwrap();
         drop(consumer);
         assert_eq!(
-            producer.push_frames(&[[1.0, 1.0]]),
+            producer.push_frames(&[[0.1, 0.1]]),
             Err(PcmFrameQueueError::ConsumerDisconnected)
         );
     }
