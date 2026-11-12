@@ -613,10 +613,14 @@ impl Sn76489StateV1 {
         }
         let coefficient_sum: f64 = self.filter_coefficients.iter().sum();
         if (coefficient_sum - 1.0).abs() > 1.0e-9
-            || self.filter_coefficients.iter().enumerate().any(|(index, coefficient)| {
-                let mirrored = self.filter_coefficients.len() - 1 - index;
-                (coefficient - self.filter_coefficients[mirrored]).abs() > 1.0e-12
-            })
+            || self
+                .filter_coefficients
+                .iter()
+                .enumerate()
+                .any(|(index, coefficient)| {
+                    let mirrored = self.filter_coefficients.len() - 1 - index;
+                    (coefficient - self.filter_coefficients[mirrored]).abs() > 1.0e-12
+                })
         {
             return Err(PsgStateError::InvalidState(
                 "FIR coefficients are not normalized and symmetric",
