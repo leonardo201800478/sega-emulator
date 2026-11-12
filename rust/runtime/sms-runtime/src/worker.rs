@@ -2394,7 +2394,10 @@ mod tests {
         worker.reset().unwrap();
 
         let reset = worker.debug_snapshot().unwrap();
-        assert_eq!(reset.sprite_limit_mode, SpriteLimitMode::UnlockedCompatibility);
+        assert_eq!(
+            reset.sprite_limit_mode,
+            SpriteLimitMode::UnlockedCompatibility
+        );
         assert_eq!(reset.frame_number, 0);
         assert_eq!(reset.machine_time_ticks, 0);
     }
