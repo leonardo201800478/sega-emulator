@@ -1,3 +1,5 @@
+> **Registro histórico:** esta auditoria documenta os adaptadores WASAPI/XAudio2 do baseline anterior. Eles foram substituídos na candidata CPAL 0.18.2 da [PR #770](https://github.com/leonardo201800478/sega-emulator/pull/770). Preserve este conteúdo como histórico técnico; não use os backends antigos como especificação operacional. Consulte [saída física CPAL](cpal-output-backend.md).
+
 # OUT-D — ownership e conclusão de buffers XAudio2
 
 **Status:** contrato de lifetime e migração PCM FIFO integrados na `main`.
