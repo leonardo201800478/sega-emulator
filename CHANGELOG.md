@@ -63,3 +63,11 @@ Limites: o pump ainda ocorre na fronteira de run_frame(); a execução do schedu
 - Validação automatizada adicionada para cabeçalho, temporização, intervalos longos, escrita de arquivo e ações do menu Qt.
 
 **Limitações:** ainda requer execução dos testes no CI e validação manual no Windows. A gravação VGM registra writes de PSG, não PCM renderizado nem temporização sub-T-state que o modelo atual não exponha.
+
+
+## 2026-11-12 — Replataforma desktop (R2)
+
+- Atualiza a documentação normativa para Slint 1.18, WGPU 30/Vulkan, CPAL 0.18.2 e SDL3 após auditoria.
+- Registra R1 e R2 como integradas e R3/R4/R5 como pendentes.
+- Marca decisões anteriores de apresentação/áudio como históricas/superseded sem apagar evidências.
+- Define critérios de corte dos hosts anteriores; implementações ainda consumidas não são removidas antes de CPAL (R3) e consolidação (R5).

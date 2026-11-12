@@ -14,12 +14,12 @@ O produto é nativo Rust. A interface desktop é egui/eframe. Python, PySide6/Qt
 | Hardware Rust | CPU Z80 compartilhada, ALU, barramento, memória, mapper, VDP, PSG e interrupções |
 | Tempo Rust | MachineScheduler e primitives temporais; autoridade única de clocks/eventos |
 | Runtime SMS | `rust/runtime/sms-runtime`; worker dono da máquina e comandos coarse-grained |
-| Hosts Rust | D3D12, WASAPI/XAudio2 e input; consomem dados do runtime sem controlar tempo emulado |
+| Hosts desktop | Slint 1.18 + WGPU 30/Vulkan; CPAL 0.18.2 (R3); SDL3 após auditoria |
 | Aplicação egui | Menus, apresentação, estado de sessão e comandos; sem lógica de hardware |
 
 ## Estado integrado
 
-O worker SMS temporal está disponível como implementação Rust pura e desacoplada da sessão física de áudio por factory executada na thread proprietária. O shell egui/eframe está integrado na main. A ligação operacional completa do shell ao worker SMS, viewport D3D12, áudio e input está em PRs abertas #613/#614 e não deve ser descrita como integrada até merge.
+O worker SMS temporal é preservado. O desktop Slint/WGPU recebe frames reais do runtime pelo contrato de frame e não controla o tempo emulado. A saída física CPAL e o input SDL3 permanecem etapas posteriores (R3/R4). O estado de migração e os componentes transitórios estão documentados no plano de corte dos hosts anteriores.
 
 ## Regras
 
@@ -33,4 +33,4 @@ O worker SMS temporal está disponível como implementação Rust pura e desacop
 
 ## Validação
 
-A compilação de uma crate não comprova fidelidade funcional. São obrigatórios os gates Rust, os testes semânticos/determinísticos e a validação física de D3D12, áudio e input quando aplicáveis. A campanha longa do Scheduler tem [evidência própria](evidence/scheduler-stress-long-2026-11-07.md), mas não prova integração temporal SMS. ZEXDOC/ZEXALL permanecem NOT RUN até o fechamento E7 e a conclusão de harness Rust.
+A compilação de uma crate não comprova fidelidade funcional. São obrigatórios os gates Rust, os testes semânticos/determinísticos e a validação física Vulkan, CPAL e SDL3 quando aplicáveis. A campanha longa do Scheduler tem [evidência própria](evidence/scheduler-stress-long-2026-11-07.md), mas não prova integração temporal SMS. ZEXDOC/ZEXALL permanecem NOT RUN até o fechamento E7 e a conclusão de harness Rust.

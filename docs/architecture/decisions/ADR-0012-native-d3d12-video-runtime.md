@@ -1,6 +1,6 @@
 # ADR-0012 — Runtime de vídeo nativo em Rust com Direct3D 12
 
-- **Status:** ACEITA
+- **Status:** SUPERSEDED — substituída para a arquitetura desktop-alvo pela ADR 0011 em 2026-11-11. Mantida exclusivamente como registro histórico da decisão anterior.
 - **Data:** 2026-11-02
 - **Escopo:** Windows x64; caminho de vídeo do Sega Emulator, começando pela integração SMS1
 - **Decisões relacionadas:** ADR-0016 (fidelidade observável e precisão temporal proporcional); proposta `native-video-runtime.md`

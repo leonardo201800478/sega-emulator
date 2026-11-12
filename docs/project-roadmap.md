@@ -1,6 +1,6 @@
 # Roadmap mestre — Sega Emulator
 
-**Baseline auditada:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784 (2026-11-10).
+**Revisão documental:** 2026-11-12. A fotografia operacional deve ser vinculada ao HEAD consultado no GitHub.
 **Decisões:** ADR 0010 (runtime/hardware), ADR 0011 (desktop/hosts) e ADR-0016 (fidelidade temporal).
 
 Duas trilhas coordenadas: evolução dos sistemas Sega (P0–P9) e replataforma desktop/host (R1–R5). A segunda não autoriza reescrever hardware nem antecipar sistemas.
@@ -11,7 +11,7 @@ Duas trilhas coordenadas: evolução dos sistemas Sega (P0–P9) e replataforma 
 - CPU, VDP, PSG, memória, barramentos, mappers, interrupções e estados pertencem ao runtime.
 - Slint é GUI; WGPU é API gráfica; Vulkan é backend inicial preferencial; CPAL é saída física.
 - SDL3 será avaliado para input/gamepads após auditoria.
-- egui/eframe e D3D12/WASAPI/XAudio2 permanecem baseline até paridade e corte controlado.
+- Não ampliar nem reintroduzir o host desktop anterior. A retirada física dos módulos transitórios ocorre somente após R3/R5 e inventário de consumidores.
 - GUI não executa hardware, avança clocks ou usa callbacks por instrução.
 - Preservar SmsTemporalWorker, Scheduler, SMS e SG-1000. Não duplicar componentes.
 - Sem JIT, frame skipping, hacks temporais ou otimizações especulativas.
@@ -59,15 +59,15 @@ Consolidar native/sega_desktop, native/video_output_wgpu e native/audio_output; 
 
 ## 4. Estado operacional
 
-A fotografia operacional vinculada ao SHA atual está em [project-status-2026-11-11.md](project-status-2026-11-11.md).
+A fotografia de migração está em [legacy-host-retirement.md](architecture/migrations/legacy-host-retirement.md); status de PRs e workflows deve ser reconsultado no GitHub antes de cada merge.
 
 - Main auditada: `82ccad8eb9cd11d78dfddd168f307f90012426b5`.
 - PR #745 — ADR 0011 e reconciliação documental: MERGED.
-- PR #750 — higienização de CI: Draft, gates em validação; não integrada.
-- PR #747 — POC R1 Slint/WGPU/Vulkan: Draft; gate Clippy pendente de correção; Vulkan físico NOT RUN.
-- PR #746 e #744: Draft e base desatualizada; revalidar antes de merge.
-- PR #749: documentação auxiliar empilhada sobre #747; não é integração independente.
-- CPAL e SDL3 na nova arquitetura: NOT RUN.
+- R1 — POC Slint/WGPU/Vulkan: PR #747 MERGED.
+- R2 — frames reais SMS no desktop Slint/WGPU: PR #752 MERGED; preferências persistentes #754 MERGED.
+- R3 — CPAL 0.18.2: PENDING.
+- R4 — SDL3: PENDING.
+- R5 — consolidação e retirada integral dos hosts anteriores: PENDING.
 
 PR aberta, branch ou CI parcial não representa integração funcional. Reauditar GitHub e SHA antes de cada tarefa.
 

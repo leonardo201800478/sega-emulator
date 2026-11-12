@@ -41,4 +41,4 @@ E7 deve estar demonstravelmente fechado antes de E8/ZEXDOC/ZEXALL.
 
 evidence/ contém resultados reproduzíveis; audits/ investigações; hardware/ referências; milestones/ marcos históricos; releases/ notas; sprints/ objetivos e critérios temporários.
 
-Documentos sobre Qt, egui/eframe, D3D12 ou WASAPI/XAudio2 podem permanecer como registros históricos da baseline. Não os tratar como arquitetura-alvo quando conflitarem com ADR 0011. Não apagar evidências históricas sem verificar referências e valor de auditoria.
+Documentos de implementações anteriores permanecem como evidência histórica auditável. Não os tratar como arquitetura-alvo quando conflitarem com ADR 0011. A retirada do código transitório exige R3/R5, inventário de consumidores e CI verde; não apagar evidências históricas nem reescrever resultados passados.

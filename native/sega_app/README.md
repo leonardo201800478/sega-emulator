@@ -1,3 +1,5 @@
+> **LEGACY / NÃO É O DESKTOP-ALVO:** este aplicativo documenta o shell anterior e seus adaptadores de apresentação/áudio. A arquitetura ativa é `native/sega_desktop` (Slint 1.18 + WGPU 30/Vulkan). Não adicionar funcionalidades aqui; a remoção física aguarda os gates R3/R5 descritos em `docs/architecture/migrations/legacy-host-retirement.md`.
+
 # Native egui application — SMS runtime integration
 
 `sega-app` is the native Rust/egui frontend for the temporal Sega Master System runtime.
