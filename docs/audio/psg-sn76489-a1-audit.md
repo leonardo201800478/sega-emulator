@@ -212,3 +212,157 @@ A documentação SMS Power é a referência primária comunitária utilizada par
 | Fechamento PSG A1 | IN PROGRESS |
 
 Nenhum resultado de CI anterior é transferido para commits novos. A implementação permanece inalterada nesta etapa documental.
+
+
+## 9. A1.1 — atualização da auditoria e confronto de referências (2026-11-12)
+
+**Baseline de código do port:** `main` em `16c7f5bd5083792f96318e45760589c23f4deb18` (após PR #780).
+**Core auditado:** `native/sn76489/src/psg.rs`, blob `a4e633027e5c49925a911141836af3545c60162a`.
+**Branch de origem:** `feat/psg-a1-closure-20261112`; **port seletivo:** `test/psg-a1-independent-noise-vectors-20261112`.
+**Escopo desta atualização:** somente auditoria documental e comparação de fontes. Nenhum comportamento do runtime foi alterado.
+
+### 9.1 Evidência confirmada na documentação SMS Power
+
+A página técnica SMS Power distingue o PSG discreto SN76489AN dos PSGs Sega integrados ao VDP. Para o comportamento documentado da família:
+
+- O registrador de tom define o valor de recarga do contador; a onda quadrada tem período de duas vezes esse valor.
+- A página afirma explicitamente que valores de tom 0 e 1 produzem saída constante +1.
+- O contador do ruído usa divisores 0x10, 0x20, 0x40 ou Tone 2.
+- O LFSR avança quando sua entrada muda de 0 para 1, uma vez a cada duas expirações do contador relacionado.
+- Para SMS, o LFSR tem 16 bits; o ruído branco usa taps 0 e 3 (máscara 0x0009), com feedback no bit 15.
+
+Fonte: https://www.smspower.org/Development/SN76489 — seções “Tone channels”, “Noise channel” e “The Linear Feedback Shift Register”.
+
+### 9.2 Divergência que impede fechar os períodos 0/1
+
+A implementação atual do core executa:
+
+```rust
+if period <= 1 {
+    self.tone_outputs[channel] = 1;
+    self.tone_counters[channel] = period;
+}
+```
+
+Esse comportamento coincide com a descrição textual do SMS Power para valores 0 e 1.
+
+Entretanto, a implementação atual do MAME para `segapsg_device` documenta que PSGs Sega tratam frequência 0 como zero, e sua atualização de canal alterna a saída quando o contador chega a zero. Isso produz comportamento diferente da saída constante descrita pelo SMS Power. O código MAME identifica essa semântica como verificada em hardware, mas é uma implementação de referência, não uma medição reproduzida neste projeto.
+
+Fonte: https://github.com/mamedev/mame/blob/master/src/devices/sound/sn76496.cpp — comentários de variante Sega, construtor `segapsg_device`, atualização de registradores e rotina `sound_stream_update`.
+
+**Decisão A1.1:** não alterar a implementação nem transformar o comportamento atual em PASS. A semântica SMS de período 0/1 permanece **CONFLICT / ORACLE REQUIRED** até que a diferença de variante/revisão ou a evidência de hardware seja reconciliada. O perfil SG-1000 não deve herdar automaticamente a regra Sega.
+
+### 9.3 Noise Rate = Tone 2 — o que foi e não foi provado
+
+O core atual mantém `noise_counter` e `noise_counter_phase` próprios. Quando Noise Rate = Tone 2, `refresh_noise_period()` copia `tone_periods[2].max(1)`; a rotina de tick alterna a fase do contador de ruído e desloca o LFSR em uma das duas expirações. Assim, a taxa média de deslocamento corresponde a duas vezes o período de Tone 2.
+
+A implementação MAME também representa esse modo como período de ruído igual a duas vezes o período de Tone 2. Isso dá suporte à relação de frequência média, mas não demonstra que a fase inicial e as transições após escritas/reset sejam idênticas às do VDP Sega. A descrição SMS Power explica a divisão por duas expirações, mas não especifica todos os alinhamentos de fase após cada sequência de escrita.
+
+**Decisão A1.1:** preservar o contador independente por enquanto. A1.3 deve produzir traces comparativos de expiração, transição do flip-flop Tone 2 e shift do LFSR para reset, escrita de Noise, escrita de Tone 2 e avanço interrompido em boundaries. Não conectar diretamente o LFSR ao flip-flop Tone 2 sem evidência adicional.
+
+### 9.4 Saída do LFSR — convenção temporal a fixar
+
+A descrição SMS Power diz que o bit deslocado para fora do registrador é encaminhado ao mixer, enquanto o pseudocódigo apresentado na mesma página atualiza o registrador e depois lê o novo bit 0. O core atual captura o bit 0 anterior ao shift em `noise_output`. Implementações MAME também atualizam a saída após deslocar o registrador.
+
+Essa diferença pode decorrer da convenção de direção/representação do registrador, mas não deve ser resolvida por equivalência presumida. A1.2 deve congelar uma sequência de estados **e** bits de saída por transição, com a convenção de indexação explicitada, e confrontá-la com uma referência independente do perfil Sega de 16 bits.
+
+**Decisão A1.1:** a sequência de estados SMS existente continua coberta por teste interno; a sequência temporal de saída do bit permanece **ORACLE REQUIRED**.
+
+### 9.5 Resultado desta etapa
+
+| Item | Resultado A1.1 |
+|---|---|
+| Baseline e blob do core identificados | PASS |
+| Separação de variante discreta e Sega integrada | PASS |
+| Protocolo, divisores e taps documentados | PASS — documentação de referência |
+| Períodos 0/1 | CONFLICT / ORACLE REQUIRED |
+| Fase Noise Rate = Tone 2 | PARTIAL / TRACE REQUIRED |
+| Convenção temporal do bit de saída LFSR | CONFLICT / ORACLE REQUIRED |
+| Novos testes de código | IMPLEMENTED — port seletivo A1.2/A1.3; CI do HEAD atual pendente |
+| Cargo fmt / Clippy / testes | PENDING — executar na branch de port e no HEAD exato |
+| Validação física Master System | BLOCKED / NOT RUN |
+
+A1.1 está concluída como **atualização do inventário de evidências**, não como fechamento do PSG. Os vetores independentes A1.2 e o teste de continuidade A1.3 foram portados seletivamente para a branch atual; a aprovação depende da CI no novo HEAD. Nenhuma correção do core deve preceder a definição explícita do oráculo correspondente.
+
+
+## 10. A1.2 — vetores diferenciais SMS de ruído (2026-11-12)
+
+**Baseline de teste:** branch `feat/psg-a1-closure-20261112`.
+**Referência externa:** Gearsystem, commit `1be9a12b82cae84ddd6f9b7006d546abe2d58bd4`, arquivo `src/audio/Sms_Apu.cpp`, rotinas `Sms_Noise::reset`, `Sms_Noise::run` e `Sms_Apu::write_data`.
+**Escopo:** testes do traço digital SMS; nenhuma alteração no core de produção.
+
+### 10.1 Modelo de referência usado
+
+O código independente do Gearsystem representa o perfil SMS com:
+- seed `0x8000`;
+- registrador de deslocamento de 16 bits;
+- feedback branco derivado dos taps 0 e 3, inserido no bit 15;
+- saída do mixer baseada no bit 0 do estado anterior ao shift;
+- feedback periódico igual ao bit 0 deslocado para o bit 15, sem XOR.
+
+A referência é uma implementação independente de emulação, não uma medição elétrica do VDP. Ela é usada para comparação diferencial do traço, não para declarar equivalência física absoluta.
+
+Fonte fixada: https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Apu.cpp
+
+### 10.2 Testes adicionados
+
+Em `native/sn76489/src/psg.rs`:
+- `sms_white_noise_trace_matches_independent_gear_system_reference`: 32 tuplas estado anterior / bit de saída / próximo estado.
+- `sms_periodic_noise_trace_matches_independent_gear_system_reference`: ciclo periódico completo de 16 deslocamentos, incluindo retorno ao seed.
+
+Os testes exercitam explicitamente o perfil `PsgProfile::Sms`; não usam o construtor padrão SG-1000. A comparação inclui o bit de saída no mesmo boundary do deslocamento, evitando validar apenas o período ou o estado final.
+
+### 10.3 Resultado A1.2 parcial
+
+| Item | Estado |
+|---|---|
+| Vetor SMS white noise (16-bit, taps 0/3) | IMPLEMENTED — aguardando CI do HEAD |
+| Vetor SMS periodic noise | IMPLEMENTED — aguardando CI do HEAD |
+| Convenção temporal pre-shift do bit de saída | REFERÊNCIA DIFERENCIAL ADICIONADA |
+| Noise Rate = Tone 2 / fase relativa | NOT CLOSED — A1.3 |
+| Períodos de tom 0/1 | CONFLICT / ORACLE REQUIRED |
+| Reset completo e estado versionado | A1.4 |
+| Teste físico em Master System | BLOCKED / NOT RUN |
+
+A1.2 permanece parcial: os vetores de ruído foram adicionados, mas só serão promovidos a PASS após CI verde no mesmo SHA. A sequência de LFSR não fecha por si só a temporização do divisor, o alinhamento do Noise Rate = Tone 2 nem o modelo analógico de saída.
+
+
+## 11. A1.3 — caracterização parcial do divisor Noise Rate = Tone 2 (2026-11-12)
+
+**Referência independente:** Gearsystem, commit `1be9a12b82cae84ddd6f9b7006d546abe2d58bd4`, `src/audio/Sms_Apu.cpp`.
+**Escopo:** caracterizar relação de período e continuidade do intervalo pendente; não declarar alinhamento absoluto de fase.
+
+### 11.1 Evidência comparativa
+
+No Gearsystem, o registrador de ruído seleciona diretamente um ponteiro para `squares[2].period`. A rotina `Sms_Noise::run` calcula o intervalo de deslocamento como `2 * *period` e mantém `delay` entre chamadas. Uma escrita no registrador de tom 2 altera o período consultado nas próximas iterações; uma escrita no registrador de ruído reinicializa `shifter`, mas não zera `delay`.
+
+Isso sustenta dois requisitos verificáveis:
+1. taxa média de shift = uma transição por dois períodos de Tone 2;
+2. alteração do período de Tone 2 não deve descartar o tempo parcial já transcorrido no divisor de ruído.
+
+Fonte: https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Apu.cpp
+
+### 11.2 Teste de regressão adicionado
+
+`sms_tone_two_noise_rate_tracks_period_without_resetting_partial_divider`:
+- configura Tone 2 = 3 e Noise Rate = Tone 2;
+- avança um tick e altera Tone 2 para 2 com dois ticks restantes no contador;
+- verifica que o contador parcial permanece;
+- verifica o primeiro shift na expiração prevista;
+- verifica o próximo shift após dois períodos do novo valor.
+
+O teste não compara a fase inicial absoluta com hardware e não prova acoplamento elétrico ao flip-flop de Tone 2. É um teste de relação temporal média e continuidade do intervalo pendente, derivado do modelo independente.
+
+### 11.3 Limite de conclusão
+
+| Propriedade | Estado |
+|---|---|
+| Noise period acompanha o valor de Tone 2 | TEST ADDED |
+| Shift a cada duas expirações após alinhamento conhecido | TEST ADDED |
+| Escrita Tone 2 preserva contador parcial | TEST ADDED |
+| Fase inicial após power-on/reset | ORACLE REQUIRED |
+| Fase após escrita Noise Register | PARTIAL — precisa trace independente |
+| Fase após escrita Tone 2 em todos os boundaries | PARTIAL |
+| Relação elétrica com flip-flop Tone 2 do VDP | NOT PROVEN |
+
+A1.3 permanece **PARTIAL** até que a fase absoluta seja reconciliada com evidência independente ou captura de hardware. O contador de ruído independente permanece preservado; não deve ser substituído por conexão direta ao flip-flop de Tone 2 com base apenas na equivalência de frequência média.
