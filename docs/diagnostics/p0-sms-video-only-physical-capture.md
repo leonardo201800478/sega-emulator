@@ -2,7 +2,7 @@
 
 **Issue:** [#755](https://github.com/leonardo201800478/sega-emulator/issues/755)
 
-**Current implementation scope:** SMS frame production, mailbox consumption, RGB conversion, WGPU texture upload, and OS presentation telemetry. Physical sound output and gameplay controls are not implemented in the current desktop build and are deliberately excluded from this capture.
+**Current implementation scope:** SMS frame production, mailbox consumption, RGB conversion, WGPU texture upload, and OS presentation telemetry. CPAL physical audio is integrated and normally initialized automatically when an SMS worker is created. For this video-only capture, set `SEGA_EMULATOR_VIDEO_ONLY=1` before launching the desktop; this skips CPAL session creation while preserving digital PSG generation and its normal contribution to frame processing/pacing. Gameplay input and input-to-frame latency remain outside this capture.
 
 ## Preconditions
 
@@ -11,8 +11,13 @@
 - Use a continuously changing scene so repeated frames can be distinguished. Keep the ROM and scene identical across repetitions.
 - Do not add a frame limiter, change V-Sync/G-SYNC between repetitions, or alter MachineScheduler/region clocks.
 - The Slint 16 ms timer is mailbox polling only, not a display refresh target.
-- No physical audio endpoint, audio callback, controller input, keyboard gameplay input, or input-to-frame latency is part of this test.
+- `SEGA_EMULATOR_VIDEO_ONLY=1` must be set in the process environment before launch. Confirm the log contains `R3_AUDIO skipped: SEGA_EMULATOR_VIDEO_ONLY enabled`; if it reports `CPAL output opened`, invalidate the run.
+- No physical CPAL session, audio callback, controller input, keyboard gameplay input, or input-to-frame latency is part of this test.
 - Digital PSG generation remains part of the emulated machine and must not be disabled or bypassed. The absence of physical sound output does not remove PSG state or its existing role in runtime frame processing/pacing.
+
+## Video-only launch mode
+
+The desktop reads `SEGA_EMULATOR_VIDEO_ONLY` when creating each SMS worker. Accepted true values are `1` and `true` (case-insensitive). Unset, `0`, and other values retain normal CPAL initialization. Apply the variable to the same PowerShell process that launches `sega-desktop.exe`; do not set it after the worker has been created. The flag bypasses only the physical CPAL session: PSG emulation and sample generation remain active.
 
 ## Capture matrix
 
