@@ -132,7 +132,7 @@ impl NativeCpalOutput {
 
         let flush_requested = Arc::new(AtomicBool::new(false));
         let callback_error = Arc::new(Mutex::new(None));
-        let stream = build_stream(
+        let stream = build_stream_for_format(
             &device,
             config,
             supported.sample_format(),
@@ -343,7 +343,7 @@ fn build_stream_for_format(
     consumer: PcmFrameConsumer,
     flush_requested: Arc<AtomicBool>,
     callback_error: Arc<Mutex<Option<String>>>,
-) -> Result<cpal::Stream, cpal::Error> {
+) -> Result<cpal::Stream, String> {
     macro_rules! build {
         ($sample:ty) => {
             build_stream::<$sample>(
@@ -354,6 +354,7 @@ fn build_stream_for_format(
                 flush_requested,
                 callback_error,
             )
+            .map_err(|error| error.to_string())
         };
     }
 
@@ -370,10 +371,7 @@ fn build_stream_for_format(
         cpal::SampleFormat::U64 => build!(u64),
         cpal::SampleFormat::F32 => build!(f32),
         cpal::SampleFormat::F64 => build!(f64),
-        unsupported => Err(cpal::Error::new(
-            cpal::ErrorKind::UnsupportedOperation,
-            format!("unsupported CPAL output sample format: {unsupported}"),
-        )),
+        unsupported => Err(format!("unsupported CPAL output sample format: {unsupported}")),
     }
 }
 
