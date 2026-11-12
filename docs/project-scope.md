@@ -17,7 +17,7 @@ Construir um emulador Sega multissistema em Rust, modular, determinístico e tem
 | Renderização | WGPU 30.x; Vulkan preferencial no Windows x64 |
 | Saída física | CPAL 0.18.2 |
 | Input futuro | SDL3 após auditoria |
-| Baseline transitória | egui/eframe + D3D12 + WASAPI/XAudio2 até paridade e corte |
+| Estado de migração | Slint/WGPU R2 integrado; CPAL R3, SDL3 R4 e consolidação R5 pendentes |
 
 Estrutura de referência: native/sega_desktop, native/video_output_wgpu e native/audio_output. A estrutura real do repositório prevalece.
 
