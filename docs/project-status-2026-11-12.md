@@ -234,7 +234,7 @@ P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite v
 
 **Base:** main `6b5993e07df740316beb568f0dc67139e6553928` (inclui PR #788).
 
-- PR #789 adiciona distribuições rolling de 512 observações para polling Slint, intervalos de consumo, mailbox residence/take, RGB conversion, `Queue::write_texture` e duração do callback.
+- PR #790 adiciona distribuições rolling de 512 observações para polling Slint, intervalos de consumo, mailbox residence/take, RGB conversion, `Queue::write_texture` e duração do callback.
 - Percentis p50/p95/p99 e jitter p95−p50 são emitidos por segundo; sample counts são explícitos.
 - O worker já mede p50/p95/p99 de frame completion, ticks/frame, step, publicação, processamento e wait.
 - A PR permanece em validação Windows x64 Release. Nenhuma alteração no Scheduler ou pacing foi feita.
