@@ -195,7 +195,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 ### H2 — Fechamento da síntese e reconstrução
 
-**Status: EM EXECUÇÃO — sweep digital completo, métricas transitórias/ruído e protótipo event-based test-only adicionados; aguardando CI e análise dos artefatos.**
+**Status: MODELAGEM E DIAGNÓSTICO CONCLUÍDOS; CANDIDATO DE PRODUÇÃO PENDENTE.**
 
 1. [x] Auditar divisor, fase de amostragem, FIR e diferenças de resposta.
 2. [x] Adicionar sweep digital dos períodos 0–1023 nos perfis SMS/SG-1000 e nos três osciladores, incluindo a condição constante dos períodos 0/1.
@@ -206,6 +206,46 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 7. [x] Implementar candidato test-only de interpolação fracionária windowed-sinc de 8 pontos sobre o histórico FIR, com atraso fixo de 3 ticks internos (48 master clocks), comparação espectral e invariância por chunking.
 8. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
 9. [x] Os protótipos foram escritos independentemente, sem copiar código de terceiros.
+
+#### Resultados consolidados da modelagem H2
+
+A execução reproduzível de 12/11/2026 concluiu o sweep, os relatórios de transientes/ruído e os A/B dos candidatos.
+
+**Baseline histórico vs. interpolação linear atual:**
+
+- SMS: NRMSE 3,9032%, correlação 0,999235.
+- SG-1000: NRMSE 3,8742%, correlação 0,999247.
+- Diferença de energia em 20–24 kHz: aproximadamente -0,498 dB nos dois perfis.
+- Tons isolados: atenuação adicional do linear em relação ao baseline de -0,1434 dB no período 5, -0,0994 dB no período 6, -0,0730 dB no período 7 e progressivamente menor nos períodos maiores.
+- O PCM Scheduler/direct continua idêntico amostra a amostra e o estado final é igual para o trace de 16 milhões de clocks.
+
+**Sweep FIR e aliasing:**
+
+| Período | Frequência | Relação com Nyquist | Ganho FIR |
+|---:|---:|---|---:|
+| 2 | 55.930,39 Hz | Acima | -116,84 dB |
+| 3 | 37.286,93 Hz | Acima | -100,98 dB |
+| 4 | 27.965,20 Hz | Acima | -93,18 dB |
+| 5 | 22.372,16 Hz | Abaixo | -9,48 dB |
+| 6 | 18.643,46 Hz | Abaixo | -0,0005 dB |
+| 7 | 15.980,11 Hz | Abaixo | -0,0003 dB |
+
+O período 5 já está na região de transição do FIR. A perda adicional causada pela interpolação linear é pequena em comparação com a atenuação do próprio FIR. Não se deve alterar o filtro anti-aliasing apenas para elevar o nível de um tom próximo de Nyquist.
+
+**Decisão sobre os protótipos:**
+
+| Candidato | Resultado | Decisão |
+|---|---|---|
+| Evento 65 taps/256 fases, Blackman | Degrau com overshoot/undershoot de aproximadamente 13,3%; settling em 38 amostras. Período 5 com fundamental 0,2847 contra 0,1051 no linear. | Rejeitado |
+| Windowed-sinc 8 pontos sobre histórico FIR | Fundamental próximo do baseline: +0,1450 dB no período 5, +0,0187 dB no 14 e +0,0012 dB no 56. | Não aprovado |
+| Lagrange3 | Recupera energia, mas excede o baseline em aproximadamente 0,122 dB no período 5; pico inicial +12,74% no mesmo período. | Não aprovado |
+| Lagrange4 | Resultado semelhante, com pico inicial +13,19% no período 5. | Não aprovado |
+
+O sinc8 também apresentou pico inicial de 0,203481 no período 5, contra 0,131832 no baseline (+54,35%), apesar de o pico em regime estacionário se aproximar do baseline. O atraso adicional é de 48 master clocks. O comportamento transitório impede sua promoção.
+
+**Ruído:** os oito controles foram medidos nos dois perfis, com RMS, pico, DC, delta máximo, correlação lag-1, taxa de cruzamento por zero, centróide espectral e flatness. Não houve alteração de seed, taps, divisor ou sequência LFSR.
+
+**Conclusão H2:** a diferença da versão atual foi localizada na reconstrução fracionária; a interpolação linear reduz ligeiramente a energia alta e suaviza bordas. Os candidatos testados demonstram os trade-offs, mas nenhum atende simultaneamente resposta espectral e transientes. Portanto, a síntese de produção permanece intacta.
 
 #### Auditoria da referência Gearsystem
 
@@ -229,7 +269,7 @@ Referências de inspeção:
 - [Gearsystem Blip_Buffer.h](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Blip_Buffer.h)
 - [Gearsystem Blip_Buffer.cpp](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Blip_Buffer.cpp)
 
-**Gate H2:** fechar após CI, leitura dos CSV/WAVs, comparação histórica e decisão documentada. O protótipo permanece test-only; nenhuma alteração de síntese de produção será aceita sem superioridade global demonstrada.
+**Gate H2 — MODELAGEM: CONCLUÍDO. Gate de produção: ABERTO.** Nenhum candidato foi aprovado. A próxima alteração de síntese exige nova reconstrução que controle transientes, comparação com Gearsystem/ARES em cadeia equalizada e avaliação auditiva controlada. O core de produção permanece inalterado.
 
 ### H3 — Linha de áudio de referência em 48 kHz
 
