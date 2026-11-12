@@ -1,6 +1,6 @@
 # ADR 0011 — Replataforma desktop com Slint, WGPU e CPAL
 
-- **Status:** ACCEPTED FOR POC; produção condicionada aos gates.
+- **Status:** ACCEPTED; arquitetura-alvo normativa. Integração incremental em R2; R3/R4/R5 condicionadas aos respectivos gates.
 - **Revisão:** 2026-11-11.
 - **Baseline:** main SHA 392a5c67e85a11a5a980d8f7055bcc8a12fe3784.
 - **Escopo:** substituir gradualmente GUI e adaptadores host; preservar runtime Rust.
@@ -21,7 +21,7 @@ A replataforma ocorre no repositório existente. Não criar outro repositório n
 
 WGPU é a única API gráfica do produto; Vulkan é backend WGPU, não API paralela. R1 deve selecionar e registrar Vulkan explicitamente, sem fallback silencioso. CPAL é a API de saída de áudio; WASAPI pode ser backend interno no Windows.
 
-egui/eframe, D3D12 e WASAPI/XAudio2 permanecem baseline até paridade, regressão e aceite Release. Não remover prematuramente.
+O caminho Slint/WGPU é o frontend desktop-alvo. CPAL é a única API de saída física definida para a nova arquitetura; SDL3 é a entrada futura após auditoria. Não criar novos consumidores dos hosts anteriores. A remoção física dos módulos ainda usados pelo aplicativo antigo fica condicionada a R3/R5 e aos gates de regressão. O inventário transitório é mantido em docs/architecture/migrations/legacy-host-retirement.md.
 
 ## 2. Fronteiras
 
@@ -73,7 +73,7 @@ A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via
 - **R4 — SDL3:** auditar e integrar teclado/gamepads, hotplug e mapeamentos.
 - **R5 — frontend:** consolidar launcher, biblioteca, configurações, menus, HUD, logs e telemetria. Demonstrar paridade antes de remover egui/eframe e hosts antigos.
 
-Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores.
+Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores. O corte completo dos hosts anteriores não é autorizado por mera integração R2; depende de CPAL R3 e consolidação R5.
 
 ## 6. Matriz de validação CI
 
