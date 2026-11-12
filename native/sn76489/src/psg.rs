@@ -1341,6 +1341,53 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn sample_queue_overflow_drops_oldest_pcm_without_changing_psg_or_fir_state() {
+        let mut bounded =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut reference =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+
+        for device in [&mut bounded, &mut reference] {
+            device.write_inner(0x85);
+            device.write_inner(0x12);
+            device.write_inner(0x90);
+            device.write_inner(0xE4);
+            device.write_inner(0xF0);
+        }
+        bounded.sample_buffer_capacity = 1;
+
+        let total_clocks = 200_000;
+        bounded.advance_clocks(total_clocks);
+        reference.advance_clocks(total_clocks);
+
+        assert_eq!(bounded.pending_samples.len(), 1);
+        assert_eq!(
+            bounded.dropped_samples as usize,
+            reference.pending_samples.len() - 1
+        );
+        assert_eq!(bounded.pending_samples.back(), reference.pending_samples.back());
+
+        // Queue pressure is a host-output concern: it must not feed back into
+        // oscillator, LFSR, clock, resampler or FIR history.
+        assert_eq!(bounded.tone_periods, reference.tone_periods);
+        assert_eq!(bounded.attenuations, reference.attenuations);
+        assert_eq!(bounded.noise_control, reference.noise_control);
+        assert_eq!(bounded.latched_register, reference.latched_register);
+        assert_eq!(bounded.tone_counters, reference.tone_counters);
+        assert_eq!(bounded.tone_outputs, reference.tone_outputs);
+        assert_eq!(bounded.noise_counter, reference.noise_counter);
+        assert_eq!(bounded.noise_counter_phase, reference.noise_counter_phase);
+        assert_eq!(bounded.lfsr, reference.lfsr);
+        assert_eq!(bounded.noise_output, reference.noise_output);
+        assert_eq!(bounded.clock_divider_phase, reference.clock_divider_phase);
+        assert_eq!(bounded.output_phase, reference.output_phase);
+        assert_eq!(bounded.filter_coefficients, reference.filter_coefficients);
+        assert_eq!(bounded.filter_history, reference.filter_history);
+        assert_eq!(bounded.filter_position, reference.filter_position);
+    }
+
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
         let mut first = Sn76489::new(3_579_545, 44_100).unwrap();
