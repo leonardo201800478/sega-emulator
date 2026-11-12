@@ -1,3 +1,5 @@
+> **Áudio — atualização de 2026-11-12:** as decisões WASAPI/XAudio2 descritas abaixo são históricas e estão superseded pela arquitetura CPAL 0.18.2 candidata na [PR #770](https://github.com/leonardo201800478/sega-emulator/pull/770). No Windows, CPAL utiliza WASAPI internamente como backend do sistema; o projeto não mantém adaptador próprio WASAPI, XAudio2 nem bindings de áudio Win32. Consulte [saída física CPAL](../audio/cpal-output-backend.md).
+
 > **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
 
 # SG-1000 native core consolidation — PR #126
