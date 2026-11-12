@@ -942,6 +942,11 @@ mod windows_host {
                 host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
+            // Keep the menu indicator bound to the window manager's actual state.
+            let actual_fullscreen = app.window().is_fullscreen();
+            if app.get_fullscreen_enabled() != actual_fullscreen {
+                app.set_fullscreen_enabled(actual_fullscreen);
+            }
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
                 host_pacing.report_if_due(&worker_slot);
                 host_pacing.record_callback(callback_started.elapsed());
