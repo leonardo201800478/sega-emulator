@@ -2,7 +2,7 @@
 
 Emulador Sega multissistema com runtime de hardware integralmente em Rust. A arquitetura desktop de destino é **Slint 1.18.x + WGPU 30.x + CPAL 0.18.2**, com Vulkan como backend gráfico inicial preferencial no Windows x64.
 
-**Estado importante:** a main ainda contém egui/eframe, D3D12 e WASAPI/XAudio2 como baseline integrada. A nova stack está em fase de POC; não está implementada nem integrada.
+**Arquitetura-alvo atual:** backend Rust determinístico; desktop Slint 1.18.x; apresentação WGPU 30.x com Vulkan inicial no Windows x64; áudio físico CPAL 0.18.2; SDL3 após auditoria. A migração está em R2, com vídeo SMS integrado ao caminho Slint/WGPU. CPAL (R3), SDL3 (R4) e consolidação final (R5) permanecem pendentes.
 
 ## Migração
 
@@ -22,7 +22,7 @@ Consulte [status](docs/project-status-2026-11-11.md), [escopo](docs/project-scop
 
 Estrutura de referência: native/sega_desktop, native/video_output_wgpu e native/audio_output. A estrutura real prevalece; não duplicar crates/componentes.
 
-egui/eframe e D3D12/WASAPI/XAudio2 são baseline temporária. Não removê-los antes de paridade, regressão e validação Release.
+A arquitetura anterior permanece apenas como caminho transitório durante a migração controlada. Inventário, dependências remanescentes e critérios de retirada estão em [plano de corte dos hosts anteriores](docs/architecture/migrations/legacy-host-retirement.md). Não confundir documentação histórica ou código ainda necessário ao host anterior com arquitetura-alvo.
 
 ## Build e validação
 
