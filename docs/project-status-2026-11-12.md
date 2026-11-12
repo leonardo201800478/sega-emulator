@@ -240,4 +240,3 @@ P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite v
 - A PR permanece em validação Windows x64 Release. Nenhuma alteração no Scheduler ou pacing foi feita.
 - A captura física posterior a #766/#785 continua pendente; a captura histórica `SMS-QPC-20261112-002914` não contém todas as métricas novas.
 - `empty_polls` não é contado como repetição física. A análise de present/display permanece externa via PresentMon/QPC.
-
