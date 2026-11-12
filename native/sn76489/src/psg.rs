@@ -1590,4 +1590,74 @@ mod tests {
         psg.write(0x04);
         assert_eq!(psg.noise_control(), 0x04);
     }
+
+    #[test]
+    fn versioned_state_round_trip_preserves_arbitrary_pipeline_phase() {
+        let mut original =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        original.write_inner(0x85);
+        original.write_inner(0x12);
+        original.write_inner(0x90);
+        original.write_inner(0xE4);
+        original.write_inner(0xF0);
+        original.advance_clocks(123_457);
+        original.render_pending.push_back(0.125);
+
+        let state = original.snapshot_state();
+        assert_eq!(state.format_version, super::SN76489_STATE_FORMAT_VERSION);
+        assert_eq!(state.clock_divider_phase, 1);
+        assert_ne!(state.output_phase, 0);
+        assert!(!state.pending_samples.is_empty());
+        assert!(state.filter_history.iter().any(|sample| *sample != 0.0));
+        assert_eq!(state.render_pending, [0.125]);
+
+        let mut restored = Sn76489::from_state(state.clone()).unwrap();
+        assert_eq!(restored.snapshot_state(), state);
+
+        for clocks in [1_u64, 15, 16, 17, 113, 257, 4_096, 65_537] {
+            original.advance_clocks(clocks);
+            restored.advance_clocks(clocks);
+            assert_eq!(restored.snapshot_state(), original.snapshot_state());
+        }
+        assert_eq!(restored.drain_samples(None), original.drain_samples(None));
+    }
+
+    #[test]
+    fn invalid_versioned_state_is_rejected_without_mutating_live_device() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.write_inner(0xE4);
+        device.advance_clocks(1_237);
+        let before = device.snapshot_state();
+        let mut invalid = before.clone();
+        invalid.format_version = super::SN76489_STATE_FORMAT_VERSION + 1;
+
+        assert_eq!(
+            device.restore_state(invalid),
+            Err(super::PsgStateError::UnsupportedVersion {
+                expected: super::SN76489_STATE_FORMAT_VERSION,
+                actual: super::SN76489_STATE_FORMAT_VERSION + 1,
+            })
+        );
+        assert_eq!(device.snapshot_state(), before);
+    }
+
+    #[test]
+    fn invalid_lfsr_state_is_rejected_without_partial_restore() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        device.advance_clocks(987);
+        let before = device.snapshot_state();
+        let mut invalid = before.clone();
+        invalid.lfsr = 0;
+
+        assert_eq!(
+            device.restore_state(invalid),
+            Err(super::PsgStateError::InvalidState(
+                "LFSR state is zero or exceeds the selected hardware profile"
+            ))
+        );
+        assert_eq!(device.snapshot_state(), before);
+    }
+
 }
