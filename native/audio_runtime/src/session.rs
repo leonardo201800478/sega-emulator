@@ -35,10 +35,6 @@ pub struct AudioOutputMetrics {
     pub dropped_blocks: u64,
     /// Frames intentionally discarded from the FIFO during an epoch flush.
     pub flushed_frames: u64,
-    /// XAudio2 source-voice starvation transitions (not FIFO underrun events).
-    pub endpoint_starvation_events: u64,
-    /// Frames removed from the FIFO but rejected by XAudio2 submission.
-    pub submission_failed_frames: u64,
 }
 
 impl AudioOutputMetrics {
