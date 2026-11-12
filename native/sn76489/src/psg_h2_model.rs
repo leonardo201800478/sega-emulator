@@ -440,14 +440,15 @@ fn write_runtime_metrics(
     event_render_elapsed: std::time::Duration,
     core_render_elapsed: std::time::Duration,
 ) {
-    let event_storage_bytes = events.capacity() * std::mem::size_of::<PsgAmplitudeEvent>();
+    // `events` is a slice, so report its payload size rather than Vec capacity.
+    let event_payload_bytes = events.len() * std::mem::size_of::<PsgAmplitudeEvent>();
     let kernel_storage_bytes = (kernel.step_response.capacity()
         + kernel.impulse_response.capacity()
         + kernel.discrete_coefficients.capacity())
         * std::mem::size_of::<f64>();
     let renderer_scratch_bytes = (sample_count * 3 + 1) * std::mem::size_of::<f64>();
     let peak_working_set_estimate_bytes =
-        event_storage_bytes + kernel_storage_bytes + renderer_scratch_bytes;
+        event_payload_bytes + kernel_storage_bytes + renderer_scratch_bytes;
     let audio_duration_seconds = sample_count as f64 / SAMPLE_RATE as f64;
     let event_pipeline_seconds = capture_elapsed.as_secs_f64() + event_render_elapsed.as_secs_f64();
     let report = format!(
@@ -461,7 +462,7 @@ fn write_runtime_metrics(
             "  \"event_render_ms\": {:.6},\n",
             "  \"current_core_render_ms\": {:.6},\n",
             "  \"event_pipeline_realtime_factor\": {:.9},\n",
-            "  \"event_storage_bytes\": {},\n",
+            "  \"event_payload_bytes\": {},\n",
             "  \"kernel_storage_bytes\": {},\n",
             "  \"renderer_scratch_peak_bytes\": {},\n",
             "  \"peak_working_set_estimate_bytes\": {},\n",
@@ -480,7 +481,7 @@ fn write_runtime_metrics(
         event_render_elapsed.as_secs_f64() * 1000.0,
         core_render_elapsed.as_secs_f64() * 1000.0,
         event_pipeline_seconds / audio_duration_seconds,
-        event_storage_bytes,
+        event_payload_bytes,
         kernel_storage_bytes,
         renderer_scratch_bytes,
         peak_working_set_estimate_bytes,
