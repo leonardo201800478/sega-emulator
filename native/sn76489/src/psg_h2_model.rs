@@ -166,9 +166,7 @@ impl EventBasedKernel {
                 .skip(start)
             {
                 let sample_time = sample_index as f64 + 1.0;
-                let position = sample_time - event_position
-                    - EVENT_HALF
-                    - EVENT_FRACTIONAL_DELAY;
+                let position = sample_time - event_position - EVENT_HALF - EVENT_FRACTIONAL_DELAY;
                 *contribution += event.delta * self.response_to_step(position);
             }
         }
@@ -528,8 +526,7 @@ fn event_capture_and_reconstruction_are_invariant_to_clock_chunking() {
         let contiguous = capture_events(profile, &TRACE, TOTAL_CLOCKS, None);
         let reference_pcm = kernel.render(&contiguous, 0.0, TOTAL_CLOCKS);
         for chunk_size in [1_u64, 7, 997, 16_384] {
-            let segmented =
-                capture_events(profile, &TRACE, TOTAL_CLOCKS, Some(chunk_size));
+            let segmented = capture_events(profile, &TRACE, TOTAL_CLOCKS, Some(chunk_size));
             assert_eq!(segmented, contiguous, "{profile:?}, chunk={chunk_size}");
             assert_eq!(
                 kernel.render(&segmented, 0.0, TOTAL_CLOCKS),
@@ -572,12 +569,7 @@ fn event_reconstruction_handles_sample_boundaries_simultaneous_deltas_and_end_ed
         },
     ];
     let reordered = [
-        ordered[0],
-        ordered[1],
-        ordered[3],
-        ordered[2],
-        ordered[4],
-        ordered[5],
+        ordered[0], ordered[1], ordered[3], ordered[2], ordered[4], ordered[5],
     ];
 
     let first = kernel.render(&ordered, 0.0, TOTAL_CLOCKS);
