@@ -546,7 +546,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Compile deterministic stress replay
         run: cargo test --release --locked -p sega-machine-scheduler --test stress_replay --no-run
@@ -575,6 +575,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - name: Format changed native host integration files
+        run: rustfmt --edition 2024 native/sega_app/src/app.rs native/sega_desktop/src/main.rs
       - name: Refresh root workspace lockfile
         run: cargo update --workspace
       - name: Refresh standalone audio-output lockfile
@@ -601,7 +603,7 @@ jobs:
           git switch -c "$PR_HEAD_REF"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock native/audio_output/Cargo.lock native/sega_app/Cargo.lock
+          git add Cargo.lock native/audio_output/Cargo.lock native/sega_app/Cargo.lock native/sega_app/src/app.rs native/sega_desktop/src/main.rs
           if git diff --cached --quiet; then
             echo "Cargo lockfiles are already current."
           else
