@@ -1810,6 +1810,43 @@ mod windows_host {
         use super::*;
 
         #[test]
+        fn host_duration_window_reports_nearest_rank_percentiles() {
+            let mut samples = HostDurationWindow::default();
+            for value in [10, 20, 30, 40, 50] {
+                samples.push(value);
+            }
+
+            assert_eq!(samples.len(), 5);
+            assert_eq!(samples.percentile_ns(50), 30);
+            assert_eq!(samples.percentile_ns(95), 50);
+            assert_eq!(samples.percentile_ns(99), 50);
+        }
+
+        #[test]
+        fn host_duration_window_retains_only_the_latest_512_samples() {
+            let mut samples = HostDurationWindow::default();
+            for value in 1..=513 {
+                samples.push(value);
+            }
+
+            assert_eq!(samples.len(), HOST_PACING_WINDOW_CAPACITY);
+            assert_eq!(samples.percentile_ns(50), 257);
+            assert_eq!(samples.percentile_ns(95), 488);
+            assert_eq!(samples.percentile_ns(99), 508);
+        }
+
+        #[test]
+        fn host_frame_pacing_records_poll_and_consumption_distributions() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            for (index, micros) in [10, 20, 30, 40, 50].into_iter().enumerate() {
+                window.record_poll(start + Duration::from_micros((index as u64) * micros));
+            }
+            assert_eq!(window.poll_interval_distribution.len(), 4);
+            assert!(window.poll_interval_distribution.percentile_ns(95) > 0);
+        }
+
+        #[test]
         fn host_frame_pacing_window_records_callback_and_mailbox_take_costs() {
             let mut window = HostFramePacingWindow::new();
             window.record_callback(Duration::from_micros(120));
