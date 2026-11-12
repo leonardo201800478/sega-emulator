@@ -221,18 +221,24 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 **Gate H3: ATENDIDO** — CI aplicável verde; fonte interna em 48 kHz; conversão para endpoint explícita; invariância por blocos; estado temporal e progresso de hardware independentes da taxa PCM.
 
-### H4 — Contrato PCM moderno e saída 24-bit
+### H4 — Contrato PCM adaptativo e máxima qualidade nativa disponível
 
-**Status: EM PREPARAÇÃO na branch `feat/h4-modern-pcm-contract-20261112`; nenhuma alteração de produção ainda foi declarada.**
+**Status: ESPECIFICAÇÃO REFINADA na branch `feat/h4-modern-pcm-contract-20261112`; nenhuma alteração de produção ainda foi declarada.**
 
-1. Substituir o contrato implícito PCM16 de `PcmSink` por frames/amostras com formato explícito, sem alocações no callback físico.
-2. Manter PCM em precisão elevada até a saída; aplicar volume e saturação uma única vez na fronteira correta.
-3. Negociar formato com o dispositivo: I24 quando suportado; F32 como alternativa de alta precisão; fallback documentado quando necessário.
-4. Confirmar a semântica de 24 bits de CPAL: `I24/U24` usam armazenamento de 4 bytes, com 24 bits significativos.
-5. Não assumir que todo endpoint suporta I24 ou 48 kHz.
-6. Atualizar contadores/telemetria para refletir taxa, canais, formato e bits efetivamente negociados.
+**Objetivo:** aproveitar a melhor combinação de formato, profundidade e taxa de amostragem que o endpoint selecionado realmente suporta, sem impor 24 bits/96 kHz e sem excluir dispositivos convencionais. PCM 48 kHz/16 bits é um nível de compatibilidade obrigatório, não um teto de qualidade.
 
-**Gate H4:** testes de conversão, saturação, silêncio, dual-mono, fallback e callback sem locks/alocação; CI Windows x64.
+1. Substituir o contrato implícito PCM16 de `PcmSink` por frames/amostras com formato explícito, mantendo precisão interna elevada até a conversão final e sem alocações no callback físico.
+2. Suportar pelo menos PCM16, PCM24 (I24) e F32 quando anunciados pelo backend/dispositivo. Não presumir que I24 existe em todo endpoint; F32 é um formato de transporte de ponto flutuante, não deve ser rotulado como profundidade inteira de 32 bits.
+3. Enumerar as configurações suportadas pelo dispositivo e negociar formato e taxa em conjunto. Não selecionar profundidade de uma configuração e taxa de outra combinação não suportada.
+4. Política automática inicial: priorizar formatos de alta precisão disponíveis (F32/F64 quando realmente suportados como saída nativa; depois I32/I24; depois I16), mas nunca rejeitar I16. Para taxa, preferir a maior taxa PCM convencional suportada até 96 kHz (incluindo 48, 88,2 e 96 kHz), com fallback para 44,1 kHz ou outra taxa efetivamente anunciada. Taxas acima de 96 kHz podem ser consideradas por política explícita/etapa posterior, sem torná-las requisito.
+5. Permitir configuração manual/override posterior, sem obrigar o usuário a escolher para que o áudio funcione. A negociação automática deve ser previsível e expor claramente o resultado efetivo.
+6. Manter a fonte PCM interna SMS/SG-1000 em 48 kHz conforme H3. Se o endpoint for 88,2/96 kHz, converter explicitamente 48 kHz → taxa negociada; isso adapta o transporte ao dispositivo, mas **não cria informação sonora acima da banda da fonte nem aumenta a fidelidade intrínseca do PSG**.
+7. Aplicar ganho, dither (se tecnicamente justificado para quantização inteira) e saturação apenas uma vez na fronteira de conversão. Não degradar para PCM16 antes de entregar dados a um endpoint I24/F32.
+8. Confirmar a representação CPAL: I24/U24 usam 4 bytes de armazenamento com 24 bits significativos. Implementar conversão e alinhamento conforme o tipo CPAL, não por suposição de packed-3-byte.
+9. Atualizar telemetria com dispositivo, canais, taxa, formato, profundidade efetiva e tamanho de armazenamento negociados; distinguir formato de saída de precisão interna.
+10. Se o endpoint não suportar o formato/taxa preferidos, tentar a próxima combinação suportada e finalmente PCM16/48 kHz ou a melhor alternativa real disponível. Falha de negociação só quando não existir configuração de saída utilizável.
+
+**Gate H4:** testes de seleção entre múltiplas configurações, fallback PCM16, I24/F32, conversão 48→88,2/96 kHz, saturação, silêncio, dual-mono, continuidade por blocos e callback sem locks/alocação; CI Windows x64. Testes de hardware real devem registrar capacidades anunciadas e configuração efetivamente aberta.
 
 ### H5 — Integração CPAL e experiência de saída
 
