@@ -884,6 +884,51 @@ mod tests {
         assert_eq!(device.noise_period, 0x123);
     }
 
+
+    #[test]
+    fn sms_tone_two_noise_rate_tracks_period_without_resetting_partial_divider() {
+        let mut device =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+
+        // Tone 2 period = 3; Noise Rate = Tone 2.
+        device.write_inner(0xC3);
+        device.write_inner(0x00);
+        device.write_inner(0xE3);
+        assert_eq!(device.tone_periods[2], 3);
+        assert_eq!(device.noise_period, 3);
+
+        // Put the independent noise divider at a known boundary, then advance
+        // one tick so a Tone 2 write occurs with two divider ticks remaining.
+        device.noise_counter = 3;
+        device.noise_counter_phase = 0;
+        device.tick_internal_clock();
+        assert_eq!(device.noise_counter, 2);
+        let before_write = device.lfsr;
+
+        // Change Tone 2 to period 2. The current divider remainder is retained;
+        // subsequent reloads use the new period, as in the reference's live
+        // pointer to the Tone 2 period and persistent oscillator delay.
+        device.write_inner(0xC2);
+        assert_eq!(device.noise_period, 2);
+        assert_eq!(device.noise_counter, 2);
+        assert_eq!(device.lfsr, before_write);
+
+        device.tick_internal_clock();
+        assert_eq!(device.lfsr, before_write);
+        device.tick_internal_clock();
+        assert_ne!(device.lfsr, before_write);
+        let first_shift = device.lfsr;
+
+        // Two expirations of the new period (2 + 2 internal ticks) produce
+        // the next shift; the intervening expiration only changes divider phase.
+        for _ in 0..3 {
+            device.tick_internal_clock();
+            assert_eq!(device.lfsr, first_shift);
+        }
+        device.tick_internal_clock();
+        assert_ne!(device.lfsr, first_shift);
+    }
+
     #[test]
     fn noise_register_write_resets_lfsr_without_restarting_noise_divider() {
         let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
