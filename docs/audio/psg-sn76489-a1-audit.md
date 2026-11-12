@@ -412,6 +412,7 @@ O DTO agora possui `encode()` e `decode()` em formato canônico little-endian:
 Testes adicionais:
 - `versioned_state_codec_round_trip_is_canonical`;
 - `versioned_state_codec_rejects_corruption_truncation_and_trailing_data`;
-- `versioned_state_codec_rejects_unknown_schema_version`.
+- `versioned_state_codec_rejects_unknown_schema_version`;
+- `versioned_state_codec_round_trips_sg1000_profile_and_rejects_invalid_profile_tag`: verifica a tag SG-1000 e a rejeição estrita de tags de perfil inválidas.
 
 **Status A1.4:** IMPLEMENTED — aguardando CI no HEAD atual. A validação física continua separada; o codec confirma persistência digital, não equivalência analógica nem saída física.
