@@ -543,8 +543,12 @@ def main() -> None:
         sinc_rate, sinc_samples = read_float_wav(Path(sinc_path))
         if {baseline_rate, linear_rate, sinc_rate} != {sample_rate}:
             raise ValueError(f"period {period}: sinc8 sample-rate mismatch")
-        if len({len(baseline_samples), len(linear_samples), len(sinc_samples)}) != 1:
-            raise ValueError(f"period {period}: sinc8 sample counts differ")
+        common_count = min(len(baseline_samples), len(linear_samples), len(sinc_samples))
+        if common_count < sample_rate // 10:
+            raise ValueError(f"period {period}: insufficient common sinc8 analysis window")
+        baseline_samples = baseline_samples[:common_count]
+        linear_samples = linear_samples[:common_count]
+        sinc_samples = sinc_samples[:common_count]
 
         baseline_tone = tone_response_summary(baseline_samples, sample_rate, period)
         linear_tone = tone_response_summary(linear_samples, sample_rate, period)
