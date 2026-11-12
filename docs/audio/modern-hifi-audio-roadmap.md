@@ -207,6 +207,26 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 8. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
 9. [x] Os protótipos foram escritos independentemente, sem copiar código de terceiros.
 
+#### Auditoria da referência Gearsystem
+
+Na revisão do commit de referência 1be9a12b82cae84ddd6f9b7006d546abe2d58bd4 foram confirmados os seguintes elementos da implementação Blip Buffer:
+
+- 64 fases subamostrais (BLIP_PHASE_BITS = 6).
+- Qualidade 12 para os osciladores quadrados e qualidade 8 para ruído.
+- Eventos de delta de amplitude enviados em timestamps fracionários (offset_resampled).
+- Kernel derivado de sinc com janela, integração/diferenciação para representar transições e correção da soma por fase.
+- A síntese não equivale a interpolar linearmente duas amostras FIR.
+
+O protótipo local de 65 taps/256 fases é uma experiência independente, **não uma reprodução do kernel Gearsystem**. Seu primeiro relatório mostrou ringing/overshoot e undershoot excessivos (aproximadamente 13,3% no degrau), além de energia fundamental excessiva em tons próximos de Nyquist. Foi rejeitado como candidato de produção.
+
+O candidato windowed-sinc de 8 pontos sobre o histórico FIR é uma alternativa distinta: não é event-based e introduz atraso fixo de 3 ticks internos (48 master clocks). Seu A/B espectral está sendo validado separadamente.
+
+Referências de inspeção:
+- [Gearsystem Sms_Oscs.h](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Oscs.h)
+- [Gearsystem Sms_Apu.cpp](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Apu.cpp)
+- [Gearsystem Blip_Buffer.h](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Blip_Buffer.h)
+- [Gearsystem Blip_Buffer.cpp](https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Blip_Buffer.cpp)
+
 **Gate H2:** fechar após CI, leitura dos CSV/WAVs, comparação histórica e decisão documentada. O protótipo permanece test-only; nenhuma alteração de síntese de produção será aceita sem superioridade global demonstrada.
 
 ### H3 — Linha de áudio de referência em 48 kHz
