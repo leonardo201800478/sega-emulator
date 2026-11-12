@@ -154,7 +154,7 @@ Repetir cenários críticos com janela em foco e fora de foco. Registrar taxa de
 
 - PR #763 (deadline absoluto e instrumentação base) e PR #766 (timeout lateness, wakeups, callback Slint e mailbox) estão integradas; seus HEADs tiveram CI e SMS Debugger Runtime PASS.
 - A captura física `SMS-QPC-20261112-002914` é anterior à PR #766 e não contém as novas métricas. Ela não substitui uma nova captura correlacionada.
-- PR #785 complementa a medição do handler: inclui comandos processados após deadline e emite TRACE por tipo/duração. É instrumentação observacional; não altera Scheduler nem política de pacing.
+- PR #785 foi integrada na main (`6130cb42f1d76648552a5a0cd510e3a84c7efb42`) e complementa a medição do handler: inclui comandos processados após deadline e emite TRACE por tipo/duração. É instrumentação observacional; não altera Scheduler nem política de pacing.
 - Benchmarks Release e captura Windows/Vulkan após #766/#785 ainda precisam ser executados; nenhum resultado físico novo é marcado PASS.
 
 ## Fora de escopo
