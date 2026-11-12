@@ -715,6 +715,99 @@ mod tests {
         }
     }
 
+    fn render_register_trace(
+        profile: PsgProfile,
+        max_advance_chunk: Option<u64>,
+    ) -> Vec<f64> {
+        // Deterministic PSG bus trace: tone/volume setup, then live register
+        // changes while the chip is running. Times are source PSG clocks.
+        const TRACE: [(u64, u8); 14] = [
+            (0, 0x85),       // Tone 0 period low = 5.
+            (0, 0x12),       // Tone 0 period high = 0x12.
+            (0, 0x90),       // Tone 0 full volume.
+            (0, 0xA8),       // Tone 1 period low = 8.
+            (0, 0x05),       // Tone 1 period high = 5.
+            (0, 0xB4),       // Tone 1 attenuation = 4.
+            (0, 0xC0),       // Tone 2 period low = 0.
+            (0, 0x10),       // Tone 2 period high = 1.
+            (0, 0xD8),       // Tone 2 attenuation = 8.
+            (0, 0xE4),       // White noise, fixed divider.
+            (0, 0xF6),       // Noise attenuation = 6.
+            (250_000, 0x94), // Change tone 0 volume during playback.
+            (750_000, 0xE7), // White noise, tone-2-derived divider.
+            (1_250_000, 0xF2), // Raise noise level during playback.
+        ];
+        const TOTAL_CLOCKS: u64 = 2_000_000;
+
+        let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, profile).unwrap();
+        let mut elapsed = 0_u64;
+
+        for (clock, value) in TRACE {
+            let mut remaining = clock - elapsed;
+            while remaining > 0 {
+                let clocks = max_advance_chunk
+                    .map(|limit| remaining.min(limit))
+                    .unwrap_or(remaining);
+                psg.advance_clocks(clocks);
+                remaining -= clocks;
+            }
+            psg.write(value);
+            elapsed = clock;
+        }
+
+        let mut remaining = TOTAL_CLOCKS - elapsed;
+        while remaining > 0 {
+            let clocks = max_advance_chunk
+                .map(|limit| remaining.min(limit))
+                .unwrap_or(remaining);
+            psg.advance_clocks(clocks);
+            remaining -= clocks;
+        }
+
+        psg.drain_samples(None)
+    }
+
+    #[test]
+    fn sms_and_sg1000_register_traces_produce_finite_deterministic_48khz_pcm() {
+        const CLOCK_HZ: u64 = 3_579_545;
+        const TOTAL_CLOCKS: u64 = 2_000_000;
+        const SAMPLE_RATE: u64 = 48_000;
+        let expected_samples = (u128::from(TOTAL_CLOCKS / super::CLOCK_DIVIDER)
+            * u128::from(SAMPLE_RATE)
+            * u128::from(super::CLOCK_DIVIDER)
+            / u128::from(CLOCK_HZ)) as usize;
+
+        let sms_contiguous = render_register_trace(PsgProfile::Sms, None);
+        let sms_segmented = render_register_trace(PsgProfile::Sms, Some(997));
+        let sg_contiguous = render_register_trace(PsgProfile::Sg1000, None);
+        let sg_segmented = render_register_trace(PsgProfile::Sg1000, Some(997));
+
+        for (profile, contiguous, segmented) in [
+            (PsgProfile::Sms, &sms_contiguous, &sms_segmented),
+            (PsgProfile::Sg1000, &sg_contiguous, &sg_segmented),
+        ] {
+            assert_eq!(contiguous.len(), expected_samples, "{profile:?}");
+            assert_eq!(segmented, contiguous, "{profile:?}");
+            assert!(contiguous.iter().all(|sample| sample.is_finite()), "{profile:?}");
+
+            let peak = contiguous.iter().map(|sample| sample.abs()).fold(0.0_f64, f64::max);
+            let mean = contiguous.iter().sum::<f64>() / contiguous.len() as f64;
+            let rms = (contiguous.iter().map(|sample| sample * sample).sum::<f64>()
+                / contiguous.len() as f64)
+                .sqrt();
+
+            assert!(peak > 0.001, "{profile:?}: trace unexpectedly silent");
+            assert!(rms > 0.001, "{profile:?}: trace RMS unexpectedly low");
+            assert!(peak <= 1.25, "{profile:?}: unexpected reconstruction overshoot {peak}");
+            assert!(mean.abs() < 0.1, "{profile:?}: unexpected DC offset {mean}");
+        }
+
+        assert_ne!(
+            sms_contiguous, sg_contiguous,
+            "SMS and SG-1000 profiles must retain their distinct noise behavior"
+        );
+    }
+
     #[test]
     fn fractional_output_sampling_reduces_clock_quantization_error() {
         let clock_hz = 3_579_545_u64;
