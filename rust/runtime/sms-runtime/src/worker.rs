@@ -2559,7 +2559,12 @@ mod tests {
         worker
             .configure_audio_output(move || -> Result<Box<dyn super::AudioSession>, String> {
                 let sink = ControlSink(Arc::clone(&factory_events));
-                let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink)?;
+                let session = NativeAudioSession::new(
+                    SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+                    SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+                    100,
+                    sink,
+                )?;
                 Ok(Box::new(session))
             })
             .unwrap();
@@ -2673,7 +2678,13 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(
+            SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+            SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+            100,
+            sink,
+        )
+        .unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
@@ -2704,7 +2715,13 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(
+            SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+            SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32,
+            100,
+            sink,
+        )
+        .unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
