@@ -98,7 +98,29 @@ A auditoria não encontrou prova de que a condição temporária zero nos ticks 
 5. Comparar RMS, pico, DC offset, frequência, resposta espectral, aliasing, transientes, ruído, clipping e erro normalizado.
 6. Testar execução contínua versus blocos arbitrários e verificar igualdade bit a bit do estado e da sequência produzida.
 
-**Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace está adicionado, mas o gate permanece aberto até a captura histórica e análise quantitativa. Nenhuma troca de algoritmo antes desse gate.
+**Exportação de referência para comparação histórica:**
+
+O exemplo `native/sn76489/examples/psg_trace.rs` gera WAV IEEE-float 32-bit mono a 48 kHz a partir de uma sequência fixa de escritas em registradores e clocks. O hash FNV-1a impresso é calculado sobre as amostras `f64` internas antes da conversão WAV; é um identificador de reprodução, não uma assinatura criptográfica.
+
+Execute a mesma fonte do exemplo na revisão histórica e na branch atual:
+
+```powershell
+git worktree add ../sega-audio-baseline f47f71830344b85f72329376505d400bfbfaae69
+New-Item -ItemType Directory -Force ../sega-audio-baseline/native/sn76489/examples
+Copy-Item native/sn76489/examples/psg_trace.rs ../sega-audio-baseline/native/sn76489/examples/psg_trace.rs
+
+cargo run --release --manifest-path ../sega-audio-baseline/Cargo.toml -p sega-sn76489 --example psg_trace -- sms baseline-sms.wav
+cargo run --release -p sega-sn76489 --example psg_trace -- sms current-sms.wav
+cargo run --release --manifest-path ../sega-audio-baseline/Cargo.toml -p sega-sn76489 --example psg_trace -- sg1000 baseline-sg1000.wav
+cargo run --release -p sega-sn76489 --example psg_trace -- sg1000 current-sg1000.wav
+
+# Controle de invariância: segmenta o avanço do Scheduler em blocos de 997 clocks.
+cargo run --release -p sega-sn76489 --example psg_trace -- sms current-sms-chunked.wav 997
+```
+
+O WAV contém a fonte mono crua do PSG, sem dual-mono, volume de host, bass management ou quantização para 24 bits. Assim, a comparação isola o núcleo e seu filtro de reconstrução. A conversão final para WAV float32 serve apenas para inspeção/escuta; os valores e o hash impressos são calculados sobre as amostras `f64`.
+
+**Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
 
