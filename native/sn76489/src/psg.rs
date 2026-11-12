@@ -445,8 +445,7 @@ impl Sn76489StateV1 {
                 actual: version,
             });
         }
-        let body_len = usize::try_from(frame.u32()?)
-            .map_err(|_| PsgStateError::Truncated)?;
+        let body_len = usize::try_from(frame.u32()?).map_err(|_| PsgStateError::Truncated)?;
         let body = frame.take(body_len)?.to_vec();
         let checksum = frame.u32()?;
         if !frame.finished() {
@@ -588,9 +587,7 @@ impl Sn76489StateV1 {
                 "noise divider period or counter is inconsistent",
             ));
         }
-        if self.clock_divider_phase >= CLOCK_DIVIDER
-            || self.output_phase >= self.clock_hz
-        {
+        if self.clock_divider_phase >= CLOCK_DIVIDER || self.output_phase >= self.clock_hz {
             return Err(PsgStateError::InvalidState(
                 "clock divider or output sampling phase is out of range",
             ));
@@ -1916,8 +1913,7 @@ mod tests {
 
     #[test]
     fn versioned_state_round_trip_preserves_arbitrary_pipeline_phase() {
-        let mut original =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut original = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         original.write_inner(0x85);
         original.write_inner(0x12);
         original.write_inner(0x90);
@@ -1947,8 +1943,7 @@ mod tests {
 
     #[test]
     fn invalid_versioned_state_is_rejected_without_mutating_live_device() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.write_inner(0xE4);
         device.advance_clocks(1_237);
         let before = device.snapshot_state();
@@ -1967,8 +1962,7 @@ mod tests {
 
     #[test]
     fn invalid_lfsr_state_is_rejected_without_partial_restore() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.advance_clocks(987);
         let before = device.snapshot_state();
         let mut invalid = before.clone();
@@ -1983,11 +1977,9 @@ mod tests {
         assert_eq!(device.snapshot_state(), before);
     }
 
-
     #[test]
     fn versioned_state_codec_round_trip_is_canonical() {
-        let mut device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         device.write_inner(0x85);
         device.write_inner(0x12);
         device.write_inner(0x90);
@@ -2008,8 +2000,7 @@ mod tests {
 
     #[test]
     fn versioned_state_codec_rejects_corruption_truncation_and_trailing_data() {
-        let device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         let encoded = device.snapshot_state().encode().unwrap();
 
         let mut corrupted = encoded.clone();
@@ -2042,8 +2033,7 @@ mod tests {
 
     #[test]
     fn versioned_state_codec_rejects_unknown_schema_version() {
-        let device =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let device = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         let mut encoded = device.snapshot_state().encode().unwrap();
         encoded[8] = super::SN76489_STATE_FORMAT_VERSION as u8 + 1;
 
@@ -2055,5 +2045,4 @@ mod tests {
             })
         );
     }
-
 }
