@@ -1,7 +1,7 @@
 # Validação física de áudio CPAL — Windows x64
 
-**Branch:** `feat/cpal-audio-backend-20261112`  
-**PR:** #770  
+**Branch:** `feat/cpal-audio-backend-20261112`
+**PR:** #770
 **Estado:** roteiro preparado; execução física depende do PC Windows com dispositivo de áudio.
 
 ## Objetivo
