@@ -1686,6 +1686,20 @@ mod windows_host {
         use super::*;
 
         #[test]
+        fn host_frame_pacing_window_records_callback_and_mailbox_take_costs() {
+            let mut window = HostFramePacingWindow::new();
+            window.record_callback(Duration::from_micros(120));
+            window.record_mailbox_take(Duration::from_micros(8));
+
+            assert_eq!(window.callback_count, 1);
+            assert_eq!(window.callback_sum_ns, 120_000);
+            assert_eq!(window.callback_max_ns, 120_000);
+            assert_eq!(window.mailbox_take_count, 1);
+            assert_eq!(window.mailbox_take_sum_ns, 8_000);
+            assert_eq!(window.mailbox_take_max_ns, 8_000);
+        }
+
+        #[test]
         fn classic_material_transport_icons_load_as_slint_svg_images() {
             let icons = load_transport_icons().unwrap();
             for icon in [
