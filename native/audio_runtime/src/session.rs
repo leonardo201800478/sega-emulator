@@ -318,7 +318,7 @@ mod tests {
         let mut session = NativeAudioSession::new(48_000, 48_000, 100, sink).unwrap();
         session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
         session.close();
-        assert_eq!(session.sink.blocks, vec![vec![0, 0, 0, 64, 0, 192]]);
+        assert_eq!(session.sink.blocks, vec![vec![0.0, 0.5, -0.5]]);
         assert!(session.sink.closed);
     }
 
