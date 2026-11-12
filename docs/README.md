@@ -27,6 +27,10 @@ PR Draft, branch, documentação ou CI parcial não alteram o estado integrado d
 - [Scheduler](architecture/scheduler/README.md)
 - [Fidelidade temporal](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
 
+## Áudio
+
+- [Plano Modern Hi-Fi — SMS e SG-1000](audio/modern-hifi-audio-roadmap.md)
+
 ## Z80
 
 - [Scorecard](z80-completion-scorecard.md)
