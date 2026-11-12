@@ -347,9 +347,10 @@ impl<'a> StateReader<'a> {
     fn f64_vec(&mut self, maximum: usize) -> Result<Vec<f64>, PsgStateError> {
         let count = usize::try_from(self.u32()?)
             .map_err(|_| PsgStateError::InvalidState("state vector length is invalid"))?;
-        if count > maximum {
+        let remaining_values = self.bytes.len().saturating_sub(self.offset) / 8;
+        if count > maximum || count > remaining_values {
             return Err(PsgStateError::InvalidState(
-                "state vector exceeds its validated maximum length",
+                "state vector exceeds its validated maximum length or remaining payload",
             ));
         }
         (0..count).map(|_| self.f64()).collect()
@@ -444,16 +445,16 @@ impl Sn76489StateV1 {
         }
         let body_len = usize::try_from(frame.u32()?)
             .map_err(|_| PsgStateError::Truncated)?;
-        let body = frame.take(body_len)?;
+        let body = frame.take(body_len)?.to_vec();
         let checksum = frame.u32()?;
         if !frame.finished() {
             return Err(PsgStateError::TrailingData);
         }
-        if state_crc32(body) != checksum {
+        if state_crc32(&body) != checksum {
             return Err(PsgStateError::ChecksumMismatch);
         }
 
-        let mut reader = StateReader::new(body);
+        let mut reader = StateReader::new(&body);
         let profile = match reader.u8()? {
             0 => PsgProfile::Sg1000,
             1 => PsgProfile::Sms,
@@ -492,7 +493,6 @@ impl Sn76489StateV1 {
         let filter_position = usize::try_from(reader.u64()?)
             .map_err(|_| PsgStateError::InvalidState("FIR cursor is invalid"))?;
         let filter_history = reader.f64_vec(MAX_STATE_FILTER_TAPS)?;
-        let sample_buffer_capacity = sample_buffer_capacity.max(0);
         let pending_samples = reader.f64_vec(sample_buffer_capacity)?;
         let render_pending = reader.f64_vec(sample_buffer_capacity)?;
         if !reader.finished() {
