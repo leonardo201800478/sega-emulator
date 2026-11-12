@@ -28,7 +28,7 @@ rust/
 │   ├── input-runtime/
 │   └── sms-core/
 ├── hosts/
-│   └── audio-output/          # WASAPI / XAudio2 host adapters
+│   └── audio-output/          # host de áudio nativo em transição; substituição CPAL prevista em R3
 ├── runtime/
 │   └── sms-runtime/           # pure-Rust worker and session lifecycle
 └── tests/
