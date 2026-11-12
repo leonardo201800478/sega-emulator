@@ -206,9 +206,6 @@ mod tests {
 
         let domain = ClockDomainId(17);
         let mut scheduler = MachineScheduler::<Option<u8>>::new();
-        scheduler
-            .register_clock_domain(domain, ClockRatio::new(1, 1).unwrap())
-            .unwrap();
         for &(clock, value) in TRACE {
             scheduler
                 .schedule_at(
