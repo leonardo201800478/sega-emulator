@@ -153,7 +153,7 @@ mod windows_host {
                         height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        image-fit: fill;
+                        image-fit: contain;
                     }
                     TouchArea {
                         width: 100%; height: 100%;
@@ -942,6 +942,11 @@ mod windows_host {
                 host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
+            // Keep the menu indicator bound to the window manager's actual state.
+            let actual_fullscreen = app.window().is_fullscreen();
+            if app.get_fullscreen_enabled() != actual_fullscreen {
+                app.set_fullscreen_enabled(actual_fullscreen);
+            }
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
                 host_pacing.report_if_due(&worker_slot);
                 host_pacing.record_callback(callback_started.elapsed());
