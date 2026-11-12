@@ -228,3 +228,16 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 
 ### Próximo incremento
 P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite visual físico R2; não avançar R4/R5.
+
+
+## 12. Atualização operacional — P0 #755 / PR #789 (2026-11-12)
+
+**Base:** main `6b5993e07df740316beb568f0dc67139e6553928` (inclui PR #788).
+
+- PR #789 adiciona distribuições rolling de 512 observações para polling Slint, intervalos de consumo, mailbox residence/take, RGB conversion, `Queue::write_texture` e duração do callback.
+- Percentis p50/p95/p99 e jitter p95−p50 são emitidos por segundo; sample counts são explícitos.
+- O worker já mede p50/p95/p99 de frame completion, ticks/frame, step, publicação, processamento e wait.
+- A PR permanece em validação Windows x64 Release. Nenhuma alteração no Scheduler ou pacing foi feita.
+- A captura física posterior a #766/#785 continua pendente; a captura histórica `SMS-QPC-20261112-002914` não contém todas as métricas novas.
+- `empty_polls` não é contado como repetição física. A análise de present/display permanece externa via PresentMon/QPC.
+
