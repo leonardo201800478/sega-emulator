@@ -40,7 +40,7 @@ A auditoria da árvore main em 2026-11-12 encontrou:
 - native/sega_desktop / runtime SMS: o caminho CPAL está integrado por PR #770 e a linha PCM interna de 48 kHz por PR #774; faltam gates de operação física prolongada, hotplug e formatos adaptativos.
 - .github/workflows/ci.yml: existem nomes de checks de compatibilidade exigidos pela proteção da branch; os jobs correspondentes ficam SKIPPED em eventos normais e não validam os hosts antigos.
 
-**Conclusão:** as referências nos documentos normativos foram corrigidas para refletir a arquitetura-alvo. A remoção de WASAPI/XAudio2 está proposta na PR #770 junto com a substituição CPAL, mas a main mantém o baseline anterior até a validação exigida. Não integrar a remoção antes de CI e comprovação funcional; não apagar código apenas para eliminar ocorrências textuais.
+**Conclusão:** a main já utiliza CPAL 0.18.2 e a linha PCM interna de 48 kHz após os merges #770 e #774. A retirada física dos hosts gráficos anteriores permanece condicionada ao inventário de consumidores, à paridade Slint/WGPU e aos gates R5. Não remover módulos ou dependências apenas para eliminar ocorrências textuais; preservar os contratos e evidências necessários.
 
 ## 4. Critérios obrigatórios para retirada física
 
