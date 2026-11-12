@@ -153,7 +153,7 @@ mod windows_host {
                         height: min(parent.height, parent.width / (root.selected-aspect == "1:1" ? 1.0 : root.selected-aspect == "16:9" ? 16.0 / 9.0 : 4.0 / 3.0));
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        image-fit: fill;
+                        image-fit: contain;
                     }
                     TouchArea {
                         width: 100%; height: 100%;
