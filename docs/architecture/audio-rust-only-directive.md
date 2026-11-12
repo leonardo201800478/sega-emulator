@@ -24,7 +24,7 @@ Devem ser construídos e executados em Rust:
 - Mixer multifuente, DSP, filtros, resampling, conversão de formato, clipping/quantização e buffers.
 - Filas limitadas, backpressure, underrun/overflow, métricas e recuperação de falhas.
 - Ciclo de vida da sessão de áudio e workers nativos.
-- Integração direta com APIs de saída do sistema operacional, incluindo WASAPI e XAudio2 no Windows.
+- Integração direta com APIs de saída do sistema operacional, por meio do adaptador CPAL 0.18.2, que seleciona o backend nativo do sistema.
 - Save/load de estados de áudio, quando aplicável, preservando fases, filas e eventos necessários ao determinismo.
 
 O pipeline compartilhado deverá acomodar, conforme os marcos de hardware, PSG SN76489, YM2413, YM2612/YM3438, DAC, RF5C164, CD-DA e PWM 32X, sem pressupor que todos estejam implementados ao mesmo tempo.
