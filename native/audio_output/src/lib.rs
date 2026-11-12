@@ -121,9 +121,9 @@ impl NativeCpalOutput {
         let (supported, used_default_fallback) = match preferred {
             Some(config) => (config, false),
             None => (
-                device
-                    .default_output_config()
-                    .map_err(|error| format!("CPAL default output configuration failed: {error}"))?,
+                device.default_output_config().map_err(|error| {
+                    format!("CPAL default output configuration failed: {error}")
+                })?,
                 true,
             ),
         };
@@ -336,10 +336,7 @@ fn select_preferred_output_config(
                     if range.channels() != channels || range.sample_format() != format {
                         continue;
                     }
-                    if let Some(config) = range
-                        .clone()
-                        .try_with_sample_rate(rate)
-                    {
+                    if let Some(config) = range.clone().try_with_sample_rate(rate) {
                         return Some(config);
                     }
                 }
