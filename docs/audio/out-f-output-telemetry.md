@@ -1,4 +1,7 @@
-# OUT-F — telemetria da saída PCM (primeiro incremento)
+# Registro histórico — OUT-F — telemetria da saída PCM (primeiro incremento)
+
+> **SUPERSEDED:** os campos `endpoint_starvation_events` e `submission_failed_frames` eram específicos do XAudio2 e foram removidos do contrato genérico. A telemetria atual usa apenas métricas de FIFO e stream CPAL. Consulte [saída CPAL](cpal-output-backend.md).
+
 
 ## Objetivo
 
