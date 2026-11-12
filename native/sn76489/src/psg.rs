@@ -1217,8 +1217,7 @@ mod tests {
             0.0,
         ];
 
-        let mut psg =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         psg.tone_outputs = [1; 3];
         psg.noise_output = 1;
         psg.attenuations = [15; 4];
@@ -1257,5 +1256,4 @@ mod tests {
         psg.write(0x04);
         assert_eq!(psg.noise_control(), 0x04);
     }
-
 }
