@@ -71,7 +71,7 @@ A fotografia completa de PRs, issues, workflows, riscos e próximos passos está
 - P0 #755 (frame pacing/Scheduler) deve ser diagnosticado antes de novas mudanças temporais ou hardening de áudio.
 
 Branches antigas devem ser reconciliadas por portabilidade seletiva para branches novas sobre a main atual. Não fazer merge cego de histórico divergente.
- 
+
 ## 5. Z80
 
 E4C → E5 → E6 → E7 → E8 → E9. Consultar docs/z80-completion-scorecard.md e docs/z80-dd-fd-semantic-matrix.md antes de qualquer tarefa. Não iniciar E8/ZEXDOC/ZEXALL antes do fechamento demonstrável de E7. Não reabrir etapas validadas sem evidência de defeito/regressão.
