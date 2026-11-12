@@ -143,6 +143,45 @@ fn export(report: &str, wavs: Vec<(String,Vec<f64>)>) {
     }
 }
 
+fn kernel_step_metrics() -> (f64, f64, usize) {
+    let taps = kernel()[PHASES / 2].clone();
+    let mut level = 0.0;
+    let mut response = Vec::with_capacity(taps.len());
+    for tap in taps {
+        level += tap;
+        response.push(level);
+    }
+    let overshoot = response.iter().copied().fold(1.0_f64, f64::max) - 1.0;
+    let undershoot = response.iter().copied().fold(0.0_f64, f64::min);
+    let settling = (0..response.len())
+        .find(|index| response[*index..].iter().all(|value| (value - 1.0).abs() <= 0.01))
+        .unwrap_or(response.len());
+    (overshoot, undershoot, settling)
+}
+
+#[test]
+fn event_kernel_step_response_reports_ringing_overshoot_undershoot_and_settling() {
+    let (overshoot, undershoot, settling) = kernel_step_metrics();
+    assert!(overshoot.is_finite() && undershoot.is_finite());
+    assert!(settling <= (2 * RADIUS + 1) as usize);
+    if let Some(directory) = std::env::var_os("PSG_H2_ARTIFACT_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(
+            directory.join("psg-h2-kernel-transient.csv"),
+            format!(
+                "kernel,phases,taps,cutoff_nyquist,overshoot,undershoot,settling_to_1pct_samples\nblackman-sinc,{}, {},0.94,{:.12},{:.12},{}\n",
+                PHASES,
+                2 * RADIUS + 1,
+                overshoot,
+                undershoot,
+                settling
+            ),
+        )
+        .unwrap();
+    }
+}
+
 #[test]
 fn exhaustive_period_sweep_verifies_divider_and_period_zero_one_semantics() {
     for profile in [PsgProfile::Sms,PsgProfile::Sg1000] {
