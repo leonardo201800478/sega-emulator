@@ -97,9 +97,9 @@ jobs:
             --lagrange3-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/lagrange3-tone-p14.wav \
             --lagrange3-tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav artifacts/lagrange3-tone-p28.wav \
             --lagrange3-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/lagrange3-tone-p56.wav \
-            --lagrange3-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange3-tone-p112.wav
-            --sinc8-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/sinc8-sms-p5.wav
-            --sinc8-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/sinc8-sms-p14.wav
+            --lagrange3-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange3-tone-p112.wav \
+            --sinc8-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/sinc8-sms-p5.wav \
+            --sinc8-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/sinc8-sms-p14.wav \
             --sinc8-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/sinc8-sms-p56.wav
           cat artifacts/psg-audio-report.md
       - name: Upload PSG H2 measurements and PCM captures
