@@ -1529,7 +1529,7 @@ fn worker_loop(
                 .remaining(Instant::now())
                 .unwrap_or(Duration::ZERO);
             let wait_deadline = frame_deadline.deadline;
-            pacing_wait_active = wait_deadline.is_some();
+            pacing_wait_active = !timeout.is_zero();
             let wait_started = Instant::now();
             let wait_result = commands.recv_timeout(timeout);
             let wait_finished = Instant::now();
