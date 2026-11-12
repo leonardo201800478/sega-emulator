@@ -1,8 +1,8 @@
 # Plano Modern Hi-Fi — SMS e SG-1000
 
-**Status:** H2 em validação; reconstrução event-based implementada como protótipo exclusivamente de teste. Nenhuma alteração de síntese foi promovida à produção.
-**Branch de trabalho:** `feat/modern-hifi-audio-foundation-20261112`
-**Baseline de main após atualização:** `b375d4bb85149678b82ab39a497177d1a1cd2319` (2026-11-12).
+**Status:** H2 concluído como investigação experimental; H3 em implementação para padronizar a linha PCM interna em 48 kHz. O renderer event-based H2 continua exclusivamente em testes e não foi promovido à produção.
+**Branch de trabalho H3:** `feat/h3-pcm-48khz-explicit-rates-20261112`
+**Baseline de main:** `1f3f30a9d198bb65212388ced220cc4ea7499a5c` (merge da PR #773, 2026-11-12).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
 **Não autoriza merge:** toda implementação será submetida a PR e validada antes de qualquer integração.
@@ -195,7 +195,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 ### H2 — Fechamento da síntese e reconstrução
 
-**Status: EM VALIDAÇÃO — protótipo event-based, sweep de períodos, transientes e perfis de ruído adicionados em módulo exclusivamente de teste. A conclusão depende dos novos artefatos e da CI.**
+**Status: CONCLUÍDO como investigação experimental reproduzível.** A PR #773 foi integrada à `main` em `1f3f30a9d198bb65212388ced220cc4ea7499a5c`. A síntese de produção permanece intacta; o renderer event-based continua restrito a testes. Os gates não atendidos para promoção acústica permanecem bloqueios deliberados, não pendências para integrar o protótipo.
 
 1. [x] Auditar divisor, fase de amostragem, FIR e diferenças de resposta.
 2. [x] Validar a interpolação fracionária com o core real e comparar baseline, linear e protótipo Lagrange4.
@@ -208,13 +208,18 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 ### H3 — Linha de áudio de referência em 48 kHz
 
-1. Definir 48 kHz como taxa interna de produção de áudio, independente da taxa física do endpoint.
-2. Generalizar o `PcmResampler` para taxa de entrada explícita, sem constante global implícita de 44,1 kHz.
-3. Preservar determinismo, contagem de frames, flush e invariância por tamanho de bloco.
-4. Evitar resampling redundante quando a taxa de saída negociada também for 48 kHz.
-5. Manter `f64` até a fronteira final de conversão.
+**Status: IMPLEMENTAÇÃO INICIAL NA BRANCH H3; aguardando CI e revisão dos resultados.**
 
-**Gate H3:** 48 kHz end-to-end em testes headless; equivalência entre blocos; sem alteração de clocks do Scheduler.
+1. [x] Definir 48 kHz como taxa interna de produção SMS/SG-1000, independente da taxa física do endpoint.
+2. [x] Generalizar `PcmResampler` para taxas explícitas de entrada e saída; remover a taxa de entrada global implícita de 44,1 kHz.
+3. [x] Separar taxa PCM interna (48 kHz) da taxa negociada pelo CPAL e converter explicitamente entre elas.
+4. [x] Bypassar o FIR quando entrada e saída têm a mesma taxa, evitando resampling redundante em 48 kHz.
+5. [x] Atualizar o default SMS/SG-1000 e versionar o snapshot do barramento SMS para rejeitar snapshots antigos com configuração temporal de áudio incompatível.
+6. [x] Adicionar teste headless de conversão 48 kHz → 44,1 kHz e preservar testes de invariância por blocos/flush.
+7. [ ] Executar CI completa, incluindo Windows x64 CPAL e SMS Runtime, e corrigir regressões.
+8. [ ] Confirmar métricas de contagem de frames e invariância no runtime real; provar que os clocks e o estado final do Scheduler permanecem idênticos.
+
+**Gate H3:** CI aplicável verde; 48 kHz end-to-end na fonte interna; equivalência entre blocos; nenhuma alteração nos clocks do Scheduler.
 
 ### H4 — Contrato PCM moderno e saída 24-bit
 
@@ -280,7 +285,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 - [SMS Power](https://www.smspower.org/)
 
 ---
-**Estado desta revisão:** planejamento e auditoria estática documentados. Não há alteração de algoritmo de áudio nesta etapa. Testes locais e validação física permanecem pendentes.
+**Estado desta revisão anterior:** planejamento e auditoria estática. O trabalho H3 agora está sendo implementado na branch `feat/h3-pcm-48khz-explicit-rates-20261112`; os resultados de CI e validação física ainda não foram declarados.
 
 
 Consulte também o estudo PSG H2 — reconstrução event-based, com a modelagem independente, os testes matemáticos, a varredura de períodos e a caracterização dos perfis de ruído.
@@ -306,6 +311,6 @@ O kernel tem 65 taps, atraso de grupo de 31,25 amostras, lookahead causal estima
 
 **Decisão de arquitetura:** H2 fecha como investigação reproduzível e protótipo exclusivamente de teste. Nenhuma alteração foi feita na síntese de produção, no MachineScheduler ou no callback CPAL. O protótipo não está pronto para streaming: mantém eventos e buffers de duração integral.
 
-### H3 — próximo trabalho autorizado pelo roadmap
+### H3 — execução após o merge de H2
 
-H3 pode começar de forma independente, focando a linha PCM de referência em 48 kHz: generalizar taxas explícitas no resampler, preservar fase/continuidade/flush e invariância por blocos, e provar equivalência headless sem alterar clocks do Scheduler. H3 não pode integrar nem depender do renderer H2 experimental. Os gates H4–H6 permanecem inalterados.
+H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental. A implementação separa taxa de geração PCM interna de taxa física negociada, mantendo `MachineScheduler` como autoridade temporal. Os gates H4–H6 permanecem inalterados.

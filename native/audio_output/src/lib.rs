@@ -20,7 +20,9 @@ use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
-use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
+use sega_audio_runtime::{
+    AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ, NativeAudioSession, PcmSink,
+};
 
 use crate::pcm_convert::mono_sample_to_stereo_frame;
 use crate::pcm_fifo::{PcmFrameConsumer, PcmFrameProducer};
@@ -170,7 +172,12 @@ impl NativeCpalOutput {
 
     /// Wrap this sink in the shared Rust DSP/resampler session.
     pub fn into_audio_session(self, volume: u8) -> Result<NativeAudioSession<Self>, String> {
-        NativeAudioSession::new(self.sample_rate_hz, volume, self)
+        NativeAudioSession::new(
+            DEFAULT_PCM_SOURCE_RATE_HZ,
+            self.sample_rate_hz,
+            volume,
+            self,
+        )
     }
 
     fn check_callback_error(&self) -> Result<(), String> {

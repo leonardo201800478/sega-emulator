@@ -16,16 +16,16 @@ use crate::{
     SmsIoError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
     SmsTemporalCoordinatorState, SmsTemporalEvent, SmsVdp, Territory,
 };
-use sega_audio_runtime::{PsgClockError, ScheduledPsg};
+use sega_audio_runtime::{DEFAULT_PCM_SOURCE_RATE_HZ, PsgClockError, ScheduledPsg};
 use sega_sn76489::{PsgProfile, Sn76489Core};
 use sega_temporal_core::MachineTime;
 use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 11;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 12;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
-const DEFAULT_AUDIO_SAMPLE_RATE: u64 = 44_100;
+const DEFAULT_AUDIO_SAMPLE_RATE: u64 = DEFAULT_PCM_SOURCE_RATE_HZ as u64;
 const MAX_PORT_WRITE_TRACE: usize = 64;
 
 fn elapsed_tstates(
@@ -219,10 +219,11 @@ impl SmsTemporalBus {
         )
     }
 
-    /// Construct a bus with an explicit SMS PSG input clock and host sample rate.
+    /// Construct a bus with an explicit SMS PSG input clock and internal PCM source rate.
     ///
     /// The PSG input clock must follow the selected SMS CPU/PSG clock profile.
-    /// The sample rate controls only output resampling; it never clocks the chip.
+    /// The PCM rate controls PSG sample generation; it never clocks the chip or Scheduler.
+    /// Host endpoint conversion is performed independently by the native audio session.
     pub fn new_with_psg_config(
         rom: impl Into<Vec<u8>>,
         master_ticks_per_tstate: u64,
@@ -1320,6 +1321,15 @@ mod temporal_vdp_tests {
     }
 
     #[test]
+    fn default_sms_temporal_bus_uses_the_canonical_48khz_pcm_source_rate() {
+        let bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        assert_eq!(
+            bus.psg().sample_rate(),
+            super::DEFAULT_PCM_SOURCE_RATE_HZ as u64
+        );
+    }
+
+    #[test]
     fn vdp_data_write_is_invisible_until_the_scheduled_port_boundary() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         assert_eq!(bus.vdp().vram()[0], 0);
@@ -1451,12 +1461,12 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 11);
+        assert_eq!(snapshot.format_version, 12);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
 
-        snapshot.format_version = 10;
+        snapshot.format_version = 11;
         assert!(matches!(
             SmsTemporalBus::restore_state(snapshot),
             Err(super::SmsTemporalBusError::InvalidState)

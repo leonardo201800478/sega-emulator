@@ -14,7 +14,7 @@ pub(crate) struct NativeSn76489 {
 #[pymethods]
 impl NativeSn76489 {
     #[new]
-    #[pyo3(signature = (clock_hz=3579545, sample_rate=44100))]
+    #[pyo3(signature = (clock_hz=3579545, sample_rate=48000))]
     fn new(clock_hz: u64, sample_rate: u64) -> PyResult<Self> {
         let inner = Sn76489::new(clock_hz, sample_rate)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
