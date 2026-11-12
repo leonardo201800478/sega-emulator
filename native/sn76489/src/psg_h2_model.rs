@@ -430,18 +430,22 @@ fn goertzel_power(samples: &[f64], frequency_hz: f64) -> f64 {
         .max(0.0)
 }
 
+struct RuntimeTimings {
+    capture: std::time::Duration,
+    event_render: std::time::Duration,
+    core_render: std::time::Duration,
+}
+
 fn write_runtime_metrics(
     directory: &Path,
     profile_name: &str,
     events: &[PsgAmplitudeEvent],
     kernel: &EventBasedKernel,
     sample_count: usize,
-    capture_elapsed: std::time::Duration,
-    event_render_elapsed: std::time::Duration,
-    core_render_elapsed: std::time::Duration,
+    timings: RuntimeTimings,
 ) {
-    // `events` is a slice, so report its payload size rather than Vec capacity.
-    let event_payload_bytes = events.len() * std::mem::size_of::<PsgAmplitudeEvent>();
+    // This is the slice payload, not the source Vec's reserved capacity.
+    let event_payload_bytes = std::mem::size_of_val(events);
     let kernel_storage_bytes = (kernel.step_response.capacity()
         + kernel.impulse_response.capacity()
         + kernel.discrete_coefficients.capacity())
@@ -450,7 +454,7 @@ fn write_runtime_metrics(
     let peak_working_set_estimate_bytes =
         event_payload_bytes + kernel_storage_bytes + renderer_scratch_bytes;
     let audio_duration_seconds = sample_count as f64 / SAMPLE_RATE as f64;
-    let event_pipeline_seconds = capture_elapsed.as_secs_f64() + event_render_elapsed.as_secs_f64();
+    let event_pipeline_seconds = timings.capture.as_secs_f64() + timings.event_render.as_secs_f64();
     let report = format!(
         concat!(
             "{{\n",
@@ -477,9 +481,9 @@ fn write_runtime_metrics(
         sample_count,
         audio_duration_seconds,
         events.len(),
-        capture_elapsed.as_secs_f64() * 1000.0,
-        event_render_elapsed.as_secs_f64() * 1000.0,
-        core_render_elapsed.as_secs_f64() * 1000.0,
+        timings.capture.as_secs_f64() * 1000.0,
+        timings.event_render.as_secs_f64() * 1000.0,
+        timings.core_render.as_secs_f64() * 1000.0,
         event_pipeline_seconds / audio_duration_seconds,
         event_payload_bytes,
         kernel_storage_bytes,
@@ -634,9 +638,11 @@ fn event_based_full_register_traces_are_deterministic_for_both_profiles() {
                 &events,
                 &kernel,
                 event_pcm.len(),
-                capture_elapsed,
-                event_render_elapsed,
-                core_render_elapsed,
+                RuntimeTimings {
+                    capture: capture_elapsed,
+                    event_render: event_render_elapsed,
+                    core_render: core_render_elapsed,
+                },
             );
         }
     }
