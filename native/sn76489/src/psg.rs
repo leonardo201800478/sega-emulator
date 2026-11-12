@@ -1201,6 +1201,64 @@ mod tests {
         assert_eq!(chunked.lfsr, whole.lfsr);
     }
 
+
+    #[test]
+    fn output_samples_are_chunk_invariant_across_ntsc_pal_and_host_rates() {
+        const CHUNK_SIZES: [u64; 9] = [1, 3, 15, 16, 17, 29, 257, 1_021, 4_093];
+        const CLOCK_RATES: [u64; 2] = [3_579_545, 3_546_893];
+        const SAMPLE_RATES: [u64; 4] = [22_050, 44_100, 48_000, 96_000];
+        const TOTAL_CLOCKS: u64 = 300_007;
+
+        for clock_hz in CLOCK_RATES {
+            for sample_rate in SAMPLE_RATES {
+                let mut whole =
+                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                let mut chunked =
+                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                for device in [&mut whole, &mut chunked] {
+                    device.write_inner(0x85);
+                    device.write_inner(0x12);
+                    device.write_inner(0x90);
+                    device.write_inner(0xE4);
+                    device.write_inner(0xF0);
+                }
+
+                whole.advance_clocks(TOTAL_CLOCKS);
+                let mut remaining = TOTAL_CLOCKS;
+                let mut chunk_index = 0;
+                while remaining > 0 {
+                    let clocks = CHUNK_SIZES[chunk_index % CHUNK_SIZES.len()].min(remaining);
+                    chunked.advance_clocks(clocks);
+                    remaining -= clocks;
+                    chunk_index += 1;
+                }
+
+                let whole_samples = whole.drain_samples(None);
+                let chunked_samples = chunked.drain_samples(None);
+                let internal_ticks = TOTAL_CLOCKS / super::CLOCK_DIVIDER;
+                let expected_samples = (u128::from(internal_ticks)
+                    * u128::from(sample_rate)
+                    * u128::from(super::CLOCK_DIVIDER)
+                    / u128::from(clock_hz)) as usize;
+
+                assert_eq!(
+                    whole_samples.len(),
+                    expected_samples,
+                    "sample count mismatch at {clock_hz} Hz / {sample_rate} Hz"
+                );
+                assert_eq!(
+                    chunked_samples, whole_samples,
+                    "PCM differs at {clock_hz} Hz / {sample_rate} Hz"
+                );
+                assert_eq!(
+                    chunked.snapshot_state(),
+                    whole.snapshot_state(),
+                    "PSG state differs at {clock_hz} Hz / {sample_rate} Hz"
+                );
+            }
+        }
+    }
+
     #[test]
     fn fractional_output_sampling_reduces_clock_quantization_error() {
         let clock_hz = 3_579_545_u64;
