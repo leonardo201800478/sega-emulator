@@ -1210,8 +1210,10 @@ mod tests {
 
         for clock_hz in CLOCK_RATES {
             for sample_rate in SAMPLE_RATES {
-                let mut whole = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
-                let mut chunked = Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                let mut whole =
+                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
+                let mut chunked =
+                    Sn76489::new_with_profile(clock_hz, sample_rate, PsgProfile::Sms).unwrap();
                 for device in [&mut whole, &mut chunked] {
                     device.write_inner(0x85);
                     device.write_inner(0x12);
@@ -1396,7 +1398,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn sample_queue_overflow_drops_oldest_pcm_without_changing_psg_or_fir_state() {
         let mut bounded = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
@@ -1420,7 +1421,10 @@ mod tests {
             bounded.dropped_samples as usize,
             reference.pending_samples.len() - 1
         );
-        assert_eq!(bounded.pending_samples.back(), reference.pending_samples.back());
+        assert_eq!(
+            bounded.pending_samples.back(),
+            reference.pending_samples.back()
+        );
 
         // Queue pressure is a host-output concern: it must not feed back into
         // oscillator, LFSR, clock, resampler or FIR history.
