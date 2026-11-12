@@ -358,12 +358,12 @@ jobs:
           cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000-chunked.wav 997
       - name: Compare PCM traces and produce report
         run: |
-          python tools/audio/compare_psg_wav.py \\
-            --baseline-sms artifacts/baseline-sms.wav \\
-            --current-sms artifacts/current-sms.wav \\
-            --chunked-sms artifacts/current-sms-chunked.wav \\
-            --baseline-sg1000 artifacts/baseline-sg1000.wav \\
-            --current-sg1000 artifacts/current-sg1000.wav \\
+          python tools/audio/compare_psg_wav.py \
+            --baseline-sms artifacts/baseline-sms.wav \
+            --current-sms artifacts/current-sms.wav \
+            --chunked-sms artifacts/current-sms-chunked.wav \
+            --baseline-sg1000 artifacts/baseline-sg1000.wav \
+            --current-sg1000 artifacts/current-sg1000.wav \
             --chunked-sg1000 artifacts/current-sg1000-chunked.wav
       - name: Upload WAV traces and comparison report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
