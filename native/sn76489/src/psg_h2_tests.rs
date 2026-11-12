@@ -261,7 +261,6 @@ fn spectral_metrics(samples: &[f64]) -> (f64, f64) {
     let mut weighted_power = 0.0;
     let mut total_power = 0.0;
     let mut logarithmic_power = 0.0;
-    let mut powers = Vec::with_capacity(BINS);
     for bin in 1..=BINS {
         let fft_bin = bin * 8;
         let mut real = 0.0;
@@ -276,7 +275,6 @@ fn spectral_metrics(samples: &[f64]) -> (f64, f64) {
         }
         let power = real * real + imaginary * imaginary;
         let frequency = fft_bin as f64 * RATE as f64 / count as f64;
-        powers.push((frequency, power));
         total_power += power;
         weighted_power += frequency * power;
         logarithmic_power += (power + 1.0e-30).ln();
@@ -334,8 +332,8 @@ fn transient_and_noise_metrics_cover_both_hardware_profiles() {
     let mut report=String::from("kind,profile,scenario,mean,rms,peak,max_delta,lag1_correlation,zero_crossing_ratio,spectral_centroid_hz,spectral_flatness\n");
     for profile in [PsgProfile::Sms,PsgProfile::Sg1000] {
         for (scenario,before,after) in transient_stats(profile) {
-            report.push_str(&format!("transient-before,{},{},{:.12},{:.12},{:.12},{:.12},,\n",name(profile),scenario,before.mean,before.rms,before.peak,before.max_delta));
-            report.push_str(&format!("transient-after,{},{},{:.12},{:.12},{:.12},{:.12},,\n",name(profile),scenario,after.mean,after.rms,after.peak,after.max_delta));
+            report.push_str(&format!("transient-before,{},{},{:.12},{:.12},{:.12},{:.12},,,,\n",name(profile),scenario,before.mean,before.rms,before.peak,before.max_delta));
+            report.push_str(&format!("transient-after,{},{},{:.12},{:.12},{:.12},{:.12},,,,\n",name(profile),scenario,after.mean,after.rms,after.peak,after.max_delta));
         }
         for control in 0_u8..8 {
             let (m,corr,zc,centroid,flatness)=noise_stats(profile,control);
