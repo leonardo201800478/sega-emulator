@@ -721,6 +721,32 @@ enum WorkerCommand {
     Shutdown,
 }
 
+impl WorkerCommand {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Start(_) => "start",
+            Self::Pause(_) => "pause",
+            Self::Stop(_) => "stop",
+            Self::Reset(_) => "reset",
+            Self::LoadRom(_, _) => "load_rom",
+            Self::StepFrame(_) => "step_frame",
+            Self::StepInstruction(_) => "step_instruction",
+            Self::DebugSnapshot(_) => "debug_snapshot",
+            Self::ReadMemory(_, _) => "read_memory",
+            Self::SetTraceEnabled(_, _) => "set_trace_enabled",
+            Self::SetSpriteLimitMode(_, _) => "set_sprite_limit_mode",
+            Self::SetBreakpoint(_, _) => "set_breakpoint",
+            Self::SetController(_, _, _) => "set_controller",
+            Self::RequestNmi => "request_nmi",
+            Self::ConfigureAudio(_, _) => "configure_audio",
+            Self::SetAudioVolume(_, _) => "set_audio_volume",
+            Self::CloseAudio(_) => "close_audio",
+            Self::SetVideoMailbox(_, _) => "set_video_mailbox",
+            Self::Shutdown => "shutdown",
+        }
+    }
+}
+
 /// Owned, immutable SMS/Z80 state captured on the machine worker thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsDebugSnapshot {
@@ -1558,6 +1584,7 @@ fn worker_loop(
 
         if let Some(command) = command {
             let was_running = running;
+            let command_kind = command.kind();
             let command_handler_started = Instant::now();
             let command_continues = handle_command(
                 command,
@@ -1573,9 +1600,18 @@ fn worker_loop(
                 &mut trace_history,
                 &mut trace_enabled,
             );
-            if was_running && pacing_wait_active {
-                telemetry.record_command_handler(command_handler_started.elapsed());
+            let command_handler_elapsed = command_handler_started.elapsed();
+            if was_running {
+                telemetry.record_command_handler(command_handler_elapsed);
             }
+            sega_observability::tracing::trace!(
+                target: "sega::audio::pacing",
+                command_kind,
+                command_handler_ns = command_handler_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+                worker_was_running = was_running,
+                pacing_wait_active,
+                "SMS worker command handler"
+            );
             if !command_continues {
                 break;
             }
@@ -2883,6 +2919,17 @@ mod tests {
         window.record_actual_wait(Duration::from_millis(21));
 
         assert_eq!(window.snapshot().pacing_wait_elapsed_p50_ns, 21_000_000);
+    }
+
+    #[test]
+    fn frame_pacing_window_records_command_handler_without_wait_wakeup() {
+        let mut window = FramePacingWindow::new();
+        window.push(FramePacingSample::default());
+        window.record_command_handler(Duration::from_micros(250));
+
+        let snapshot = window.snapshot();
+        assert_eq!(snapshot.command_handler_p95_ns, 250_000);
+        assert_eq!(snapshot.pacing_command_wakeups_total, 0);
     }
 
     #[test]
