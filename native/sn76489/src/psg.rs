@@ -741,7 +741,38 @@ mod tests {
             .sum()
     }
 
+    fn interpolate_lagrange3(samples: [f64; 3], fraction: f64) -> f64 {
+        let x = fraction;
+        let weights = [
+            x * (x - 1.0) / 2.0,
+            1.0 - x * x,
+            x * (x + 1.0) / 2.0,
+        ];
+        samples
+            .iter()
+            .zip(weights)
+            .map(|(sample, weight)| sample * weight)
+            .sum()
+    }
+
     fn render_lagrange4_tone(period: u16, max_advance_chunk: Option<u64>) -> Vec<f64> {
+        render_interpolated_tone(period, max_advance_chunk, interpolate_lagrange4)
+    }
+
+    fn render_lagrange3_tone(period: u16, max_advance_chunk: Option<u64>) -> Vec<f64> {
+        render_interpolated_tone(period, max_advance_chunk, |samples, fraction| {
+            interpolate_lagrange3([samples[1], samples[2], samples[3]], fraction)
+        })
+    }
+
+    fn render_interpolated_tone<F>(
+        period: u16,
+        max_advance_chunk: Option<u64>,
+        interpolate: F,
+    ) -> Vec<f64>
+    where
+        F: Fn([f64; 4], f64) -> f64,
+    {
         const CLOCK_HZ: u64 = 3_579_545;
         const SAMPLE_RATE: u64 = 48_000;
         const TOTAL_CLOCKS: u64 = 4_000_000;
@@ -785,7 +816,7 @@ mod tests {
                         let crossing = u128::from(CLOCK_HZ - previous_phase)
                             + u128::from(sample_index) * u128::from(CLOCK_HZ);
                         let fraction = crossing as f64 / increment as f64;
-                        output.push(interpolate_lagrange4(samples, fraction));
+                        output.push(interpolate(samples, fraction));
                     }
                 }
             }
@@ -819,7 +850,7 @@ mod tests {
     }
 
     #[test]
-    fn experimental_lagrange4_tone_sweep_is_chunk_invariant_and_exports_ci_wavs() {
+    fn experimental_lagrange_tone_sweep_is_chunk_invariant_and_exports_ci_wavs() {
         const PERIODS: [u16; 8] = [5, 6, 7, 9, 14, 28, 56, 112];
         let artifact_dir = std::env::var_os("PSG_AUDIO_ARTIFACT_DIR").map(std::path::PathBuf::from);
         if let Some(directory) = &artifact_dir {
@@ -827,29 +858,42 @@ mod tests {
         }
 
         for period in PERIODS {
-            let samples = render_lagrange4_tone(period, None);
-            assert!(samples.iter().all(|sample| sample.is_finite()));
-            let peak = samples
-                .iter()
-                .map(|sample| sample.abs())
-                .fold(0.0_f64, f64::max);
-            assert!(peak > 0.001, "period={period}: experimental tone is silent");
-            assert!(
-                peak < 1.0,
-                "period={period}: unexpected Lagrange overshoot {peak}"
-            );
+            let lagrange4 = render_lagrange4_tone(period, None);
+            let lagrange3 = render_lagrange3_tone(period, None);
+            for (name, samples) in [("Lagrange4", &lagrange4), ("Lagrange3", &lagrange3)] {
+                assert!(samples.iter().all(|sample| sample.is_finite()));
+                let peak = samples
+                    .iter()
+                    .map(|sample| sample.abs())
+                    .fold(0.0_f64, f64::max);
+                assert!(peak > 0.001, "period={period}: {name} tone is silent");
+                assert!(peak < 1.0, "period={period}: {name} overshoot {peak}");
+            }
 
             if period == 5 {
-                let chunked = render_lagrange4_tone(period, Some(997));
                 assert_eq!(
-                    chunked, samples,
+                    render_lagrange4_tone(period, Some(997)),
+                    lagrange4,
                     "Lagrange4 output changed with Scheduler chunking"
+                );
+                assert_eq!(
+                    render_lagrange3_tone(period, Some(997)),
+                    lagrange3,
+                    "Lagrange3 output changed with Scheduler chunking"
                 );
             }
 
             if let Some(directory) = &artifact_dir {
-                let path = directory.join(format!("lagrange4-tone-p{period}.wav"));
-                write_experiment_float_wav(&path, &samples).unwrap();
+                write_experiment_float_wav(
+                    &directory.join(format!("lagrange4-tone-p{period}.wav")),
+                    &lagrange4,
+                )
+                .unwrap();
+                write_experiment_float_wav(
+                    &directory.join(format!("lagrange3-tone-p{period}.wav")),
+                    &lagrange3,
+                )
+                .unwrap();
             }
         }
     }
