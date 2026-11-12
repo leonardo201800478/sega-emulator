@@ -416,3 +416,33 @@ Testes adicionais:
 - `versioned_state_codec_round_trips_sg1000_profile_and_rejects_invalid_profile_tag`: verifica a tag SG-1000 e a rejeição estrita de tags de perfil inválidas.
 
 **Status A1.4:** IMPLEMENTED — aguardando CI no HEAD atual. A validação física continua separada; o codec confirma persistência digital, não equivalência analógica nem saída física.
+
+
+## 13. A1.5 — overflow de PCM isolado do estado digital (2026-11-12)
+
+**Teste adicionado:** `sample_queue_overflow_drops_oldest_pcm_without_changing_psg_or_fir_state`.
+
+O teste compara duas instâncias SMS idênticas:
+- uma com capacidade de fila reduzida para um sample;
+- outra com a capacidade normal.
+
+Após avanço de clock idêntico, a instância limitada deve descartar os samples mais antigos, incrementar `dropped_samples` pelo número exato de descartes e reter o sample mais recente. Registradores, contadores, saídas de tom, LFSR, divisor, fases, coeficientes FIR e histórico FIR devem permanecer bit-a-bit iguais à referência sem overflow.
+
+**Critério:** pressão/overflow da fila PCM é política de entrega ao host e não pode retroagir sobre o estado do chip nem sobre a temporização do runtime. O teste foi adicionado e aguarda CI no HEAD atual. A validação concorrente do sink/endpoint físico continua fora do escopo A1.5.
+
+## 14. A1.6 — invariância regional e de taxa de saída (2026-11-12)
+
+**Teste adicionado:** `output_samples_are_chunk_invariant_across_ntsc_pal_and_host_rates`.
+
+Matriz coberta:
+- clocks PSG NTSC: 3.579.545 Hz;
+- clocks PSG PAL: 3.546.893 Hz;
+- taxas de saída: 22.050, 44.100, 48.000 e 96.000 Hz;
+- avanço total de 300.007 clocks em execução única versus blocos irregulares incluindo boundaries abaixo, iguais e acima de 16 clocks.
+
+Para cada combinação, o teste exige:
+- contagem PCM igual à razão racional esperada;
+- vetor PCM exatamente idêntico entre execução contínua e fragmentada;
+- snapshot completo idêntico após drenar a fila, incluindo fase do divisor, fase de amostragem, FIR e estado dos osciladores.
+
+A suíte existente `psg_fir_preserves_audio_band_and_rejects_the_full_stopband` já mede resposta de banda e rejeição para as mesmas duas regiões de clock e quatro taxas. A1.6 será promovida a PASS apenas após CI no mesmo SHA; não é uma medição de taxa efetiva de endpoint físico.
