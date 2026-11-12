@@ -48,6 +48,8 @@ If the frame-level master-tick delta is inconsistent, or if step_frame duration 
 
 The desktop emits one R2_FRAME_PACING_HOST summary approximately once per second. It reports both pacing_wait_budget (the requested timeout computed by the worker) and pacing_wait_elapsed (the actual monotonic duration until timeout or command arrival):
 
+Each host summary also includes `qpc_available`, `qpc_ticks`, and `qpc_frequency`. When `qpc_available=1`, the tick/frequency pair is sampled from Windows QueryPerformanceCounter/QueryPerformanceFrequency immediately before the log record is emitted. These values share the QPC domain exported by PresentMon with `--qpc_time`, allowing approximate correlation of the one-second host summaries with ETW-derived presentation events. QPC is an observation timestamp only; it does not replace `Instant` for durations and never participates in worker deadlines or MachineScheduler time. A value of `qpc_available=0` means the marker could not be sampled and the record must not be correlated by its zero-valued fields.
+
 - timer callback count and empty mailbox polls;
 - average/max timer polling interval and mailbox residence interval;
 - consumed frames, sequence gaps, the cumulative producer mailbox replacement counter, and publish-to-consume mailbox residence time;
