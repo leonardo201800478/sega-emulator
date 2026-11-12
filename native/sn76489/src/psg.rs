@@ -788,9 +788,15 @@ mod tests {
         ] {
             assert_eq!(contiguous.len(), expected_samples, "{profile:?}");
             assert_eq!(segmented, contiguous, "{profile:?}");
-            assert!(contiguous.iter().all(|sample| sample.is_finite()), "{profile:?}");
+            assert!(
+                contiguous.iter().all(|sample| sample.is_finite()),
+                "{profile:?}"
+            );
 
-            let peak = contiguous.iter().map(|sample| sample.abs()).fold(0.0_f64, f64::max);
+            let peak = contiguous
+                .iter()
+                .map(|sample| sample.abs())
+                .fold(0.0_f64, f64::max);
             let mean = contiguous.iter().sum::<f64>() / contiguous.len() as f64;
             let rms = (contiguous.iter().map(|sample| sample * sample).sum::<f64>()
                 / contiguous.len() as f64)
