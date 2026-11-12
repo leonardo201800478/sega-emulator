@@ -562,7 +562,8 @@ jobs:
 
   refresh-lockfiles:
     name: Generate and integrate Cargo lockfiles
-    if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
+    needs: [changes]
+    if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && needs.changes.outputs.audio == 'true') || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -740,4 +741,3 @@ jobs:
         run: cargo test --release --locked --all-targets --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Build legacy shell using CPAL (Windows x64 Release)
         run: cargo build --release --locked --manifest-path native/sega_app/Cargo.toml --target x86_64-pc-windows-msvc
-
