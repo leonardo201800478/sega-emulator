@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Analyze the test-only SN76489 event-based reconstruction against fixed PCM references."""
+"""Analyze test-only SN76489 event reconstruction against fixed PCM references."""
 from __future__ import annotations
+
 import argparse
 import json
 import math
@@ -8,16 +9,24 @@ from pathlib import Path
 from typing import Any
 
 from compare_psg_wav import (
-    TRACE_EVENTS, compare, fft_power, read_float_wav, spectral_delta,
-    spectral_summary, summarize, transient_summary,
+    TRACE_EVENTS,
+    compare,
+    fft_power,
+    read_float_wav,
+    spectral_delta,
+    spectral_summary,
+    summarize,
+    tone_response_summary,
+    transient_summary,
 )
+
 
 def tone_summary(samples: list[float], sample_rate: int, period: int) -> dict[str, Any]:
     """Measure a tone at its folded frequency below Nyquist."""
     expected_hz = 3_579_545.0 / (32.0 * period)
     wrapped = expected_hz % sample_rate
     alias_hz = min(wrapped, sample_rate - wrapped)
-    steady = samples[max(256, len(samples) // 8):]
+    steady = samples[max(256, len(samples) // 8) :]
     power, fft_size = fft_power(steady)
     expected_bin = round(alias_hz * fft_size / sample_rate)
     first_bin = max(1, expected_bin - 4)
@@ -37,11 +46,15 @@ def tone_summary(samples: list[float], sample_rate: int, period: int) -> dict[st
         "rms": rms,
         "fundamental_relative_db": (
             10.0 * math.log10(fundamental_power / total_power)
-            if fundamental_power > 0.0 and total_power > 0.0 else None
+            if fundamental_power > 0.0 and total_power > 0.0
+            else None
         ),
     }
 
-def autocorrelation_summary(samples: list[float], maximum_lag: int = 64) -> dict[str, Any]:
+
+def autocorrelation_summary(
+    samples: list[float], maximum_lag: int = 64
+) -> dict[str, Any]:
     """Report normalized short-lag autocorrelation for deterministic noise traces."""
     mean = math.fsum(samples) / len(samples)
     centered = [sample - mean for sample in samples]
@@ -56,7 +69,10 @@ def autocorrelation_summary(samples: list[float], maximum_lag: int = 64) -> dict
     maximum = max((abs(value) for value in correlations.values()), default=0.0)
     return {"lags": correlations, "max_abs_nonzero_lag": maximum}
 
-def load_pair(reference_path: Path, candidate_path: Path, sample_rate: int):
+
+def load_pair(
+    reference_path: Path, candidate_path: Path, sample_rate: int
+) -> tuple[list[float], list[float]]:
     reference_rate, reference = read_float_wav(reference_path)
     candidate_rate, candidate = read_float_wav(candidate_path)
     if reference_rate != sample_rate or candidate_rate != sample_rate:
@@ -64,6 +80,7 @@ def load_pair(reference_path: Path, candidate_path: Path, sample_rate: int):
     if len(reference) != len(candidate):
         raise ValueError("H2 trace sample-count mismatch")
     return reference, candidate
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -74,19 +91,60 @@ def main() -> None:
     parser.add_argument("--current-sg1000", type=Path, required=True)
     parser.add_argument("--event-sg1000", type=Path, required=True)
     parser.add_argument("--event-model-metrics", type=Path, required=True)
-    parser.add_argument("--event-tone", action="append", nargs=4,
-                        metavar=("PERIOD", "BASELINE_WAV", "CURRENT_WAV", "EVENT_WAV"),
-                        default=[])
-    parser.add_argument("--noise", action="append", nargs=4,
-                        metavar=("PROFILE", "MODE", "CURRENT_WAV", "EVENT_WAV"),
-                        default=[])
+    parser.add_argument("--full-tone-sweep", type=Path, required=True)
+    parser.add_argument("--runtime-metrics-sms", type=Path, required=True)
+    parser.add_argument("--runtime-metrics-sg1000", type=Path, required=True)
+    parser.add_argument(
+        "--event-tone",
+        action="append",
+        nargs=4,
+        metavar=("PERIOD", "BASELINE_WAV", "CURRENT_WAV", "EVENT_WAV"),
+        default=[],
+    )
+    parser.add_argument(
+        "--noise",
+        action="append",
+        nargs=4,
+        metavar=("PROFILE", "MODE", "CURRENT_WAV", "EVENT_WAV"),
+        default=[],
+    )
     parser.add_argument("--json", type=Path, default=Path("artifacts/psg-h2-report.json"))
-    parser.add_argument("--markdown", type=Path, default=Path("artifacts/psg-h2-report.md"))
+    parser.add_argument(
+        "--markdown", type=Path, default=Path("artifacts/psg-h2-report.md")
+    )
     args = parser.parse_args()
 
     sample_rate = 48_000
     model_metrics = json.loads(args.event_model_metrics.read_text())
-    report: dict[str, Any] = {"model": model_metrics, "profiles": {}, "tone_sweep": {}, "noise": {}}
+    full_tone_sweep = json.loads(args.full_tone_sweep.read_text())
+    runtime_metrics = {
+        "sms": json.loads(args.runtime_metrics_sms.read_text()),
+        "sg1000": json.loads(args.runtime_metrics_sg1000.read_text()),
+    }
+    stopband = [item for item in full_tone_sweep if item["period"] <= 4]
+    passband = [item for item in full_tone_sweep if item["period"] >= 6]
+    transition = next(item for item in full_tone_sweep if item["period"] == 5)
+    full_sweep_summary = {
+        "period_count": len(full_tone_sweep),
+        "first_period": min(item["period"] for item in full_tone_sweep),
+        "last_period": max(item["period"] for item in full_tone_sweep),
+        "max_stopband_gain_periods_2_to_4": max(
+            item["kernel_gain"] for item in stopband
+        ),
+        "period_5_transition_gain": transition["kernel_gain"],
+        "minimum_passband_gain_periods_6_to_1023": min(
+            item["kernel_gain"] for item in passband
+        ),
+    }
+    report: dict[str, Any] = {
+        "model": model_metrics,
+        "profiles": {},
+        "tone_sweep": {},
+        "full_tone_sweep": full_tone_sweep,
+        "full_tone_sweep_summary": full_sweep_summary,
+        "runtime_metrics": runtime_metrics,
+        "noise": {},
+    }
 
     for profile in ("sms", "sg1000"):
         baseline, current = load_pair(
@@ -110,7 +168,9 @@ def main() -> None:
             "baseline_spectrum": baseline_spectrum,
             "current_spectrum": current_spectrum,
             "event_spectrum": event_spectrum,
-            "event_spectral_delta_db": spectral_delta(baseline_spectrum, event_spectrum),
+            "event_spectral_delta_db": spectral_delta(
+                baseline_spectrum, event_spectrum
+            ),
             "transients": [
                 {
                     "name": name,
@@ -126,14 +186,25 @@ def main() -> None:
         period = int(period_text)
         if not 1 <= period <= 1023:
             raise ValueError(f"tone period must be in 1..=1023, got {period}")
-        baseline, current = load_pair(Path(baseline_path), Path(current_path), sample_rate)
+        baseline, current = load_pair(
+            Path(baseline_path), Path(current_path), sample_rate
+        )
         event_rate, event = read_float_wav(Path(event_path))
         if event_rate != sample_rate or len(event) != len(baseline):
             raise ValueError(f"period {period}: event sample-rate/count mismatch")
+        expected_hz = 3_579_545.0 / (32.0 * period)
+        harmonics = None
+        if expected_hz < sample_rate / 2:
+            harmonics = {
+                "baseline": tone_response_summary(baseline, sample_rate, period),
+                "current": tone_response_summary(current, sample_rate, period),
+                "event": tone_response_summary(event, sample_rate, period),
+            }
         report["tone_sweep"][str(period)] = {
             "baseline": tone_summary(baseline, sample_rate, period),
             "current": tone_summary(current, sample_rate, period),
             "event": tone_summary(event, sample_rate, period),
+            "harmonics": harmonics,
             "baseline_vs_event": compare(baseline, event),
             "current_vs_event": compare(current, event),
         }
@@ -150,7 +221,9 @@ def main() -> None:
             "current_vs_event": compare(current, event),
             "current_spectrum": current_spectrum,
             "event_spectrum": event_spectrum,
-            "event_spectral_delta_db": spectral_delta(current_spectrum, event_spectrum),
+            "event_spectral_delta_db": spectral_delta(
+                current_spectrum, event_spectrum
+            ),
             "current_autocorrelation": autocorrelation_summary(current),
             "event_autocorrelation": autocorrelation_summary(event),
         }
@@ -160,8 +233,10 @@ def main() -> None:
     args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
     lines = [
-        "# SN76489 H2 event-based reconstruction report", "",
-        "The event renderer is test-only. No production PSG or Scheduler path is changed.", "",
+        "# SN76489 H2 event-based reconstruction report",
+        "",
+        "The event renderer is test-only. No production PSG or Scheduler path is changed.",
+        "",
         f"- Sample rate: {sample_rate} Hz mono float32 WAV",
         f"- Kernel: {model_metrics['kernel_taps']} taps; Kaiser beta {model_metrics['kaiser_beta']}",
         f"- Group delay: {model_metrics['group_delay_samples']} output samples",
@@ -169,14 +244,31 @@ def main() -> None:
         f"- Stopband gain at Nyquist: {model_metrics['stopband_gain_at_nyquist']:.9g}",
         f"- Step undershoot: {model_metrics['step_undershoot']:.6%}",
         f"- Step overshoot: {model_metrics['step_overshoot']:.6%}",
-        f"- Settling to 0.1%: {model_metrics['settling_to_0_1_percent_samples']:.3f} samples", "",
+        f"- Settling to 0.1%: {model_metrics['settling_to_0_1_percent_samples']:.3f} samples",
+        "",
+        "## Full tone period sweep",
+        "",
+        f"- Periods covered: {full_sweep_summary['period_count']} "
+        f"({full_sweep_summary['first_period']}–{full_sweep_summary['last_period']})",
+        f"- Maximum stopband gain for periods 2–4: "
+        f"{full_sweep_summary['max_stopband_gain_periods_2_to_4']:.9g}",
+        f"- Period 5 transition-band gain: "
+        f"{full_sweep_summary['period_5_transition_gain']:.9g}",
+        f"- Minimum passband gain for periods 6–1023: "
+        f"{full_sweep_summary['minimum_passband_gain_periods_6_to_1023']:.9g}",
+        "",
     ]
+
     for profile in ("sms", "sg1000"):
         data = report["profiles"][profile]
-        lines.extend([
-            f"## {profile.upper()}", "",
-            "| Comparison | NRMSE | Correlation |", "|---|---:|---:|",
-        ])
+        lines.extend(
+            [
+                f"## {profile.upper()}",
+                "",
+                "| Comparison | NRMSE | Correlation |",
+                "|---|---:|---:|",
+            ]
+        )
         for name, key in (
             ("Baseline vs current", "baseline_vs_current"),
             ("Baseline vs event", "baseline_vs_event"),
@@ -184,16 +276,23 @@ def main() -> None:
         ):
             result = data[key]
             lines.append(
-                f"| {name} | {result['normalized_rms_error']:.6%} | {result['correlation']:.9f} |"
+                f"| {name} | {result['normalized_rms_error']:.6%} | "
+                f"{result['correlation']:.9f} |"
             )
-        lines.extend(["", "| Band | Event energy delta vs baseline (dB) |", "|---|---:|"])
+        lines.extend(
+            ["", "| Band | Event energy delta vs baseline (dB) |", "|---|---:|"]
+        )
         for band, value in data["event_spectral_delta_db"].items():
-            lines.append(f"| {band} | {value:.4f} |")
-        lines.extend([
-            "", "| Transient | Baseline early peak | Current early peak | Event early peak | "
-            "Baseline settled RMS | Current settled RMS | Event settled RMS |",
-            "|---|---:|---:|---:|---:|---:|---:|",
-        ])
+            display = "n/a" if value is None else f"{value:.4f}"
+            lines.append(f"| {band} | {display} |")
+        lines.extend(
+            [
+                "",
+                "| Transient | Baseline early peak | Current early peak | Event early peak | "
+                "Baseline settled RMS | Current settled RMS | Event settled RMS |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
         for event in data["transients"]:
             lines.append(
                 f"| {event['name']} | {event['baseline']['early_peak']:.9f} | "
@@ -204,19 +303,51 @@ def main() -> None:
             )
         lines.append("")
 
-    lines.extend([
-        "## Tone sweep checkpoints", "",
-        "| Period | Expected Hz | Aliased Hz | Baseline RMS | Current RMS | Event RMS | Event NRMSE vs baseline |",
-        "|---:|---:|---:|---:|---:|---:|---:|",
-    ])
-    for period, data in sorted(report["tone_sweep"].items(), key=lambda item: int(item[0])):
+    lines.extend(
+        [
+            "## Tone sweep checkpoints",
+            "",
+            "| Period | Expected Hz | Aliased Hz | Baseline RMS | Current RMS | "
+            "Event RMS | Event THD | Event NRMSE vs baseline |",
+            "|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for period, data in sorted(
+        report["tone_sweep"].items(), key=lambda item: int(item[0])
+    ):
         tone = data["event"]
+        harmonics = data["harmonics"]
+        thd = "n/a" if harmonics is None else f"{harmonics['event']['thd_percent']:.5f}%"
         lines.append(
             f"| {period} | {tone['expected_frequency_hz']:.3f} | "
             f"{tone['aliased_frequency_hz']:.3f} | {data['baseline']['rms']:.9f} | "
-            f"{data['current']['rms']:.9f} | {tone['rms']:.9f} | "
+            f"{data['current']['rms']:.9f} | {tone['rms']:.9f} | {thd} | "
             f"{data['baseline_vs_event']['normalized_rms_error']:.6%} |"
         )
+
+    lines.extend(["", "## Runtime and streaming suitability", ""])
+    lines.extend(
+        [
+            "| Profile | Capture ms | Event render ms | Current core ms | "
+            "Batch realtime factor | Estimated peak bytes | Lookahead ms |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for profile, metrics in runtime_metrics.items():
+        lines.append(
+            f"| {profile.upper()} | {metrics['event_capture_ms']:.3f} | "
+            f"{metrics['event_render_ms']:.3f} | "
+            f"{metrics['current_core_render_ms']:.3f} | "
+            f"{metrics['event_pipeline_realtime_factor']:.6f} | "
+            f"{metrics['peak_working_set_estimate_bytes']} | "
+            f"{metrics['causal_lookahead_ms']:.6f} |"
+        )
+    lines.append(
+        "The current prototype is offline batch-only; the memory estimate excludes "
+        "allocator overhead and process baseline. Production streaming requires a bounded "
+        "event queue and circular accumulation buffer."
+    )
+
     lines.extend(["", "## Noise profiles", ""])
     for name, data in sorted(report["noise"].items()):
         lines.append(
@@ -227,6 +358,7 @@ def main() -> None:
         )
     lines.append("")
     args.markdown.write_text("\n".join(lines) + "\n")
+
 
 if __name__ == "__main__":
     main()
