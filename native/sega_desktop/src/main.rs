@@ -1187,12 +1187,26 @@ mod windows_host {
     }
 
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
+    fn configure_sms_audio(worker: &SmsTemporalWorker) {
+        const BUFFER_FRAMES: u32 = 512;
+        const QUEUE_BLOCKS: usize = 8;
+        let result = worker.configure_audio_output(|| {
+            let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
+            let session = sink.into_audio_session(100)?;
+            Ok(Box::new(session))
+        });
+        if let Err(error) = result {
+            eprintln!("R3_AUDIO CPAL unavailable; continuing without physical audio: {error}");
+        }
+    }
+
     fn create_sms_worker(
         rom: Vec<u8>,
         region: &str,
         mailbox: &FrameMailbox,
     ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
+        configure_sms_audio(&worker);
         worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok(worker)
@@ -1207,6 +1221,7 @@ mod windows_host {
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
+        configure_sms_audio(&next);
         next.set_diagnostics_enabled(true);
 
         let previous = worker_slot.borrow_mut().take();
