@@ -67,6 +67,7 @@ The physical QPC pilot (2026-11-12) showed stable virtual ticks per frame but a 
 This diagnostic increment adds bounded, rolling worker fields:
 
 - frame_budget_p50/p95/p99_us: target host duration derived from the number of PSG samples drained for each completed frame;
+- worker_step_p50/p95/p99_us, frame_processing_p50/p95/p99_us, pacing_wait_budget_p50/p95/p99_us and pacing_wait_elapsed_p50/p95/p99_us: distributions for the emulation step, complete frame processing and worker wait path;
 - psg_samples_p50/p95/p99: generated sample count per completed frame, needed to verify the budget input;
 - pacing_timeout_lateness_p50/p95/p99_us and pacing_timeout_count_total: time by which recv_timeout returns after the absolute frame deadline and the number of timeout returns; the percentiles include only frames with a timeout return;
 - pacing_command_wakeups_total: command wakeups attributed to the preceding completed frame;
