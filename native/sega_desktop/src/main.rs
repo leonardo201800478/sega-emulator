@@ -1188,6 +1188,12 @@ mod windows_host {
         let result = worker.configure_audio_output(
             || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
                 let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
+                eprintln!(
+                    "R3_AUDIO CPAL output opened: sample_rate={} Hz, channels={}, queue_capacity={} frames",
+                    sink.sample_rate_hz(),
+                    sink.channels(),
+                    BUFFER_FRAMES as usize * QUEUE_BLOCKS
+                );
                 let session = sink.into_audio_session(100)?;
                 Ok(Box::new(session))
             },
