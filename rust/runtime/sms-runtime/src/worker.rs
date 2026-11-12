@@ -2799,6 +2799,27 @@ mod tests {
     }
 
     #[test]
+    fn frame_pacing_window_records_deadline_wakeup_and_frame_budget_diagnostics() {
+        let mut window = FramePacingWindow::default();
+        window.push(FramePacingSample {
+            frame_budget_ns: 20_000_000,
+            audio_samples: 882,
+            ..FramePacingSample::default()
+        });
+        window.record_timeout_lateness(Duration::from_micros(750));
+        window.record_command_wakeup(Duration::from_millis(4));
+        window.record_command_handler(Duration::from_micros(250));
+
+        let metrics = window.snapshot();
+        assert_eq!(metrics.frame_budget_p50_ns, 20_000_000);
+        assert_eq!(metrics.audio_samples_p50, 882);
+        assert_eq!(metrics.pacing_timeout_lateness_p95_ns, 750_000);
+        assert_eq!(metrics.pacing_command_wakeups_total, 1);
+        assert_eq!(metrics.pacing_command_remaining_p95_ns, 4_000_000);
+        assert_eq!(metrics.command_handler_p95_ns, 250_000);
+    }
+
+    #[test]
     fn frame_pacing_window_is_bounded_and_reports_rolling_percentiles() {
         let mut window = FramePacingWindow::default();
         for value in 1..=(FRAME_PACING_WINDOW_CAPACITY as u64 + 1) {
