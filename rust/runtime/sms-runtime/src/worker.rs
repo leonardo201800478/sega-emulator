@@ -156,8 +156,14 @@ struct FramePacingSample {
     video_publish_ns: u64,
     audio_submit_ns: u64,
     frame_processing_ns: u64,
+    frame_budget_ns: u64,
+    audio_samples: u64,
     pacing_wait_budget_ns: u64,
     pacing_wait_elapsed_ns: u64,
+    pacing_timeout_lateness_ns: u64,
+    pacing_command_wakeups: u64,
+    pacing_command_remaining_ns: u64,
+    command_handler_ns: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -187,15 +193,39 @@ impl FramePacingWindow {
         self.total = self.total.saturating_add(1);
     }
 
-    fn record_actual_wait(&mut self, elapsed: Duration) {
-        if self.len == 0 {
-            return;
-        }
+    fn last_sample_mut(&mut self) -> Option<&mut FramePacingSample> {
+        if self.len == 0 { return None; }
         let last = (self.next + FRAME_PACING_WINDOW_CAPACITY - 1) % FRAME_PACING_WINDOW_CAPACITY;
+        Some(&mut self.samples[last])
+    }
+
+    fn record_actual_wait(&mut self, elapsed: Duration) {
         let elapsed_ns = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-        self.samples[last].pacing_wait_elapsed_ns = self.samples[last]
-            .pacing_wait_elapsed_ns
-            .saturating_add(elapsed_ns);
+        if let Some(sample) = self.last_sample_mut() {
+            sample.pacing_wait_elapsed_ns = sample.pacing_wait_elapsed_ns.saturating_add(elapsed_ns);
+        }
+    }
+
+    fn record_timeout_lateness(&mut self, lateness: Duration) {
+        let lateness_ns = lateness.as_nanos().min(u128::from(u64::MAX)) as u64;
+        if let Some(sample) = self.last_sample_mut() {
+            sample.pacing_timeout_lateness_ns = sample.pacing_timeout_lateness_ns.saturating_add(lateness_ns);
+        }
+    }
+
+    fn record_command_wakeup(&mut self, remaining: Duration) {
+        let remaining_ns = remaining.as_nanos().min(u128::from(u64::MAX)) as u64;
+        if let Some(sample) = self.last_sample_mut() {
+            sample.pacing_command_wakeups = sample.pacing_command_wakeups.saturating_add(1);
+            sample.pacing_command_remaining_ns = sample.pacing_command_remaining_ns.max(remaining_ns);
+        }
+    }
+
+    fn record_command_handler(&mut self, elapsed: Duration) {
+        let elapsed_ns = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+        if let Some(sample) = self.last_sample_mut() {
+            sample.command_handler_ns = sample.command_handler_ns.saturating_add(elapsed_ns);
+        }
     }
 
     fn snapshot(&self) -> SmsFramePacingMetrics {
@@ -246,6 +276,11 @@ impl FramePacingWindow {
             .iter()
             .map(|sample| sample.pacing_wait_elapsed_ns)
             .collect();
+        let mut frame_budgets: Vec<_> = samples.iter().map(|sample| sample.frame_budget_ns).collect();
+        let mut audio_samples: Vec<_> = samples.iter().map(|sample| sample.audio_samples).collect();
+        let mut timeout_lateness: Vec<_> = samples.iter().map(|sample| sample.pacing_timeout_lateness_ns).collect();
+        let mut command_remaining: Vec<_> = samples.iter().map(|sample| sample.pacing_command_remaining_ns).collect();
+        let mut command_handlers: Vec<_> = samples.iter().map(|sample| sample.command_handler_ns).collect();
 
         SmsFramePacingMetrics {
             sample_count: self.len as u64,
@@ -274,6 +309,18 @@ impl FramePacingWindow {
             pacing_wait_elapsed_p50_ns: percentile(&mut wait_elapsed, 50),
             pacing_wait_elapsed_p95_ns: percentile(&mut wait_elapsed, 95),
             pacing_wait_elapsed_p99_ns: percentile(&mut wait_elapsed, 99),
+            frame_budget_p50_ns: percentile(&mut frame_budgets, 50),
+            frame_budget_p95_ns: percentile(&mut frame_budgets, 95),
+            frame_budget_p99_ns: percentile(&mut frame_budgets, 99),
+            audio_samples_p50: percentile(&mut audio_samples, 50),
+            audio_samples_p95: percentile(&mut audio_samples, 95),
+            audio_samples_p99: percentile(&mut audio_samples, 99),
+            pacing_timeout_lateness_p50_ns: percentile(&mut timeout_lateness, 50),
+            pacing_timeout_lateness_p95_ns: percentile(&mut timeout_lateness, 95),
+            pacing_timeout_lateness_p99_ns: percentile(&mut timeout_lateness, 99),
+            pacing_command_wakeups_total: samples.iter().map(|sample| sample.pacing_command_wakeups).sum(),
+            pacing_command_remaining_p95_ns: percentile(&mut command_remaining, 95),
+            command_handler_p95_ns: percentile(&mut command_handlers, 95),
         }
     }
 }
@@ -310,6 +357,18 @@ pub struct SmsFramePacingMetrics {
     pub pacing_wait_elapsed_p50_ns: u64,
     pub pacing_wait_elapsed_p95_ns: u64,
     pub pacing_wait_elapsed_p99_ns: u64,
+    pub frame_budget_p50_ns: u64,
+    pub frame_budget_p95_ns: u64,
+    pub frame_budget_p99_ns: u64,
+    pub audio_samples_p50: u64,
+    pub audio_samples_p95: u64,
+    pub audio_samples_p99: u64,
+    pub pacing_timeout_lateness_p50_ns: u64,
+    pub pacing_timeout_lateness_p95_ns: u64,
+    pub pacing_timeout_lateness_p99_ns: u64,
+    pub pacing_command_wakeups_total: u64,
+    pub pacing_command_remaining_p95_ns: u64,
+    pub command_handler_p95_ns: u64,
 }
 
 #[derive(Debug, Default)]
@@ -441,12 +500,23 @@ impl WorkerTelemetry {
     }
 
     fn record_actual_pacing_wait(&self, elapsed: Duration) {
-        if !self.diagnostics_enabled() {
-            return;
-        }
-        if let Ok(mut timing) = self.frame_timing.lock() {
-            timing.pacing_window.record_actual_wait(elapsed);
-        }
+        if !self.diagnostics_enabled() { return; }
+        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_actual_wait(elapsed); }
+    }
+
+    fn record_pacing_timeout_lateness(&self, lateness: Duration) {
+        if !self.diagnostics_enabled() { return; }
+        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_timeout_lateness(lateness); }
+    }
+
+    fn record_pacing_command_wakeup(&self, remaining: Duration) {
+        if !self.diagnostics_enabled() { return; }
+        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_command_wakeup(remaining); }
+    }
+
+    fn record_command_handler(&self, elapsed: Duration) {
+        if !self.diagnostics_enabled() { return; }
+        if let Ok(mut timing) = self.frame_timing.lock() { timing.pacing_window.record_command_handler(elapsed); }
     }
 
     fn frame_pacing_metrics(&self) -> SmsFramePacingMetrics {
@@ -1345,8 +1415,14 @@ fn execute_frame(
             video_publish_ns: video_publish_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
             audio_submit_ns: audio_submit_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
             frame_processing_ns: processing_elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            frame_budget_ns: frame_duration.as_nanos().min(u128::from(u64::MAX)) as u64,
+            audio_samples: sample_count as u64,
             pacing_wait_budget_ns: frame_wait.as_nanos().min(u128::from(u64::MAX)) as u64,
             pacing_wait_elapsed_ns: 0,
+            pacing_timeout_lateness_ns: 0,
+            pacing_command_wakeups: 0,
+            pacing_command_remaining_ns: 0,
+            command_handler_ns: 0,
         });
     }
 
@@ -1403,12 +1479,21 @@ fn worker_loop(
             let timeout = frame_deadline
                 .remaining(Instant::now())
                 .unwrap_or(Duration::ZERO);
+            let wait_deadline = frame_deadline.deadline;
             let wait_started = Instant::now();
             let wait_result = commands.recv_timeout(timeout);
-            telemetry.record_actual_pacing_wait(wait_started.elapsed());
+            let wait_finished = Instant::now();
+            telemetry.record_actual_pacing_wait(wait_finished.saturating_duration_since(wait_started));
             match wait_result {
-                Ok(command) => Some(command),
+                Ok(command) => {
+                    let remaining = wait_deadline.map(|deadline| deadline.saturating_duration_since(wait_finished)).unwrap_or(Duration::ZERO);
+                    telemetry.record_pacing_command_wakeup(remaining);
+                    Some(command)
+                }
                 Err(RecvTimeoutError::Timeout) => {
+                    if let Some(deadline) = wait_deadline {
+                        telemetry.record_pacing_timeout_lateness(wait_finished.saturating_duration_since(deadline));
+                    }
                     frame_deadline.clear();
                     None
                 }
@@ -1425,7 +1510,8 @@ fn worker_loop(
 
         if let Some(command) = command {
             let was_running = running;
-            if !handle_command(
+            let command_handler_started = Instant::now();
+            let command_continues = handle_command(
                 command,
                 &mut machine,
                 &mut breakpoints,
@@ -1438,9 +1524,9 @@ fn worker_loop(
                 &telemetry,
                 &mut trace_history,
                 &mut trace_enabled,
-            ) {
-                break;
-            }
+            );
+            telemetry.record_command_handler(command_handler_started.elapsed());
+            if !command_continues { break; }
             // Pause/reset/load/power transitions invalidate the previous
             // frame's wall-clock epoch. Non-pausing commands retain it.
             if was_running != running || !running {
