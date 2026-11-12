@@ -19,7 +19,7 @@ use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
     SpriteLimitMode, Territory, VideoStandard,
 };
-#[cfg(windows)]
+#[cfg(all(windows, feature = "d3d12-host"))]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
 use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
@@ -784,7 +784,7 @@ pub struct SmsTemporalWorker {
     commands: SyncSender<WorkerCommand>,
     worker: Option<JoinHandle<()>>,
     telemetry: Arc<WorkerTelemetry>,
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "d3d12-host"))]
     video_session: Mutex<Option<D3d12MailboxSession>>,
 }
 
@@ -903,7 +903,7 @@ impl SmsTemporalWorker {
                 commands,
                 worker: Some(worker),
                 telemetry,
-                #[cfg(windows)]
+                #[cfg(all(windows, feature = "d3d12-host"))]
                 video_session: Mutex::new(None),
             }),
             Ok(Err(error)) => {
@@ -1100,7 +1100,7 @@ impl SmsTemporalWorker {
         self.set_video_mailbox(None)
     }
 
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "d3d12-host"))]
     fn start_video_session<E>(
         &self,
         start: impl FnOnce() -> Result<D3d12MailboxSession, E>,
@@ -1139,30 +1139,30 @@ impl SmsTemporalWorker {
         Ok(())
     }
 
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "d3d12-host"))]
     pub fn open_video_output(&self) -> Result<(), String> {
         self.start_video_session(|| D3d12MailboxSession::start(256, 192, 768, 576))
     }
 
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "d3d12-host"))]
     pub fn open_video_output_in_viewport(&self, window_handle: usize) -> Result<(), String> {
         self.start_video_session(|| {
             D3d12MailboxSession::start_for_existing_window(256, 192, window_handle)
         })
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature = "d3d12-host"))]
     pub fn open_video_output(&self) -> Result<(), String> {
         Err("D3D12 video output is available only on Windows".to_owned())
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature = "d3d12-host"))]
     pub fn open_video_output_in_viewport(&self, _window_handle: usize) -> Result<(), String> {
         Err("D3D12 video output is available only on Windows".to_owned())
     }
 
     pub fn close_video_output(&self) -> Result<(), String> {
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "d3d12-host"))]
         {
             let mut session_guard = self
                 .video_session
@@ -1180,7 +1180,7 @@ impl SmsTemporalWorker {
     }
 
     pub fn video_output_is_running(&self) -> bool {
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "d3d12-host"))]
         {
             self.video_session
                 .lock()
@@ -1188,7 +1188,7 @@ impl SmsTemporalWorker {
                 .and_then(|session| session.as_ref().map(D3d12MailboxSession::is_running))
                 .unwrap_or(false)
         }
-        #[cfg(not(windows))]
+        #[cfg(not(all(windows, feature = "d3d12-host")))]
         {
             false
         }
@@ -1213,7 +1213,7 @@ impl SmsTemporalWorker {
     }
 
     pub fn video_last_presented_sequence(&self) -> u64 {
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "d3d12-host"))]
         {
             self.video_session
                 .lock()
@@ -1225,14 +1225,14 @@ impl SmsTemporalWorker {
                 })
                 .unwrap_or(0)
         }
-        #[cfg(not(windows))]
+        #[cfg(not(all(windows, feature = "d3d12-host")))]
         {
             0
         }
     }
 
     pub fn video_device_recovery_count(&self) -> u64 {
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "d3d12-host"))]
         {
             self.video_session
                 .lock()
@@ -1244,7 +1244,7 @@ impl SmsTemporalWorker {
                 })
                 .unwrap_or(0)
         }
-        #[cfg(not(windows))]
+        #[cfg(not(all(windows, feature = "d3d12-host")))]
         {
             0
         }
