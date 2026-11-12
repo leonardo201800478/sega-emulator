@@ -2,7 +2,8 @@
 
 **Repositório:** https://github.com/leonardo201800478/sega-emulator
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
-**Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`  
+**Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
+
 **Main atual após a atualização desta fotografia:** `44e167b7d17973b8d634198951fec298a50dddf7`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
