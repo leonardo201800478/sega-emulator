@@ -1,8 +1,8 @@
 # Auditoria geral e plano de continuidade — 2026-11-12
 
-**Repositório:** https://github.com/leonardo201800478/sega-emulator  
-**Branch de documentação:** `docs/audit-project-status-2026-11-12`  
-**Main auditada:** `f5a0b691824322ce56c1a921329d3aa0957c4963`  
+**Repositório:** https://github.com/leonardo201800478/sega-emulator
+**Branch de documentação:** `docs/audit-project-status-2026-11-12`
+**Main auditada:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
 > Esta é uma fotografia remota do GitHub. CI PASS significa apenas que os jobs executados passaram no SHA indicado. SKIPPED/queued/NOT RUN não são PASS. Validação física só é considerada realizada quando há evidência de execução no hardware/ambiente correspondente.
