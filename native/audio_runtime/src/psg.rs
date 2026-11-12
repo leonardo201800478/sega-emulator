@@ -206,6 +206,12 @@ mod tests {
 
         let domain = ClockDomainId(17);
         let mut scheduler = MachineScheduler::<Option<u8>>::new();
+        let mut scheduled =
+            ScheduledPsg::new(domain, PsgProfile::Sms, CLOCK_HZ, SAMPLE_RATE).unwrap();
+        scheduled
+            .register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
+            .unwrap();
+
         for &(clock, value) in TRACE {
             scheduler
                 .schedule_at(
@@ -223,11 +229,6 @@ mod tests {
             )
             .unwrap();
 
-        let mut scheduled =
-            ScheduledPsg::new(domain, PsgProfile::Sms, CLOCK_HZ, SAMPLE_RATE).unwrap();
-        scheduled
-            .register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
-            .unwrap();
         let mut direct =
             Sn76489Core::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
         let mut direct_samples = Vec::new();
