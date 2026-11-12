@@ -1844,6 +1844,16 @@ mod windows_host {
             }
             assert_eq!(window.poll_interval_distribution.len(), 4);
             assert!(window.poll_interval_distribution.percentile_ns(95) > 0);
+
+            window.record_frame(start + Duration::from_millis(1), 1, start);
+            window.record_frame(
+                start + Duration::from_millis(2),
+                2,
+                start + Duration::from_millis(1),
+            );
+            assert_eq!(window.consumed_interval_distribution.len(), 1);
+            assert_eq!(window.consumed_interval_distribution.percentile_ns(50), 1_000_000);
+            assert_eq!(window.mailbox_residence_distribution.len(), 2);
         }
 
         #[test]
