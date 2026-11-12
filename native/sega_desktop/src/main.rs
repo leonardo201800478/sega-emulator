@@ -948,13 +948,13 @@ mod windows_host {
                 return;
             };
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
-                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
+                host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
             let Some(texture) = app.get_gpu_texture().to_wgpu_30_texture() else {
-                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
+                host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
 
@@ -965,14 +965,14 @@ mod windows_host {
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
                     host_pacing.record_empty_poll();
-                    host_pacing.record_callback(callback_started.elapsed());
                     host_pacing.report_if_due(&worker_slot);
+                    host_pacing.record_callback(callback_started.elapsed());
                     return;
                 }
                 Err(error) => {
                     app.set_frame_status(format!("Erro no mailbox: {error}").into());
-                    host_pacing.record_callback(callback_started.elapsed());
                     host_pacing.report_if_due(&worker_slot);
+                    host_pacing.record_callback(callback_started.elapsed());
                     return;
                 }
             };
@@ -988,8 +988,8 @@ mod windows_host {
                     )
                     .into(),
                 );
-                host_pacing.record_callback(callback_started.elapsed());
                 host_pacing.report_if_due(&worker_slot);
+                host_pacing.record_callback(callback_started.elapsed());
                 return;
             }
 
@@ -1033,8 +1033,8 @@ mod windows_host {
                     app.set_frame_status(format!("Falha ao converter frame: {error}").into());
                 }
             }
-            host_pacing.record_callback(callback_started.elapsed());
             host_pacing.report_if_due(&worker_slot);
+            host_pacing.record_callback(callback_started.elapsed());
         });
         timer
     }
