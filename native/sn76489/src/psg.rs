@@ -1233,4 +1233,30 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn sms_reference_latch_data_vectors_update_registers_immediately() {
+        let mut psg =
+            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+
+        // SMS Power example: 0x8E followed by 0x0F produces Tone 0 = 0x0FE.
+        psg.write(0x8E);
+        assert_eq!(psg.tone_periods()[0], 0x00E);
+        psg.write(0x0F);
+        assert_eq!(psg.tone_periods()[0], 0x0FE);
+
+        // SMS Power specifies that the latched register persists for data bytes.
+        // A volume data byte updates the low four bits of the selected volume.
+        psg.write(0xBF);
+        assert_eq!(psg.attenuations()[1], 0x0F);
+        psg.write(0x00);
+        assert_eq!(psg.attenuations()[1], 0x00);
+
+        // Noise data writes update all three meaningful bits.
+        psg.write(0xE5);
+        assert_eq!(psg.noise_control(), 0x05);
+        psg.write(0x04);
+        assert_eq!(psg.noise_control(), 0x04);
+    }
+
 }
