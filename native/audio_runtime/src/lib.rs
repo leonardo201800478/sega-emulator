@@ -8,9 +8,12 @@ pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
 pub use psg::{PsgClockError, ScheduledPsg};
 pub use session::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 
+/// Canonical internal PCM source rate, independent of any host audio endpoint.
+pub const DEFAULT_PCM_SOURCE_RATE_HZ: u32 = 48_000;
+
 use std::f64::consts::PI;
 
-const DEFAULT_TEST_INPUT_RATE: u32 = 48_000;
+const DEFAULT_TEST_INPUT_RATE: u32 = DEFAULT_PCM_SOURCE_RATE_HZ;
 const TAPS: usize = 63;
 const HALF: isize = 31;
 const PHASES: usize = 1024;
@@ -120,6 +123,12 @@ impl PcmResampler {
         Ok(())
     }
 
+    /// Return the source PCM rate expected by this resampler.
+    pub fn input_rate(&self) -> u32 {
+        self.input_rate
+    }
+
+    /// Return the PCM rate produced for the downstream sink.
     pub fn output_rate(&self) -> u32 {
         self.output_rate
     }
