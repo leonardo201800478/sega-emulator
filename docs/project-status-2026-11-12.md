@@ -4,7 +4,7 @@
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
 **Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
 
-**Main atual (HEAD após a PR documental #786):** `9d54702d07d3a6040cc8d0c8894a144bc555dd47`
+**Main atual (pós PR #787):** `323f295f459feaed457550db2b8d2c2e4188d81e`
 
 **Baseline funcional de código (pós PR #785):** `6130cb42f1d76648552a5a0cd510e3a84c7efb42`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
@@ -178,7 +178,7 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 - A1: PR #784 integrou os vetores independentes de ruído branco/periódico e a continuidade de Tone 2. A1 permanece PARTIAL: oráculo de períodos 0/1, fase inicial absoluta do ruído, fase após escrita e validação física Master System continuam pendentes.
 - A antiga PR #767 foi fechada após o port seletivo. O DTO `Sn76489StateV1` permanece preservado na branch histórica para revisão separada A1.4; decoder/restore precisam de hardening antes de novo port.
 - H3: integrado pela PR #774; validação de software e CI aplicável passaram. Validação física prolongada de endpoint permanece pendente.
-- H4: implementação submetida na PR #787; main ainda não contém o código. A branch remove quantização PCM16 intermediária, mantém f64 até o callback, negocia F32/I24/I16 e taxas 48/88,2/96 kHz. CI e validação física pendentes.
+- H4: PR #787 integrada no merge commit `323f295f459feaed457550db2b8d2c2e4188d81e`. Pipeline f64 até callback e negociação F32/I24/I16 + taxas 48/88,2/96 kHz. CI aplicável PASS no HEAD da PR; validação física Windows x64, hotplug e campanha prolongada ainda NOT RUN.
 
 ### Backlog antigo — decisões de auditoria
 
@@ -196,7 +196,7 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 
 - R1: POC Slint/WGPU/Vulkan integrada; counters de setup/teardown existem, mas falta evidência física de ciclo teardown/recriação.
 - R2: integração de frames e preferências concluída; aceite funcional permanece condicionado ao teste manual da PR #783 e à matriz da issue #756.
-- R3: CPAL integrado; negociação adaptativa, reconexão/hotplug e validação física prolongada pendentes.
+- R3: CPAL e H4 integrados; CI aplicável PASS. Validação física prolongada, endpoint format matrix e hotplug/reabertura automática pendentes.
 - R4/R5: não antecipar enquanto P0 e aceite R2 estiverem abertos.
 - Z80: nenhuma etapa reaberta ou avançada nesta atualização; consultar scorecard e matriz antes de qualquer alteração.
 
@@ -207,3 +207,24 @@ Esta seção supersede os estados históricos das seções 5 e 8 quando houver d
 - PASS: PR #785 integrada; CI aplicável no HEAD `58dcdca5cb3a3d674dec7e09b699dafecba8466b`.
 - BLOCKED: captura física pós-#766/#785, aceite Windows/Vulkan R2 e validação física CPAL/PSG.
 - NOT RUN: build local/Windows nesta sessão, teardown/recriação física R1 e testes físicos de PSG/CPAL.
+
+
+## 11. Atualização operacional — pós PR #787 (2026-11-12)
+
+**Main:** `323f295f459feaed457550db2b8d2c2e4188d81e` — PR #787 integrada por squash.
+
+### H4 / R3
+- Pipeline interno de áudio permanece em f64 normalizado até o callback CPAL; sem PCM16 intermediário.
+- Negociação de configuração suportada: stereo→mono; F32→I24→I16; 48→88,2→96→44,1 kHz.
+- CI no HEAD exato da PR `a1b8774acf39101ecb1a3697571a526a98160f32`: PASS para Windows x64 CPAL, Rust workspace regression, PSG/console integration, Slint/WGPU/Vulkan POC, Rust quality, rustfmt/Clippy e patch hygiene.
+- Jobs SDL3, D3D12, Scheduler stress, Z80 e VDP: SKIPPED; não são PASS nem evidência de validação dessas áreas.
+- Validação física de endpoint, reprodução prolongada, underruns, loopback e remoção/reabertura automática: NOT RUN. R3 continua IN_PROGRESS.
+
+### P0 — issue #755
+- Continua OPEN e prioritária.
+- A integração H4 não altera Scheduler nem timing de hardware e não resolve a oscilação de FPS.
+- Próxima execução: auditoria e instrumentação por timestamps monotônicos em Scheduler, SmsTemporalWorker, publicação/consumo FrameMailbox e submit/present WGPU; captura mínima de cinco minutos e percentis p50/p95/p99, jitter e frames perdidos/repetidos.
+- Não incorporar a otimização temporal antiga #639 antes da caracterização causal.
+
+### Próximo incremento
+P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite visual físico R2; não avançar R4/R5.
