@@ -284,3 +284,28 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 
 Consulte também o estudo PSG H2 — reconstrução event-based, com a modelagem independente, os testes matemáticos, a varredura de períodos e a caracterização dos perfis de ruído.
+
+
+## 8. Fechamento H2 — atualização da CI de 2026-11-12
+
+**H2 — investigação event-based: CONCLUÍDA.** A PR #773 foi validada no HEAD `4dc0a906da1f5795c3078e59fb627ed2fda71f00` pela CI [#43289661184](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661184) e pelo SMS Debugger Runtime [#43289661057](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661057). A validação incluiu PSG e integração de consoles, regressão Rust, CPAL 0.18.2 no Windows x64, testes do shell legado e build Release.
+
+O artefato `psg-audio-ab-reference` (ID `13977310503`) foi baixado e inspecionado. Principais resultados:
+
+| Métrica | SMS | SG-1000 |
+|---|---:|---:|
+| Baseline × atual NRMSE | 3,903223% | 3,874234% |
+| Baseline × evento NRMSE | 3,066105% | 3,042106% |
+| Atual × evento NRMSE | 5,704215% | 5,660919% |
+| Memória estimada do lote | 6.612.224 bytes | 6.608.352 bytes |
+| Render evento em lote | 36,228 ms | 30,322 ms |
+
+O kernel tem 65 taps, atraso de grupo de 31,25 amostras, lookahead causal estimado de 32 frames, overshoot/undershoot de aproximadamente ±8,91% e settling de 51,785 amostras a 0,1%.
+
+**Limitação importante:** o NRMSE atual × evento no ruído branco é 9,273552% para SMS e 9,065867% para SG-1000. O ruído periódico apresenta 4,595224% e 4,754251%, respectivamente. Essas diferenças, o ringing e a ausência de avaliação auditiva controlada impedem aprovar a promoção do modelo experimental para produção. O relatório completo e os dados por período estão em `docs/audio/psg-h2-reconstruction-study.md` e no artefato da CI.
+
+**Decisão de arquitetura:** H2 fecha como investigação reproduzível e protótipo exclusivamente de teste. Nenhuma alteração foi feita na síntese de produção, no MachineScheduler ou no callback CPAL. O protótipo não está pronto para streaming: mantém eventos e buffers de duração integral.
+
+### H3 — próximo trabalho autorizado pelo roadmap
+
+H3 pode começar de forma independente, focando a linha PCM de referência em 48 kHz: generalizar taxas explícitas no resampler, preservar fase/continuidade/flush e invariância por blocos, e provar equivalência headless sem alterar clocks do Scheduler. H3 não pode integrar nem depender do renderer H2 experimental. Os gates H4–H6 permanecem inalterados.
