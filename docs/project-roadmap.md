@@ -65,7 +65,7 @@ A fotografia de migração está em [legacy-host-retirement.md](architecture/mig
 - PR #745 — ADR 0011 e reconciliação documental: MERGED.
 - R1 — POC Slint/WGPU/Vulkan: PR #747 MERGED.
 - R2 — frames reais SMS no desktop Slint/WGPU: PR #752 MERGED; preferências persistentes #754 MERGED.
-- R3 — CPAL 0.18.2: PENDING.
+- R3 — CPAL 0.18.2: IN_PROGRESS na candidata PR #770; CI Windows e validação física ainda pendentes.
 - R4 — SDL3: PENDING.
 - R5 — consolidação e retirada integral dos hosts anteriores: PENDING.
 
