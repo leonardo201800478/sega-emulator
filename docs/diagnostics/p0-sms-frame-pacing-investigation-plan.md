@@ -191,12 +191,12 @@ O critério T1 só poderá ser marcado integralmente concluído após revisão d
 
 ## Physical QPC pilot — 2026-11-12
 
-**Capture bundle:** `SMS-QPC-20261112-002914`  
-**Tested executable commit:** `f74389189ca83dc35475100e32ca7977600d74be`  
-**PR #765 merge base:** `3703b9d5b12e654d4f2a50e6ebb9d12915b4c1f1`  
-**Build/source delta:** the tested `f74389189ca83dc35475100e32ca7977600d74be` commit differs from the PR #765 merge base only in `.gitignore` (`test-results/`); no runtime source delta was found.  
-**Hardware:** Windows 11 build 26300, RTX 5070, Vulkan; PresentMon 2.6.0.  
-**ROM:** Sonic the Hedgehog 2 (Europe, Brazil) (En) (Rev 1), SHA-256 recorded in capture-metadata.json.  
+**Capture bundle:** `SMS-QPC-20261112-002914`
+**Tested executable commit:** `f74389189ca83dc35475100e32ca7977600d74be`
+**PR #765 merge base:** `3703b9d5b12e654d4f2a50e6ebb9d12915b4c1f1`
+**Build/source delta:** the tested `f74389189ca83dc35475100e32ca7977600d74be` commit differs from the PR #765 merge base only in `.gitignore` (`test-results/`); no runtime source delta was found.
+**Hardware:** Windows 11 build 26300, RTX 5070, Vulkan; PresentMon 2.6.0.
+**ROM:** Sonic the Hedgehog 2 (Europe, Brazil) (En) (Rev 1), SHA-256 recorded in capture-metadata.json.
 **Audio:** no physical audio session is represented by the capture; audio-submit timing is zero and must not be interpreted as CPAL validation.
 
 ### Raw capture integrity
