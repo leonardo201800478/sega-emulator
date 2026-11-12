@@ -20,12 +20,12 @@ use std::slice;
 
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
-use windows::Win32::Foundation::{
+use windows_d3d12::Win32::Foundation::{
     CloseHandle, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HANDLE, HINSTANCE, HWND, LPARAM,
     LRESULT, RECT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
 };
-use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
-use windows::Win32::Graphics::Direct3D12::{
+use windows_d3d12::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
+use windows_d3d12::Win32::Graphics::Direct3D12::{
     D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
     D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_CPU_DESCRIPTOR_HANDLE,
     D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_DESCRIPTOR_HEAP_DESC, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
@@ -44,23 +44,23 @@ use windows::Win32::Graphics::Direct3D12::{
     ID3D12CommandAllocator, ID3D12CommandList, ID3D12CommandQueue, ID3D12DescriptorHeap,
     ID3D12Device, ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
 };
-use windows::Win32::Graphics::Dxgi::Common::{
+use windows_d3d12::Win32::Graphics::Dxgi::Common::{
     DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC,
 };
-use windows::Win32::Graphics::Dxgi::{
+use windows_d3d12::Win32::Graphics::Dxgi::{
     CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT, DXGI_SCALING_STRETCH,
     DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
     DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2, IDXGISwapChain2,
     IDXGISwapChain3,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, WaitForSingleObjectEx};
-use windows::Win32::UI::HiDpi::{
+use windows_d3d12::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_d3d12::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, WaitForSingleObjectEx};
+use windows_d3d12::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
     SetThreadDpiAwarenessContext,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
+use windows_d3d12::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, GA_ROOT, GWL_STYLE, GetAncestor, GetWindowLongPtrW, GetWindowThreadProcessId,
     HWND_BOTTOM, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
@@ -69,7 +69,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
-use windows::core::{Error, Interface, Result, w};
+use windows_d3d12::core::{Error, Interface, Result, w};
 
 mod mailbox_session;
 mod session;
@@ -100,7 +100,7 @@ impl NativeVideoWindow {
     pub fn create(width: u32, height: u32) -> Result<Self> {
         if width == 0 || height == 0 || width > i32::MAX as u32 || height > i32::MAX as u32 {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "window dimensions must be in the non-zero i32 range",
             ));
         }
@@ -161,14 +161,14 @@ impl NativeVideoWindow {
     pub(crate) fn validate_existing_handle(handle: usize) -> Result<()> {
         if handle == 0 {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "external HWND must be non-zero",
             ));
         }
         let hwnd = HWND(handle as *mut c_void);
         if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "external HWND is not a valid window",
             ));
         }
@@ -177,7 +177,7 @@ impl NativeVideoWindow {
         let current_thread = unsafe { GetCurrentThreadId() };
         if owner_thread == 0 || owner_thread != current_thread {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "external HWND must be attached from its owning GUI thread",
             ));
         }
@@ -224,7 +224,7 @@ impl NativeVideoWindow {
 
         unsafe {
             while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).as_bool() {
-                if message.message == windows::Win32::UI::WindowsAndMessaging::WM_QUIT {
+                if message.message == windows_d3d12::Win32::UI::WindowsAndMessaging::WM_QUIT {
                     running = false;
                     break;
                 }
@@ -290,7 +290,7 @@ impl D3d12ChildWindow {
                     let _ = DestroyWindow(hwnd);
                 }
                 return Err(Error::new(
-                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    windows_d3d12::core::HRESULT(0x8000_4005_u32 as i32),
                     "could not enable WS_CLIPCHILDREN on the eframe parent HWND",
                 ));
             }
@@ -338,7 +338,7 @@ impl D3d12ChildWindow {
     pub fn set_bounds(&self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
         if x < 0 || y < 0 || width <= 0 || height <= 0 {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "child viewport bounds require non-negative origin and positive dimensions",
             ));
         }
@@ -495,8 +495,8 @@ unsafe extern "system" fn window_proc(
 
 fn transition_barrier(
     resource: &ID3D12Resource,
-    before: windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
-    after: windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
+    before: windows_d3d12::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
+    after: windows_d3d12::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
 ) -> D3D12_RESOURCE_BARRIER {
     D3D12_RESOURCE_BARRIER {
         Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -518,7 +518,7 @@ pub enum MailboxPresentError {
     /// The frame mailbox rejected the consumer operation.
     Mailbox(FrameMailboxError),
     /// The D3D12 upload or presentation operation failed.
-    Graphics(windows::core::Error),
+    Graphics(windows_d3d12::core::Error),
 }
 
 impl fmt::Display for MailboxPresentError {
@@ -591,7 +591,7 @@ impl D3d12Host {
     ) -> Result<Self> {
         if render_width == 0 || render_height == 0 {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "render dimensions must be non-zero",
             ));
         }
@@ -610,7 +610,7 @@ impl D3d12Host {
     ) -> Result<Self> {
         if render_width == 0 || render_height == 0 {
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "render dimensions must be non-zero",
             ));
         }
@@ -723,7 +723,7 @@ impl D3d12Host {
         unsafe {
             factory.MakeWindowAssociation(
                 window.hwnd(),
-                windows::Win32::Graphics::Dxgi::DXGI_MWA_NO_ALT_ENTER,
+                windows_d3d12::Win32::Graphics::Dxgi::DXGI_MWA_NO_ALT_ENTER,
             )?;
         }
 
@@ -833,7 +833,7 @@ impl D3d12Host {
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
-            Format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+            Format: windows_d3d12::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
                 Quality: 0,
@@ -931,7 +931,7 @@ impl D3d12Host {
             if result == WAIT_TIMEOUT {
                 if !self.window.pump_messages() {
                     return Err(Error::new(
-                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        windows_d3d12::core::HRESULT(0x8000_4004_u32 as i32),
                         "native presentation window closed while waiting for a frame slot",
                     ));
                 }
@@ -1019,7 +1019,7 @@ impl D3d12Host {
             // cannot leave submitted GPU work without a retirement signal.
             let next_fence = self.last_submitted_fence.checked_add(1).ok_or_else(|| {
                 Error::new(
-                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    windows_d3d12::core::HRESULT(0x8000_4005_u32 as i32),
                     "D3D12 fence value exhausted",
                 )
             })?;
@@ -1082,7 +1082,7 @@ impl D3d12Host {
                 "video frame dimensions do not match D3D12 swap chain"
             );
             return Err(Error::new(
-                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                windows_d3d12::core::HRESULT(0x8007_0057_u32 as i32),
                 "VideoFrame dimensions must match the initialized DXGI swap chain",
             ));
         }
@@ -1154,7 +1154,7 @@ impl D3d12Host {
 
             let next_fence = self.last_submitted_fence.checked_add(1).ok_or_else(|| {
                 Error::new(
-                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    windows_d3d12::core::HRESULT(0x8000_4005_u32 as i32),
                     "D3D12 fence value exhausted",
                 )
             })?;
@@ -1239,7 +1239,7 @@ impl D3d12Host {
             return match self.device_removed_reason() {
                 Err(reason) => Err(reason),
                 Ok(()) => Err(Error::new(
-                    windows::core::HRESULT(0x887A_0005_u32 as i32),
+                    windows_d3d12::core::HRESULT(0x887A_0005_u32 as i32),
                     "D3D12 fence returned the device-removed sentinel",
                 )),
             };
@@ -1264,7 +1264,7 @@ impl D3d12Host {
             if result == WAIT_TIMEOUT {
                 if !self.window.pump_messages() {
                     return Err(Error::new(
-                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        windows_d3d12::core::HRESULT(0x8000_4004_u32 as i32),
                         "native presentation window closed while waiting for the GPU",
                     ));
                 }
@@ -1394,7 +1394,7 @@ mod tests {
     use super::{
         D3d12ChildWindow, NativeVideoWindow, PixelFormat, VideoFrame, convert_frame_row_to_rgba8888,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{
+    use windows_d3d12::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, GWL_STYLE, GetTopWindow, GetWindowLongPtrW, IsWindow, SW_MINIMIZE,
         ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_VISIBLE,
     };
@@ -1415,8 +1415,8 @@ mod tests {
         let overlay = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
-                windows::core::w!("STATIC"),
-                windows::core::w!("egui-overlay-test"),
+                windows_d3d12::core::w!("STATIC"),
+                windows_d3d12::core::w!("egui-overlay-test"),
                 WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
                 0,
                 0,
