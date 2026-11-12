@@ -52,8 +52,12 @@ Para tarefas complexas, confrontar três frentes: engenharia reversa, documenta�
 
 Validar workspaces/targets standalone separadamente. Builds de aplicação e desempenho somente Release; Debug não serve como referência. Classificar cada suíte PASS, FAIL, BLOCKED ou NOT RUN; SKIPPED nunca é PASS. Vincular evidência ao SHA exato.
 
-## GitHub e privacidade
+## Integração contínua, GitHub e privacidade
 
-GitHub é a fonte da verdade. Proibido commit direto na main, force-push e reset destrutivo. Toda alteração por branch e PR. Merge somente com CI aplicável verde no HEAD final e autorização explícita. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
+GitHub é a fonte da verdade. O objetivo é integrar continuamente na main tudo o que estiver tecnicamente validado, em incrementos pequenos. Evitar branches longas e divergências; quando uma branch estiver antiga, preservar seu histórico e portar seletivamente as alterações úteis para uma branch nova baseada na main atual. Não fazer merge cego de branches divergentes, force-push ou reset destrutivo.
+
+Toda alteração deve passar por branch e PR. Exigir CI aplicável verde no HEAD final, testes direcionados, regressões pertinentes e revisão do diff. Depois de integrada, corrigir bugs com testes de regressão direcionados; não acumular implementação validada por receio de bugs posteriores. PASS é específico ao SHA/ambiente; SKIPPED, queued e NOT RUN nunca são PASS.
+
+A autorização permanente do usuário permite integrar código validado assim que os gates forem satisfeitos; não autoriza contornar gates técnicos ou invariantes arquiteturais. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
 
 Ao receber "Prossiga", auditar main/PRs/CI, identificar a última tarefa concluída, resolver pendências e avançar até conclusão ou bloqueio real, sem duplicar trabalho.

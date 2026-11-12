@@ -59,17 +59,18 @@ Consolidar native/sega_desktop, native/video_output_wgpu e native/audio_output; 
 
 ## 4. Estado operacional
 
-A fotografia de migração está em [legacy-host-retirement.md](architecture/migrations/legacy-host-retirement.md); status de PRs e workflows deve ser reconsultado no GitHub antes de cada merge.
+A fotografia completa de PRs, issues, workflows, riscos e próximos passos está em [Auditoria geral — 2026-11-12](project-status-2026-11-12.md).
 
-- Main auditada: `82ccad8eb9cd11d78dfddd168f307f90012426b5`.
-- PR #745 — ADR 0011 e reconciliação documental: MERGED.
-- R1 — POC Slint/WGPU/Vulkan: PR #747 MERGED.
-- R2 — frames reais SMS no desktop Slint/WGPU: PR #752 MERGED; preferências persistentes #754 MERGED.
-- R3 — CPAL 0.18.2: IN_PROGRESS na candidata PR #770; CI Windows e validação física ainda pendentes.
-- R4 — SDL3: PENDING.
-- R5 — consolidação e retirada integral dos hosts anteriores: PENDING.
+- Main auditada: `f5a0b691824322ce56c1a921329d3aa0957c4963`.
+- R1 POC Slint/WGPU/Vulkan: PR #747 MERGED; execução física inicial reportada, com evidências complementares de teardown/recriação ainda pendentes.
+- R2 frames SMS: PR #752 MERGED; preferências persistentes #754 MERGED; aceite manual permanece incompleto (#756).
+- R3 CPAL 0.18.2: PR #770 MERGED; H3 PCM 48 kHz PR #774 MERGED; validação física prolongada, hotplug e formatos adaptativos ainda pendentes.
+- H2 concluído como investigação experimental; nenhum DSP alternativo aprovado para produção.
+- A1 PSG SMS permanece parcial, com oráculos e validação física pendentes.
+- R4 SDL3 e R5 consolidação permanecem pendentes.
+- P0 #755 (frame pacing/Scheduler) deve ser diagnosticado antes de novas mudanças temporais ou hardening de áudio.
 
-PR aberta, branch ou CI parcial não representa integração funcional. Reauditar GitHub e SHA antes de cada tarefa.
+Branches antigas devem ser reconciliadas por portabilidade seletiva para branches novas sobre a main atual. Não fazer merge cego de histórico divergente.
 
 ## 5. Z80
 
@@ -86,6 +87,6 @@ Gates:
 
 Validar workspaces/targets standalone. Aplicativos e testes de desempenho devem usar Release. Classificar PASS, FAIL, BLOCKED ou NOT RUN; SKIPPED nunca é PASS. Vincular evidências ao SHA exato.
 
-## 7. GitHub
+## 7. GitHub e integração contínua
 
-GitHub é a fonte da verdade. Toda alteração em branch/PR. Proibidos commit direto na main, force-push e reset destrutivo. Merge exige CI aplicável verde no HEAD final e autorização explícita. PR aberta, documentação ou CI parcial não significam integração funcional.
+GitHub é a fonte da verdade. Integrar continuamente na main o código tecnicamente validado, em incrementos pequenos. Manter branches curtas; para branches antigas/divergentes, preservar o histórico e portar seletivamente as mudanças úteis para uma branch nova baseada na main atual. Não fazer merge cego, force-push ou reset destrutivo. Toda alteração passa por branch/PR, diff revisado, testes direcionados, regressões pertinentes e CI aplicável verde no HEAD final. A autorização permanente do usuário permite integrar após os gates; não permite contorná-los. SKIPPED, queued e NOT RUN não são PASS.
