@@ -73,9 +73,11 @@ def summarize(samples: list[float], sample_rate: int) -> dict[str, Any]:
     }
 
 
-def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
-    """Calculate Hann-windowed spectral energy using a dependency-free radix-2 FFT."""
+def fft_power(samples: list[float]) -> tuple[list[float], int]:
+    """Return Hann-windowed one-sided FFT power and radix-2 transform size."""
     sample_count = len(samples)
+    if sample_count < 2:
+        raise ValueError("FFT requires at least two samples")
     fft_size = 1 << (sample_count - 1).bit_length()
     values = [
         complex(
@@ -119,6 +121,12 @@ def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
         value.real * value.real + value.imag * value.imag
         for value in values[: fft_size // 2 + 1]
     ]
+    return power, fft_size
+
+
+def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
+    """Calculate Hann-windowed spectral energy using a dependency-free radix-2 FFT."""
+    power, fft_size = fft_power(samples)
     total_power = math.fsum(power[1:])
     centroid = (
         math.fsum(
@@ -161,6 +169,36 @@ def spectral_summary(samples: list[float], sample_rate: int) -> dict[str, Any]:
         "window": "Hann",
         "spectral_centroid_hz": centroid,
         "bands": bands,
+    }
+
+
+def tone_response_summary(
+    samples: list[float], sample_rate: int, period: int
+) -> dict[str, float | int]:
+    """Measure an isolated tone's RMS and energy around its expected fundamental."""
+    steady_state = samples[min(256, len(samples) // 4) :]
+    power, fft_size = fft_power(steady_state)
+    expected_hz = 3_579_545.0 / (32.0 * period)
+    expected_bin = round(expected_hz * fft_size / sample_rate)
+    first_bin = max(1, expected_bin - 4)
+    end_bin = min(fft_size // 2 + 1, expected_bin + 5)
+    peak_bin = max(range(first_bin, end_bin), key=power.__getitem__)
+    fundamental_power = math.fsum(power[first_bin:end_bin])
+    total_power = math.fsum(power[1:])
+    rms = math.sqrt(
+        math.fsum(value * value for value in steady_state) / len(steady_state)
+    )
+    return {
+        "expected_frequency_hz": expected_hz,
+        "peak_frequency_hz": peak_bin * sample_rate / fft_size,
+        "frequency_error_hz": peak_bin * sample_rate / fft_size - expected_hz,
+        "rms": rms,
+        "fundamental_power": fundamental_power,
+        "fundamental_relative_db": (
+            10.0 * math.log10(fundamental_power / total_power)
+            if fundamental_power > 0.0 and total_power > 0.0
+            else float("-inf")
+        ),
     }
 
 
@@ -222,6 +260,14 @@ def main() -> None:
     parser.add_argument("--baseline-sg1000", type=Path, required=True)
     parser.add_argument("--current-sg1000", type=Path, required=True)
     parser.add_argument("--chunked-sg1000", type=Path, required=True)
+    parser.add_argument(
+        "--tone",
+        action="append",
+        nargs=3,
+        metavar=("PERIOD", "BASELINE_WAV", "CURRENT_WAV"),
+        default=[],
+        help="Add an isolated SMS tone comparison for the supplied SN76489 period",
+    )
     parser.add_argument("--json", type=Path, default=Path("artifacts/psg-audio-report.json"))
     parser.add_argument(
         "--markdown",
@@ -258,6 +304,7 @@ def main() -> None:
             ),
         },
         "profiles": {},
+        "isolated_tone_response": {},
     }
 
     for profile in ("sms", "sg1000"):
@@ -283,6 +330,32 @@ def main() -> None:
             "current_spectrum": current_spectrum,
             "spectral_band_delta_db": spectral_delta(
                 baseline_spectrum, current_spectrum
+            ),
+        }
+
+    for period_text, baseline_path, current_path in args.tone:
+        period = int(period_text)
+        if not 1 <= period <= 1023:
+            raise ValueError(f"tone period must be in 1..=1023, got {period}")
+        baseline_rate, baseline_samples = read_float_wav(Path(baseline_path))
+        current_rate, current_samples = read_float_wav(Path(current_path))
+        if baseline_rate != sample_rate or current_rate != sample_rate:
+            raise ValueError(f"tone period {period}: sample-rate mismatch")
+        if len(baseline_samples) != len(current_samples):
+            raise ValueError(f"tone period {period}: baseline/current sample counts differ")
+        baseline_tone = tone_response_summary(
+            baseline_samples, sample_rate, period
+        )
+        current_tone = tone_response_summary(current_samples, sample_rate, period)
+        baseline_power = baseline_tone["fundamental_power"]
+        current_power = current_tone["fundamental_power"]
+        report["isolated_tone_response"][str(period)] = {
+            "baseline": baseline_tone,
+            "current": current_tone,
+            "fundamental_energy_delta_db": (
+                10.0 * math.log10(current_power / baseline_power)
+                if baseline_power > 0.0 and current_power > 0.0
+                else None
             ),
         }
 
@@ -362,6 +435,28 @@ def main() -> None:
                 "",
             ]
         )
+    if report["isolated_tone_response"]:
+        lines.extend(
+            [
+                "## Isolated SMS tone response",
+                "",
+                "| Period | Expected Hz | Baseline RMS | Current RMS | Fundamental energy delta |",
+                "|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for period, data in sorted(
+            report["isolated_tone_response"].items(),
+            key=lambda item: int(item[0]),
+        ):
+            lines.append(
+                f"| {period} | "
+                f"{data['baseline']['expected_frequency_hz']:.3f} | "
+                f"{data['baseline']['rms']:.9f} | "
+                f"{data['current']['rms']:.9f} | "
+                f"{data['fundamental_energy_delta_db']:.4f} dB |"
+            )
+        lines.append("")
+
     args.markdown.write_text("\n".join(lines) + "\n")
 
 
