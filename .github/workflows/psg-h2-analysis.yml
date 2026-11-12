@@ -1,0 +1,108 @@
+name: PSG H2 mathematical and reconstruction analysis
+
+on:
+  pull_request:
+    paths:
+      - "native/sn76489/**"
+      - "docs/audio/modern-hifi-audio-roadmap.md"
+      - ".github/workflows/psg-h2-analysis.yml"
+  push:
+    branches:
+      - main
+      - feat/psg-h2-mathematical-model-20261112
+    paths:
+      - "native/sn76489/**"
+      - "docs/audio/modern-hifi-audio-roadmap.md"
+      - ".github/workflows/psg-h2-analysis.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  psg-h2:
+    name: PSG H2 model, sweep, transients and A/B
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format PSG crate
+        run: cargo fmt --manifest-path Cargo.toml --package sega-sn76489 -- --check
+      - name: Clippy PSG crate
+        run: cargo clippy --release --locked --all-targets -p sega-sn76489 -- -D warnings
+      - name: Run PSG H2 model and export measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          PSG_H2_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" cargo test --release --locked -p sega-sn76489 --all-targets -- --nocapture
+      - name: Fetch historical PSG baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin f47f71830344b85f72329376505d400bfbfaae69
+          git worktree add --detach "$RUNNER_TEMP/sega-audio-baseline" f47f71830344b85f72329376505d400bfbfaae69
+          mkdir -p "$RUNNER_TEMP/sega-audio-baseline/native/sn76489/examples" artifacts
+          cp native/sn76489/examples/psg_trace.rs "$RUNNER_TEMP/sega-audio-baseline/native/sn76489/examples/psg_trace.rs"
+      - name: Render historical and current PSG traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sms artifacts/baseline-sms.wav
+          cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sg1000 artifacts/baseline-sg1000.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms artifacts/current-sms.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms artifacts/current-sms-chunked.wav 997
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000-chunked.wav 997
+          for period in 5 6 7 9 14 28 56 112; do
+            cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sms "artifacts/baseline-tone-p\${period}.wav" 0 "$period"
+            cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms "artifacts/current-tone-p\${period}.wav" 0 "$period"
+          done
+      - name: Compare baseline, current and interpolation candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/audio/compare_psg_wav.py \
+            --baseline-sms artifacts/baseline-sms.wav \
+            --current-sms artifacts/current-sms.wav \
+            --chunked-sms artifacts/current-sms-chunked.wav \
+            --baseline-sg1000 artifacts/baseline-sg1000.wav \
+            --current-sg1000 artifacts/current-sg1000.wav \
+            --chunked-sg1000 artifacts/current-sg1000-chunked.wav \
+            --tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav \
+            --tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav \
+            --tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav \
+            --tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav \
+            --tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav \
+            --tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav \
+            --tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav \
+            --tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav \
+            --lagrange4-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/lagrange4-tone-p5.wav \
+            --lagrange4-tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav artifacts/lagrange4-tone-p6.wav \
+            --lagrange4-tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav artifacts/lagrange4-tone-p7.wav \
+            --lagrange4-tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav artifacts/lagrange4-tone-p9.wav \
+            --lagrange4-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/lagrange4-tone-p14.wav \
+            --lagrange4-tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav artifacts/lagrange4-tone-p28.wav \
+            --lagrange4-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/lagrange4-tone-p56.wav \
+            --lagrange4-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange4-tone-p112.wav \
+            --lagrange3-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/lagrange3-tone-p5.wav \
+            --lagrange3-tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav artifacts/lagrange3-tone-p6.wav \
+            --lagrange3-tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav artifacts/lagrange3-tone-p7.wav \
+            --lagrange3-tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav artifacts/lagrange3-tone-p9.wav \
+            --lagrange3-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/lagrange3-tone-p14.wav \
+            --lagrange3-tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav artifacts/lagrange3-tone-p28.wav \
+            --lagrange3-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/lagrange3-tone-p56.wav \
+            --lagrange3-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange3-tone-p112.wav
+          cat artifacts/psg-audio-report.md
+      - name: Upload PSG H2 measurements and PCM captures
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: psg-h2-mathematical-analysis
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
