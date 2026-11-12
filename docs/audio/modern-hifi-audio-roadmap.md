@@ -203,8 +203,9 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 4. [x] Validar a interpolação fracionária com o core real e comparar baseline, linear e protótipos Lagrange3/Lagrange4.
 5. [x] Adicionar métricas de fundamental/THD para tons representativos, transientes de volume/período/tom→ruído/ruído branco→periódico e estatísticas de ruído nos oito controles por perfil, incluindo correlação lag-1, taxa de cruzamento por zero, centróide espectral e flatness.
 6. [x] Implementar protótipo independente test-only de reconstrução band-limited por eventos: timestamps subamostrais, deltas de amplitude, kernel sinc/Blackman com 256 fases e 65 taps; comparação com saída linear e invariância por chunking.
-7. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
-8. [x] O protótipo foi escrito independentemente, sem copiar código de terceiros.
+7. [x] Implementar candidato test-only de interpolação fracionária windowed-sinc de 8 pontos sobre o histórico FIR, com atraso fixo de 3 ticks internos (48 master clocks), comparação espectral e invariância por chunking.
+8. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
+9. [x] Os protótipos foram escritos independentemente, sem copiar código de terceiros.
 
 **Gate H2:** fechar após CI, leitura dos CSV/WAVs, comparação histórica e decisão documentada. O protótipo permanece test-only; nenhuma alteração de síntese de produção será aceita sem superioridade global demonstrada.
 
