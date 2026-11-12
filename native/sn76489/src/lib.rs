@@ -2,6 +2,5 @@
 //! Machine clocks are supplied by the owning machine/Scheduler.
 mod psg;
 pub use psg::{
-    PsgError, PsgProfile, PsgStateError, SN76489_STATE_FORMAT_VERSION, Sn76489Core,
-    Sn76489StateV1,
+    PsgError, PsgProfile, PsgStateError, SN76489_STATE_FORMAT_VERSION, Sn76489Core, Sn76489StateV1,
 };
