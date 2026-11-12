@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::f64::consts::{PI, TAU};
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use std::time::Instant;
 
 const CLOCK_HZ: u64 = 3_579_545;
 const SAMPLE_RATE: u64 = 48_000;
@@ -414,6 +415,87 @@ fn normalized_error(reference: &[f64], candidate: &[f64]) -> f64 {
     error_rms / reference_rms.max(f64::MIN_POSITIVE)
 }
 
+fn goertzel_power(samples: &[f64], frequency_hz: f64) -> f64 {
+    let omega = TAU * frequency_hz / SAMPLE_RATE as f64;
+    let coefficient = 2.0 * omega.cos();
+    let mut previous = 0.0;
+    let mut previous_previous = 0.0;
+    for sample in samples {
+        let current = sample + coefficient * previous - previous_previous;
+        previous_previous = previous;
+        previous = current;
+    }
+    (previous * previous + previous_previous * previous_previous
+        - coefficient * previous * previous_previous)
+        .max(0.0)
+}
+
+fn write_runtime_metrics(
+    directory: &Path,
+    profile_name: &str,
+    events: &[PsgAmplitudeEvent],
+    kernel: &EventBasedKernel,
+    sample_count: usize,
+    capture_elapsed: std::time::Duration,
+    event_render_elapsed: std::time::Duration,
+    core_render_elapsed: std::time::Duration,
+) {
+    let event_storage_bytes = events.capacity() * std::mem::size_of::<PsgAmplitudeEvent>();
+    let kernel_storage_bytes = (kernel.step_response.capacity()
+        + kernel.impulse_response.capacity()
+        + kernel.discrete_coefficients.capacity())
+        * std::mem::size_of::<f64>();
+    let renderer_scratch_bytes =
+        (sample_count * 3 + 1) * std::mem::size_of::<f64>();
+    let peak_working_set_estimate_bytes =
+        event_storage_bytes + kernel_storage_bytes + renderer_scratch_bytes;
+    let audio_duration_seconds = sample_count as f64 / SAMPLE_RATE as f64;
+    let event_pipeline_seconds =
+        capture_elapsed.as_secs_f64() + event_render_elapsed.as_secs_f64();
+    let report = format!(
+        concat!(
+            "{{\n",
+            "  \"profile\": \"{}\",\n",
+            "  \"sample_count\": {},\n",
+            "  \"audio_duration_seconds\": {:.9},\n",
+            "  \"event_count\": {},\n",
+            "  \"event_capture_ms\": {:.6},\n",
+            "  \"event_render_ms\": {:.6},\n",
+            "  \"current_core_render_ms\": {:.6},\n",
+            "  \"event_pipeline_realtime_factor\": {:.9},\n",
+            "  \"event_storage_bytes\": {},\n",
+            "  \"kernel_storage_bytes\": {},\n",
+            "  \"renderer_scratch_peak_bytes\": {},\n",
+            "  \"peak_working_set_estimate_bytes\": {},\n",
+            "  \"group_delay_samples\": {:.6},\n",
+            "  \"causal_lookahead_frames\": 32,\n",
+            "  \"causal_lookahead_ms\": {:.9},\n",
+            "  \"streaming_ready\": false,\n",
+            "  \"streaming_limitation\": \"offline renderer stores the complete event list and full-duration scratch/output buffers\"\n",
+            "}}\n"
+        ),
+        profile_name,
+        sample_count,
+        audio_duration_seconds,
+        events.len(),
+        capture_elapsed.as_secs_f64() * 1000.0,
+        event_render_elapsed.as_secs_f64() * 1000.0,
+        core_render_elapsed.as_secs_f64() * 1000.0,
+        event_pipeline_seconds / audio_duration_seconds,
+        event_storage_bytes,
+        kernel_storage_bytes,
+        renderer_scratch_bytes,
+        peak_working_set_estimate_bytes,
+        EVENT_HALF + EVENT_FRACTIONAL_DELAY,
+        32.0 * 1000.0 / SAMPLE_RATE as f64
+    );
+    std::fs::write(
+        directory.join(format!("psg-h2-runtime-{profile_name}.json")),
+        report,
+    )
+    .unwrap();
+}
+
 fn write_kernel_metrics(directory: &Path, kernel: &EventBasedKernel) {
     let (minimum, maximum) = kernel.step_extrema();
     let report = format!(
@@ -482,8 +564,19 @@ fn event_kernel_sweeps_all_tone_periods_and_preserves_period_zero_one() {
         let frequency = CLOCK_HZ as f64 / (32.0 * f64::from(period));
         let wrapped = frequency.rem_euclid(SAMPLE_RATE as f64);
         let alias = wrapped.min(SAMPLE_RATE as f64 - wrapped);
-        let response = kernel.discrete_frequency_response(alias / SAMPLE_RATE as f64);
+        let response = if frequency >= SAMPLE_RATE as f64 / 2.0 || period == 5 {
+            kernel.continuous_frequency_response(frequency / SAMPLE_RATE as f64)
+        } else {
+            kernel.discrete_frequency_response(alias / SAMPLE_RATE as f64)
+        };
         assert!(response.is_finite() && (0.0..=1.10).contains(&response));
+        if period <= 4 {
+            assert!(response < 2.0e-4, "period={period}, stopband gain={response}");
+        } else if period == 5 {
+            assert!((0.25..0.40).contains(&response), "transition gain={response}");
+        } else {
+            assert!(response > 0.999, "period={period}, passband gain={response}");
+        }
     }
     for period in [0_u16, 1] {
         let mut psg =
@@ -507,9 +600,18 @@ fn event_based_full_register_traces_are_deterministic_for_both_profiles() {
         std::fs::create_dir_all(path).unwrap();
     }
     for (profile, name) in [(PsgProfile::Sms, "sms"), (PsgProfile::Sg1000, "sg1000")] {
+        let capture_start = Instant::now();
         let events = capture_events(profile, &PSG_TRACE, FULL_TRACE_CLOCKS, None);
+        let capture_elapsed = capture_start.elapsed();
+
+        let event_render_start = Instant::now();
         let event_pcm = kernel.render(&events, 0.0, FULL_TRACE_CLOCKS);
+        let event_render_elapsed = event_render_start.elapsed();
+
+        let core_render_start = Instant::now();
         let core_pcm = render_core_trace(profile, &PSG_TRACE, FULL_TRACE_CLOCKS);
+        let core_render_elapsed = core_render_start.elapsed();
+
         let expected = (u128::from(FULL_TRACE_CLOCKS) * u128::from(SAMPLE_RATE)
             / u128::from(CLOCK_HZ)) as usize;
         assert_eq!(event_pcm.len(), expected, "{profile:?}");
@@ -518,6 +620,16 @@ fn event_based_full_register_traces_are_deterministic_for_both_profiles() {
         assert!(normalized_error(&core_pcm, &event_pcm) < 0.08);
         if let Some(path) = &directory {
             export_wav(path, &format!("event-{name}.wav"), &event_pcm);
+            write_runtime_metrics(
+                path,
+                name,
+                &events,
+                &kernel,
+                event_pcm.len(),
+                capture_elapsed,
+                event_render_elapsed,
+                core_render_elapsed,
+            );
         }
     }
 }
@@ -596,6 +708,76 @@ fn event_reconstruction_handles_sample_boundaries_simultaneous_deltas_and_end_ed
     assert_eq!(first.len(), 19_200);
     assert!(first.iter().all(|sample| sample.is_finite()));
     assert!(first.iter().map(|sample| sample.abs()).fold(0.0, f64::max) < 1.0);
+}
+
+
+#[test]
+fn event_based_full_tone_period_sweep_exports_2_through_1023() {
+    const SWEEP_CLOCKS: u64 = 357_955;
+    const EXPECTED_SAMPLES: usize = 4_800;
+    let kernel = EventBasedKernel::new();
+    let directory = artifact_directory();
+    let mut report = String::from("[\\n");
+
+    for period in 2_u16..=1023 {
+        let trace = tone_trace(period);
+        let events = capture_events(
+            PsgProfile::Sms,
+            &trace,
+            SWEEP_CLOCKS,
+            None,
+        );
+        let samples = kernel.render(&events, 0.0, SWEEP_CLOCKS);
+        assert_eq!(samples.len(), EXPECTED_SAMPLES, "period={period}");
+        assert!(samples.iter().all(|sample| sample.is_finite()));
+
+        let expected_frequency = CLOCK_HZ as f64 / (32.0 * f64::from(period));
+        let wrapped = expected_frequency.rem_euclid(SAMPLE_RATE as f64);
+        let alias_frequency = wrapped.min(SAMPLE_RATE as f64 - wrapped);
+        let continuous_gain = kernel.continuous_frequency_response(
+            expected_frequency / SAMPLE_RATE as f64,
+        );
+        let rms = (samples.iter().map(|sample| sample * sample).sum::<f64>()
+            / samples.len() as f64)
+            .sqrt();
+        let peak = samples.iter().map(|sample| sample.abs()).fold(0.0, f64::max);
+        let fundamental_power = goertzel_power(&samples, alias_frequency);
+
+        assert!(peak < 1.0, "period={period}, peak={peak}");
+        assert!(rms.is_finite() && fundamental_power.is_finite());
+        if expected_frequency >= SAMPLE_RATE as f64 / 2.0 {
+            assert!(continuous_gain < 2.0e-4, "period={period}, gain={continuous_gain}");
+        } else if period == 5 {
+            assert!((0.25..0.40).contains(&continuous_gain));
+        } else {
+            assert!(continuous_gain > 0.999, "period={period}, gain={continuous_gain}");
+        }
+
+        if period > 2 {
+            report.push_str(",\\n");
+        }
+        report.push_str(&format!(
+            concat!(
+                "  {{\"period\": {}, \"expected_frequency_hz\": {:.9}, ",
+                "\"alias_frequency_hz\": {:.9}, \"continuous_gain\": {:.12}, ",
+                "\"rms\": {:.12}, \"peak\": {:.12}, ",
+                "\"fundamental_power_at_alias\": {:.12e}, \"event_count\": {}}}"
+            ),
+            period,
+            expected_frequency,
+            alias_frequency,
+            continuous_gain,
+            rms,
+            peak,
+            fundamental_power,
+            events.len()
+        ));
+    }
+    report.push_str("\\n]\\n");
+
+    if let Some(path) = &directory {
+        std::fs::write(path.join("psg-h2-tone-sweep.json"), report).unwrap();
+    }
 }
 
 #[test]
