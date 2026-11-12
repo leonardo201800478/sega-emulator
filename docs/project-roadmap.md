@@ -87,6 +87,6 @@ Gates:
 
 Validar workspaces/targets standalone. Aplicativos e testes de desempenho devem usar Release. Classificar PASS, FAIL, BLOCKED ou NOT RUN; SKIPPED nunca é PASS. Vincular evidências ao SHA exato.
 
-## 7. GitHub
+## 7. GitHub e integração contínua
 
-GitHub é a fonte da verdade. Toda alteração em branch/PR. Proibidos commit direto na main, force-push e reset destrutivo. Merge exige CI aplicável verde no HEAD final e autorização explícita. PR aberta, documentação ou CI parcial não significam integração funcional.
+GitHub é a fonte da verdade. Integrar continuamente na main o código tecnicamente validado, em incrementos pequenos. Manter branches curtas; para branches antigas/divergentes, preservar o histórico e portar seletivamente as mudanças úteis para uma branch nova baseada na main atual. Não fazer merge cego, force-push ou reset destrutivo. Toda alteração passa por branch/PR, diff revisado, testes direcionados, regressões pertinentes e CI aplicável verde no HEAD final. A autorização permanente do usuário permite integrar após os gates; não permite contorná-los. SKIPPED, queued e NOT RUN não são PASS.
