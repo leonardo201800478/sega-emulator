@@ -9,7 +9,7 @@
 pub mod d3d12;
 
 /// Host-side diagnostics that correlate telemetry with Windows performance traces.
-#[cfg(all(windows, feature = "d3d12-host"))]
+#[cfg(all(windows, feature = "windows_diagnostics"))]
 pub mod diagnostics;
 
 pub mod frame_queue;
