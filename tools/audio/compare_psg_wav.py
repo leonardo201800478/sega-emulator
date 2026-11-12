@@ -185,6 +185,21 @@ def tone_response_summary(
     peak_bin = max(range(first_bin, end_bin), key=power.__getitem__)
     fundamental_power = math.fsum(power[first_bin:end_bin])
     total_power = math.fsum(power[1:])
+    harmonic_powers: dict[str, float] = {}
+    max_harmonic = int((sample_rate / 2) // expected_hz)
+    for harmonic in range(2, max_harmonic + 1):
+        harmonic_bin = round(harmonic * expected_hz * fft_size / sample_rate)
+        harmonic_start = max(1, harmonic_bin - 4)
+        harmonic_end = min(fft_size // 2 + 1, harmonic_bin + 5)
+        harmonic_powers[str(harmonic)] = math.fsum(
+            power[harmonic_start:harmonic_end]
+        )
+    total_harmonic_power = math.fsum(harmonic_powers.values())
+    thd_ratio = (
+        math.sqrt(total_harmonic_power / fundamental_power)
+        if fundamental_power > 0.0
+        else 0.0
+    )
     rms = math.sqrt(
         math.fsum(value * value for value in steady_state) / len(steady_state)
     )
@@ -197,8 +212,12 @@ def tone_response_summary(
         "fundamental_relative_db": (
             10.0 * math.log10(fundamental_power / total_power)
             if fundamental_power > 0.0 and total_power > 0.0
-            else float("-inf")
+            else None
         ),
+        "harmonic_powers": harmonic_powers,
+        "thd_ratio": thd_ratio,
+        "thd_percent": 100.0 * thd_ratio,
+        "thd_db": 20.0 * math.log10(thd_ratio) if thd_ratio > 0.0 else None,
     }
 
 
