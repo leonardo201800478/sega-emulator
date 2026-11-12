@@ -327,7 +327,7 @@ jobs:
     needs: [changes]
     if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.psg == 'true' && needs.changes.outputs.full != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -340,7 +340,91 @@ jobs:
       - name: Clippy PSG and console audio integration
         run: cargo clippy --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core -- -D warnings
       - name: Test PSG and console audio integration
-        run: cargo test --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
+        run: |
+          mkdir -p artifacts
+          PSG_AUDIO_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" cargo test --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
+
+      - name: Fetch historical PSG baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin f47f71830344b85f72329376505d400bfbfaae69
+          git worktree add --detach "$RUNNER_TEMP/sega-audio-baseline" f47f71830344b85f72329376505d400bfbfaae69
+          mkdir -p "$RUNNER_TEMP/sega-audio-baseline/native/sn76489/examples" artifacts
+          cp native/sn76489/examples/psg_trace.rs "$RUNNER_TEMP/sega-audio-baseline/native/sn76489/examples/psg_trace.rs"
+      - name: Render historical and current PSG traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sms artifacts/baseline-sms.wav
+          cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sg1000 artifacts/baseline-sg1000.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms artifacts/current-sms.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000.wav
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms artifacts/current-sms-chunked.wav 997
+          cargo run --release --locked -p sega-sn76489 --example psg_trace -- sg1000 artifacts/current-sg1000-chunked.wav 997
+      - name: Render exhaustive-range tone checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for period in 2 3 4 5 6 7 9 14 28 56 112 255 512 1023; do
+            cargo run --release --locked --manifest-path "$RUNNER_TEMP/sega-audio-baseline/Cargo.toml" -p sega-sn76489 --example psg_trace -- sms "artifacts/baseline-tone-p$period.wav" 0 "$period"
+            cargo run --release --locked -p sega-sn76489 --example psg_trace -- sms "artifacts/current-tone-p$period.wav" 0 "$period"
+          done
+      - name: Compare historical PCM and chunk invariance
+        run: |
+          python tools/audio/compare_psg_wav.py \
+            --baseline-sms artifacts/baseline-sms.wav \
+            --current-sms artifacts/current-sms.wav \
+            --chunked-sms artifacts/current-sms-chunked.wav \
+            --baseline-sg1000 artifacts/baseline-sg1000.wav \
+            --current-sg1000 artifacts/current-sg1000.wav \
+            --chunked-sg1000 artifacts/current-sg1000-chunked.wav \
+            --tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav \
+            --tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav \
+            --tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav \
+            --tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav \
+            --tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav \
+            --tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav \
+            --tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav \
+            --tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav \
+            --tone 255 artifacts/baseline-tone-p255.wav artifacts/current-tone-p255.wav \
+            --tone 512 artifacts/baseline-tone-p512.wav artifacts/current-tone-p512.wav \
+            --tone 1023 artifacts/baseline-tone-p1023.wav artifacts/current-tone-p1023.wav
+      - name: Analyze event-based reconstruction and noise profiles
+        run: |
+          python tools/audio/analyze_psg_h2.py \
+            --baseline-sms artifacts/baseline-sms.wav \
+            --current-sms artifacts/current-sms.wav \
+            --event-sms artifacts/event-sms.wav \
+            --baseline-sg1000 artifacts/baseline-sg1000.wav \
+            --current-sg1000 artifacts/current-sg1000.wav \
+            --event-sg1000 artifacts/event-sg1000.wav \
+            --event-model-metrics artifacts/psg-h2-model-metrics.json \
+            --event-tone 2 artifacts/baseline-tone-p2.wav artifacts/current-tone-p2.wav artifacts/event-tone-p2.wav \
+            --event-tone 3 artifacts/baseline-tone-p3.wav artifacts/current-tone-p3.wav artifacts/event-tone-p3.wav \
+            --event-tone 4 artifacts/baseline-tone-p4.wav artifacts/current-tone-p4.wav artifacts/event-tone-p4.wav \
+            --event-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/event-tone-p5.wav \
+            --event-tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav artifacts/event-tone-p6.wav \
+            --event-tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav artifacts/event-tone-p7.wav \
+            --event-tone 9 artifacts/baseline-tone-p9.wav artifacts/current-tone-p9.wav artifacts/event-tone-p9.wav \
+            --event-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/event-tone-p14.wav \
+            --event-tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav artifacts/event-tone-p28.wav \
+            --event-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/event-tone-p56.wav \
+            --event-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/event-tone-p112.wav \
+            --event-tone 255 artifacts/baseline-tone-p255.wav artifacts/current-tone-p255.wav artifacts/event-tone-p255.wav \
+            --event-tone 512 artifacts/baseline-tone-p512.wav artifacts/current-tone-p512.wav artifacts/event-tone-p512.wav \
+            --event-tone 1023 artifacts/baseline-tone-p1023.wav artifacts/current-tone-p1023.wav artifacts/event-tone-p1023.wav \
+            --noise sms periodic artifacts/current-noise-sms-periodic.wav artifacts/event-noise-sms-periodic.wav \
+            --noise sms white artifacts/current-noise-sms-white.wav artifacts/event-noise-sms-white.wav \
+            --noise sg1000 periodic artifacts/current-noise-sg1000-periodic.wav artifacts/event-noise-sg1000-periodic.wav \
+            --noise sg1000 white artifacts/current-noise-sg1000-white.wav artifacts/event-noise-sg1000-white.wav
+      - name: Upload PSG H2 WAV traces and reports
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: psg-audio-ab-reference
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
 
   vdp-focused:
     name: VDP core and console integration validation
