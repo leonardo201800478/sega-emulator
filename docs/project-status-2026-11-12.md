@@ -254,5 +254,5 @@ P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite v
 
 - The physical capture protocol is paired: video-only (SEGA_EMULATOR_VIDEO_ONLY=1) and audio-active (CPAL initialized and audible), with the same ROM SHA-256, region, scene and display conditions.
 - PR #791 prepares video-only mode. The PR also adds one-second R3_AUDIO_HEALTH snapshots for CPAL queue consumption, drops, underruns and output errors so audio-active runs can be validated instead of assuming that stream creation means healthy playback.
-- Relevant integrated baselines: #766 worker deadline/Slint callback diagnostics; #785 post-deadline command-handler timing; #787 f64 PCM and CPAL negotiation; #790 rolling host p50/p95/p99.
+- Relevant integrated baselines with successful applicable CI on their exact PR HEADs: #770 CPAL 0.18.2 physical backend integration; #774 explicit 48 kHz PCM source and endpoint-rate separation; #766 worker deadline/Slint callback diagnostics; #785 post-deadline command-handler timing; #787 f64 PCM and CPAL format negotiation; #788 H4/P0 status reconciliation; #790 rolling host p50/p95/p99.
 - No physical capture is PASS until paired raw logs and PresentMon CSVs have been reviewed. The Scheduler and hardware timing remain unchanged.
