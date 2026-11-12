@@ -1321,6 +1321,15 @@ mod temporal_vdp_tests {
     }
 
     #[test]
+    fn default_sms_temporal_bus_uses_the_canonical_48khz_pcm_source_rate() {
+        let bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        assert_eq!(
+            bus.psg().sample_rate(),
+            super::DEFAULT_PCM_SOURCE_RATE_HZ as u64
+        );
+    }
+
+    #[test]
     fn vdp_data_write_is_invisible_until_the_scheduled_port_boundary() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         assert_eq!(bus.vdp().vram()[0], 0);
@@ -1452,7 +1461,7 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 11);
+        assert_eq!(snapshot.format_version, 12);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
