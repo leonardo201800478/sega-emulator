@@ -386,7 +386,7 @@ jobs:
             --lagrange4-tone 14 artifacts/baseline-tone-p14.wav artifacts/current-tone-p14.wav artifacts/lagrange4-tone-p14.wav \
             --lagrange4-tone 28 artifacts/baseline-tone-p28.wav artifacts/current-tone-p28.wav artifacts/lagrange4-tone-p28.wav \
             --lagrange4-tone 56 artifacts/baseline-tone-p56.wav artifacts/current-tone-p56.wav artifacts/lagrange4-tone-p56.wav \
-            --lagrange4-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange4-tone-p112.wav
+            --lagrange4-tone 112 artifacts/baseline-tone-p112.wav artifacts/current-tone-p112.wav artifacts/lagrange4-tone-p112.wav \
             --lagrange3-tone 5 artifacts/baseline-tone-p5.wav artifacts/current-tone-p5.wav artifacts/lagrange3-tone-p5.wav \
             --lagrange3-tone 6 artifacts/baseline-tone-p6.wav artifacts/current-tone-p6.wav artifacts/lagrange3-tone-p6.wav \
             --lagrange3-tone 7 artifacts/baseline-tone-p7.wav artifacts/current-tone-p7.wav artifacts/lagrange3-tone-p7.wav \
