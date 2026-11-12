@@ -55,6 +55,6 @@ Qt é a única interface gráfica ativa e usa exclusivamente o runtime Rust. Pyg
 - Validar o contrato para cada console antes de habilitar drivers específicos nele.
 
 
-## Decisão normativa de áudio — 2026-10-30
+## Decisão histórica de áudio — 2026-10-30 (SUPERSEDED pela ADR 0011; CPAL R3 pendente)
 
 A seleção global de saída permanece WASAPI Shared por padrão e XAudio2 como alternativa. A fachada Qt/PySide6 envia apenas configuração e comandos de sessão; o runtime Rust possui produção, mixagem, resampling, filas, workers e saída. O frontend não drena nem transporta PCM. O WASAPI Shared tenta IAudioClient3 para negociar min/max/fundamental e recua para Shared convencional quando necessário; Exclusive permanece fora do padrão. O mixer DSP multi-fonte mono é compartilhado por WASAPI/XAudio2; filtros analógicos por chip não são habilitados sem calibração. Ver [Runtime de áudio nativo](native-audio-runtime.md).
