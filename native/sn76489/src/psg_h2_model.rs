@@ -717,16 +717,11 @@ fn event_based_full_tone_period_sweep_exports_2_through_1023() {
     const EXPECTED_SAMPLES: usize = 4_800;
     let kernel = EventBasedKernel::new();
     let directory = artifact_directory();
-    let mut report = String::from("[\\n");
+    let mut report = String::from("[\n");
 
     for period in 2_u16..=1023 {
         let trace = tone_trace(period);
-        let events = capture_events(
-            PsgProfile::Sms,
-            &trace,
-            SWEEP_CLOCKS,
-            None,
-        );
+        let events = capture_events(PsgProfile::Sms, &trace, SWEEP_CLOCKS, None);
         let samples = kernel.render(&events, 0.0, SWEEP_CLOCKS);
         assert_eq!(samples.len(), EXPECTED_SAMPLES, "period={period}");
         assert!(samples.iter().all(|sample| sample.is_finite()));
@@ -734,9 +729,11 @@ fn event_based_full_tone_period_sweep_exports_2_through_1023() {
         let expected_frequency = CLOCK_HZ as f64 / (32.0 * f64::from(period));
         let wrapped = expected_frequency.rem_euclid(SAMPLE_RATE as f64);
         let alias_frequency = wrapped.min(SAMPLE_RATE as f64 - wrapped);
-        let continuous_gain = kernel.continuous_frequency_response(
-            expected_frequency / SAMPLE_RATE as f64,
-        );
+        let kernel_gain = if expected_frequency >= SAMPLE_RATE as f64 / 2.0 || period == 5 {
+            kernel.continuous_frequency_response(expected_frequency / SAMPLE_RATE as f64)
+        } else {
+            kernel.discrete_frequency_response(alias_frequency / SAMPLE_RATE as f64)
+        };
         let rms = (samples.iter().map(|sample| sample * sample).sum::<f64>()
             / samples.len() as f64)
             .sqrt();
@@ -746,34 +743,34 @@ fn event_based_full_tone_period_sweep_exports_2_through_1023() {
         assert!(peak < 1.0, "period={period}, peak={peak}");
         assert!(rms.is_finite() && fundamental_power.is_finite());
         if expected_frequency >= SAMPLE_RATE as f64 / 2.0 {
-            assert!(continuous_gain < 2.0e-4, "period={period}, gain={continuous_gain}");
+            assert!(kernel_gain < 2.0e-4, "period={period}, gain={kernel_gain}");
         } else if period == 5 {
-            assert!((0.25..0.40).contains(&continuous_gain));
+            assert!((0.25..0.40).contains(&kernel_gain));
         } else {
-            assert!(continuous_gain > 0.999, "period={period}, gain={continuous_gain}");
+            assert!(kernel_gain > 0.999, "period={period}, gain={kernel_gain}");
         }
 
         if period > 2 {
-            report.push_str(",\\n");
+            report.push_str(",\n");
         }
         report.push_str(&format!(
             concat!(
                 "  {{\"period\": {}, \"expected_frequency_hz\": {:.9}, ",
-                "\"alias_frequency_hz\": {:.9}, \"continuous_gain\": {:.12}, ",
+                "\"alias_frequency_hz\": {:.9}, \"kernel_gain\": {:.12}, ",
                 "\"rms\": {:.12}, \"peak\": {:.12}, ",
                 "\"fundamental_power_at_alias\": {:.12e}, \"event_count\": {}}}"
             ),
             period,
             expected_frequency,
             alias_frequency,
-            continuous_gain,
+            kernel_gain,
             rms,
             peak,
             fundamental_power,
             events.len()
         ));
     }
-    report.push_str("\\n]\\n");
+    report.push_str("\n]\n");
 
     if let Some(path) = &directory {
         std::fs::write(path.join("psg-h2-tone-sweep.json"), report).unwrap();
