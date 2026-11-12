@@ -1521,5 +1521,6 @@ mod tests {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
 #[path = "psg_h2_tests.rs"]
 mod h2_tests;
