@@ -561,16 +561,16 @@ jobs:
 
 
   refresh-lockfiles:
-    name: Generate Cargo lockfiles (manual artifact; no repository writes)
+    name: Generate and integrate Cargo lockfiles
     if: (github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     permissions:
-      contents: read
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          persist-credentials: true
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
@@ -590,6 +590,23 @@ jobs:
           test -f Cargo.lock
           test -f native/audio_output/Cargo.lock
           test -f native/sega_app/Cargo.lock
+      - name: Commit refreshed lockfiles to same-repository PR branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git switch -c "$PR_HEAD_REF"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock native/audio_output/Cargo.lock native/sega_app/Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Cargo lockfiles are already current."
+          else
+            git commit -m "chore(deps): refresh Cargo lockfiles for CPAL"
+            git push origin "HEAD:$PR_HEAD_REF"
+          fi
       - name: Upload lockfiles for reviewed integration
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
