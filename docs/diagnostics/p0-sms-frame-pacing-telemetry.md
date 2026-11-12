@@ -68,10 +68,10 @@ The next diagnostic increment adds bounded, rolling worker fields:
 
 - frame_budget_p50/p95/p99_us: target host duration derived from the number of PSG samples drained for each completed frame;
 - psg_samples_p50/p95/p99: generated sample count per completed frame, needed to verify the budget input;
-- pacing_timeout_lateness_p50/p95/p99_us: time by which recv_timeout returns after the absolute frame deadline; this is recorded only for timeout wakeups;
+- pacing_timeout_lateness_p50/p95/p99_us and pacing_timeout_count_total: time by which recv_timeout returns after the absolute frame deadline and the number of timeout returns; the percentiles include only frames with a timeout return;
 - pacing_command_wakeups_total: command wakeups attributed to the preceding completed frame;
-- pacing_command_remaining_p95_us: remaining deadline budget when command wakeups occurred;
-- command_handler_p95_us: accumulated command-handler time attributed to that frame.
+- pacing_command_remaining_p95_us: remaining deadline budget when command wakeups occurred; its percentile includes only frames with command wakeups;
+- command_handler_p95_us: accumulated command-handler time attributed to a frame; its percentile includes only frames with measured command-handler work.
 
 The host summary also records total Slint timer callback duration and FrameMailbox::take_latest_with_timestamp duration (average and maximum). Existing timer interval, mailbox residence, conversion and queue-write metrics remain separate.
 
