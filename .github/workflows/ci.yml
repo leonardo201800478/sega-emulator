@@ -677,3 +677,19 @@ jobs:
           check_job "Retired SDL3 host context" "$EXPECT_WINDOWS_INPUT_RETIRED" "$WINDOWS_INPUT_RETIRED"
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
+
+  windows-d3d12-retired:
+    name: Windows x64 D3D12 compile
+    if: ${{ false }}
+    runs-on: windows-latest
+    steps:
+      - name: Retired host validation (intentionally not executed)
+        run: echo "D3D12 validation is retired; this job exists only for the legacy required-check name."
+
+  windows-audio-retired:
+    name: Windows WASAPI and XAudio2 validation
+    if: ${{ false }}
+    runs-on: windows-latest
+    steps:
+      - name: Retired host validation (intentionally not executed)
+        run: echo "WASAPI/XAudio2 validation is retired; this job exists only for the legacy required-check name."
