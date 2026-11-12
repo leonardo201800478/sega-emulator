@@ -743,11 +743,7 @@ mod tests {
 
     fn interpolate_lagrange3(samples: [f64; 3], fraction: f64) -> f64 {
         let x = fraction;
-        let weights = [
-            x * (x - 1.0) / 2.0,
-            1.0 - x * x,
-            x * (x + 1.0) / 2.0,
-        ];
+        let weights = [x * (x - 1.0) / 2.0, 1.0 - x * x, x * (x + 1.0) / 2.0];
         samples
             .iter()
             .zip(weights)
