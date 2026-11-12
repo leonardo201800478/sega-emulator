@@ -19,14 +19,14 @@ impl QpcClock {
     /// Returns `None` if Windows cannot provide a positive QPC frequency.
     pub fn new() -> Option<Self> {
         static FREQUENCY: OnceLock<Option<u64>> = OnceLock::new();
-        let frequency = *FREQUENCY.get_or_init(|| {
+        let frequency = (*FREQUENCY.get_or_init(|| {
             let mut value = 0_i64;
             // SAFETY: `value` is a valid, writable i64 out-parameter for the API.
             unsafe {
                 QueryPerformanceFrequency(&mut value).ok()?;
             }
             u64::try_from(value).ok().filter(|frequency| *frequency > 0)
-        })?;
+        }))?;
         Some(Self { frequency })
     }
 
