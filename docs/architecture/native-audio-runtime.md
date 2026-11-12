@@ -1,6 +1,6 @@
 # Registro histórico — runtime de áudio nativo anterior
 
-> **Status:** SUPERSEDED como arquitetura-alvo pela ADR 0011. O runtime digital/PCM permanece reutilizável; os adaptadores de saída anteriores só podem ser removidos após integração e validação CPAL (R3) e corte R5.
+ > **Status:** DOCUMENTO HISTÓRICO / SUPERSEDED. As decisões WASAPI/XAudio2 abaixo não são normativas. A candidata PR #770 substitui os adaptadores próprios por CPAL 0.18.2; consulte [Saída física CPAL](../audio/cpal-output-backend.md). Preservado para auditoria histórica.
 
 # Runtime de áudio nativo — arquitetura e migração
 
