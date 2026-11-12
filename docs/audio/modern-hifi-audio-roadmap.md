@@ -1,7 +1,7 @@
 # Plano Modern Hi-Fi — SMS e SG-1000
 
-**Status:** H2 concluído como investigação experimental; H3 em implementação para padronizar a linha PCM interna em 48 kHz. O renderer event-based H2 continua exclusivamente em testes e não foi promovido à produção.
-**Branch de trabalho H3:** `feat/h3-pcm-48khz-explicit-rates-20261112`
+**Status:** H2 concluído como investigação experimental; H3 implementado e integrado à main pela PR #774. H4 — contrato PCM moderno e saída 24-bit — é a próxima etapa. O renderer event-based H2 continua exclusivamente em testes e não foi promovido à produção.
+**Branch de trabalho H4:** `feat/h4-modern-pcm-contract-20261112`
 **Baseline de main:** `1f3f30a9d198bb65212388ced220cc4ea7499a5c` (merge da PR #773, 2026-11-12).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
@@ -208,7 +208,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 ### H3 — Linha de áudio de referência em 48 kHz
 
-**Status: IMPLEMENTAÇÃO INICIAL NA BRANCH H3; aguardando CI e revisão dos resultados.**
+**Status: CONCLUÍDO E INTEGRADO À MAIN pela PR #774.** Merge commit: `f5a0b691824322ce56c1a921329d3aa0957c4963`. CI principal (run `43296873475`) e SMS Debugger Runtime (run `43296873385`) concluíram com sucesso no HEAD `d4e93ad1ba891a386c2097e77b7e9eefee9e10e9`. A validação incluiu regressão Rust, Clippy, testes do runtime SMS, build Windows x64, CPAL e shell legado CPAL no Windows x64, além da validação focada de Z80 e PSG.
 
 1. [x] Definir 48 kHz como taxa interna de produção SMS/SG-1000, independente da taxa física do endpoint.
 2. [x] Generalizar `PcmResampler` para taxas explícitas de entrada e saída; remover a taxa de entrada global implícita de 44,1 kHz.
@@ -216,12 +216,14 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 4. [x] Bypassar o FIR quando entrada e saída têm a mesma taxa, evitando resampling redundante em 48 kHz.
 5. [x] Atualizar o default SMS/SG-1000 e versionar o snapshot do barramento SMS para rejeitar snapshots antigos com configuração temporal de áudio incompatível.
 6. [x] Adicionar teste headless de conversão 48 kHz → 44,1 kHz e preservar testes de invariância por blocos/flush.
-7. [ ] Executar CI completa, incluindo Windows x64 CPAL e SMS Runtime, e corrigir regressões.
-8. [ ] Confirmar métricas de contagem de frames e invariância no runtime real; provar que os clocks e o estado final do Scheduler permanecem idênticos.
+7. [x] Executar CI completa, incluindo Windows x64 CPAL e SMS Runtime; todos os jobs aplicáveis concluíram com sucesso.
+8. [x] Confirmar conversão/contagem de frames, invariância por blocos e invariantes temporais do runtime; o teste `pcm_source_rate_does_not_change_scheduler_or_cpu_progress` validou igualdade de progresso de CPU, `now()`, frame number, estado arquitetural, framebuffer, fase divider e tone counters entre taxas PCM distintas.
 
-**Gate H3:** CI aplicável verde; 48 kHz end-to-end na fonte interna; equivalência entre blocos; nenhuma alteração nos clocks do Scheduler.
+**Gate H3: ATENDIDO** — CI aplicável verde; fonte interna em 48 kHz; conversão para endpoint explícita; invariância por blocos; estado temporal e progresso de hardware independentes da taxa PCM.
 
 ### H4 — Contrato PCM moderno e saída 24-bit
+
+**Status: EM PREPARAÇÃO na branch `feat/h4-modern-pcm-contract-20261112`; nenhuma alteração de produção ainda foi declarada.**
 
 1. Substituir o contrato implícito PCM16 de `PcmSink` por frames/amostras com formato explícito, sem alocações no callback físico.
 2. Manter PCM em precisão elevada até a saída; aplicar volume e saturação uma única vez na fronteira correta.
@@ -285,7 +287,7 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 - [SMS Power](https://www.smspower.org/)
 
 ---
-**Estado desta revisão anterior:** planejamento e auditoria estática. O trabalho H3 agora está sendo implementado na branch `feat/h3-pcm-48khz-explicit-rates-20261112`; os resultados de CI e validação física ainda não foram declarados.
+**Estado desta revisão:** H3 foi integrada à main pela PR #774 após CI aplicável verde. H4 está em preparação em branch própria; ainda não há alegação de saída PCM24 implementada nem validação física.
 
 
 Consulte também o estudo PSG H2 — reconstrução event-based, com a modelagem independente, os testes matemáticos, a varredura de períodos e a caracterização dos perfis de ruído.
