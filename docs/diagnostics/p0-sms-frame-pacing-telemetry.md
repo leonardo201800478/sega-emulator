@@ -58,6 +58,10 @@ Each host summary also includes `qpc_available`, `qpc_ticks`, and `qpc_frequency
 - worker p50/p95/p99 frame intervals and p95 stage durations;
 - machine clock and ticks-per-frame range.
 
+The host summary now reports p50/p95/p99 for poll intervals, consumed-frame intervals, mailbox residence, RGB conversion, `Queue::write_texture`, total Slint callback duration, and mailbox-take duration. These host distributions use fixed-capacity rolling windows of the most recent 512 observations; sample counts are emitted alongside each distribution. Interval jitter is reported as p95−p50 for polling, consumed-frame intervals, and worker completion intervals. Rolling samples are not cleared at the one-second log boundary, while the existing interval counters and averages remain one-second window values.
+
+`empty_polls` counts GUI timer callbacks that found no new mailbox frame; it is not a count of physical display repeats. `sequence_gaps` and `mailbox_replaced_total` quantify producer/consumer coalescing. Actual present/display cadence must be analyzed from PresentMon's QPC-correlated data; Slint owns the surface submit/present path, so the host does not fabricate WGPU submit or physical-present timestamps.
+
 The host report is deliberately explicit that physical present timestamps are unavailable through the current Slint-owned surface. sequence_gaps is a per-window count and mailbox_replaced_total is cumulative; neither is automatically a defect: the mailbox is latest-frame-wins, so replacements can be expected if the consumer is slower. They must be interpreted alongside produced and consumed cadence.
 
 ## Follow-up diagnostics — worker wakeup and Slint callback
