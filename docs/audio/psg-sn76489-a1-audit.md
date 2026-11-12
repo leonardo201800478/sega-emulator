@@ -325,3 +325,44 @@ Os testes exercitam explicitamente o perfil `PsgProfile::Sms`; não usam o const
 | Teste físico em Master System | BLOCKED / NOT RUN |
 
 A1.2 permanece parcial: os vetores de ruído foram adicionados, mas só serão promovidos a PASS após CI verde no mesmo SHA. A sequência de LFSR não fecha por si só a temporização do divisor, o alinhamento do Noise Rate = Tone 2 nem o modelo analógico de saída.
+
+
+## 11. A1.3 — caracterização parcial do divisor Noise Rate = Tone 2 (2026-11-12)
+
+**Referência independente:** Gearsystem, commit `1be9a12b82cae84ddd6f9b7006d546abe2d58bd4`, `src/audio/Sms_Apu.cpp`.
+**Escopo:** caracterizar relação de período e continuidade do intervalo pendente; não declarar alinhamento absoluto de fase.
+
+### 11.1 Evidência comparativa
+
+No Gearsystem, o registrador de ruído seleciona diretamente um ponteiro para `squares[2].period`. A rotina `Sms_Noise::run` calcula o intervalo de deslocamento como `2 * *period` e mantém `delay` entre chamadas. Uma escrita no registrador de tom 2 altera o período consultado nas próximas iterações; uma escrita no registrador de ruído reinicializa `shifter`, mas não zera `delay`.
+
+Isso sustenta dois requisitos verificáveis:
+1. taxa média de shift = uma transição por dois períodos de Tone 2;
+2. alteração do período de Tone 2 não deve descartar o tempo parcial já transcorrido no divisor de ruído.
+
+Fonte: https://github.com/drhelius/Gearsystem/blob/1be9a12b82cae84ddd6f9b7006d546abe2d58bd4/src/audio/Sms_Apu.cpp
+
+### 11.2 Teste de regressão adicionado
+
+`sms_tone_two_noise_rate_tracks_period_without_resetting_partial_divider`:
+- configura Tone 2 = 3 e Noise Rate = Tone 2;
+- avança um tick e altera Tone 2 para 2 com dois ticks restantes no contador;
+- verifica que o contador parcial permanece;
+- verifica o primeiro shift na expiração prevista;
+- verifica o próximo shift após dois períodos do novo valor.
+
+O teste não compara a fase inicial absoluta com hardware e não prova acoplamento elétrico ao flip-flop de Tone 2. É um teste de relação temporal média e continuidade do intervalo pendente, derivado do modelo independente.
+
+### 11.3 Limite de conclusão
+
+| Propriedade | Estado |
+|---|---|
+| Noise period acompanha o valor de Tone 2 | TEST ADDED |
+| Shift a cada duas expirações após alinhamento conhecido | TEST ADDED |
+| Escrita Tone 2 preserva contador parcial | TEST ADDED |
+| Fase inicial após power-on/reset | ORACLE REQUIRED |
+| Fase após escrita Noise Register | PARTIAL — precisa trace independente |
+| Fase após escrita Tone 2 em todos os boundaries | PARTIAL |
+| Relação elétrica com flip-flop Tone 2 do VDP | NOT PROVEN |
+
+A1.3 permanece **PARTIAL** até que a fase absoluta seja reconciliada com evidência independente ou captura de hardware. O contador de ruído independente permanece preservado; não deve ser substituído por conexão direta ao flip-flop de Tone 2 com base apenas na equivalência de frequência média.
