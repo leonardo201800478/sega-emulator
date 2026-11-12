@@ -1897,7 +1897,7 @@ mod tests {
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn frame_timing_uses_worker_completion_timestamps_not_video_presentation() {
