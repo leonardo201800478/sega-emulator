@@ -414,13 +414,13 @@ mod tests {
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.07).sin()).collect();
         let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.07).sin()).collect();
 
-        let mut stepped = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut stepped = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
         stepped.process_samples_discarding_output(&first).unwrap();
         assert!(stepped.sink.blocks.is_empty());
         stepped.resume().unwrap();
         stepped.process_samples(&second).unwrap();
 
-        let mut reference = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut reference = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
         reference.process_samples(&second).unwrap();
 
         assert_eq!(stepped.sink.blocks, reference.sink.blocks);
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn pause_flush_resume_preserves_dsp_history_and_acknowledges_sink_controls() {
-        let mut session = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut session = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.05).sin()).collect();
         let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.05).sin()).collect();
         session.process_samples(&first).unwrap();
@@ -438,7 +438,7 @@ mod tests {
         assert!(!session.sink.suspended);
         session.process_samples(&second).unwrap();
 
-        let mut reference = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut reference = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
         reference.process_samples(&first).unwrap();
         reference.process_samples(&second).unwrap();
 
