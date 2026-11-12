@@ -140,8 +140,26 @@ impl EventBasedKernel {
         let mut settled_deltas = vec![0.0; sample_count + 1];
         let mut transition_contributions = vec![0.0; sample_count];
 
-        for event in events {
-            let numerator = u128::from(event.clock) * u128::from(SAMPLE_RATE);
+        debug_assert!(events.windows(2).all(|pair| pair[0].clock <= pair[1].clock));
+        let mut event_index = 0;
+        let mut simultaneous_deltas = Vec::new();
+        while event_index < events.len() {
+            let event_clock = events[event_index].clock;
+            simultaneous_deltas.clear();
+            while event_index < events.len() && events[event_index].clock == event_clock {
+                simultaneous_deltas.push(events[event_index].delta);
+                event_index += 1;
+            }
+
+            // Canonicalize simultaneous deltas before convolution. Floating-point
+            // accumulation must not depend on the order of same-clock bus writes.
+            simultaneous_deltas.sort_by(f64::total_cmp);
+            let event_delta = simultaneous_deltas.iter().sum::<f64>();
+            if event_delta == 0.0 {
+                continue;
+            }
+
+            let numerator = u128::from(event_clock) * u128::from(SAMPLE_RATE);
             let whole = (numerator / u128::from(CLOCK_HZ)) as f64;
             let remainder = (numerator % u128::from(CLOCK_HZ)) as f64;
             let event_position = whole + remainder / CLOCK_HZ as f64;
@@ -155,7 +173,7 @@ impl EventBasedKernel {
                 .max(0.0) as usize;
 
             if settled < sample_count {
-                settled_deltas[settled] += event.delta;
+                settled_deltas[settled] += event_delta;
             }
             let start = first.min(sample_count);
             let end = settled.min(sample_count);
@@ -167,7 +185,7 @@ impl EventBasedKernel {
             {
                 let sample_time = sample_index as f64 + 1.0;
                 let position = sample_time - event_position - EVENT_HALF - EVENT_FRACTIONAL_DELAY;
-                *contribution += event.delta * self.response_to_step(position);
+                *contribution += event_delta * self.response_to_step(position);
             }
         }
 
