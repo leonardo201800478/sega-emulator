@@ -45,6 +45,7 @@ pub struct NativeCpalOutput {
     sample_rate_hz: u32,
     channels: u16,
     sample_format: cpal::SampleFormat,
+    used_default_fallback: bool,
     started: bool,
     closed: bool,
     flush_requested: Arc<AtomicBool>,
@@ -169,6 +170,7 @@ impl NativeCpalOutput {
             sample_rate_hz,
             channels,
             sample_format,
+            used_default_fallback,
             started: false,
             closed: false,
             flush_requested,
@@ -191,6 +193,11 @@ impl NativeCpalOutput {
     /// Return the actual sample format selected by the output device.
     pub const fn sample_format(&self) -> cpal::SampleFormat {
         self.sample_format
+    }
+
+    /// Whether CPAL's default configuration was used because no preferred PCM tuple was advertised.
+    pub const fn used_default_config_fallback(&self) -> bool {
+        self.used_default_fallback
     }
 
     /// Wrap this sink in the shared Rust DSP/resampler session.
