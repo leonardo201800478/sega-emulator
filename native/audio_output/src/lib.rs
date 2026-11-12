@@ -119,7 +119,7 @@ impl NativeCpalOutput {
             return Err("CPAL output device reported zero channels".to_owned());
         }
 
-        let mut config: cpal::StreamConfig = supported.clone().into();
+        let config: cpal::StreamConfig = supported.into();
         // Let CPAL and the selected host negotiate the callback quantum.
         // `buffer_frames` sizes the bounded application FIFO, not the OS endpoint.
 
@@ -163,6 +163,11 @@ impl NativeCpalOutput {
         self.sample_rate_hz
     }
 
+    /// Return the channel count selected by the output device.
+    pub const fn channels(&self) -> u16 {
+        self.channels
+    }
+
     /// Wrap this sink in the shared Rust DSP/resampler session.
     pub fn into_audio_session(self, volume: u8) -> Result<NativeAudioSession<Self>, String> {
         NativeAudioSession::new(self.sample_rate_hz, volume, self)
@@ -187,14 +192,14 @@ impl PcmSink for NativeCpalOutput {
             return Err("CPAL output is closed".to_owned());
         }
         self.check_callback_error()?;
-        if pcm.len() % 2 != 0 {
+        if !pcm.len().is_multiple_of(2) {
             return Err("PCM16 block contains an incomplete sample".to_owned());
         }
 
         self.frame_scratch.clear();
         self.frame_scratch.reserve(pcm.len() / 2);
-        for sample in pcm.chunks_exact(2) {
-            let mono = i16::from_le_bytes([sample[0], sample[1]]);
+        for sample in pcm.as_chunks::<2>().0 {
+            let mono = i16::from_le_bytes(*sample);
             self.frame_scratch
                 .push(mono_sample_to_stereo_frame(mono, 0));
         }
