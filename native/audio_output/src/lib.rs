@@ -318,9 +318,9 @@ impl PcmSink for NativeCpalOutput {
 fn select_preferred_output_config(
     ranges: &[cpal::SupportedStreamConfigRange],
 ) -> Option<cpal::SupportedStreamConfig> {
-    // Prefer stereo, then mono; high-precision PCM formats precede the mandatory
-    // PCM16 fallback. 48 kHz avoids resampling; 88.2/96 kHz are used when 48 kHz
-    // is not in the device's advertised range.
+    // Prefer stereo, then mono; format priority is F32 > I24 > I16. Within each
+    // format, prefer 48 kHz, then 88.2/96 kHz, then 44.1 kHz. I16 is the
+    // mandatory PCM16 fallback when no higher-precision format is advertised.
     const CHANNELS: [u16; 2] = [2, 1];
     const FORMATS: [cpal::SampleFormat; 3] = [
         cpal::SampleFormat::F32,
@@ -515,6 +515,24 @@ mod tests {
         let ranges = [range(2, 88_200, 96_000, cpal::SampleFormat::F32)];
         let selected = select_preferred_output_config(&ranges).unwrap();
         assert_eq!(selected.sample_rate(), 88_200);
+    }
+
+    #[test]
+    fn config_negotiation_selects_i24_when_f32_is_unavailable() {
+        let ranges = [
+            range(2, 48_000, 48_000, cpal::SampleFormat::I24),
+            range(2, 48_000, 96_000, cpal::SampleFormat::I16),
+        ];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_format(), cpal::SampleFormat::I24);
+        assert_eq!(selected.sample_rate(), 48_000);
+    }
+
+    #[test]
+    fn config_negotiation_supports_96000_when_88200_is_unavailable() {
+        let ranges = [range(2, 96_000, 96_000, cpal::SampleFormat::F32)];
+        let selected = select_preferred_output_config(&ranges).unwrap();
+        assert_eq!(selected.sample_rate(), 96_000);
     }
 
     #[test]
