@@ -2,7 +2,7 @@
 
 **Status:** H2 concluído como investigação experimental; H3 implementado e integrado à main pela PR #774. H4 — contrato PCM moderno e saída 24-bit — é a próxima etapa. O renderer event-based H2 continua exclusivamente em testes e não foi promovido à produção.
 **Branch de trabalho H4:** `feat/h4-modern-pcm-contract-20261112`
-**Baseline de main:** `1f3f30a9d198bb65212388ced220cc4ea7499a5c` (merge da PR #773, 2026-11-12).
+**Baseline de main para H4:** `f5a0b691824322ce56c1a921329d3aa0957c4963` (merge da PR #774, 2026-11-12).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
 **Não autoriza merge:** toda implementação será submetida a PR e validada antes de qualquer integração.
@@ -313,6 +313,6 @@ O kernel tem 65 taps, atraso de grupo de 31,25 amostras, lookahead causal estima
 
 **Decisão de arquitetura:** H2 fecha como investigação reproduzível e protótipo exclusivamente de teste. Nenhuma alteração foi feita na síntese de produção, no MachineScheduler ou no callback CPAL. O protótipo não está pronto para streaming: mantém eventos e buffers de duração integral.
 
-### H3 — execução após o merge de H2
+### H3 — execução e fechamento após o merge de H2
 
-H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental. A implementação separa taxa de geração PCM interna de taxa física negociada, mantendo `MachineScheduler` como autoridade temporal. Os gates H4–H6 permanecem inalterados.
+H3 foi concluído em branch própria, sem dependência do renderer H2 experimental, e integrado à main pela PR #774. A implementação separa taxa de geração PCM interna de taxa física negociada, mantendo `MachineScheduler` como autoridade temporal. H4 é a próxima etapa; os gates H5–H6 permanecem inalterados.
