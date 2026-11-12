@@ -223,7 +223,7 @@ impl PcmResampler {
     fn encode(&self, values: impl Iterator<Item = f64>) -> Vec<f64> {
         let mut output = Vec::new();
         for value in values {
-            output.extend_from_slice(&self.pcm16(value).to_le_bytes());
+            output.push(self.normalized(value));
         }
         output
     }
