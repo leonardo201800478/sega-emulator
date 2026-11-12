@@ -156,26 +156,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         let mut elapsed = 0_u64;
         for (clock, value) in TRACE {
-            advance(
-                &mut psg,
-                clock - elapsed,
-                chunk_limit,
-                &mut samples,
-            );
+            advance(&mut psg, clock - elapsed, chunk_limit, &mut samples);
             psg.write(value);
             elapsed = clock;
         }
-        advance(
-            &mut psg,
-            TOTAL_CLOCKS - elapsed,
-            chunk_limit,
-            &mut samples,
-        );
+        advance(&mut psg, TOTAL_CLOCKS - elapsed, chunk_limit, &mut samples);
     }
 
     samples.extend(psg.drain_samples(None));
-    let expected_samples = (u128::from(total_clocks) * u128::from(SAMPLE_RATE)
-        / u128::from(CLOCK_HZ)) as usize;
+    let expected_samples =
+        (u128::from(total_clocks) * u128::from(SAMPLE_RATE) / u128::from(CLOCK_HZ)) as usize;
     if samples.len() != expected_samples {
         return Err(format!(
             "PSG sample capture truncated: expected {expected_samples}, got {}",
