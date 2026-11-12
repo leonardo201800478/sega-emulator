@@ -23,7 +23,7 @@ use sega_sms_core::{
 use sega_video_runtime::d3d12::D3d12MailboxSession;
 use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
-const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
+const SMS_INTERNAL_AUDIO_SAMPLE_RATE: u64 = 48_000;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
@@ -126,7 +126,7 @@ fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalM
         rom,
         SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE,
         psg_clock_hz,
-        SMS_TEMPORAL_SAMPLE_RATE,
+        SMS_INTERNAL_AUDIO_SAMPLE_RATE,
         vdp_profile,
         territory,
     )
@@ -1427,7 +1427,7 @@ fn execute_frame(
     let sample_count = samples.len();
     let pacing_sample_count = sample_count.max(1) as f64;
     let frame_duration =
-        Duration::from_secs_f64(pacing_sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
+        Duration::from_secs_f64(pacing_sample_count / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64);
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
@@ -2031,7 +2031,7 @@ mod tests {
     use super::{
         BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
         FramePacingDeadline, FramePacingSample, FramePacingWindow, Ordering,
-        SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
+        SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
         build_sms_temporal_machine, execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
@@ -2559,7 +2559,7 @@ mod tests {
         worker
             .configure_audio_output(move || -> Result<Box<dyn super::AudioSession>, String> {
                 let sink = ControlSink(Arc::clone(&factory_events));
-                let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink)?;
+                let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink)?;
                 Ok(Box::new(session))
             })
             .unwrap();
@@ -2673,7 +2673,7 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
@@ -2704,7 +2704,7 @@ mod tests {
         let mut machine = build_sms_temporal_machine(av_test_rom(), "usa").unwrap();
         let sink = RecordingSink::default();
         let captured_blocks = Arc::clone(&sink.0);
-        let session = NativeAudioSession::new(SMS_TEMPORAL_SAMPLE_RATE as u32, 100, sink).unwrap();
+        let session = NativeAudioSession::new(SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, SMS_INTERNAL_AUDIO_SAMPLE_RATE as u32, 100, sink).unwrap();
         let mut audio_session: Option<Box<dyn super::AudioSession>> = Some(Box::new(session));
         let telemetry = WorkerTelemetry::default();
         let mut video_mailbox = None;
@@ -2873,7 +2873,7 @@ mod tests {
 
         let metrics = window.snapshot();
         assert_eq!(metrics.frame_budget_p50_ns, 20_000_000);
-        assert_eq!(metrics.audio_samples_p50, 882);
+        assert_eq!(metrics.audio_samples_p50, 960);
         assert_eq!(metrics.pacing_timeout_lateness_p95_ns, 750_000);
         assert_eq!(metrics.pacing_timeout_count_total, 1);
         assert_eq!(metrics.pacing_command_wakeups_total, 1);
