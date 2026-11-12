@@ -1543,7 +1543,9 @@ fn worker_loop(
                     // Count only commands that actually interrupted a wait before
                     // the frame deadline. A zero-timeout poll after an expired
                     // deadline is command processing, not a pacing wakeup.
-                    if let Some(deadline) = wait_deadline.filter(|deadline| wait_finished < *deadline) {
+                    if let Some(deadline) =
+                        wait_deadline.filter(|deadline| wait_finished < *deadline)
+                    {
                         telemetry.record_pacing_command_wakeup(
                             deadline.saturating_duration_since(wait_finished),
                         );
