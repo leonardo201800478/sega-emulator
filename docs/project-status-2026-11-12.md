@@ -240,3 +240,11 @@ P0 #755 permanece a prioridade. Em paralelo, a PR #783 ainda precisa de aceite v
 - A PR permanece em validação Windows x64 Release. Nenhuma alteração no Scheduler ou pacing foi feita.
 - A captura física posterior a #766/#785 continua pendente; a captura histórica `SMS-QPC-20261112-002914` não contém todas as métricas novas.
 - `empty_polls` não é contado como repetição física. A análise de present/display permanece externa via PresentMon/QPC.
+
+
+## 13. Atualização operacional — PR #790 integrada (2026-11-12)
+
+- PR #790 foi integrada à `main` no merge commit `568ccf257e06a757cb9bd183b8f28dea3c0ba544` após CI aplicável SUCCESS no HEAD `5ba9e22d8c8a71243c14da6bc3c44d6de12541c1`.
+- A instrumentação host agora emite p50/p95/p99 e sample counts para as sete distribuições rolling de capacidade 512; a captura física P0 #755 continua pendente.
+- A saída CPAL é inicializada automaticamente no desktop normal. Para a captura video-only, usar `SEGA_EMULATOR_VIDEO_ONLY=1`, que deve ignorar apenas a sessão física CPAL e preservar a geração digital PSG. Essa opção é adicionada pela PR de preparação da captura; não altera Scheduler nem pacing.
+- A issue #755 permanece aberta até revisão das capturas físicas e diagnóstico causal.
