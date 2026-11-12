@@ -174,7 +174,7 @@ impl PcmResampler {
     }
 
     pub fn flush(&mut self) -> Vec<u8> {
-        if self.output_rate == INPUT_RATE || self.real == 0 {
+        if self.output_rate == self.input_rate || self.real == 0 {
             self.reset();
             return Vec::new();
         }
