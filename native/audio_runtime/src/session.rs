@@ -100,7 +100,12 @@ impl<S: PcmSink> NativeAudioSession<S> {
     }
 
     /// Validate both PCM rates and volume before opening the host sink.
-    pub fn with_sink_factory<F>(input_rate: u32, output_rate: u32, volume: u8, make_sink: F) -> Result<Self, String>
+    pub fn with_sink_factory<F>(
+        input_rate: u32,
+        output_rate: u32,
+        volume: u8,
+        make_sink: F,
+    ) -> Result<Self, String>
     where
         F: FnOnce() -> Result<S, String>,
     {
@@ -319,7 +324,9 @@ mod tests {
 
     #[test]
     fn close_after_suspend_does_not_publish_resampler_tail() {
-        let mut session = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+        let mut session =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default())
+                .unwrap();
         session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
         session.suspend_and_flush().unwrap();
         let blocks_at_flush = session.sink.blocks.clone();
@@ -348,7 +355,9 @@ mod tests {
 
     #[test]
     fn session_ignores_empty_batches_and_closes_idempotently() {
-        let mut session = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut session =
+            NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default())
+                .unwrap();
         session.process_samples(&[]).unwrap();
         assert!(session.sink.blocks.is_empty());
         session.close();
@@ -377,7 +386,9 @@ mod tests {
 
     #[test]
     fn invalid_volume_does_not_change_the_active_session() {
-        let mut session = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut session =
+            NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default())
+                .unwrap();
         assert!(session.set_volume(101).is_err());
         assert_eq!(session.resampler.volume(), 100);
     }
@@ -414,13 +425,17 @@ mod tests {
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.07).sin()).collect();
         let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.07).sin()).collect();
 
-        let mut stepped = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+        let mut stepped =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default())
+                .unwrap();
         stepped.process_samples_discarding_output(&first).unwrap();
         assert!(stepped.sink.blocks.is_empty());
         stepped.resume().unwrap();
         stepped.process_samples(&second).unwrap();
 
-        let mut reference = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+        let mut reference =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default())
+                .unwrap();
         reference.process_samples(&second).unwrap();
 
         assert_eq!(stepped.sink.blocks, reference.sink.blocks);
@@ -428,7 +443,9 @@ mod tests {
 
     #[test]
     fn pause_flush_resume_preserves_dsp_history_and_acknowledges_sink_controls() {
-        let mut session = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+        let mut session =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default())
+                .unwrap();
         let first: Vec<f64> = (0..160).map(|i| (i as f64 * 0.05).sin()).collect();
         let second: Vec<f64> = (160..320).map(|i| (i as f64 * 0.05).sin()).collect();
         session.process_samples(&first).unwrap();
@@ -438,7 +455,9 @@ mod tests {
         assert!(!session.sink.suspended);
         session.process_samples(&second).unwrap();
 
-        let mut reference = NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+        let mut reference =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default())
+                .unwrap();
         reference.process_samples(&first).unwrap();
         reference.process_samples(&second).unwrap();
 
@@ -450,12 +469,16 @@ mod tests {
     #[test]
     fn reset_dsp_discards_filter_history_at_machine_content_boundary() {
         let input: Vec<f64> = (0..160).map(|i| (i as f64 * 0.03).sin()).collect();
-        let mut session = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut session =
+            NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default())
+                .unwrap();
         session.process_samples(&input).unwrap();
         session.reset_dsp();
         session.process_samples(&input).unwrap();
 
-        let mut fresh = NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+        let mut fresh =
+            NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default())
+                .unwrap();
         fresh.process_samples(&input).unwrap();
 
         assert_eq!(session.sink.blocks[1], fresh.sink.blocks[0]);
