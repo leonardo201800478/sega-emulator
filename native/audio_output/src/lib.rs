@@ -120,7 +120,8 @@ impl NativeCpalOutput {
         }
 
         let mut config: cpal::StreamConfig = supported.clone().into();
-        config.buffer_size = cpal::BufferSize::Fixed(buffer_frames);
+        // Let CPAL and the selected host negotiate the callback quantum.
+        // `buffer_frames` sizes the bounded application FIFO, not the OS endpoint.
 
         let queue_capacity = usize::try_from(buffer_frames)
             .ok()
