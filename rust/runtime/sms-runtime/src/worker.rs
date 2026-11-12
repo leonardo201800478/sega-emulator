@@ -499,8 +499,6 @@ struct WorkerTelemetry {
     audio_dropped_frames: AtomicU64,
     audio_underrun_frames: AtomicU64,
     audio_flushed_frames: AtomicU64,
-    audio_endpoint_starvation_events: AtomicU64,
-    audio_submission_failed_frames: AtomicU64,
     audio_output_error: Mutex<Option<String>>,
     video_output_error: Mutex<Option<String>>,
     video_last_published_sequence: AtomicU64,
@@ -633,10 +631,6 @@ impl WorkerTelemetry {
             self.audio_dropped_frames.store(0, Ordering::Release);
             self.audio_underrun_frames.store(0, Ordering::Release);
             self.audio_flushed_frames.store(0, Ordering::Release);
-            self.audio_endpoint_starvation_events
-                .store(0, Ordering::Release);
-            self.audio_submission_failed_frames
-                .store(0, Ordering::Release);
         }
     }
 
@@ -670,10 +664,6 @@ impl WorkerTelemetry {
             .store(metrics.underrun_frames, Ordering::Release);
         self.audio_flushed_frames
             .store(metrics.flushed_frames, Ordering::Release);
-        self.audio_endpoint_starvation_events
-            .store(metrics.endpoint_starvation_events, Ordering::Release);
-        self.audio_submission_failed_frames
-            .store(metrics.submission_failed_frames, Ordering::Release);
     }
 
     fn record_audio_session_metrics(&self, session: &dyn AudioSession) {
@@ -695,10 +685,6 @@ impl WorkerTelemetry {
             underrun_events: self.audio_underruns.load(Ordering::Acquire),
             dropped_blocks: self.audio_dropped_blocks.load(Ordering::Acquire),
             flushed_frames: self.audio_flushed_frames.load(Ordering::Acquire),
-            endpoint_starvation_events: self
-                .audio_endpoint_starvation_events
-                .load(Ordering::Acquire),
-            submission_failed_frames: self.audio_submission_failed_frames.load(Ordering::Acquire),
         }
     }
 
@@ -2232,8 +2218,6 @@ mod tests {
             underrun_events: 4,
             dropped_blocks: 3,
             flushed_frames: 9,
-            endpoint_starvation_events: 2,
-            submission_failed_frames: 7,
         };
 
         telemetry.set_diagnostics_enabled(true);
