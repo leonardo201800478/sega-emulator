@@ -121,18 +121,7 @@ fn event_tone(profile: PsgProfile, period: u16, chunk: Option<u64>) -> (Vec<f64>
     (output,events.len())
 }
 
-fn filtered_output_at_delay(psg: &Sn76489Core, delay: usize) -> f64 {
-    let taps = psg.filter_coefficients.len();
-    let newest = (psg.filter_position + taps - 1 - delay % taps) % taps;
-    let mut output = 0.0;
-    for index in 0..taps {
-        let history = (newest + taps - index) % taps;
-        output += psg.filter_coefficients[index] * psg.filter_history[history];
-    }
-    output
-}
-
-fn interpolate_sinc8(psg: &Sn76489Core, fraction: f64) -> f64 {
+fn interpolate_sinc8(history: &[f64; 8], next_position: usize, fraction: f64) -> f64 {
     let mut weighted = 0.0;
     let mut weight_sum = 0.0;
     for delay in 0..8 {
@@ -147,7 +136,8 @@ fn interpolate_sinc8(psg: &Sn76489Core, fraction: f64) -> f64 {
             (PI * distance).sin() / (PI * distance)
         };
         let weight = sinc * window;
-        weighted += filtered_output_at_delay(psg, delay) * weight;
+        let index = (next_position + 8 - 1 - delay) % 8;
+        weighted += history[index] * weight;
         weight_sum += weight;
     }
     weighted / weight_sum
@@ -157,6 +147,8 @@ fn sinc8_tone(profile: PsgProfile, period: u16, chunk_clocks: Option<u64>) -> Ve
     let mut psg = Sn76489Core::new_with_profile(CLOCK, RATE, profile).unwrap();
     setup_tone(&mut psg, period);
     let mut output = Vec::new();
+    let mut filtered_history = [0.0_f64; 8];
+    let mut history_position = 0_usize;
     let mut remaining = CLOCKS;
     while remaining > 0 {
         let clocks = chunk_clocks
@@ -171,6 +163,8 @@ fn sinc8_tone(profile: PsgProfile, period: u16, chunk_clocks: Option<u64>) -> Ve
                 super::advance_output_phase(previous_phase, RATE, CLOCK);
             psg.tick_internal_clock();
             psg.push_filter_sample();
+            filtered_history[history_position] = psg.filtered_output();
+            history_position = (history_position + 1) % filtered_history.len();
             psg.output_phase = next_phase;
             if sample_count > 0 {
                 let increment = u128::from(RATE) * u128::from(super::CLOCK_DIVIDER);
@@ -178,7 +172,11 @@ fn sinc8_tone(profile: PsgProfile, period: u16, chunk_clocks: Option<u64>) -> Ve
                     let crossing = u128::from(CLOCK - previous_phase)
                         + u128::from(sample_index) * u128::from(CLOCK);
                     let fraction = crossing as f64 / increment as f64;
-                    output.push(interpolate_sinc8(&psg, fraction));
+                    output.push(interpolate_sinc8(
+                        &filtered_history,
+                        history_position,
+                        fraction,
+                    ));
                 }
             }
         }
