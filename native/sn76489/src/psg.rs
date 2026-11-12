@@ -715,6 +715,150 @@ mod tests {
         }
     }
 
+    fn filtered_output_at_delay(psg: &Sn76489, delay: usize) -> f64 {
+        let taps = psg.filter_coefficients.len();
+        let newest_index = (psg.filter_position + taps - 1 - delay % taps) % taps;
+        let mut total = 0.0;
+        for (index, coefficient) in psg.filter_coefficients.iter().enumerate() {
+            let history_index = (newest_index + taps - index) % taps;
+            total += coefficient * psg.filter_history[history_index];
+        }
+        total
+    }
+
+    fn interpolate_lagrange4(samples: [f64; 4], fraction: f64) -> f64 {
+        let x = fraction;
+        let weights = [
+            -((x + 1.0) * x * (x - 1.0)) / 6.0,
+            ((x + 2.0) * x * (x - 1.0)) / 2.0,
+            -((x + 2.0) * (x + 1.0) * (x - 1.0)) / 2.0,
+            ((x + 2.0) * (x + 1.0) * x) / 6.0,
+        ];
+        samples
+            .iter()
+            .zip(weights)
+            .map(|(sample, weight)| sample * weight)
+            .sum()
+    }
+
+    fn render_lagrange4_tone(
+        period: u16,
+        max_advance_chunk: Option<u64>,
+    ) -> Vec<f64> {
+        const CLOCK_HZ: u64 = 3_579_545;
+        const SAMPLE_RATE: u64 = 48_000;
+        const TOTAL_CLOCKS: u64 = 4_000_000;
+
+        let mut psg =
+            Sn76489::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
+        psg.write_inner(0x80 | (period as u8 & 0x0f));
+        psg.write_inner((period >> 4) as u8);
+        psg.write_inner(0x90);
+        psg.write_inner(0xbf);
+        psg.write_inner(0xdf);
+        psg.write_inner(0xff);
+
+        let mut output = Vec::new();
+        let mut remaining = TOTAL_CLOCKS;
+        while remaining > 0 {
+            let clocks = max_advance_chunk
+                .map(|limit| remaining.min(limit))
+                .unwrap_or(remaining);
+            let (internal_clocks, divider_phase) =
+                super::split_clock_advance(clocks, psg.clock_divider_phase);
+            psg.clock_divider_phase = divider_phase;
+
+            for _ in 0..internal_clocks {
+                let previous_phase = psg.output_phase;
+                let (sample_count, next_phase) =
+                    super::advance_output_phase(previous_phase, SAMPLE_RATE, CLOCK_HZ);
+
+                psg.tick_internal_clock();
+                psg.push_filter_sample();
+                psg.output_phase = next_phase;
+
+                if sample_count > 0 {
+                    let samples = [
+                        filtered_output_at_delay(&psg, 3),
+                        filtered_output_at_delay(&psg, 2),
+                        filtered_output_at_delay(&psg, 1),
+                        filtered_output_at_delay(&psg, 0),
+                    ];
+                    let increment =
+                        u128::from(SAMPLE_RATE) * u128::from(super::CLOCK_DIVIDER);
+                    for sample_index in 0..sample_count {
+                        let crossing = u128::from(CLOCK_HZ - previous_phase)
+                            + u128::from(sample_index) * u128::from(CLOCK_HZ);
+                        let fraction = crossing as f64 / increment as f64;
+                        output.push(interpolate_lagrange4(samples, fraction));
+                    }
+                }
+            }
+            remaining -= clocks;
+        }
+        output
+    }
+
+    fn write_experiment_float_wav(
+        path: &std::path::Path,
+        samples: &[f64],
+    ) -> std::io::Result<()> {
+        use std::io::Write;
+
+        const SAMPLE_RATE: u32 = 48_000;
+        let data_bytes = u32::try_from(samples.len() * 4).expect("test WAV fits in u32");
+        let mut writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+        writer.write_all(b"RIFF")?;
+        writer.write_all(&(36_u32 + data_bytes).to_le_bytes())?;
+        writer.write_all(b"WAVEfmt ")?;
+        writer.write_all(&16_u32.to_le_bytes())?;
+        writer.write_all(&3_u16.to_le_bytes())?;
+        writer.write_all(&1_u16.to_le_bytes())?;
+        writer.write_all(&SAMPLE_RATE.to_le_bytes())?;
+        writer.write_all(&(SAMPLE_RATE * 4).to_le_bytes())?;
+        writer.write_all(&4_u16.to_le_bytes())?;
+        writer.write_all(&32_u16.to_le_bytes())?;
+        writer.write_all(b"data")?;
+        writer.write_all(&data_bytes.to_le_bytes())?;
+        for sample in samples {
+            writer.write_all(&(*sample as f32).to_le_bytes())?;
+        }
+        writer.flush()
+    }
+
+    #[test]
+    fn experimental_lagrange4_tone_sweep_is_chunk_invariant_and_exports_ci_wavs() {
+        const PERIODS: [u16; 8] = [5, 6, 7, 9, 14, 28, 56, 112];
+        let artifact_dir = std::env::var_os("PSG_AUDIO_ARTIFACT_DIR").map(std::path::PathBuf::from);
+        if let Some(directory) = &artifact_dir {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+
+        for period in PERIODS {
+            let samples = render_lagrange4_tone(period, None);
+            assert!(samples.iter().all(|sample| sample.is_finite()));
+            let peak = samples
+                .iter()
+                .map(|sample| sample.abs())
+                .fold(0.0_f64, f64::max);
+            assert!(peak > 0.001, "period={period}: experimental tone is silent");
+            assert!(peak < 1.0, "period={period}: unexpected Lagrange overshoot {peak}");
+
+            if period == 5 {
+                let chunked = render_lagrange4_tone(period, Some(997));
+                assert_eq!(
+                    chunked, samples,
+                    "Lagrange4 output changed with Scheduler chunking"
+                );
+            }
+
+            if let Some(directory) = &artifact_dir {
+                let path = directory.join(format!("lagrange4-tone-p{period}.wav"));
+                write_experiment_float_wav(&path, &samples).unwrap();
+            }
+        }
+    }
+
     fn render_register_trace(profile: PsgProfile, max_advance_chunk: Option<u64>) -> Vec<f64> {
         // Deterministic PSG bus trace: tone/volume setup, then live register
         // changes while the chip is running. Times are source PSG clocks.
