@@ -135,7 +135,7 @@ impl NativeCpalOutput {
         }
         if sample_format.is_dsd() {
             return Err(format!(
-                "CPAL endpoint selected a DSD format unsupported by PCM output: {sample_format}"
+                "CPAL endpoint selected a DSD format unsupported by PCM output: {sample_format:?}"
             ));
         }
 
