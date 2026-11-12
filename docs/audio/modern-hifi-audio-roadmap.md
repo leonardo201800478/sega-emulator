@@ -2,7 +2,7 @@
 
 **Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 ainda não implementado em produção.
 **Integração H3:** PR #774 — merge commit `f5a0b691824322ce56c1a921329d3aa0957c4963`.
-**Baseline de main:** `44e167b7d17973b8d634198951fec298a50dddf7` (após PR #780; H3 #774 permanece integrado).
+**Baseline de main:** `6130cb42f1d76648552a5a0cd510e3a84c7efb42` (após PR #780; H3 #774 permanece integrado).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
 **Integração contínua:** mudanças validadas devem ser integradas em incrementos curtos na main; branches divergentes exigem portabilidade seletiva e CI no HEAD atual.
