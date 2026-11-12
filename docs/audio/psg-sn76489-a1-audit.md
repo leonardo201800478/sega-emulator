@@ -446,3 +446,38 @@ Para cada combinação, o teste exige:
 - snapshot completo idêntico após drenar a fila, incluindo fase do divisor, fase de amostragem, FIR e estado dos osciladores.
 
 A suíte existente `psg_fir_preserves_audio_band_and_rejects_the_full_stopband` já mede resposta de banda e rejeição para as mesmas duas regiões de clock e quatro taxas. A1.6 será promovida a PASS apenas após CI no mesmo SHA; não é uma medição de taxa efetiva de endpoint físico.
+
+
+## 15. Evidência CI dos incrementos A1.2–A1.6 (2026-11-12)
+
+**SHA de código validado:** `cbf8197a106f7d45f5526670b4ae048625ca87c9`.
+
+| Gate | Resultado | Evidência |
+|---|---|---|
+| Workspace `cargo fmt` | PASS | GitHub Actions run `43222633062` |
+| Clippy SMS runtime Release | PASS | run `43222633062` |
+| Testes SMS runtime Release | PASS | run `43222633062` |
+| Build SMS runtime Windows x64 Release | PASS | run `43222633062` |
+| PSG + console integration: fmt | PASS | run `43222633182`, job `131197996775` |
+| PSG + console integration: Clippy | PASS | run `43222633182`, job `131197996775` |
+| PSG + console integration: testes | PASS — 40 testes do crate PSG; job completo PASS | run `43222633182`, job `131197996775` |
+| Linux audio-output | PASS | run `43222633182`, job `131197996778` |
+| Documentation patch hygiene | PASS | run `43222633182`, job `131197996830` |
+| Buildkite `CI / psg-focused` | PASS | build `761` |
+| Buildkite `CI / docs-format` | PASS | build `761` |
+| Buildkite `CI / linux-audio` | PASS | build `761` |
+| Windows WASAPI/XAudio2 | IN PROGRESS no momento da atualização | run `43222633182` |
+| Windows D3D12 / DXGI | IN PROGRESS no momento da atualização | run `43222633182` |
+| Buildkite quality gate / workflow-lint / scheduler-stress / rust-workspace | QUEUED | build `761` |
+| Validação física Master System | BLOCKED / NOT RUN | requer hardware e captura física |
+
+### Promoção dos itens
+
+- **A1.2 — PASS (software):** vetores white/periodic SMS e bit de saída passaram no job PSG.
+- **A1.3 — PARTIAL:** teste de taxa média e continuidade do divisor passou; fase inicial absoluta e relação elétrica com o flip-flop Tone 2 seguem sem oráculo físico.
+- **A1.4 — PASS (software):** DTO, codec CRC-32, round-trip SMS/SG-1000, corrupção, truncamento, tag e versão inválidas passaram no job PSG.
+- **A1.5 — PASS (software):** overflow descarta o PCM mais antigo sem alterar o estado digital/FIR.
+- **A1.6 — PASS (software):** invariância de PCM e estado para NTSC/PAL e quatro taxas de saída.
+- **A1.1 — PARTIAL:** protocolo e fontes documentados; divergência de tom 0/1 permanece registrada como conflito de oráculo, não como PASS.
+
+Estes resultados são estritamente associados ao SHA declarado. Qualquer commit posterior exige nova verificação do SHA atual. PASS de software não substitui teste acústico nem validação física no Master System.
