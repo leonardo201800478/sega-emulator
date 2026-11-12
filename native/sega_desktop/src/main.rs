@@ -659,6 +659,7 @@ mod windows_host {
     /// and physical present operation, so this host cannot claim a GPU-present timestamp.
     struct HostFramePacingWindow {
         started: Instant,
+        qpc_clock: Option<sega_video_runtime::diagnostics::QpcClock>,
         last_poll: Option<Instant>,
         last_consumed: Option<Instant>,
         last_sequence: u64,
@@ -685,6 +686,7 @@ mod windows_host {
         fn new() -> Self {
             Self {
                 started: Instant::now(),
+                qpc_clock: sega_video_runtime::diagnostics::QpcClock::new(),
                 last_poll: None,
                 last_consumed: None,
                 last_sequence: 0,
@@ -790,6 +792,13 @@ mod windows_host {
                     },
                 )
             };
+            // QPC shares the timestamp domain used by PresentMon --qpc_time.
+            // This marker is diagnostic only and never participates in frame pacing.
+            let (qpc_ticks, qpc_frequency, qpc_available) = self
+                .qpc_clock
+                .as_ref()
+                .and_then(|clock| clock.now().map(|ticks| (ticks, clock.frequency())))
+                .map_or((0, 0, false), |(ticks, frequency)| (ticks, frequency, true));
             let average_us = |total_ns: u128, count: u64| -> u64 {
                 if count == 0 {
                     0
@@ -798,7 +807,10 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p95_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p95_us={} pacing_wait_budget_p95_us={} pacing_wait_elapsed_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                u8::from(qpc_available),
+                qpc_ticks,
+                qpc_frequency,
                 elapsed.as_millis(),
                 self.polls,
                 self.empty_polls,
