@@ -161,6 +161,7 @@ struct FramePacingSample {
     pacing_wait_budget_ns: u64,
     pacing_wait_elapsed_ns: u64,
     pacing_timeout_lateness_ns: u64,
+    pacing_timeout_count: u64,
     pacing_command_wakeups: u64,
     pacing_command_remaining_ns: u64,
     command_handler_ns: u64,
@@ -209,6 +210,7 @@ impl FramePacingWindow {
     fn record_timeout_lateness(&mut self, lateness: Duration) {
         let lateness_ns = lateness.as_nanos().min(u128::from(u64::MAX)) as u64;
         if let Some(sample) = self.last_sample_mut() {
+            sample.pacing_timeout_count = sample.pacing_timeout_count.saturating_add(1);
             sample.pacing_timeout_lateness_ns = sample.pacing_timeout_lateness_ns.saturating_add(lateness_ns);
         }
     }
@@ -278,9 +280,21 @@ impl FramePacingWindow {
             .collect();
         let mut frame_budgets: Vec<_> = samples.iter().map(|sample| sample.frame_budget_ns).collect();
         let mut audio_samples: Vec<_> = samples.iter().map(|sample| sample.audio_samples).collect();
-        let mut timeout_lateness: Vec<_> = samples.iter().map(|sample| sample.pacing_timeout_lateness_ns).collect();
-        let mut command_remaining: Vec<_> = samples.iter().map(|sample| sample.pacing_command_remaining_ns).collect();
-        let mut command_handlers: Vec<_> = samples.iter().map(|sample| sample.command_handler_ns).collect();
+        let mut timeout_lateness: Vec<_> = samples
+            .iter()
+            .filter(|sample| sample.pacing_timeout_count > 0)
+            .map(|sample| sample.pacing_timeout_lateness_ns)
+            .collect();
+        let mut command_remaining: Vec<_> = samples
+            .iter()
+            .filter(|sample| sample.pacing_command_wakeups > 0)
+            .map(|sample| sample.pacing_command_remaining_ns)
+            .collect();
+        let mut command_handlers: Vec<_> = samples
+            .iter()
+            .filter(|sample| sample.command_handler_ns > 0)
+            .map(|sample| sample.command_handler_ns)
+            .collect();
 
         SmsFramePacingMetrics {
             sample_count: self.len as u64,
@@ -318,6 +332,7 @@ impl FramePacingWindow {
             pacing_timeout_lateness_p50_ns: percentile(&mut timeout_lateness, 50),
             pacing_timeout_lateness_p95_ns: percentile(&mut timeout_lateness, 95),
             pacing_timeout_lateness_p99_ns: percentile(&mut timeout_lateness, 99),
+            pacing_timeout_count_total: samples.iter().map(|sample| sample.pacing_timeout_count).sum(),
             pacing_command_wakeups_total: samples.iter().map(|sample| sample.pacing_command_wakeups).sum(),
             pacing_command_remaining_p95_ns: percentile(&mut command_remaining, 95),
             command_handler_p95_ns: percentile(&mut command_handlers, 95),
@@ -366,6 +381,7 @@ pub struct SmsFramePacingMetrics {
     pub pacing_timeout_lateness_p50_ns: u64,
     pub pacing_timeout_lateness_p95_ns: u64,
     pub pacing_timeout_lateness_p99_ns: u64,
+    pub pacing_timeout_count_total: u64,
     pub pacing_command_wakeups_total: u64,
     pub pacing_command_remaining_p95_ns: u64,
     pub command_handler_p95_ns: u64,
@@ -1420,6 +1436,7 @@ fn execute_frame(
             pacing_wait_budget_ns: frame_wait.as_nanos().min(u128::from(u64::MAX)) as u64,
             pacing_wait_elapsed_ns: 0,
             pacing_timeout_lateness_ns: 0,
+            pacing_timeout_count: 0,
             pacing_command_wakeups: 0,
             pacing_command_remaining_ns: 0,
             command_handler_ns: 0,
@@ -2814,6 +2831,7 @@ mod tests {
         assert_eq!(metrics.frame_budget_p50_ns, 20_000_000);
         assert_eq!(metrics.audio_samples_p50, 882);
         assert_eq!(metrics.pacing_timeout_lateness_p95_ns, 750_000);
+        assert_eq!(metrics.pacing_timeout_count_total, 1);
         assert_eq!(metrics.pacing_command_wakeups_total, 1);
         assert_eq!(metrics.pacing_command_remaining_p95_ns, 4_000_000);
         assert_eq!(metrics.command_handler_p95_ns, 250_000);
