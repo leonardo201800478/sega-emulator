@@ -12,7 +12,7 @@ Emulador Sega multissistema com runtime de hardware integralmente em Rust. A arq
 - **R4:** auditoria e integração SDL3 para teclado/gamepads.
 - **R5:** frontend Slint completo, launcher, biblioteca, configurações, HUD e telemetria; corte da baseline após paridade.
 
-Consulte [status](docs/project-status-2026-11-11.md), [escopo](docs/project-scope.md), [roadmap](docs/project-roadmap.md), [sprint R1](docs/sprints/2026-11-r1-slint-wgpu-vulkan-poc.md) e [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md).
+Consulte [status da migração e corte](docs/architecture/migrations/legacy-host-retirement.md), [escopo](docs/project-scope.md), [roadmap](docs/project-roadmap.md), [sprint R1](docs/sprints/2026-11-r1-slint-wgpu-vulkan-poc.md) e [ADR 0011](docs/adr/0011-slint-wgpu-cpal-desktop-platform.md).
 
 ## Arquitetura
 
