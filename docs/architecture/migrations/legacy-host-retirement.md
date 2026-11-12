@@ -1,7 +1,7 @@
 # Plano de corte dos hosts anteriores — Slint / WGPU / CPAL
 
-**Revisão:** 2026-11-12  
-**Autoridade arquitetural:** ADR 0011 — Slint, WGPU e CPAL  
+**Revisão:** 2026-11-12
+**Autoridade arquitetural:** ADR 0011 — Slint, WGPU e CPAL
 **Objetivo:** manter a documentação operacional alinhada à arquitetura-alvo e retirar implementações transitórias sem quebrar o runtime ou apagar evidências históricas.
 
 ## 1. Arquitetura normativa
