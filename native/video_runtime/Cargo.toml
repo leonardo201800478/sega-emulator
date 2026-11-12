@@ -8,11 +8,19 @@ publish = false
 name = "sega_video_runtime"
 path = "src/lib.rs"
 
+[features]
+default = []
+windows_diagnostics = ["dep:windows"]
+d3d12-host = ["dep:windows_d3d12", "windows_diagnostics"]
+
 [dependencies]
 sega-observability.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "=0.62.2", features = [
+windows = { package = "windows", version = "=0.62.2", optional = true, features = [
+    "Win32_System_Performance",
+] }
+windows_d3d12 = { package = "windows", version = "=0.62.2", optional = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D12",
@@ -21,8 +29,15 @@ windows = { version = "=0.62.2", features = [
     "Win32_Graphics_Dxgi_Common",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
-    "Win32_System_Performance",
     "Win32_Security",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_HiDpi",
 ] }
+
+[[example]]
+name = "d3d12_frame_smoke"
+required-features = ["d3d12-host"]
+
+[[example]]
+name = "d3d12_session_smoke"
+required-features = ["d3d12-host"]

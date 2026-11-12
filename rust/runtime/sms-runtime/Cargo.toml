@@ -8,6 +8,10 @@ publish = false
 name = "sega_sms_runtime"
 path = "src/lib.rs"
 
+[features]
+default = []
+d3d12-host = ["sega-video-runtime/d3d12-host"]
+
 [dependencies]
 sega-observability.workspace = true
 sega-debugger-core.workspace = true

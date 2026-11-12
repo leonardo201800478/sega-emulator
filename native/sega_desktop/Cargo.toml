@@ -6,7 +6,7 @@ publish = false
 
 [target.'cfg(windows)'.dependencies]
 sega-sms-runtime = { path = "../../rust/runtime/sms-runtime" }
-sega-video-runtime = { path = "../video_runtime" }
+sega-video-runtime = { path = "../video_runtime", features = ["windows_diagnostics"] }
 slint = { version = "~1.18", default-features = false, features = [
     "compat-1-18",
     "std",

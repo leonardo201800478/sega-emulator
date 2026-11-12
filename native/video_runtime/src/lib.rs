@@ -5,11 +5,11 @@
 //! ownership. Native presentation backends consume completed frames through
 //! this contract.
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "d3d12-host"))]
 pub mod d3d12;
 
 /// Host-side diagnostics that correlate telemetry with Windows performance traces.
-#[cfg(windows)]
+#[cfg(all(windows, feature = "windows_diagnostics"))]
 pub mod diagnostics;
 
 pub mod frame_queue;

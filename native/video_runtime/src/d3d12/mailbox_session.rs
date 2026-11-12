@@ -14,7 +14,7 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
+use windows_d3d12::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
 
 use super::{D3d12Host, NativeVideoWindow};
 use crate::{FrameMailbox, FrameMailboxError, VideoFrame};
@@ -31,12 +31,12 @@ pub enum D3d12MailboxSessionError {
     /// The startup handshake ended before the host reported readiness.
     StartupChannelClosed,
     /// Presenting a frame failed for a reason other than device loss.
-    Presentation(windows::core::Error),
+    Presentation(windows_d3d12::core::Error),
     /// D3D12 reported a non-recoverable device-loss reason.
-    DeviceLost(windows::core::Error),
+    DeviceLost(windows_d3d12::core::Error),
     /// Device recreation or retry of the interrupted frame failed.
     DeviceRecoveryFailed {
-        initial_reason: windows::core::Error,
+        initial_reason: windows_d3d12::core::Error,
         recovery_error: String,
     },
     /// The presentation worker panicked before returning.
@@ -96,11 +96,11 @@ impl From<FrameMailboxError> for D3d12MailboxSessionError {
     }
 }
 
-fn is_recoverable_device_loss(error: &windows::core::Error) -> bool {
+fn is_recoverable_device_loss(error: &windows_d3d12::core::Error) -> bool {
     error.code() == DXGI_ERROR_DEVICE_REMOVED || error.code() == DXGI_ERROR_DEVICE_RESET
 }
 
-fn is_window_closed_error(error: &windows::core::Error) -> bool {
+fn is_window_closed_error(error: &windows_d3d12::core::Error) -> bool {
     error.code().0 == 0x8000_4004_u32 as i32
 }
 
@@ -186,7 +186,7 @@ impl D3d12MailboxSession {
         initialize_host: F,
     ) -> Result<Self, D3d12MailboxSessionError>
     where
-        F: Fn() -> windows::core::Result<D3d12Host> + Send + 'static,
+        F: Fn() -> windows_d3d12::core::Result<D3d12Host> + Send + 'static,
     {
         let mailbox = FrameMailbox::new();
         let worker_mailbox = mailbox.clone();

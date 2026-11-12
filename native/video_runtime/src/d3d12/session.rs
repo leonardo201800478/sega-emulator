@@ -12,7 +12,7 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
+use windows_d3d12::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
 
 use super::D3d12Host;
 use crate::{FrameQueue, FrameQueueError, VideoFrame};
@@ -29,12 +29,12 @@ pub enum D3d12SessionError {
     /// The startup handshake ended before the host reported readiness.
     StartupChannelClosed,
     /// Presenting a frame failed for a reason other than device loss.
-    Presentation(windows::core::Error),
+    Presentation(windows_d3d12::core::Error),
     /// D3D12 reported a non-recoverable device-loss reason.
-    DeviceLost(windows::core::Error),
+    DeviceLost(windows_d3d12::core::Error),
     /// Device recreation or the single retry of the interrupted frame failed.
     DeviceRecoveryFailed {
-        initial_reason: windows::core::Error,
+        initial_reason: windows_d3d12::core::Error,
         recovery_error: String,
     },
     /// The worker thread panicked before returning its result.
@@ -107,11 +107,11 @@ impl From<FrameQueueError> for D3d12SessionError {
 
 /// Only explicit DXGI removed/reset reasons are automatically recoverable.
 /// DEVICE_HUNG, DRIVER_INTERNAL_ERROR and INVALID_CALL remain visible failures.
-fn is_recoverable_device_loss(error: &windows::core::Error) -> bool {
+fn is_recoverable_device_loss(error: &windows_d3d12::core::Error) -> bool {
     error.code() == DXGI_ERROR_DEVICE_REMOVED || error.code() == DXGI_ERROR_DEVICE_RESET
 }
 
-fn is_window_closed_error(error: &windows::core::Error) -> bool {
+fn is_window_closed_error(error: &windows_d3d12::core::Error) -> bool {
     error.code().0 == 0x8000_4004_u32 as i32
 }
 
@@ -405,11 +405,11 @@ impl Drop for D3d12Session {
 #[cfg(test)]
 mod tests {
     use super::{is_recoverable_device_loss, is_window_closed_error};
-    use windows::Win32::Graphics::Dxgi::{
+    use windows_d3d12::Win32::Graphics::Dxgi::{
         DXGI_ERROR_DEVICE_HUNG, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET,
         DXGI_ERROR_DRIVER_INTERNAL_ERROR,
     };
-    use windows::core::{Error, HRESULT};
+    use windows_d3d12::core::{Error, HRESULT};
 
     #[test]
     fn only_removed_and_reset_are_automatically_recoverable() {
