@@ -122,14 +122,14 @@ O WAV contém a fonte mono crua do PSG, sem dual-mono, volume de host, bass mana
 
 A validação `psg-focused` da CI executa automaticamente a captura histórica e atual, compara SMS/SG-1000 e a invariância contínua/segmentada, e publica o artefato `psg-audio-ab-reference` com WAVs e relatórios JSON/Markdown.
 
-**Captura A/B mais recente:** workflow run [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528), com renderização, comparação e upload concluídos. Artefato: [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528/artifacts/13963575165).
+**Capturas A/B preliminares:** os workflows [#43257745528](https://github.com/leonardo201800478/sega-emulator/actions/runs/43257745528) e [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796) concluíram e geraram artefatos. A auditoria posterior detectou que o exportador só drenava o buffer ao final; como o buffer do PSG é limitado a aproximadamente um segundo, o trace complexo de 16 milhões de clocks foi truncado para a janela final. Os números e espectros abaixo são, portanto, **preliminares de regime permanente**, não uma captura integral das transições. O exportador foi corrigido para drenar durante o avanço e agora exige contagem integral de amostras; os resultados definitivos serão os do workflow atualizado.
 
 | Perfil | Baseline RMS | Atual RMS | Variação RMS | NRMSE | Correlação | Erro absoluto máximo |
 |---|---:|---:|---:|---:|---:|---:|
 | SMS | 0.172599373757 | 0.172461161101 | -0.0801% | 5.3096% | 0.998589 | 0.097151 |
 | SG-1000 | 0.172297929419 | 0.172143498796 | -0.0896% | 5.2957% | 0.998597 | 0.095782 |
 
-O pico caiu 0,0243% no SMS e 1,8384% no SG-1000. Todas as capturas tiveram 48.000 amostras a 48 kHz (1 segundo). A execução atual contínua e segmentada em blocos de 997 clocks foi **idêntica amostra a amostra** nos dois perfis: correlação 1.0, erro RMS zero e erro máximo zero.
+O pico caiu 0,0243% no SMS e 1,8384% no SG-1000. As capturas anteriores continham 48.000 amostras a 48 kHz porque o buffer limitou o resultado a uma janela de 1 segundo. A execução atual contínua e segmentada em blocos de 997 clocks foi **idêntica amostra a amostra** nos dois perfis: correlação 1.0, erro RMS zero e erro máximo zero.
 
 O NRMSE de aproximadamente 5,3% e o erro máximo próximo de 0,096 demonstram uma mudança de forma de onda mensurável entre baseline e atual, apesar da correlação alta. Isso **não determina qual versão soa melhor**: ainda é necessário localizar em quais bandas e transientes a diferença ocorre e fazer escuta controlada. O relatório JSON/Markdown e os seis WAVs estão no artefato acima.
 
@@ -146,7 +146,7 @@ O NRMSE de aproximadamente 5,3% e o erro máximo próximo de 0,096 demonstram um
 | 16–20 kHz | -0,139 dB | -0,132 dB |
 | 20–24 kHz | -0,985 dB | -0,910 dB |
 
-O centróide espectral diminuiu 13,328 Hz no SMS e 12,459 Hz no SG-1000. A diferença concentra-se nas bandas altas, sobretudo 20–24 kHz; as bandas até 8 kHz praticamente não mudam neste trace. Isso é compatível com maior suavização da reconstrução fracionária, mas não prova que ela cause a percepção subjetiva do usuário: é preciso separar transientes, tons e ruído e também auditar o caminho downstream (resampler/mixer/PCM16).
+Na janela final capturada, o centróide espectral diminuiu 13,328 Hz no SMS e 12,459 Hz no SG-1000. A diferença concentra-se nas bandas altas, sobretudo 20–24 kHz; as bandas até 8 kHz praticamente não mudam neste trace. Isso é compatível com maior suavização da reconstrução fracionária, mas não prova que ela cause a percepção subjetiva do usuário: é preciso separar transientes, tons e ruído e também auditar o caminho downstream (resampler/mixer/PCM16).
 
 **Varredura de tons isolados:** na captura [#43259328531](https://github.com/leonardo201800478/sega-emulator/actions/runs/43259328531), o mesmo tom quadrado SMS foi renderizado em baseline e atual para oito períodos, com os outros três canais silenciados.
 
