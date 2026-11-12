@@ -250,29 +250,99 @@ fn transient_stats(profile: PsgProfile) -> Vec<(String,Stats,Stats)> {
     out
 }
 
-fn noise_stats(profile: PsgProfile, control: u8) -> (Stats,f64,f64) {
-    let mut p=Sn76489Core::new_with_profile(CLOCK,RATE,profile).unwrap();
-    p.write(0x9f); p.write(0xbf); p.write(0xdf); p.write(0xc5); p.write(0x11);
-    p.write(0xe0|control); p.write(0xf0); p.advance_clocks(CLOCKS);
-    let s=p.drain_samples(None); let m=stats(&s); let mut cross=0.0; let mut a=0.0; let mut b=0.0;
-    for pair in s.windows(2) { cross+=(pair[0]-m.mean)*(pair[1]-m.mean); a+=(pair[0]-m.mean).powi(2); b+=(pair[1]-m.mean).powi(2); }
-    let corr=if a>0.0&&b>0.0 {cross/(a*b).sqrt()} else {0.0};
-    let zc=s.windows(2).filter(|w|(w[0]<0.0)!=(w[1]<0.0)).count() as f64/s.len().max(1) as f64;
-    (m,corr,zc)
+fn spectral_metrics(samples: &[f64]) -> (f64, f64) {
+    const WINDOW: usize = 4096;
+    const BINS: usize = 256;
+    let count = WINDOW.min(samples.len());
+    if count < 32 {
+        return (0.0, 0.0);
+    }
+    let mean = samples[..count].iter().sum::<f64>() / count as f64;
+    let mut weighted_power = 0.0;
+    let mut total_power = 0.0;
+    let mut logarithmic_power = 0.0;
+    let mut powers = Vec::with_capacity(BINS);
+    for bin in 1..=BINS {
+        let fft_bin = bin * 8;
+        let mut real = 0.0;
+        let mut imaginary = 0.0;
+        for (index, sample) in samples[..count].iter().enumerate() {
+            let window = 0.5
+                - 0.5 * (std::f64::consts::TAU * index as f64 / (count - 1) as f64).cos();
+            let phase = std::f64::consts::TAU * fft_bin as f64 * index as f64 / count as f64;
+            let value = (sample - mean) * window;
+            real += value * phase.cos();
+            imaginary -= value * phase.sin();
+        }
+        let power = real * real + imaginary * imaginary;
+        let frequency = fft_bin as f64 * RATE as f64 / count as f64;
+        powers.push((frequency, power));
+        total_power += power;
+        weighted_power += frequency * power;
+        logarithmic_power += (power + 1.0e-30).ln();
+    }
+    let centroid = if total_power > 0.0 {
+        weighted_power / total_power
+    } else {
+        0.0
+    };
+    let arithmetic = total_power / BINS as f64;
+    let flatness = if arithmetic > 0.0 {
+        (logarithmic_power / BINS as f64).exp() / arithmetic
+    } else {
+        0.0
+    };
+    (centroid, flatness.clamp(0.0, 1.0))
+}
+
+fn noise_stats(profile: PsgProfile, control: u8) -> (Stats, f64, f64, f64, f64) {
+    let mut p = Sn76489Core::new_with_profile(CLOCK, RATE, profile).unwrap();
+    p.write(0x9f);
+    p.write(0xbf);
+    p.write(0xdf);
+    p.write(0xc5);
+    p.write(0x11);
+    p.write(0xe0 | control);
+    p.write(0xf0);
+    p.advance_clocks(CLOCKS);
+    let samples = p.drain_samples(None);
+    let metrics = stats(&samples);
+    let mut cross = 0.0;
+    let mut a = 0.0;
+    let mut b = 0.0;
+    for pair in samples.windows(2) {
+        cross += (pair[0] - metrics.mean) * (pair[1] - metrics.mean);
+        a += (pair[0] - metrics.mean).powi(2);
+        b += (pair[1] - metrics.mean).powi(2);
+    }
+    let correlation = if a > 0.0 && b > 0.0 {
+        cross / (a * b).sqrt()
+    } else {
+        0.0
+    };
+    let zero_crossings = samples
+        .windows(2)
+        .filter(|window| (window[0] < 0.0) != (window[1] < 0.0))
+        .count() as f64
+        / samples.len().max(1) as f64;
+    let (centroid, flatness) = spectral_metrics(&samples);
+    (metrics, correlation, zero_crossings, centroid, flatness)
 }
 
 #[test]
 fn transient_and_noise_metrics_cover_both_hardware_profiles() {
-    let mut report=String::from("kind,profile,scenario,mean,rms,peak,max_delta,lag1_correlation,zero_crossing_ratio\n");
+    let mut report=String::from("kind,profile,scenario,mean,rms,peak,max_delta,lag1_correlation,zero_crossing_ratio,spectral_centroid_hz,spectral_flatness\n");
     for profile in [PsgProfile::Sms,PsgProfile::Sg1000] {
         for (scenario,before,after) in transient_stats(profile) {
             report.push_str(&format!("transient-before,{},{},{:.12},{:.12},{:.12},{:.12},,\n",name(profile),scenario,before.mean,before.rms,before.peak,before.max_delta));
             report.push_str(&format!("transient-after,{},{},{:.12},{:.12},{:.12},{:.12},,\n",name(profile),scenario,after.mean,after.rms,after.peak,after.max_delta));
         }
         for control in 0_u8..8 {
-            let (m,corr,zc)=noise_stats(profile,control);
-            report.push_str(&format!("noise,{},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12}\n",
-                name(profile),if control&4==0 {"periodic"}else{"white"},m.mean,m.rms,m.peak,m.max_delta,corr,zc));
+            let (m,corr,zc,centroid,flatness)=noise_stats(profile,control);
+            assert!(centroid.is_finite() && flatness.is_finite());
+            assert!((0.0..=1.0).contains(&flatness));
+            report.push_str(&format!("noise,{},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.6},{:.9}\n",
+                name(profile),if control&4==0 {"periodic"}else{"white"},m.mean,m.rms,m.peak,m.max_delta,corr,zc,centroid,flatness));
         }
     }
     if let Some(dir)=std::env::var_os("PSG_H2_ARTIFACT_DIR") {
