@@ -31,6 +31,7 @@ PR Draft, branch, documentação ou CI parcial não alteram o estado integrado d
 
 - [Plano Modern Hi-Fi — SMS e SG-1000](audio/modern-hifi-audio-roadmap.md)
 - [Estudo de reconstrução PSG H2](audio/psg-h2-reconstruction-study.md)
+- [Checkpoint de continuidade H2](audio/modern-hifi-h2-continuity-checkpoint.md)
 
 ## Z80
 
