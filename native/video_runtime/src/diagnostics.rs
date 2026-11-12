@@ -22,7 +22,9 @@ impl QpcClock {
         let frequency = *FREQUENCY.get_or_init(|| {
             let mut value = 0_i64;
             // SAFETY: `value` is a valid, writable i64 out-parameter for the API.
-            unsafe { QueryPerformanceFrequency(&mut value).ok()?; }
+            unsafe {
+                QueryPerformanceFrequency(&mut value).ok()?;
+            }
             u64::try_from(value).ok().filter(|frequency| *frequency > 0)
         })?;
         Some(Self { frequency })
@@ -34,7 +36,9 @@ impl QpcClock {
     pub fn now(&self) -> Option<u64> {
         let mut value = 0_i64;
         // SAFETY: `value` is a valid, writable i64 out-parameter for the API.
-        unsafe { QueryPerformanceCounter(&mut value).ok()?; }
+        unsafe {
+            QueryPerformanceCounter(&mut value).ok()?;
+        }
         u64::try_from(value).ok()
     }
 
