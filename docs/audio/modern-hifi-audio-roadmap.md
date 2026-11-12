@@ -1,6 +1,19 @@
 # Plano Modern Hi-Fi — SMS e SG-1000
 
-**Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 ainda não implementado em produção.
+## Atualização operacional — H4 integrado (2026-11-12)
+
+- PR #787 integrada por squash; merge commit: `323f295f459feaed457550db2b8d2c2e4188d81e`.
+- A pipeline de áudio transporta amostras normalizadas `f64` até a fronteira CPAL; não há quantização PCM16 intermediária.
+- O callback converte para o formato negociado. A seleção prioriza estéreo/mono, F32/I24/I16 e taxas 48/88,2/96 kHz, com 44,1 kHz como fallback de taxa.
+- I16 permanece disponível como fallback de formato. F32/I24 são escolhidos somente quando anunciados pelo endpoint.
+- CI aplicável no HEAD da PR `a1b8774acf39101ecb1a3697571a526a98160f32`: PASS para CPAL Windows x64, workspace regression, PSG integration, Slint/WGPU/Vulkan POC, Rust quality, rustfmt/Clippy e documentação.
+- SKIPPED: SDL3, D3D12, Scheduler stress, Z80 e VDP; não são gates executados/passados nesta alteração.
+- Validação física Windows x64 (F32/I24/I16, reprodução prolongada, underruns, remoção/reconfiguração de dispositivo e loopback): NOT RUN.
+- H4 está integrado em software; R3 permanece IN_PROGRESS até os testes físicos e lifecycle restantes.
+- H2 continua experimental/test-only; nenhum DSP alternativo foi promovido. A1 PSG permanece parcial.
+
+
+**Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 integrado pela PR #787; validação física pendente.
 **Integração H3:** PR #774 — merge commit `f5a0b691824322ce56c1a921329d3aa0957c4963`.
 **Baseline de main:** `6130cb42f1d76648552a5a0cd510e3a84c7efb42` (após PR #780; H3 #774 permanece integrado).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
@@ -324,7 +337,7 @@ H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental
 - A fonte interna SMS/SG-1000 permanece em 48 kHz; a taxa do endpoint é explícita e não altera MachineScheduler.
 - H2 permanece fechado como investigação experimental. A PR #772 foi auditada e fechada como supersedida, sem promover DSP. O artifact do run `43270057505` (artifact `13968900493`) registrou continuous vs segmented bit-exact (correlation 1.0; 214.552 amostras) e baseline/current correlation 0.999235, normalized RMS error 3.90%. No modelo event-based, SMS period 5 produziu fundamental 0.284657 contra 0.105104 no modelo linear e 0.108649 no sinc8; a diferença impede promoção sem validação independente/auditiva. O modelo em main permanece test-only.
 - A1 continua PARTIAL. Os três vetores independentes A1.2/A1.3 foram portados e integrados pela PR #784. No HEAD da PR #784, PSG core/console integration, SMS Runtime Release (format/Clippy/testes) e Windows CPAL output passaram; SMS Debugger Windows Release validation foi SKIPPED e não é contado como PASS. O DTO de estado da branch antiga foi separado e não foi incorporado neste incremento.
-- H4 permanece não integrado na main. Esta branch remove a quantização PCM16 intermediária, mantém f64 normalizado até o callback CPAL, negocia tuplas suportadas F32/I24/I16 com 48/88,2/96 kHz e registra formato/fallback. CI e validação física ainda pendentes.
+- H4 integrado na main pela PR #787. Esta branch remove a quantização PCM16 intermediária, mantém f64 normalizado até o callback CPAL, negocia tuplas suportadas F32/I24/I16 com 48/88,2/96 kHz e registra formato/fallback. CI e validação física ainda pendentes.
 - A issue #755 já dispõe de métricas de worker e host, incluindo timeout lateness, comando, mailbox, conversão e queue submission. Falta nova captura física após a instrumentação complementar #766, com PresentMon/QPC correlacionado; não presumir causa de áudio ou alterar Scheduler sem evidência.
 - R2: FrameMailbox portátil foi integrado pela PR #780. A PR #783 reúne correção de aspecto e sincronização do estado fullscreen; CI aplicável PASS no HEAD da PR, mas o aceite visual Windows/Vulkan ainda requer 4:3, 1:1, 16:9, resize contínuo e alternância F11/botão.
 - A arquitetura futura multissistema (SG-1000, SMS, Game Gear e Mega Drive) mantém core digital compartilhado com perfis de placa/clock/roteamento próprios. Não antecipar R4/R5 enquanto P0 e aceite R2 estiverem abertos.
