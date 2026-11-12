@@ -879,9 +879,9 @@ mod windows_host {
             };
             let audio_output = {
                 let guard = worker_slot.borrow();
-                guard.as_ref().map(|worker| {
-                    (worker.audio_output_metrics(), worker.audio_output_error())
-                })
+                guard
+                    .as_ref()
+                    .map(|worker| (worker.audio_output_metrics(), worker.audio_output_error()))
             };
             // QPC shares the timestamp domain used by PresentMon --qpc_time.
             // This marker is diagnostic only and never participates in frame pacing.
