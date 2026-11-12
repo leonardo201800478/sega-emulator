@@ -385,7 +385,7 @@ A1.3 permanece **PARTIAL** até que a fase absoluta seja reconciliada com evidê
 - histórico FIR e cursor;
 - filas PCM pendentes, incluindo a fila interna de renderização.
 
-Os coeficientes FIR não são duplicados no DTO: são reconstruídos deterministicamente a partir do par imutável `clock_hz/sample_rate`. O histórico e o cursor — que carregam a memória temporal do filtro — são preservados.
+Os coeficientes FIR também são armazenados no DTO, além do histórico e do cursor. Embora sejam derivados de `clock_hz/sample_rate`, preservá-los evita depender de uma nova execução de funções matemáticas de ponto flutuante ao restaurar em outro host, mantendo o mesmo conjunto de coeficientes e a mesma continuação do filtro.
 
 ### 12.2 API e invariantes
 
