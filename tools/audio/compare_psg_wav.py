@@ -268,6 +268,14 @@ def main() -> None:
         default=[],
         help="Add an isolated SMS tone comparison for the supplied SN76489 period",
     )
+    parser.add_argument(
+        "--lagrange4-tone",
+        action="append",
+        nargs=4,
+        metavar=("PERIOD", "BASELINE_WAV", "LINEAR_WAV", "LAGRANGE4_WAV"),
+        default=[],
+        help="Compare experimental Lagrange4 interpolation against baseline and linear output",
+    )
     parser.add_argument("--json", type=Path, default=Path("artifacts/psg-audio-report.json"))
     parser.add_argument(
         "--markdown",
@@ -305,6 +313,7 @@ def main() -> None:
         },
         "profiles": {},
         "isolated_tone_response": {},
+        "lagrange4_tone_response": {},
     }
 
     for profile in ("sms", "sg1000"):
@@ -355,6 +364,44 @@ def main() -> None:
             "fundamental_energy_delta_db": (
                 10.0 * math.log10(current_power / baseline_power)
                 if baseline_power > 0.0 and current_power > 0.0
+                else None
+            ),
+        }
+
+    for period_text, baseline_path, linear_path, lagrange_path in args.lagrange4_tone:
+        period = int(period_text)
+        if not 1 <= period <= 1023:
+            raise ValueError(f"tone period must be in 1..=1023, got {period}")
+        baseline_rate, baseline_samples = read_float_wav(Path(baseline_path))
+        linear_rate, linear_samples = read_float_wav(Path(linear_path))
+        lagrange_rate, lagrange_samples = read_float_wav(Path(lagrange_path))
+        if {baseline_rate, linear_rate, lagrange_rate} != {sample_rate}:
+            raise ValueError(f"period {period}: Lagrange4 sample-rate mismatch")
+        if len({len(baseline_samples), len(linear_samples), len(lagrange_samples)}) != 1:
+            raise ValueError(f"period {period}: Lagrange4 sample counts differ")
+
+        baseline_tone = tone_response_summary(
+            baseline_samples, sample_rate, period
+        )
+        linear_tone = tone_response_summary(linear_samples, sample_rate, period)
+        lagrange_tone = tone_response_summary(
+            lagrange_samples, sample_rate, period
+        )
+        baseline_power = baseline_tone["fundamental_power"]
+        linear_power = linear_tone["fundamental_power"]
+        lagrange_power = lagrange_tone["fundamental_power"]
+        report["lagrange4_tone_response"][str(period)] = {
+            "baseline": baseline_tone,
+            "linear": linear_tone,
+            "lagrange4": lagrange_tone,
+            "lagrange4_vs_baseline_db": (
+                10.0 * math.log10(lagrange_power / baseline_power)
+                if baseline_power > 0.0 and lagrange_power > 0.0
+                else None
+            ),
+            "lagrange4_vs_linear_db": (
+                10.0 * math.log10(lagrange_power / linear_power)
+                if linear_power > 0.0 and lagrange_power > 0.0
                 else None
             ),
         }
@@ -454,6 +501,28 @@ def main() -> None:
                 f"{data['baseline']['rms']:.9f} | "
                 f"{data['current']['rms']:.9f} | "
                 f"{data['fundamental_energy_delta_db']:.4f} dB |"
+            )
+        lines.append("")
+
+    if report["lagrange4_tone_response"]:
+        lines.extend(
+            [
+                "## Experimental Lagrange4 interpolation",
+                "",
+                "| Period | Baseline RMS | Linear RMS | Lagrange4 RMS | Lagrange4 vs. linear |",
+                "|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for period, data in sorted(
+            report["lagrange4_tone_response"].items(),
+            key=lambda item: int(item[0]),
+        ):
+            lines.append(
+                f"| {period} | "
+                f"{data['baseline']['rms']:.9f} | "
+                f"{data['linear']['rms']:.9f} | "
+                f"{data['lagrange4']['rms']:.9f} | "
+                f"{data['lagrange4_vs_linear_db']:.4f} dB |"
             )
         lines.append("")
 
