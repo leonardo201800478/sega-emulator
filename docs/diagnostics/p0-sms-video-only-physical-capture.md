@@ -44,11 +44,11 @@ For Vulkan, do not reject a capture solely because PresentMon reports `Runtime=O
 Analyze separately:
 
 1. **Virtual machine:** machine ticks/frame min, p50, max; expected regional profile; no drift or Scheduler changes.
-2. **SMS worker:** completed-frame interval p50/p95/p99; step duration; video publication; processing duration; requested and actual pacing wait.
-3. **Mailbox/host:** polls, empty polls, consumed frames, sequence gaps, producer replacements, mailbox residence, conversion duration, queue-write duration.
+2. **SMS worker:** completed-frame interval p50/p95/p99 and p95−p50 jitter; step duration; video publication; processing duration; requested and actual pacing wait.
+3. **Mailbox/host:** p50/p95/p99 and jitter for timer poll intervals and consumed-frame intervals; p50/p95/p99 for mailbox residence, mailbox take, RGB conversion, `Queue::write_texture` and total Slint callback; polls, empty polls, consumed frames, sequence gaps and producer replacements. Host distributions are rolling windows of up to 512 observations; each record includes sample counts.
 4. **OS presentation:** PresentMon `MsBetweenPresents`, `MsBetweenDisplayChange`, dropped-frame and present-mode fields where available; correlate using QPC ticks/frequency.
 
-Do not call a sequence gap or mailbox replacement a defect in isolation: the mailbox is latest-frame-wins. Compare producer cadence, consumer cadence and physical display events together. Do not equate a present event with photons emitted by the panel; optical validation requires a photodiode or equivalent external measurement.
+Do not interpret `empty_polls` as physical repeated frames: it only means no new frame was ready when the Slint timer polled. Do not call a sequence gap or mailbox replacement a defect in isolation: the mailbox is latest-frame-wins. Compare producer cadence, consumer cadence and physical display events together. Do not equate a present event with photons emitted by the panel; optical validation requires a photodiode or equivalent external measurement.
 
 A run is valid only if it has the full requested duration, correct PID, non-empty telemetry and PresentMon data, matching ROM/region/scene metadata, and no unrelated system load or configuration changes. Report p50/p95/p99, min/max, mean, standard deviation, and raw CSV/log files. No physical run is considered PASS until its raw evidence is reviewed.
 
