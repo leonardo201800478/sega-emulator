@@ -2,7 +2,7 @@
 
 **Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 ainda não implementado em produção.
 **Integração H3:** PR #774 — merge commit `f5a0b691824322ce56c1a921329d3aa0957c4963`.
-**Baseline de main:** `16c7f5bd5083792f96318e45760589c23f4deb18` (após PR #780; H3 #774 permanece integrado).
+**Baseline de main:** `44e167b7d17973b8d634198951fec298a50dddf7` (após PR #780; H3 #774 permanece integrado).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
 **Integração contínua:** mudanças validadas devem ser integradas em incrementos curtos na main; branches divergentes exigem portabilidade seletiva e CI no HEAD atual.
@@ -323,8 +323,8 @@ H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental
 - CPAL 0.18.2 foi integrado pela PR #770; H3/PCM interno 48 kHz foi integrado pela PR #774. No HEAD da PR #774, SMS Runtime, workspace regression, CPAL Windows x64 e PSG core/console passaram.
 - A fonte interna SMS/SG-1000 permanece em 48 kHz; a taxa do endpoint é explícita e não altera MachineScheduler.
 - H2 permanece fechado como investigação experimental. A PR #772 foi auditada e fechada como supersedida, sem promover DSP. O artifact do run `43270057505` (artifact `13968900493`) registrou continuous vs segmented bit-exact (correlation 1.0; 214.552 amostras) e baseline/current correlation 0.999235, normalized RMS error 3.90%. No modelo event-based, SMS period 5 produziu fundamental 0.284657 contra 0.105104 no modelo linear e 0.108649 no sinc8; a diferença impede promoção sem validação independente/auditiva. O modelo em main permanece test-only.
-- A1 continua PARTIAL. A antiga PR #767 foi auditada; os três vetores independentes A1.2/A1.3 foram portados seletivamente na PR #784. A CI no novo HEAD ainda precisa terminar. O DTO de estado da branch antiga foi separado e não foi incorporado neste incremento.
+- A1 continua PARTIAL. Os três vetores independentes A1.2/A1.3 foram portados e integrados pela PR #784. No HEAD da PR #784, PSG core/console integration, SMS Runtime Release (format/Clippy/testes) e Windows CPAL output passaram; SMS Debugger Windows Release validation foi SKIPPED e não é contado como PASS. O DTO de estado da branch antiga foi separado e não foi incorporado neste incremento.
 - H4 permanece não implementado. O contrato atual ainda entrega PCM16 ao CPAL; a negociação explícita de tuplas taxa/formato e a preservação de precisão até a fronteira final são a próxima implementação.
 - A issue #755 já dispõe de métricas de worker e host, incluindo timeout lateness, comando, mailbox, conversão e queue submission. Falta nova captura física após a instrumentação complementar #766, com PresentMon/QPC correlacionado; não presumir causa de áudio ou alterar Scheduler sem evidência.
-- R2: FrameMailbox portátil foi integrado pela PR #780. A PR #783 reúne correção de aspecto e sincronização do estado fullscreen; CI está em execução e o aceite visual Windows/Vulkan ainda requer 4:3, 1:1, 16:9, resize contínuo e alternância F11/botão.
+- R2: FrameMailbox portátil foi integrado pela PR #780. A PR #783 reúne correção de aspecto e sincronização do estado fullscreen; CI aplicável PASS no HEAD da PR, mas o aceite visual Windows/Vulkan ainda requer 4:3, 1:1, 16:9, resize contínuo e alternância F11/botão.
 - A arquitetura futura multissistema (SG-1000, SMS, Game Gear e Mega Drive) mantém core digital compartilhado com perfis de placa/clock/roteamento próprios. Não antecipar R4/R5 enquanto P0 e aceite R2 estiverem abertos.
