@@ -89,16 +89,16 @@ A auditoria não encontrou prova de que a condição temporária zero nos ticks 
 
 ### H1 — Referência sonora reproduzível
 
-**Status: PRÓXIMA ETAPA.**
+**Status: EM EXECUÇÃO — trace determinístico do core adicionado; baseline A/B pendente.**
 
-1. Criar gerador de traces de registradores e clocks, sem ROM comercial.
-2. Gerar PCM determinístico para SMS e SG-1000, incluindo tom isolado, acordes de três tons, ruído periódico/branco, mudanças de volume e escrita de registradores durante execução.
-3. Capturar o mesmo trace no baseline `f47f718` e na implementação atual.
+1. [x] Criar trace determinístico de registradores e clocks no teste do core, sem ROM comercial: tons 0–2, volumes, ruído branco e mudanças de registradores durante a execução.
+2. [x] Gerar PCM determinístico de teste para SMS e SG-1000 a 48 kHz com três tons, ruído branco e alterações de volume/controle durante a execução. A saída é comparada entre avanço contínuo e avanço segmentado em blocos de 997 clocks. [ ] Exportar os mesmos traces para WAV/PCM bruto para comparação externa.
+3. [ ] Capturar e comparar o mesmo trace no baseline `f47f718` e na implementação atual; o teste atual valida determinismo, não constitui ainda comparação A/B histórica.
 4. Registrar WAV/PCM bruto, taxa, perfil, clock, sequência de writes e SHA do código.
 5. Comparar RMS, pico, DC offset, frequência, resposta espectral, aliasing, transientes, ruído, clipping e erro normalizado.
 6. Testar execução contínua versus blocos arbitrários e verificar igualdade bit a bit do estado e da sequência produzida.
 
-**Gate H1:** fixtures reproduzíveis e relatório A/B. Nenhuma troca de algoritmo antes desse gate.
+**Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace está adicionado, mas o gate permanece aberto até a captura histórica e análise quantitativa. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
 
