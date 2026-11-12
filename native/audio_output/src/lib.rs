@@ -336,7 +336,7 @@ fn select_preferred_output_config(
                     if range.channels() != channels || range.sample_format() != format {
                         continue;
                     }
-                    if let Some(config) = range.clone().try_with_sample_rate(rate) {
+                    if let Some(config) = (*range).try_with_sample_rate(rate) {
                         return Some(config);
                     }
                 }
