@@ -217,14 +217,20 @@ pub struct Sn76489StateV1 {
 /// Failure while validating or restoring a PSG persistence state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PsgStateError {
+    InvalidMagic,
     UnsupportedVersion { expected: u16, actual: u16 },
     InvalidConfiguration(PsgError),
     InvalidState(&'static str),
+    InvalidTag(u8),
+    Truncated,
+    TrailingData,
+    ChecksumMismatch,
 }
 
 impl fmt::Display for PsgStateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidMagic => f.write_str("SN76489 state has invalid magic"),
             Self::UnsupportedVersion { expected, actual } => write!(
                 f,
                 "SN76489 state version {actual} is unsupported (expected {expected})"
@@ -233,13 +239,301 @@ impl fmt::Display for PsgStateError {
                 write!(f, "SN76489 state configuration is invalid: {error}")
             }
             Self::InvalidState(reason) => write!(f, "SN76489 state is invalid: {reason}"),
+            Self::InvalidTag(tag) => write!(f, "SN76489 state has invalid tag {tag}"),
+            Self::Truncated => f.write_str("SN76489 state is truncated"),
+            Self::TrailingData => f.write_str("SN76489 state has trailing bytes"),
+            Self::ChecksumMismatch => f.write_str("SN76489 state checksum mismatch"),
         }
     }
 }
 
 impl std::error::Error for PsgStateError {}
 
+const SN76489_STATE_MAGIC: [u8; 8] = *b"SN76489\\0";
+const MAX_STATE_FILTER_TAPS: usize = 1_000_000;
+
+#[derive(Default)]
+struct StateWriter {
+    bytes: Vec<u8>,
+}
+
+impl StateWriter {
+    fn u8(&mut self, value: u8) {
+        self.bytes.push(value);
+    }
+
+    fn u16(&mut self, value: u16) {
+        self.bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn u32(&mut self, value: u32) {
+        self.bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn f64(&mut self, value: f64) {
+        self.u64(value.to_bits());
+    }
+
+    fn f64_vec(&mut self, values: &[f64]) -> Result<(), PsgStateError> {
+        let count = u32::try_from(values.len())
+            .map_err(|_| PsgStateError::InvalidState("state vector is too large"))?;
+        self.u32(count);
+        for value in values {
+            self.f64(*value);
+        }
+        Ok(())
+    }
+}
+
+struct StateReader<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> StateReader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn take(&mut self, count: usize) -> Result<&'a [u8], PsgStateError> {
+        let end = self
+            .offset
+            .checked_add(count)
+            .ok_or(PsgStateError::Truncated)?;
+        let value = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or(PsgStateError::Truncated)?;
+        self.offset = end;
+        Ok(value)
+    }
+
+    fn u8(&mut self) -> Result<u8, PsgStateError> {
+        Ok(self.take(1)?[0])
+    }
+
+    fn u16(&mut self) -> Result<u16, PsgStateError> {
+        Ok(u16::from_le_bytes(
+            self.take(2)?
+                .try_into()
+                .map_err(|_| PsgStateError::Truncated)?,
+        ))
+    }
+
+    fn u32(&mut self) -> Result<u32, PsgStateError> {
+        Ok(u32::from_le_bytes(
+            self.take(4)?
+                .try_into()
+                .map_err(|_| PsgStateError::Truncated)?,
+        ))
+    }
+
+    fn u64(&mut self) -> Result<u64, PsgStateError> {
+        Ok(u64::from_le_bytes(
+            self.take(8)?
+                .try_into()
+                .map_err(|_| PsgStateError::Truncated)?,
+        ))
+    }
+
+    fn f64(&mut self) -> Result<f64, PsgStateError> {
+        Ok(f64::from_bits(self.u64()?))
+    }
+
+    fn f64_vec(&mut self, maximum: usize) -> Result<Vec<f64>, PsgStateError> {
+        let count = usize::try_from(self.u32()?)
+            .map_err(|_| PsgStateError::InvalidState("state vector length is invalid"))?;
+        if count > maximum {
+            return Err(PsgStateError::InvalidState(
+                "state vector exceeds its validated maximum length",
+            ));
+        }
+        (0..count).map(|_| self.f64()).collect()
+    }
+
+    fn finished(&self) -> bool {
+        self.offset == self.bytes.len()
+    }
+}
+
+fn state_crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0_u32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = 0_u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
 impl Sn76489StateV1 {
+    /// Encode this state into the canonical little-endian, checksummed format.
+    pub fn encode(&self) -> Result<Vec<u8>, PsgStateError> {
+        self.validate()?;
+
+        let mut body = StateWriter::default();
+        body.u8(match self.profile {
+            PsgProfile::Sg1000 => 0,
+            PsgProfile::Sms => 1,
+        });
+        body.u64(self.clock_hz);
+        body.u64(self.sample_rate);
+        body.u64(
+            u64::try_from(self.sample_buffer_capacity)
+                .map_err(|_| PsgStateError::InvalidState("sample buffer capacity is too large"))?,
+        );
+        body.u64(self.dropped_samples);
+        for value in self.tone_periods {
+            body.u16(value);
+        }
+        for value in self.attenuations {
+            body.u8(value);
+        }
+        body.u8(self.noise_control);
+        body.u8(self.latched_register);
+        for value in self.tone_counters {
+            body.u16(value);
+        }
+        for value in self.tone_outputs {
+            body.u8(value);
+        }
+        body.u16(self.noise_counter);
+        body.u8(self.noise_counter_phase);
+        body.u16(self.lfsr);
+        body.u8(self.noise_output);
+        body.u64(self.clock_divider_phase);
+        body.u64(self.output_phase);
+        body.u16(self.noise_period);
+        body.u64(
+            u64::try_from(self.filter_position)
+                .map_err(|_| PsgStateError::InvalidState("FIR cursor is too large"))?,
+        );
+        body.f64_vec(&self.filter_history)?;
+        body.f64_vec(&self.pending_samples)?;
+        body.f64_vec(&self.render_pending)?;
+
+        let body_len = u32::try_from(body.bytes.len())
+            .map_err(|_| PsgStateError::InvalidState("encoded state body is too large"))?;
+        let mut frame = StateWriter::default();
+        frame.bytes.extend_from_slice(&SN76489_STATE_MAGIC);
+        frame.u16(self.format_version);
+        frame.u32(body_len);
+        frame.bytes.extend_from_slice(&body.bytes);
+        frame.u32(state_crc32(&body.bytes));
+        Ok(frame.bytes)
+    }
+
+    /// Decode exactly one canonical frame and validate all PSG invariants.
+    pub fn decode(bytes: &[u8]) -> Result<Self, PsgStateError> {
+        let mut frame = StateReader::new(bytes);
+        if frame.take(SN76489_STATE_MAGIC.len())? != SN76489_STATE_MAGIC {
+            return Err(PsgStateError::InvalidMagic);
+        }
+        let version = frame.u16()?;
+        if version != SN76489_STATE_FORMAT_VERSION {
+            return Err(PsgStateError::UnsupportedVersion {
+                expected: SN76489_STATE_FORMAT_VERSION,
+                actual: version,
+            });
+        }
+        let body_len = usize::try_from(frame.u32()?)
+            .map_err(|_| PsgStateError::Truncated)?;
+        let body = frame.take(body_len)?;
+        let checksum = frame.u32()?;
+        if !frame.finished() {
+            return Err(PsgStateError::TrailingData);
+        }
+        if state_crc32(body) != checksum {
+            return Err(PsgStateError::ChecksumMismatch);
+        }
+
+        let mut reader = StateReader::new(body);
+        let profile = match reader.u8()? {
+            0 => PsgProfile::Sg1000,
+            1 => PsgProfile::Sms,
+            tag => return Err(PsgStateError::InvalidTag(tag)),
+        };
+        let clock_hz = reader.u64()?;
+        let sample_rate = reader.u64()?;
+        let sample_buffer_capacity = usize::try_from(reader.u64()?)
+            .map_err(|_| PsgStateError::InvalidState("sample buffer capacity is invalid"))?;
+        let dropped_samples = reader.u64()?;
+        let mut tone_periods = [0; TONE_CHANNELS];
+        for value in &mut tone_periods {
+            *value = reader.u16()?;
+        }
+        let mut attenuations = [0; 4];
+        for value in &mut attenuations {
+            *value = reader.u8()?;
+        }
+        let noise_control = reader.u8()?;
+        let latched_register = reader.u8()?;
+        let mut tone_counters = [0; TONE_CHANNELS];
+        for value in &mut tone_counters {
+            *value = reader.u16()?;
+        }
+        let mut tone_outputs = [0; TONE_CHANNELS];
+        for value in &mut tone_outputs {
+            *value = reader.u8()?;
+        }
+        let noise_counter = reader.u16()?;
+        let noise_counter_phase = reader.u8()?;
+        let lfsr = reader.u16()?;
+        let noise_output = reader.u8()?;
+        let clock_divider_phase = reader.u64()?;
+        let output_phase = reader.u64()?;
+        let noise_period = reader.u16()?;
+        let filter_position = usize::try_from(reader.u64()?)
+            .map_err(|_| PsgStateError::InvalidState("FIR cursor is invalid"))?;
+        let filter_history = reader.f64_vec(MAX_STATE_FILTER_TAPS)?;
+        let sample_buffer_capacity = sample_buffer_capacity.max(0);
+        let pending_samples = reader.f64_vec(sample_buffer_capacity)?;
+        let render_pending = reader.f64_vec(sample_buffer_capacity)?;
+        if !reader.finished() {
+            return Err(PsgStateError::TrailingData);
+        }
+
+        let state = Self {
+            format_version: version,
+            profile,
+            clock_hz,
+            sample_rate,
+            sample_buffer_capacity,
+            dropped_samples,
+            tone_periods,
+            attenuations,
+            noise_control,
+            latched_register,
+            tone_counters,
+            tone_outputs,
+            noise_counter,
+            noise_counter_phase,
+            lfsr,
+            noise_output,
+            clock_divider_phase,
+            output_phase,
+            noise_period,
+            filter_history,
+            filter_position,
+            pending_samples,
+            render_pending,
+        };
+        state.validate()?;
+        Ok(state)
+    }
+
+    fn validate(&self) -> Result<(), PsgStateError> {
+        let core = Sn76489Core::new_with_profile(self.clock_hz, self.sample_rate, self.profile)
+            .map_err(PsgStateError::InvalidConfiguration)?;
+        self.validate_for(&core)
+    }
+
     fn validate_for(&self, core: &Sn76489Core) -> Result<(), PsgStateError> {
         if self.format_version != SN76489_STATE_FORMAT_VERSION {
             return Err(PsgStateError::UnsupportedVersion {
