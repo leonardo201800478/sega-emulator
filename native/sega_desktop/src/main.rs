@@ -648,6 +648,49 @@ mod windows_host {
         Ok(())
     }
 
+    const HOST_PACING_WINDOW_CAPACITY: usize = 512;
+
+    /// Fixed-capacity rolling distribution. Samples are appended without allocation;
+    /// sorting happens only when the one-second host telemetry record is emitted.
+    #[derive(Clone)]
+    struct HostDurationWindow {
+        values: [u64; HOST_PACING_WINDOW_CAPACITY],
+        len: usize,
+        next: usize,
+    }
+
+    impl Default for HostDurationWindow {
+        fn default() -> Self {
+            Self {
+                values: [0; HOST_PACING_WINDOW_CAPACITY],
+                len: 0,
+                next: 0,
+            }
+        }
+    }
+
+    impl HostDurationWindow {
+        fn push(&mut self, value_ns: u64) {
+            self.values[self.next] = value_ns;
+            self.next = (self.next + 1) % HOST_PACING_WINDOW_CAPACITY;
+            self.len = (self.len + 1).min(HOST_PACING_WINDOW_CAPACITY);
+        }
+
+        fn percentile_ns(&self, percentile: usize) -> u64 {
+            if self.len == 0 {
+                return 0;
+            }
+            let mut sorted = self.values;
+            sorted[..self.len].sort_unstable();
+            let rank = (self.len * percentile).div_ceil(100).max(1) - 1;
+            sorted[rank.min(self.len - 1)]
+        }
+
+        const fn len(&self) -> usize {
+            self.len
+        }
+    }
+
     /// Bounded host-side measurements for mailbox consumption and WGPU upload.
     ///
     /// This deliberately stops at queue.write_texture: Slint owns the Winit surface
@@ -681,6 +724,13 @@ mod windows_host {
         mailbox_take_count: u64,
         mailbox_take_sum_ns: u128,
         mailbox_take_max_ns: u64,
+        poll_interval_distribution: HostDurationWindow,
+        consumed_interval_distribution: HostDurationWindow,
+        mailbox_residence_distribution: HostDurationWindow,
+        conversion_distribution: HostDurationWindow,
+        queue_write_distribution: HostDurationWindow,
+        callback_distribution: HostDurationWindow,
+        mailbox_take_distribution: HostDurationWindow,
     }
 
     impl HostFramePacingWindow {
@@ -714,6 +764,13 @@ mod windows_host {
                 mailbox_take_count: 0,
                 mailbox_take_sum_ns: 0,
                 mailbox_take_max_ns: 0,
+                poll_interval_distribution: HostDurationWindow::default(),
+                consumed_interval_distribution: HostDurationWindow::default(),
+                mailbox_residence_distribution: HostDurationWindow::default(),
+                conversion_distribution: HostDurationWindow::default(),
+                queue_write_distribution: HostDurationWindow::default(),
+                callback_distribution: HostDurationWindow::default(),
+                mailbox_take_distribution: HostDurationWindow::default(),
             }
         }
 
@@ -728,6 +785,7 @@ mod windows_host {
                     .poll_interval_sum_ns
                     .saturating_add(u128::from(elapsed));
                 self.poll_interval_max_ns = self.poll_interval_max_ns.max(elapsed);
+                self.poll_interval_distribution.push(elapsed);
             }
             self.last_poll = Some(now);
         }
@@ -747,6 +805,7 @@ mod windows_host {
                     .consumed_interval_sum_ns
                     .saturating_add(u128::from(elapsed));
                 self.consumed_interval_max_ns = self.consumed_interval_max_ns.max(elapsed);
+                self.consumed_interval_distribution.push(elapsed);
             }
             if self.last_sequence > 0 && sequence > self.last_sequence.saturating_add(1) {
                 self.sequence_gaps = self
@@ -762,6 +821,7 @@ mod windows_host {
                 .mailbox_residence_sum_ns
                 .saturating_add(u128::from(residence));
             self.mailbox_residence_max_ns = self.mailbox_residence_max_ns.max(residence);
+            self.mailbox_residence_distribution.push(residence);
             self.last_sequence = sequence;
             self.last_consumed = Some(now);
         }
@@ -771,6 +831,7 @@ mod windows_host {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.conversion_sum_ns = self.conversion_sum_ns.saturating_add(u128::from(nanos));
             self.conversion_max_ns = self.conversion_max_ns.max(nanos);
+            self.conversion_distribution.push(nanos);
         }
 
         fn record_queue_write(&mut self, elapsed: Duration) {
@@ -778,6 +839,7 @@ mod windows_host {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.queue_write_sum_ns = self.queue_write_sum_ns.saturating_add(u128::from(nanos));
             self.queue_write_max_ns = self.queue_write_max_ns.max(nanos);
+            self.queue_write_distribution.push(nanos);
         }
 
         fn record_callback(&mut self, elapsed: Duration) {
@@ -785,6 +847,7 @@ mod windows_host {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.callback_sum_ns = self.callback_sum_ns.saturating_add(u128::from(nanos));
             self.callback_max_ns = self.callback_max_ns.max(nanos);
+            self.callback_distribution.push(nanos);
         }
 
         fn record_mailbox_take(&mut self, elapsed: Duration) {
@@ -792,6 +855,7 @@ mod windows_host {
             let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
             self.mailbox_take_sum_ns = self.mailbox_take_sum_ns.saturating_add(u128::from(nanos));
             self.mailbox_take_max_ns = self.mailbox_take_max_ns.max(nanos);
+            self.mailbox_take_distribution.push(nanos);
         }
 
         fn report_if_due(&mut self, worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>) {
@@ -828,7 +892,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} consumed_interval_avg_us={} consumed_interval_max_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} convert_avg_us={} convert_max_us={} queue_write_avg_us={} queue_write_max_us={} callback_avg_us={} callback_max_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} poll_interval_samples={} poll_interval_p50_us={} poll_interval_p95_us={} poll_interval_p99_us={} poll_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
                 qpc_frequency,
@@ -839,27 +903,67 @@ mod windows_host {
                 self.sequence_gaps,
                 average_us(self.poll_interval_sum_ns, self.polls.saturating_sub(1)),
                 self.poll_interval_max_ns / 1_000,
+                self.poll_interval_distribution.len(),
+                self.poll_interval_distribution.percentile_ns(50) / 1_000,
+                self.poll_interval_distribution.percentile_ns(95) / 1_000,
+                self.poll_interval_distribution.percentile_ns(99) / 1_000,
+                self.poll_interval_distribution
+                    .percentile_ns(95)
+                    .saturating_sub(self.poll_interval_distribution.percentile_ns(50))
+                    / 1_000,
                 average_us(
                     self.consumed_interval_sum_ns,
                     self.consumed.saturating_sub(1)
                 ),
                 self.consumed_interval_max_ns / 1_000,
+                self.consumed_interval_distribution.len(),
+                self.consumed_interval_distribution.percentile_ns(50) / 1_000,
+                self.consumed_interval_distribution.percentile_ns(95) / 1_000,
+                self.consumed_interval_distribution.percentile_ns(99) / 1_000,
+                self.consumed_interval_distribution
+                    .percentile_ns(95)
+                    .saturating_sub(self.consumed_interval_distribution.percentile_ns(50))
+                    / 1_000,
                 average_us(self.mailbox_residence_sum_ns, self.mailbox_residence_count),
                 self.mailbox_residence_max_ns / 1_000,
+                self.mailbox_residence_distribution.len(),
+                self.mailbox_residence_distribution.percentile_ns(50) / 1_000,
+                self.mailbox_residence_distribution.percentile_ns(95) / 1_000,
+                self.mailbox_residence_distribution.percentile_ns(99) / 1_000,
                 average_us(self.conversion_sum_ns, self.conversion_count),
                 self.conversion_max_ns / 1_000,
+                self.conversion_distribution.len(),
+                self.conversion_distribution.percentile_ns(50) / 1_000,
+                self.conversion_distribution.percentile_ns(95) / 1_000,
+                self.conversion_distribution.percentile_ns(99) / 1_000,
                 average_us(self.queue_write_sum_ns, self.queue_write_count),
                 self.queue_write_max_ns / 1_000,
+                self.queue_write_distribution.len(),
+                self.queue_write_distribution.percentile_ns(50) / 1_000,
+                self.queue_write_distribution.percentile_ns(95) / 1_000,
+                self.queue_write_distribution.percentile_ns(99) / 1_000,
                 average_us(self.callback_sum_ns, self.callback_count),
                 self.callback_max_ns / 1_000,
+                self.callback_distribution.len(),
+                self.callback_distribution.percentile_ns(50) / 1_000,
+                self.callback_distribution.percentile_ns(95) / 1_000,
+                self.callback_distribution.percentile_ns(99) / 1_000,
                 average_us(self.mailbox_take_sum_ns, self.mailbox_take_count),
                 self.mailbox_take_max_ns / 1_000,
+                self.mailbox_take_distribution.len(),
+                self.mailbox_take_distribution.percentile_ns(50) / 1_000,
+                self.mailbox_take_distribution.percentile_ns(95) / 1_000,
+                self.mailbox_take_distribution.percentile_ns(99) / 1_000,
                 replaced_frames,
                 runtime.sample_count,
                 runtime.total_samples,
                 runtime.frame_interval_p50_ns / 1_000,
                 runtime.frame_interval_p95_ns / 1_000,
                 runtime.frame_interval_p99_ns / 1_000,
+                runtime
+                    .frame_interval_p95_ns
+                    .saturating_sub(runtime.frame_interval_p50_ns)
+                    / 1_000,
                 runtime.machine_ticks_per_frame_min,
                 runtime.machine_ticks_per_frame_p50,
                 runtime.machine_ticks_per_frame_max,
@@ -1713,6 +1817,56 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn host_duration_window_reports_nearest_rank_percentiles() {
+            let mut samples = HostDurationWindow::default();
+            for value in [10, 20, 30, 40, 50] {
+                samples.push(value);
+            }
+
+            assert_eq!(samples.len(), 5);
+            assert_eq!(samples.percentile_ns(50), 30);
+            assert_eq!(samples.percentile_ns(95), 50);
+            assert_eq!(samples.percentile_ns(99), 50);
+        }
+
+        #[test]
+        fn host_duration_window_retains_only_the_latest_512_samples() {
+            let mut samples = HostDurationWindow::default();
+            for value in 1..=513 {
+                samples.push(value);
+            }
+
+            assert_eq!(samples.len(), HOST_PACING_WINDOW_CAPACITY);
+            assert_eq!(samples.percentile_ns(50), 257);
+            assert_eq!(samples.percentile_ns(95), 488);
+            assert_eq!(samples.percentile_ns(99), 508);
+        }
+
+        #[test]
+        fn host_frame_pacing_records_poll_and_consumption_distributions() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            for (index, micros) in [10, 20, 30, 40, 50].into_iter().enumerate() {
+                window.record_poll(start + Duration::from_micros((index as u64) * micros));
+            }
+            assert_eq!(window.poll_interval_distribution.len(), 4);
+            assert!(window.poll_interval_distribution.percentile_ns(95) > 0);
+
+            window.record_frame(start + Duration::from_millis(1), 1, start);
+            window.record_frame(
+                start + Duration::from_millis(2),
+                2,
+                start + Duration::from_millis(1),
+            );
+            assert_eq!(window.consumed_interval_distribution.len(), 1);
+            assert_eq!(
+                window.consumed_interval_distribution.percentile_ns(50),
+                1_000_000
+            );
+            assert_eq!(window.mailbox_residence_distribution.len(), 2);
+        }
 
         #[test]
         fn host_frame_pacing_window_records_callback_and_mailbox_take_costs() {
