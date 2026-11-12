@@ -253,12 +253,8 @@ mod tests {
 
     #[test]
     fn pcm16_clips_and_scales() {
-        let mut resampler = PcmResampler::new(
-            DEFAULT_TEST_INPUT_RATE,
-            DEFAULT_TEST_INPUT_RATE,
-            100,
-        )
-        .unwrap();
+        let mut resampler =
+            PcmResampler::new(DEFAULT_TEST_INPUT_RATE, DEFAULT_TEST_INPUT_RATE, 100).unwrap();
         let bytes = resampler.process(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         let values: Vec<i16> = bytes
             .as_chunks::<2>()
