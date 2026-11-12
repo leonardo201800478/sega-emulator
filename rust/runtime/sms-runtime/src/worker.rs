@@ -1889,9 +1889,8 @@ mod tests {
     use super::{
         BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
         FramePacingDeadline, FramePacingSample, FramePacingWindow, Ordering,
-        SMS_TEMPORAL_SAMPLE_RATE,
-        SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
-        execute_frame,
+        SMS_TEMPORAL_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
+        build_sms_temporal_machine, execute_frame,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
