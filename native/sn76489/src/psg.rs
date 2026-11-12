@@ -1234,8 +1234,7 @@ mod tests {
 
     #[test]
     fn sms_reference_latch_data_vectors_update_registers_immediately() {
-        let mut psg =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
 
         // SMS Power example: 0x8E followed by 0x0F produces Tone 0 = 0x0FE.
         psg.write(0x8E);
