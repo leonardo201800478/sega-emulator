@@ -39,9 +39,7 @@ const TRACE: [(u64, u8); 19] = [
 
 fn advance(psg: &mut Sn76489Core, mut clocks: u64, chunk_limit: Option<u64>) {
     while clocks > 0 {
-        let step = chunk_limit
-            .map(|limit| clocks.min(limit))
-            .unwrap_or(clocks);
+        let step = chunk_limit.map(|limit| clocks.min(limit)).unwrap_or(clocks);
         psg.advance_clocks(step);
         clocks -= step;
     }
@@ -85,7 +83,8 @@ fn write_wav(path: &Path, samples: &[f64]) -> Result<(), Box<dyn Error>> {
 
 fn fnv1a64(samples: &[f64]) -> u64 {
     samples.iter().fold(0xcbf29ce484222325_u64, |hash, sample| {
-        sample.to_bits()
+        sample
+            .to_bits()
             .to_le_bytes()
             .into_iter()
             .fold(hash, |state, byte| {
@@ -136,9 +135,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|sample| sample.abs())
         .fold(0.0_f64, f64::max);
     let mean = samples.iter().sum::<f64>() / samples.len() as f64;
-    let rms = (samples.iter().map(|sample| sample * sample).sum::<f64>()
-        / samples.len() as f64)
-        .sqrt();
+    let rms =
+        (samples.iter().map(|sample| sample * sample).sum::<f64>() / samples.len() as f64).sqrt();
 
     write_wav(&output_path, &samples)?;
     println!("profile={profile_name}");
