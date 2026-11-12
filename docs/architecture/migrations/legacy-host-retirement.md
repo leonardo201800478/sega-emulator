@@ -1,6 +1,6 @@
 # Plano de corte dos hosts anteriores — Slint / WGPU / CPAL
 
-**Revisão:** 2026-11-12
+**Revisão:** 2026-11-12 — reconciliado com main `f5a0b691824322ce56c1a921329d3aa0957c4963`.
 **Autoridade arquitetural:** ADR 0011 — Slint, WGPU e CPAL
 **Objetivo:** manter a documentação operacional alinhada à arquitetura-alvo e retirar implementações transitórias sem quebrar o runtime ou apagar evidências históricas.
 
@@ -24,9 +24,9 @@ O frontend não implementa hardware, instruções, ciclos, temporização nem ca
 | R1 — POC Slint/WGPU/Vulkan | MERGED | PR #747, merge ef6398eeaf12edf663846a5bf8392dd0033b6ea1 |
 | R2 — frames SMS no desktop Slint/WGPU | MERGED | PR #752, merge 5706e9125e345230b1b9ddda860654ce9d0789a3 |
 | R2 — preferências persistentes | MERGED | PR #754, merge 22ea3a44cd66bcd7e5c4edbd98007ca59eef9858 |
-| R3 — áudio físico CPAL | IN_PROGRESS (candidata PR #770; não merged) | Adaptador e integração de software implementados na branch; CI, dispositivo físico, reconexão, underruns e captura ainda pendentes |
-| R4 — input SDL3 | PENDING | Auditoria e integração de teclado/gamepads/hotplug |
-| R5 — consolidação e corte | PENDING | Paridade, regressão, remoção de consumidores e validação Release |
+| R3 — áudio físico CPAL | INTEGRADO EM SOFTWARE | PR #770 merged; H3 48 kHz PR #774 merged. Validação física prolongada, hotplug/reconexão, underruns e formatos adaptativos ainda pendentes. |
+| R4 — input SDL3 | PENDING | Auditoria e integração de teclado/gamepads/hotplug. |
+| R5 — consolidação e corte | PENDING | Paridade, regressão, remoção de consumidores e validação Release. | Paridade, regressão, remoção de consumidores e validação Release |
 
 Merge de R1/R2 não prova áudio físico, input SDL3, paridade integral de frontend nem encerramento da migração.
 
@@ -59,19 +59,18 @@ Antes de excluir o módulo e suas dependências:
 
 ### 4.2 Saída física de áudio anterior
 
-A PR #770 é a candidata de substituição: implementa CPAL e remove os adaptadores próprios WASAPI/XAudio2 no mesmo conjunto revisável. Ela permanece Draft. A implementação antiga na main deve ser preservada até a candidata comprovar a funcionalidade correspondente. R3 deve comprovar:
+A PR #770 foi integrada na main e substituiu os adaptadores próprios WASAPI/XAudio2 por CPAL 0.18.2, preservando FIFO SPSC e contrato de sink. A PR #774 consolidou a fonte PCM interna de 48 kHz e taxas explícitas. Isso fecha a integração de software, não a validação operacional completa.
 
+R3 só deve ser declarada tecnicamente concluída após:
 1. enumeração de dispositivos e formatos suportados;
-2. seleção e abertura de stream;
-3. reprodução PCM real proveniente do runtime SMS;
-4. conversão de formato sem alterar a linha temporal do Scheduler;
-5. lifecycle start/pause/stop/reset/close;
-6. tratamento de device removal/reconnection e erros;
-7. métricas de underrun/overflow e ausência de bloqueio indevido no callback;
-8. execução física prolongada em Windows Release, com logs e captura reproduzível;
-9. testes headless determinísticos e CI no SHA exato.
+2. seleção/abertura de stream e reprodução PCM real;
+3. conversão de formato sem alterar a linha temporal do Scheduler;
+4. lifecycle start/pause/stop/reset/close;
+5. device removal/reconnection e erros;
+6. métricas de underrun/overflow e ausência de bloqueio indevido no callback;
+7. execução física prolongada em Windows Release, com logs e captura reproduzível;
+8. negociação adaptativa de PCM16 e formatos superiores efetivamente suportados, sem impor 24 bits.
 
-Somente após R3 PASS e R5 aprovado será permitido integrar a retirada definitiva dos adaptadores antigos, dependências Windows, configurações, testes e documentação operacional correspondente. Até lá, a PR #770 não pode ser merged.
 
 ### 4.3 CI e proteção de branch
 
@@ -101,3 +100,11 @@ Os checks antigos podem continuar aparecendo como SKIPPED por exigência de prot
 3. R5: tornar Slint o único frontend desktop mantido e remover consumidores anteriores.
 4. Remover dependências, exemplos, CI transitória e documentação operacional antiga, preservando evidências históricas.
 5. Publicar auditoria final de corte com lista de arquivos removidos, testes, SHA e workflows.
+
+
+## 8. Atualização de estado — 2026-11-12
+
+- R1 POC #747, R2 frames #752, preferências #754, CPAL #770 e H3 #774 estão integrados.
+- R2 permanece em aceite parcial: issues #755 (P0 frame pacing) e #756 (viewport/ZIP/sprite-limit/menu/resume/fullscreen) continuam abertas.
+- PR #757 (viewport), #758 (preservar sprite policy no reset) e #746 (mailbox portátil) precisam ser revalidadas/portadas para a main atual; não usar seus históricos divergentes como merge integral.
+- Ver [Auditoria geral e plano de continuidade 2026-11-12](../../project-status-2026-11-12.md) para inventário de todas as PRs/issues abertas e sequência priorizada.
