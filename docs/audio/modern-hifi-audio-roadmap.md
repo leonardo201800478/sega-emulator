@@ -199,11 +199,12 @@ A comparação de implementação entre `f47f718` e a revisão atual confirmou q
 
 1. [x] Auditar divisor, fase de amostragem, FIR e diferenças de resposta.
 2. [x] Adicionar sweep digital dos períodos 0–1023 nos perfis SMS/SG-1000 e nos três osciladores, incluindo a condição constante dos períodos 0/1.
-3. [x] Validar a interpolação fracionária com o core real e comparar baseline, linear e protótipos Lagrange3/Lagrange4.
-4. [x] Adicionar métricas de fundamental/THD para tons representativos, transientes de volume/período/tom→ruído/ruído branco→periódico e estatísticas de ruído nos oito controles por perfil.
-5. [x] Implementar protótipo independente test-only de reconstrução band-limited por eventos: timestamps subamostrais, deltas de amplitude, kernel sinc/Blackman com 256 fases e 65 taps; comparação com saída linear e chunking.
-6. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
-7. [x] O protótipo foi escrito independentemente, sem copiar código de terceiros.
+3. [x] Exportar sweep analítico completo 0–1023 da resposta FIR, limite de atenuação do hold linear, harmônicos passantes e energia potencial de alias acima de Nyquist.
+4. [x] Validar a interpolação fracionária com o core real e comparar baseline, linear e protótipos Lagrange3/Lagrange4.
+5. [x] Adicionar métricas de fundamental/THD para tons representativos, transientes de volume/período/tom→ruído/ruído branco→periódico e estatísticas de ruído nos oito controles por perfil, incluindo correlação lag-1, taxa de cruzamento por zero, centróide espectral e flatness.
+6. [x] Implementar protótipo independente test-only de reconstrução band-limited por eventos: timestamps subamostrais, deltas de amplitude, kernel sinc/Blackman com 256 fases e 65 taps; comparação com saída linear e invariância por chunking.
+7. [ ] Comparar os WAVs com Gearsystem e ARES em cadeia de reprodução equalizada; referências externas não são oráculos absolutos.
+8. [x] O protótipo foi escrito independentemente, sem copiar código de terceiros.
 
 **Gate H2:** fechar após CI, leitura dos CSV/WAVs, comparação histórica e decisão documentada. O protótipo permanece test-only; nenhuma alteração de síntese de produção será aceita sem superioridade global demonstrada.
 
