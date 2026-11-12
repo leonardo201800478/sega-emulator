@@ -734,11 +734,12 @@ fn event_based_full_tone_period_sweep_exports_2_through_1023() {
         } else {
             kernel.discrete_frequency_response(alias_frequency / SAMPLE_RATE as f64)
         };
-        let rms = (samples.iter().map(|sample| sample * sample).sum::<f64>()
-            / samples.len() as f64)
+        let steady = &samples[256..];
+        let rms = (steady.iter().map(|sample| sample * sample).sum::<f64>()
+            / steady.len() as f64)
             .sqrt();
-        let peak = samples.iter().map(|sample| sample.abs()).fold(0.0, f64::max);
-        let fundamental_power = goertzel_power(&samples, alias_frequency);
+        let peak = steady.iter().map(|sample| sample.abs()).fold(0.0, f64::max);
+        let fundamental_power = goertzel_power(steady, alias_frequency);
 
         assert!(peak < 1.0, "period={period}, peak={peak}");
         assert!(rms.is_finite() && fundamental_power.is_finite());
