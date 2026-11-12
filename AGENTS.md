@@ -6,7 +6,7 @@ Decisões vigentes: ADR 0010 (runtime/hardware), ADR 0011 (desktop/hosts) e ADR-
 
 - Backend/runtime 100% Rust: CPU, barramentos, memória, mappers, VDP, áudio, interrupções, Scheduler, timing e estados.
 - Desktop alvo: Slint 1.18.x + WGPU 30.x + CPAL 0.18.2; Vulkan inicial preferencial no Windows x64; SDL3 após auditoria.
-- egui/eframe e D3D12/WASAPI/XAudio2 são baseline integrada; preservar até paridade e aceite da nova stack.
+- Slint/WGPU 30/Vulkan é o caminho desktop-alvo; CPAL 0.18.2 é a saída física-alvo; SDL3 após auditoria. Não adicionar dependências ao host anterior. Preservar temporariamente módulos ainda consumidos até os gates R3/R5 e removê-los por inventário de referências, testes e CI. Ver docs/architecture/migrations/legacy-host-retirement.md.
 - Preservar SmsTemporalWorker, FrameMailbox, Scheduler, SMS, SG-1000 e componentes validados.
 - Não duplicar CPU, worker, máquina, PSG, VDP ou Scheduler.
 - GUI exclusivamente apresentação/integração OS. Sem hardware, instruções, clocks ou callbacks por instrução.
