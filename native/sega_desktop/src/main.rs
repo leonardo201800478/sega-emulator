@@ -877,6 +877,12 @@ mod windows_host {
                     },
                 )
             };
+            let audio_output = {
+                let guard = worker_slot.borrow();
+                guard.as_ref().map(|worker| {
+                    (worker.audio_output_metrics(), worker.audio_output_error())
+                })
+            };
             // QPC shares the timestamp domain used by PresentMon --qpc_time.
             // This marker is diagnostic only and never participates in frame pacing.
             let (qpc_ticks, qpc_frequency, qpc_available) = self
@@ -996,6 +1002,25 @@ mod windows_host {
                 runtime.command_handler_p95_ns / 1_000,
                 machine_clock_hz,
             );
+
+            if let Some((audio, output_error)) = audio_output {
+                eprintln!(
+                    "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames={} consumed_frames={} dropped_frames={} dropped_blocks={} underrun_frames={} underrun_events={} flushed_frames={} output_error={:?}",
+                    u8::from(audio.sample_rate_hz > 0),
+                    audio.sample_rate_hz,
+                    audio.queue_capacity_frames,
+                    audio.queue_queued_frames,
+                    audio.queue_high_water_frames,
+                    audio.accepted_frames,
+                    audio.consumed_frames,
+                    audio.dropped_frames,
+                    audio.dropped_blocks,
+                    audio.underrun_frames,
+                    audio.underrun_events,
+                    audio.flushed_frames,
+                    output_error,
+                );
+            }
 
             self.started = Instant::now();
             self.last_poll = None;
@@ -1291,9 +1316,7 @@ mod windows_host {
     }
 
     fn video_only_capture_enabled() -> bool {
-        video_only_capture_requested(
-            std::env::var("SEGA_EMULATOR_VIDEO_ONLY").ok().as_deref(),
-        )
+        video_only_capture_requested(std::env::var("SEGA_EMULATOR_VIDEO_ONLY").ok().as_deref())
     }
 
     /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
