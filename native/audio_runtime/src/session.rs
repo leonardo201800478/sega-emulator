@@ -59,8 +59,8 @@ impl AudioOutputMetrics {
 
 /// Host-output boundary consumed by the Rust audio session.
 pub trait PcmSink {
-    /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
-    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
+    /// Enqueue one mono normalized-f64 PCM block; endpoint-format conversion is deferred to the host callback.
+    fn write_samples(&mut self, samples: Vec<f64>) -> Result<(), String>;
 
     /// Suspend the host stream and invalidate PCM still queued in the
     /// application-owned transport before acknowledging a lifecycle transition.
@@ -160,9 +160,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
         self.mixer
             .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
-        let pcm = self.resampler.process(&self.mixed_samples);
-        if publish && !pcm.is_empty() {
-            self.sink.write_pcm(pcm)?;
+        let samples = self.resampler.process(&self.mixed_samples);
+        if publish && !samples.is_empty() {
+            self.sink.write_samples(samples)?;
         }
         Ok(())
     }
@@ -247,9 +247,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
             // Closing must not publish a resampler tail into that invalidated epoch.
             self.resampler.reset();
         } else {
-            let tail = self.resampler.flush();
-            if !tail.is_empty() {
-                let _ = self.sink.write_pcm(tail);
+            let tail_samples = self.resampler.flush();
+            if !tail_samples.is_empty() {
+                let _ = self.sink.write_samples(tail_samples);
             }
         }
         self.sink.close();
@@ -269,7 +269,7 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingSink {
-        blocks: Vec<Vec<u8>>,
+        blocks: Vec<Vec<f64>>,
         underruns: u64,
         dropped: u64,
         closed: bool,
@@ -279,11 +279,11 @@ mod tests {
     }
 
     impl PcmSink for RecordingSink {
-        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        fn write_samples(&mut self, samples: Vec<f64>) -> Result<(), String> {
             if self.closed {
                 return Err("sink is closed".to_owned());
             }
-            self.blocks.push(pcm);
+            self.blocks.push(samples);
             Ok(())
         }
 
