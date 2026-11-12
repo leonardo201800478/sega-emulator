@@ -1,3 +1,7 @@
+# Registro histórico — runtime de áudio nativo anterior
+
+> **Status:** SUPERSEDED como arquitetura-alvo pela ADR 0011. O runtime digital/PCM permanece reutilizável; os adaptadores de saída anteriores só podem ser removidos após integração e validação CPAL (R3) e corte R5.
+
 # Runtime de áudio nativo — arquitetura e migração
 
 > **ORDEM DIRETA OBRIGATÓRIA:** todo código executável de áudio, lógica de chips, temporização, DSP, mixer, resampling, buffers e integração com APIs de saída deve ser implementado em Rust. Python é permitido somente para frontend Qt/PySide6, configuração, comandos coarse-grained, diagnóstico, testes e ferramentas. É proibido usar Python como runtime, fallback de hardware ou processador PCM. Consulte a [ordem arquitetural obrigatória — áudio exclusivamente em Rust](audio-rust-only-directive.md).
