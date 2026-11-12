@@ -133,6 +133,21 @@ O pico caiu 0,0243% no SMS e 1,8384% no SG-1000. Todas as capturas tiveram 48.00
 
 O NRMSE de aproximadamente 5,3% e o erro máximo próximo de 0,096 demonstram uma mudança de forma de onda mensurável entre baseline e atual, apesar da correlação alta. Isso **não determina qual versão soa melhor**: ainda é necessário localizar em quais bandas e transientes a diferença ocorre e fazer escuta controlada. O relatório JSON/Markdown e os seis WAVs estão no artefato acima.
 
+**Análise espectral inicial (FFT radix-2 com janela Hann):** nova captura [#43258136796](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796), artefato [psg-audio-ab-reference](https://github.com/leonardo201800478/sega-emulator/actions/runs/43258136796/artifacts/13962591609).
+
+| Banda | Delta SMS | Delta SG-1000 |
+|---|---:|---:|
+| 20–200 Hz | -0,009 dB | -0,007 dB |
+| 200 Hz–1 kHz | +0,001 dB | -0,000 dB |
+| 1–4 kHz | -0,004 dB | -0,005 dB |
+| 4–8 kHz | -0,017 dB | -0,010 dB |
+| 8–12 kHz | -0,047 dB | -0,037 dB |
+| 12–16 kHz | -0,177 dB | -0,168 dB |
+| 16–20 kHz | -0,139 dB | -0,132 dB |
+| 20–24 kHz | -0,985 dB | -0,910 dB |
+
+O centróide espectral diminuiu 13,328 Hz no SMS e 12,459 Hz no SG-1000. A diferença concentra-se nas bandas altas, sobretudo 20–24 kHz; as bandas até 8 kHz praticamente não mudam neste trace. Isso é compatível com maior suavização da reconstrução fracionária, mas não prova que ela cause a percepção subjetiva do usuário: é preciso separar transientes, tons e ruído e também auditar o caminho downstream (resampler/mixer/PCM16).
+
 **Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
