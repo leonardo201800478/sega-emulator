@@ -35,7 +35,7 @@ Merge de R1/R2 não prova áudio físico, input SDL3, paridade integral de front
 A auditoria da árvore main em 2026-11-12 encontrou:
 
 - native/sega_app: shell anterior ainda presente e com integração ao runtime/host gráfico anterior.
-- native/video_runtime: módulo de apresentação Windows ainda expõe implementação anterior; há consumidores em código do shell/worker.
+- native/video_runtime: `FrameMailbox`/`VideoFrame` permanecem portáveis; o módulo D3D12 e diagnósticos Windows ficam isolados pela feature opt-in `d3d12-host`, habilitada somente pelo shell anterior. A retirada física ainda depende de R5.
 - native/audio_output: crate de saída física anterior ainda possui adaptadores Windows e é consumido pelo runtime/integração do shell anterior.
 - native/sega_desktop: caminho Slint/WGPU atual; controles físicos de áudio continuam desabilitados até R3.
 - .github/workflows/ci.yml: existem nomes de checks de compatibilidade exigidos pela proteção da branch; os jobs correspondentes ficam SKIPPED em eventos normais e não validam os hosts antigos.
