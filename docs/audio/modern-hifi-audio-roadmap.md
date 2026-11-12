@@ -120,6 +120,8 @@ cargo run --release -p sega-sn76489 --example psg_trace -- sms current-sms-chunk
 
 O WAV contém a fonte mono crua do PSG, sem dual-mono, volume de host, bass management ou quantização para 24 bits. Assim, a comparação isola o núcleo e seu filtro de reconstrução. A conversão final para WAV float32 serve apenas para inspeção/escuta; os valores e o hash impressos são calculados sobre as amostras `f64`.
 
+A validação `psg-focused` da CI executa automaticamente a captura histórica e atual, compara SMS/SG-1000 e a invariância contínua/segmentada, e publica o artefato `psg-audio-ab-reference` com WAVs e relatórios JSON/Markdown.
+
 **Gate H1:** fixtures reproduzíveis, exportação PCM e relatório A/B. O teste de trace e o exportador estão adicionados; o gate permanece aberto até executar a captura histórica e analisar quantitativamente os arquivos. Nenhuma troca de algoritmo antes desse gate.
 
 ### H2 — Fechamento da síntese e reconstrução
