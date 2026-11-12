@@ -741,16 +741,12 @@ mod tests {
             .sum()
     }
 
-    fn render_lagrange4_tone(
-        period: u16,
-        max_advance_chunk: Option<u64>,
-    ) -> Vec<f64> {
+    fn render_lagrange4_tone(period: u16, max_advance_chunk: Option<u64>) -> Vec<f64> {
         const CLOCK_HZ: u64 = 3_579_545;
         const SAMPLE_RATE: u64 = 48_000;
         const TOTAL_CLOCKS: u64 = 4_000_000;
 
-        let mut psg =
-            Sn76489::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
+        let mut psg = Sn76489::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
         psg.write_inner(0x80 | (period as u8 & 0x0f));
         psg.write_inner((period >> 4) as u8);
         psg.write_inner(0x90);
@@ -784,8 +780,7 @@ mod tests {
                         filtered_output_at_delay(&psg, 1),
                         filtered_output_at_delay(&psg, 0),
                     ];
-                    let increment =
-                        u128::from(SAMPLE_RATE) * u128::from(super::CLOCK_DIVIDER);
+                    let increment = u128::from(SAMPLE_RATE) * u128::from(super::CLOCK_DIVIDER);
                     for sample_index in 0..sample_count {
                         let crossing = u128::from(CLOCK_HZ - previous_phase)
                             + u128::from(sample_index) * u128::from(CLOCK_HZ);
@@ -799,10 +794,7 @@ mod tests {
         output
     }
 
-    fn write_experiment_float_wav(
-        path: &std::path::Path,
-        samples: &[f64],
-    ) -> std::io::Result<()> {
+    fn write_experiment_float_wav(path: &std::path::Path, samples: &[f64]) -> std::io::Result<()> {
         use std::io::Write;
 
         const SAMPLE_RATE: u32 = 48_000;
@@ -842,7 +834,10 @@ mod tests {
                 .map(|sample| sample.abs())
                 .fold(0.0_f64, f64::max);
             assert!(peak > 0.001, "period={period}: experimental tone is silent");
-            assert!(peak < 1.0, "period={period}: unexpected Lagrange overshoot {peak}");
+            assert!(
+                peak < 1.0,
+                "period={period}: unexpected Lagrange overshoot {peak}"
+            );
 
             if period == 5 {
                 let chunked = render_lagrange4_tone(period, Some(997));
