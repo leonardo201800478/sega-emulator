@@ -212,3 +212,74 @@ A documentação SMS Power é a referência primária comunitária utilizada par
 | Fechamento PSG A1 | IN PROGRESS |
 
 Nenhum resultado de CI anterior é transferido para commits novos. A implementação permanece inalterada nesta etapa documental.
+
+
+## 9. A1.1 — atualização da auditoria e confronto de referências (2026-11-12)
+
+**Baseline de código:** `main` em `3703b9d5b12e654d4f2a50e6ebb9d12915b4c1f1`.
+**Core auditado:** `native/sn76489/src/psg.rs`, blob `55e1f856ae172026d53de979f55ed81beee37ad5`.
+**Branch de trabalho:** `feat/psg-a1-closure-20261112`.
+**Escopo desta atualização:** somente auditoria documental e comparação de fontes. Nenhum comportamento do runtime foi alterado.
+
+### 9.1 Evidência confirmada na documentação SMS Power
+
+A página técnica SMS Power distingue o PSG discreto SN76489AN dos PSGs Sega integrados ao VDP. Para o comportamento documentado da família:
+
+- O registrador de tom define o valor de recarga do contador; a onda quadrada tem período de duas vezes esse valor.
+- A página afirma explicitamente que valores de tom 0 e 1 produzem saída constante +1.
+- O contador do ruído usa divisores 0x10, 0x20, 0x40 ou Tone 2.
+- O LFSR avança quando sua entrada muda de 0 para 1, uma vez a cada duas expirações do contador relacionado.
+- Para SMS, o LFSR tem 16 bits; o ruído branco usa taps 0 e 3 (máscara 0x0009), com feedback no bit 15.
+
+Fonte: https://www.smspower.org/Development/SN76489 — seções “Tone channels”, “Noise channel” e “The Linear Feedback Shift Register”.
+
+### 9.2 Divergência que impede fechar os períodos 0/1
+
+A implementação atual do core executa:
+
+```rust
+if period <= 1 {
+    self.tone_outputs[channel] = 1;
+    self.tone_counters[channel] = period;
+}
+```
+
+Esse comportamento coincide com a descrição textual do SMS Power para valores 0 e 1.
+
+Entretanto, a implementação atual do MAME para `segapsg_device` documenta que PSGs Sega tratam frequência 0 como zero, e sua atualização de canal alterna a saída quando o contador chega a zero. Isso produz comportamento diferente da saída constante descrita pelo SMS Power. O código MAME identifica essa semântica como verificada em hardware, mas é uma implementação de referência, não uma medição reproduzida neste projeto.
+
+Fonte: https://github.com/mamedev/mame/blob/master/src/devices/sound/sn76496.cpp — comentários de variante Sega, construtor `segapsg_device`, atualização de registradores e rotina `sound_stream_update`.
+
+**Decisão A1.1:** não alterar a implementação nem transformar o comportamento atual em PASS. A semântica SMS de período 0/1 permanece **CONFLICT / ORACLE REQUIRED** até que a diferença de variante/revisão ou a evidência de hardware seja reconciliada. O perfil SG-1000 não deve herdar automaticamente a regra Sega.
+
+### 9.3 Noise Rate = Tone 2 — o que foi e não foi provado
+
+O core atual mantém `noise_counter` e `noise_counter_phase` próprios. Quando Noise Rate = Tone 2, `refresh_noise_period()` copia `tone_periods[2].max(1)`; a rotina de tick alterna a fase do contador de ruído e desloca o LFSR em uma das duas expirações. Assim, a taxa média de deslocamento corresponde a duas vezes o período de Tone 2.
+
+A implementação MAME também representa esse modo como período de ruído igual a duas vezes o período de Tone 2. Isso dá suporte à relação de frequência média, mas não demonstra que a fase inicial e as transições após escritas/reset sejam idênticas às do VDP Sega. A descrição SMS Power explica a divisão por duas expirações, mas não especifica todos os alinhamentos de fase após cada sequência de escrita.
+
+**Decisão A1.1:** preservar o contador independente por enquanto. A1.3 deve produzir traces comparativos de expiração, transição do flip-flop Tone 2 e shift do LFSR para reset, escrita de Noise, escrita de Tone 2 e avanço interrompido em boundaries. Não conectar diretamente o LFSR ao flip-flop Tone 2 sem evidência adicional.
+
+### 9.4 Saída do LFSR — convenção temporal a fixar
+
+A descrição SMS Power diz que o bit deslocado para fora do registrador é encaminhado ao mixer, enquanto o pseudocódigo apresentado na mesma página atualiza o registrador e depois lê o novo bit 0. O core atual captura o bit 0 anterior ao shift em `noise_output`. Implementações MAME também atualizam a saída após deslocar o registrador.
+
+Essa diferença pode decorrer da convenção de direção/representação do registrador, mas não deve ser resolvida por equivalência presumida. A1.2 deve congelar uma sequência de estados **e** bits de saída por transição, com a convenção de indexação explicitada, e confrontá-la com uma referência independente do perfil Sega de 16 bits.
+
+**Decisão A1.1:** a sequência de estados SMS existente continua coberta por teste interno; a sequência temporal de saída do bit permanece **ORACLE REQUIRED**.
+
+### 9.5 Resultado desta etapa
+
+| Item | Resultado A1.1 |
+|---|---|
+| Baseline e blob do core identificados | PASS |
+| Separação de variante discreta e Sega integrada | PASS |
+| Protocolo, divisores e taps documentados | PASS — documentação de referência |
+| Períodos 0/1 | CONFLICT / ORACLE REQUIRED |
+| Fase Noise Rate = Tone 2 | PARTIAL / TRACE REQUIRED |
+| Convenção temporal do bit de saída LFSR | CONFLICT / ORACLE REQUIRED |
+| Novos testes de código | NOT RUN |
+| Cargo fmt / Clippy / testes | NOT RUN |
+| Validação física Master System | BLOCKED / NOT RUN |
+
+A1.1 está concluída como **atualização do inventário de evidências**, não como fechamento do PSG. A próxima alteração de código deve ser A1.2: vetores diferenciais independentes para registradores, tom, ruído, saída do LFSR, volume e reset. Nenhuma correção do core deve preceder a definição explícita do oráculo correspondente.
