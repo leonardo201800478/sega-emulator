@@ -198,17 +198,15 @@ impl FramePacingWindow {
         if self.len == 0 {
             return None;
         }
-        let last =
-            (self.next + FRAME_PACING_WINDOW_CAPACITY - 1) % FRAME_PACING_WINDOW_CAPACITY;
+        let last = (self.next + FRAME_PACING_WINDOW_CAPACITY - 1) % FRAME_PACING_WINDOW_CAPACITY;
         Some(&mut self.samples[last])
     }
 
     fn record_actual_wait(&mut self, elapsed: Duration) {
         let elapsed_ns = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
         if let Some(sample) = self.last_sample_mut() {
-            sample.pacing_wait_elapsed_ns = sample
-                .pacing_wait_elapsed_ns
-                .saturating_add(elapsed_ns);
+            sample.pacing_wait_elapsed_ns =
+                sample.pacing_wait_elapsed_ns.saturating_add(elapsed_ns);
         }
     }
 
@@ -290,10 +288,7 @@ impl FramePacingWindow {
             .iter()
             .map(|sample| sample.frame_budget_ns)
             .collect();
-        let mut audio_samples: Vec<_> = samples
-            .iter()
-            .map(|sample| sample.audio_samples)
-            .collect();
+        let mut audio_samples: Vec<_> = samples.iter().map(|sample| sample.audio_samples).collect();
         let mut timeout_lateness: Vec<_> = samples
             .iter()
             .filter(|sample| sample.pacing_timeout_count > 0)
@@ -1520,9 +1515,8 @@ fn worker_loop(
             let wait_started = Instant::now();
             let wait_result = commands.recv_timeout(timeout);
             let wait_finished = Instant::now();
-            telemetry.record_actual_pacing_wait(
-                wait_finished.saturating_duration_since(wait_started),
-            );
+            telemetry
+                .record_actual_pacing_wait(wait_finished.saturating_duration_since(wait_started));
             match wait_result {
                 Ok(command) => {
                     let remaining = wait_deadline
