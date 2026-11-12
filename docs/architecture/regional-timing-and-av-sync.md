@@ -49,7 +49,7 @@ Separar três domínios:
 
 1. **Tempo de hardware:** CPU, VDP e chips de áudio avançam de forma determinística a partir dos clocks e eventos do console.
 2. **Geração digital de áudio:** o PSG/FM processa registradores, divisores, osciladores, envelopes e ruído no tempo emulado; a amostragem é derivada desse tempo, com conversão explicitamente definida.
-3. **Dispositivo de áudio host:** WASAPI, XAudio2 ou SDL3 consome PCM numa frequência como 44,1 ou 48 kHz. Essa frequência não é um clock histórico do console e não pode reprogramar o PSG/FM.
+3. **Dispositivo de áudio host:** CPAL consome PCM numa frequência negociada com o dispositivo, como 44,1 ou 48 kHz. Essa frequência não é um clock histórico do console e não pode reprogramar o PSG/FM.
 
 Requisitos:
 
