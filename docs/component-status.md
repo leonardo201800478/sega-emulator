@@ -1,19 +1,19 @@
-# Status dos componentes — 2026-11-08
+# Status dos componentes — revisão 2026-11-12
 
-**Baseline:** `main` = `9731b37098e7937fa92fffc15007a7c79aac4e4c`.
+**Revisão:** arquitetura desktop normativa conforme ADR 0011; estados de PR/workflow devem ser reconsultados no GitHub no SHA candidato.
 **Regra:** descreve somente código integrado na main; PRs abertas, evidência manual e validação física são classificadas separadamente.
 
 | Componente | Estado integrado na main | Pendências / evidência |
 |---|---|---|
 | Produto / toolchain | Rust-only; toolchain fixada em `rust-toolchain.toml` | Gates devem ser reexecutados no HEAD candidato |
-| Aplicação egui/eframe | Shell nativo e integração SMS na main | UI é apresentação/comandos coarse-grained; validação Windows ainda parcial |
+| Aplicação desktop Slint | Desktop Slint/WGPU com frames SMS integrado (R2) | CPAL R3, SDL3 R4 e consolidação R5 pendentes |
 | Z80 compartilhado | Um núcleo Rust compartilhado | E7.7 IN_PROGRESS; E8 BLOCKED; consultar scorecard e matriz DD/FD |
 | MachineScheduler | Núcleo e testes determinísticos integrados | Stress do Scheduler não comprova sincronismo físico do áudio nem TEMPORAL_PASS sistêmico |
 | SMS core temporal | Base temporal Rust integrada | Precisão VDP ainda parcial; WAIT por fixture; Save States persistentes completos pendentes |
 | SMS runtime worker | Worker Rust puro integrado | Lifecycle e áudio físico precisam de validação no mesmo SHA |
 | Vídeo / Slint + WGPU | Frames SMS integrados ao desktop Slint/WGPU (R2) | Validação física Vulkan e campanha de frame pacing continuam exigindo captura Windows Release; ver plano R2 |
 | Áudio / PSG | SN76489 e geração PCM no runtime Rust | Saída física CPAL 0.18.2 ainda não integrada (R3); não declarar áudio físico concluído |
-| Input | Teclado e SDL3 integrados ao shell | Foco/consumo de teclado requer teste Windows; gamepad físico/hotplug NOT RUN |
+| Input | Runtime de entrada existente | SDL3 na arquitetura desktop-alvo aguarda R4; teclado/gamepad físico NOT RUN |
 | SG-1000 | Implementação preservada fora da trilha de expansão SMS atual | Regressão obrigatória em cada alteração compartilhada; não criar fallback duplicado |
 | ZEXDOC / ZEXALL | NOT RUN | E8 bloqueada até fechamento E7 e harness Rust completo |
 | Python / Qt / PyO3 / Maturin | Fora da arquitetura ativa | Não reintroduzir em runtime, tooling, CI ou distribuição |
@@ -33,11 +33,11 @@ Consultar [scorecard de confiabilidade de áudio](audio/audio-reliability-scorec
 | Referência | Estado em 2026-11-08 | Consequência |
 |---|---|---|
 | [PR #752](https://github.com/leonardo201800478/sega-emulator/pull/752) | MERGED | Integração de frames SMS no desktop Slint/WGPU (R2) |
-| [PR #614](https://github.com/leonardo201800478/sega-emulator/pull/614) | MERGED | Áudio nativo e controles integrados; não é aceite físico |
+| [PR #754](https://github.com/leonardo201800478/sega-emulator/pull/754) | MERGED | Preferências persistentes e histórico de ROMs no desktop Slint |
 | [PR #657](https://github.com/leonardo201800478/sega-emulator/pull/657) | CLOSED / NOT MERGED | Não atribuir a esta PR a integração do código atual |
 | [PR #658](https://github.com/leonardo201800478/sega-emulator/pull/658) | MERGED | Descarte da cauda do resampler após invalidação de epoch |
 | [PR #661](https://github.com/leonardo201800478/sega-emulator/pull/661) | MERGED | Amostragem SN76489 em posições fracionárias do clock de saída |
-| [PR #666](https://github.com/leonardo201800478/sega-emulator/pull/666) | OPEN / CI SUCCESS | Correções de falha/telemetria; validação física pendente |
+| R3 — CPAL | PENDING | Saída física, dispositivos, formatos, lifecycle e validação de áudio ainda não integrados |
 | [PR #643](https://github.com/leonardo201800478/sega-emulator/pull/643) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #644](https://github.com/leonardo201800478/sega-emulator/pull/644) | OPEN / mergeable=false | Base antiga; não integrada |
 | [PR #645](https://github.com/leonardo201800478/sega-emulator/pull/645) | OPEN / mergeable=false | Base antiga; não integrada |
