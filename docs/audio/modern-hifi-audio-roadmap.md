@@ -1,11 +1,11 @@
 # Plano Modern Hi-Fi — SMS e SG-1000
 
-**Status:** H2 concluído como investigação experimental; H3 em implementação para padronizar a linha PCM interna em 48 kHz. O renderer event-based H2 continua exclusivamente em testes e não foi promovido à produção.
-**Branch de trabalho H3:** `feat/h3-pcm-48khz-explicit-rates-20261112`
-**Baseline de main:** `1f3f30a9d198bb65212388ced220cc4ea7499a5c` (merge da PR #773, 2026-11-12).
+**Status:** H2 concluído como investigação experimental; H3 (fonte PCM interna de 48 kHz) integrado na main pela PR #774. CPAL 0.18.2 integrado pela PR #770. A1 PSG permanece parcial; H4 ainda não implementado em produção.
+**Integração H3:** PR #774 — merge commit `f5a0b691824322ce56c1a921329d3aa0957c4963`.
+**Baseline de main:** `f5a0b691824322ce56c1a921329d3aa0957c4963` (merge da PR #774, 2026-11-12).
 **Baseline sonora anterior de comparação:** `f47f71830344b85f72329376505d400bfbfaae69`.
 **Escopo inicial:** SN76489, pipeline PCM, saída nativa e preparação para CPAL 0.18.2.
-**Não autoriza merge:** toda implementação será submetida a PR e validada antes de qualquer integração.
+**Integração contínua:** mudanças validadas devem ser integradas em incrementos curtos na main; branches divergentes exigem portabilidade seletiva e CI no HEAD atual.
 
 ## 1. Diretriz do produto
 
@@ -314,3 +314,14 @@ O kernel tem 65 taps, atraso de grupo de 31,25 amostras, lookahead causal estima
 ### H3 — execução após o merge de H2
 
 H3 foi iniciado em branch própria, sem dependência do renderer H2 experimental. A implementação separa taxa de geração PCM interna de taxa física negociada, mantendo `MachineScheduler` como autoridade temporal. Os gates H4–H6 permanecem inalterados.
+
+
+## 10. Reconciliação operacional — 2026-11-12
+
+- CPAL 0.18.2 foi integrado pela PR #770 (merge anterior à H3).
+- H3 foi concluído e integrado pela PR #774 em `f5a0b691824322ce56c1a921329d3aa0957c4963`. A fonte interna SMS/SG-1000 é 48 kHz e a taxa do endpoint é explícita; a taxa PCM não altera a progressão do Scheduler.
+- H2 permanece fechado como investigação, não como aprovação de renderer alternativo. A PR #772 adiciona modelagem/testes test-only, tem CI verde no HEAD `2ec2d54a80de0d142a8868552c7c82abb74a903f`, mas está divergente da main (70 commits atrás); portar seletivamente se houver ganho comprovado.
+- A1 está em andamento na PR #767. CI estava verde no HEAD consultado, mas há gaps de oráculo e validação física; não declarar fechamento.
+- H4 deve implementar negociação adaptativa de formatos e taxas CPAL sem exigir 24 bits: PCM16 permanece fallback obrigatório; I24/F32 e taxas maiores são usados apenas quando anunciados pelo dispositivo. Preservar precisão interna e conversão na fronteira do endpoint.
+- A estabilidade temporal #755 precisa ser caracterizada antes de correções de áudio que possam mascarar jitter do Scheduler/worker/present.
+- A arquitetura futura multissistema (SG-1000, SMS, Game Gear e Mega Drive) usará core digital comum com perfis de placa/clock/roteamento próprios. Não iniciar até A1/H4 e dependências atuais estarem em condição adequada.
