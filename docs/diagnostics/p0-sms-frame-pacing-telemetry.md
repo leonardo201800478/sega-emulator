@@ -64,7 +64,7 @@ The host report is deliberately explicit that physical present timestamps are un
 
 The physical QPC pilot (2026-11-12) showed stable virtual ticks per frame but a lower wall-clock worker cadence than the regional nominal cadence. The existing one-second summaries do not pair each frame's target budget with the actual timeout wakeup, so they cannot distinguish OS wakeup lateness from command-handler time or variable frame processing.
 
-The next diagnostic increment adds bounded, rolling worker fields:
+This diagnostic increment adds bounded, rolling worker fields:
 
 - frame_budget_p50/p95/p99_us: target host duration derived from the number of PSG samples drained for each completed frame;
 - psg_samples_p50/p95/p99: generated sample count per completed frame, needed to verify the budget input;
