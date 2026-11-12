@@ -193,8 +193,8 @@ impl PcmResampler {
     }
 
     fn emit(&mut self, flushing: bool) -> Vec<u8> {
-        let target =
-            (self.real as f64 * self.output_rate as f64 / self.input_rate as f64).round_ties_even() as usize;
+        let target = (self.real as f64 * self.output_rate as f64 / self.input_rate as f64)
+            .round_ties_even() as usize;
         let mut output = Vec::new();
 
         loop {
@@ -253,7 +253,12 @@ mod tests {
 
     #[test]
     fn pcm16_clips_and_scales() {
-        let mut resampler = PcmResampler::new(DEFAULT_TEST_INPUT_RATE, DEFAULT_TEST_INPUT_RATE, 100).unwrap();
+        let mut resampler = PcmResampler::new(
+            DEFAULT_TEST_INPUT_RATE,
+            DEFAULT_TEST_INPUT_RATE,
+            100,
+        )
+        .unwrap();
         let bytes = resampler.process(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         let values: Vec<i16> = bytes
             .as_chunks::<2>()
