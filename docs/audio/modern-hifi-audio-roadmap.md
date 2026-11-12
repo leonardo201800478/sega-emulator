@@ -92,8 +92,8 @@ A auditoria não encontrou prova de que a condição temporária zero nos ticks 
 **Status: CONCLUÍDO — captura histórica integral e determinismo comprovados pela CI.**
 
 1. [x] Criar trace determinístico de registradores e clocks no teste do core, sem ROM comercial: tons 0–2, volumes, ruído branco e mudanças de registradores durante a execução.
-2. [x] Gerar PCM determinístico de teste para SMS e SG-1000 a 48 kHz com três tons, ruído branco e alterações de volume/controle durante a execução. A saída é comparada entre avanço contínuo e avanço segmentado em blocos de 997 clocks. [ ] Exportar os mesmos traces para WAV/PCM bruto para comparação externa.
-3. [ ] Capturar e comparar o mesmo trace no baseline `f47f718` e na implementação atual; o teste atual valida determinismo, não constitui ainda comparação A/B histórica.
+2. [x] Gerar PCM determinístico de teste para SMS e SG-1000 a 48 kHz com três tons, ruído branco e alterações de volume/controle durante a execução. A saída é comparada entre avanço contínuo e avanço segmentado em blocos de 997 clocks. [x] Exportar os mesmos traces para WAV/PCM bruto para comparação externa.
+3. [x] Capturar e comparar o mesmo trace no baseline `f47f718` e na implementação atual; o artefato A/B integral foi publicado.
 4. Registrar WAV/PCM bruto, taxa, perfil, clock, sequência de writes e SHA do código.
 5. Comparar RMS, pico, DC offset, frequência, resposta espectral, aliasing, transientes, ruído, clipping e erro normalizado.
 6. Testar execução contínua versus blocos arbitrários e verificar igualdade bit a bit do estado e da sequência produzida.
