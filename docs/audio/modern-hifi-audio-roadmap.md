@@ -216,6 +216,8 @@ Na revisão do commit de referência 1be9a12b82cae84ddd6f9b7006d546abe2d58bd4 fo
 - Eventos de delta de amplitude enviados em timestamps fracionários (offset_resampled).
 - Kernel derivado de sinc com janela, integração/diferenciação para representar transições e correção da soma por fase.
 - A síntese não equivale a interpolar linearmente duas amostras FIR.
+- No oscilador quadrado, a referência ignora a saída de tom para períodos efetivos ≤128 (frequências de 16 kHz ou superiores), mas continua atualizando a fase. Isso é uma política de reconstrução/anti-aliasing do emulador, não uma regra digital que deva ser copiada para o SN76489.
+- O gerador de ruído usa seed 0x8000 e feedback 0x9000 no perfil SMS dessa revisão, com eventos temporizados pelo período selecionado.
 
 O protótipo local de 65 taps/256 fases é uma experiência independente, **não uma reprodução do kernel Gearsystem**. Seu primeiro relatório mostrou ringing/overshoot e undershoot excessivos (aproximadamente 13,3% no degrau), além de energia fundamental excessiva em tons próximos de Nyquist. Foi rejeitado como candidato de produção.
 
