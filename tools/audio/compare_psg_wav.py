@@ -157,12 +157,19 @@ def main() -> None:
         baseline = traces[f"{profile}_baseline"]
         current = traces[f"{profile}_current"]
         chunked = traces[f"{profile}_chunked"]
+        baseline_comparison = compare(baseline, current)
+        chunk_comparison = compare(current, chunked)
+        if not baseline_comparison["sample_count_equal"]:
+            raise ValueError(f"{profile}: baseline/current sample counts differ")
+        if not chunk_comparison["exactly_equal"]:
+            raise ValueError(f"{profile}: continuous and segmented PCM differ")
+
         report["profiles"][profile] = {
             "baseline": summarize(baseline, sample_rate),
             "current": summarize(current, sample_rate),
             "current_chunked": summarize(chunked, sample_rate),
-            "baseline_vs_current": compare(baseline, current),
-            "current_vs_chunked": compare(current, chunked),
+            "baseline_vs_current": baseline_comparison,
+            "current_vs_chunked": chunk_comparison,
         }
 
     args.json.parent.mkdir(parents=True, exist_ok=True)
