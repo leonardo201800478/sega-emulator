@@ -384,7 +384,7 @@ fn event_reconstruction_is_chunk_invariant_and_compared_with_linear_output() {
             assert!(es.peak<1.0);
             assert!(ss.peak<1.0);
             let hz=CLOCK as f64/(32.0*f64::from(period));
-            report.push_str(&format!("{},{},{:.9},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},64\n",
+            report.push_str(&format!("{},{},{:.9},{},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},{:.12},48\n",
                 name(profile),period,hz,events,amplitude(&linear,hz),amplitude(&event,hz),amplitude(&sinc,hz),thd(&linear,hz),thd(&event,hz),thd(&sinc,hz),ls.peak,es.peak,ss.peak,es.mean,es.max_delta));
             if [5,14,56].contains(&period) {
                 wavs.push((format!("event-{}-p{}.wav",name(profile),period),event.clone()));
