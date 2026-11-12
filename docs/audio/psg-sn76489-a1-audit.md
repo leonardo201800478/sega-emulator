@@ -366,3 +366,40 @@ O teste não compara a fase inicial absoluta com hardware e não prova acoplamen
 | Relação elétrica com flip-flop Tone 2 do VDP | NOT PROVEN |
 
 A1.3 permanece **PARTIAL** até que a fase absoluta seja reconciliada com evidência independente ou captura de hardware. O contador de ruído independente permanece preservado; não deve ser substituído por conexão direta ao flip-flop de Tone 2 com base apenas na equivalência de frequência média.
+
+
+## 12. A1.4 — DTO versionado e restauração in-memory (2026-11-12)
+
+**Implementação:** `native/sn76489/src/psg.rs`, API exportada por `native/sn76489/src/lib.rs`.
+**Versão do schema:** `SN76489_STATE_FORMAT_VERSION = 1`.
+
+### 12.1 Conteúdo preservado
+
+`Sn76489StateV1` captura:
+- perfil físico, clock e sample rate;
+- registradores de tom/atenuação/ruído e registrador latched;
+- contadores e saídas dos três canais de tom;
+- contador/fase do divisor de ruído, LFSR e saída de ruído;
+- fase do divisor de clock e fase fracionária de amostragem;
+- contador de samples descartados;
+- histórico FIR e cursor;
+- filas PCM pendentes, incluindo a fila interna de renderização.
+
+Os coeficientes FIR não são duplicados no DTO: são reconstruídos deterministicamente a partir do par imutável `clock_hz/sample_rate`. O histórico e o cursor — que carregam a memória temporal do filtro — são preservados.
+
+### 12.2 API e invariantes
+
+- `snapshot_state()` captura o estado completo.
+- `Sn76489Core::from_state(state)` constrói uma instância restaurada.
+- `restore_state(state)` valida e substitui atomicamente; em erro, o dispositivo ativo permanece inalterado.
+- Validação rejeita versão desconhecida, perfil LFSR inválido, valores fora da largura dos registradores, fases fora do domínio, período de ruído inconsistente, buffers incompatíveis e amostras não finitas.
+
+### 12.3 Testes adicionados
+
+- `versioned_state_round_trip_preserves_arbitrary_pipeline_phase`: round-trip após avanço não alinhado ao divisor 16, com fase de amostragem não nula, FIR aquecido e PCM pendente; compara estados após avanços adicionais em blocos diferentes.
+- `invalid_versioned_state_is_rejected_without_mutating_live_device`: versão desconhecida e restauração atômica.
+- `invalid_lfsr_state_is_rejected_without_partial_restore`: rejeição de estado impossível sem mutação parcial.
+
+### 12.4 Limite atual
+
+<badge>PARTIAL</badge> O DTO versionado e a restauração in-memory foram implementados; a serialização binária canônica (magic, comprimento, checksum e decode estrito) ainda não foi adicionada. A1.4 só poderá ser promovida a PASS depois do codec, dos testes de corrupção/truncamento e do CI no mesmo SHA. A validação física continua separada.
