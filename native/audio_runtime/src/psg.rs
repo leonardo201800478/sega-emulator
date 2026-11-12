@@ -159,7 +159,7 @@ mod tests {
     fn scheduler_is_the_only_source_of_psg_clock_advances() {
         let domain = ClockDomainId(7);
         let mut scheduler = MachineScheduler::<u8>::new();
-        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
+        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 48_000).unwrap();
         psg.register_clock_domain(&mut scheduler, ClockRatio::new(1, 3).unwrap())
             .unwrap();
         scheduler
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn psg_rejects_clock_advances_from_another_device() {
         let mut psg =
-            ScheduledPsg::new(ClockDomainId(7), PsgProfile::Sms, 3_579_545, 44_100).unwrap();
+            ScheduledPsg::new(ClockDomainId(7), PsgProfile::Sms, 3_579_545, 48_000).unwrap();
         let mut scheduler = MachineScheduler::<()>::new();
         scheduler
             .register_clock_domain(ClockDomainId(8), ClockRatio::new(1, 3).unwrap())
@@ -288,7 +288,7 @@ mod tests {
     fn scheduled_psg_samples_reach_the_rust_audio_session() {
         let domain = ClockDomainId(7);
         let mut scheduler = MachineScheduler::<u8>::new();
-        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
+        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 48_000).unwrap();
         psg.register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
             .unwrap();
         scheduler
@@ -300,7 +300,7 @@ mod tests {
 
         let sink = RecordingSink::default();
         let blocks = Arc::clone(&sink.blocks);
-        let mut session = NativeAudioSession::new(44_100, 100, sink).unwrap();
+        let mut session = NativeAudioSession::new(48_000, 44_100, 100, sink).unwrap();
         let submitted = psg.submit_pending_audio(&mut session).unwrap();
         assert!(submitted > 0);
         session.close();
