@@ -38,10 +38,19 @@ const TRACE: [(u64, u8); 19] = [
     (14_000_000, 0xF4), // Change noise attenuation.
 ];
 
-fn advance(psg: &mut Sn76489Core, mut clocks: u64, chunk_limit: Option<u64>) {
+fn advance(
+    psg: &mut Sn76489Core,
+    mut clocks: u64,
+    chunk_limit: Option<u64>,
+    samples: &mut Vec<f64>,
+) {
+    const MAX_CAPTURE_CHUNK_CLOCKS: u64 = 16_384;
     while clocks > 0 {
-        let step = chunk_limit.map(|limit| clocks.min(limit)).unwrap_or(clocks);
+        let step = chunk_limit
+            .map(|limit| clocks.min(limit))
+            .unwrap_or_else(|| clocks.min(MAX_CAPTURE_CHUNK_CLOCKS));
         psg.advance_clocks(step);
+        samples.extend(psg.drain_samples(None));
         clocks -= step;
     }
 }
@@ -130,6 +139,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let mut psg = Sn76489Core::new_with_profile(CLOCK_HZ, SAMPLE_RATE, profile)?;
+    let mut samples = Vec::new();
     let total_clocks = if tone_period.is_some() {
         TONE_CLOCKS
     } else {
@@ -142,18 +152,38 @@ fn main() -> Result<(), Box<dyn Error>> {
         psg.write(0xbf); // Mute tone 1.
         psg.write(0xdf); // Mute tone 2.
         psg.write(0xff); // Mute noise.
-        advance(&mut psg, total_clocks, chunk_limit);
+        advance(&mut psg, total_clocks, chunk_limit, &mut samples);
     } else {
         let mut elapsed = 0_u64;
         for (clock, value) in TRACE {
-            advance(&mut psg, clock - elapsed, chunk_limit);
+            advance(
+                &mut psg,
+                clock - elapsed,
+                chunk_limit,
+                &mut samples,
+            );
             psg.write(value);
             elapsed = clock;
         }
-        advance(&mut psg, TOTAL_CLOCKS - elapsed, chunk_limit);
+        advance(
+            &mut psg,
+            TOTAL_CLOCKS - elapsed,
+            chunk_limit,
+            &mut samples,
+        );
     }
 
-    let samples = psg.drain_samples(None);
+    samples.extend(psg.drain_samples(None));
+    let expected_samples = (u128::from(total_clocks) * u128::from(SAMPLE_RATE)
+        / u128::from(CLOCK_HZ)) as usize;
+    if samples.len() != expected_samples {
+        return Err(format!(
+            "PSG sample capture truncated: expected {expected_samples}, got {}",
+            samples.len()
+        )
+        .into());
+    }
+
     let peak = samples
         .iter()
         .map(|sample| sample.abs())
