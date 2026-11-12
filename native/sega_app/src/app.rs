@@ -1030,7 +1030,7 @@ impl SegaApp {
                                     region: &mut self.region,
                                     aspect_ratio: &mut self.aspect_ratio,
                                     audio_state: &mut self.audio_state,
-                                                        audio_volume: &mut self.audio_volume,
+                                    audio_volume: &mut self.audio_volume,
                                     audio_command: &mut actions.audio_command,
                                     viewport: &self.native_viewport,
                                     machine_command: &mut actions.command,
@@ -1273,9 +1273,7 @@ impl SegaApp {
             return;
         };
         let result = match command {
-            AudioCommand::Configure => {
-                configure_audio_output(worker, self.audio_volume)
-            }
+            AudioCommand::Configure => configure_audio_output(worker, self.audio_volume),
             AudioCommand::SetVolume(volume) => worker.set_audio_volume(volume),
             AudioCommand::Disable => worker.close_audio_output(),
         };
@@ -3017,10 +3015,7 @@ fn render_audio_runtime_metrics(ui: &mut egui::Ui, worker: &SmsTemporalWorker) {
     ui.end_row();
 }
 
-fn configure_audio_output(
-    worker: &SmsTemporalWorker,
-    volume: u8,
-) -> Result<(), String> {
+fn configure_audio_output(worker: &SmsTemporalWorker, volume: u8) -> Result<(), String> {
     const BUFFER_FRAMES: u32 = 512;
     const QUEUE_BLOCKS: usize = 8;
     worker.configure_audio_output(
