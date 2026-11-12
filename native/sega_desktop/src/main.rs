@@ -1190,7 +1190,7 @@ mod windows_host {
     fn configure_sms_audio(worker: &SmsTemporalWorker) {
         const BUFFER_FRAMES: u32 = 512;
         const QUEUE_BLOCKS: usize = 8;
-        let result = worker.configure_audio_output(|| {
+        let result = worker.configure_audio_output(|| -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
             let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
             let session = sink.into_audio_session(100)?;
             Ok(Box::new(session))
