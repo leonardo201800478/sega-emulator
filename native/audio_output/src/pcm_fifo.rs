@@ -1,4 +1,4 @@
-//! Bounded single-producer/single-consumer transport for stereo PCM16 frames.
+//! Bounded single-producer/single-consumer transport for normalized f64 stereo frames.
 //!
 //! The queue transports complete stereo frames. It never overwrites unread data:
 //! a full queue rejects the newest frames and reports the exact loss. A consumer
@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering, fence};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
-/// One interleaved stereo PCM16 frame: [left, right].
-pub type StereoFrame = [i16; 2];
+/// One interleaved normalized f64 stereo frame: [left, right].
+pub type StereoFrame = [f64; 2];
 
 /// Errors returned while constructing or using the PCM frame queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,7 +169,7 @@ impl PcmFrameConsumer {
         }
 
         report.silence_frames = output.len() - report.queued_frames;
-        output[report.queued_frames..].fill([0, 0]);
+        output[report.queued_frames..].fill([0.0, 0.0]);
 
         self.metrics
             .consumed_frames
