@@ -2,14 +2,15 @@
 
 **Repositório:** https://github.com/leonardo201800478/sega-emulator
 **Branch de documentação:** `docs/audit-project-status-2026-11-12`
-**Main auditada:** `f5a0b691824322ce56c1a921329d3aa0957c4963`
+**Main auditada na fotografia inicial:** `f5a0b691824322ce56c1a921329d3aa0957c4963`  
+**Main atual após a atualização desta fotografia:** `44e167b7d17973b8d634198951fec298a50dddf7`
 **Escopo:** PRs abertas, issues abertas, workflows associados aos HEADs conhecidos, documentação normativa e estado das trilhas de áudio, Z80 e migração desktop.
 
 > Esta é uma fotografia remota do GitHub. CI PASS significa apenas que os jobs executados passaram no SHA indicado. SKIPPED/queued/NOT RUN não são PASS. Validação física só é considerada realizada quando há evidência de execução no hardware/ambiente correspondente.
 
 ## 1. Resumo executivo
 
-A main está atualizada até o merge da PR #774 (H3 — PCM SMS/SG-1000 com taxa interna explícita de 48 kHz). O backend Rust, o MachineScheduler e o runtime SMS/SG-1000 devem continuar preservados.
+A fotografia inicial estava atualizada até a PR #774. Esta atualização incorpora os merges #775, #776, #780 e #784, com baseline atual `44e167b7d17973b8d634198951fec298a50dddf7`. O backend Rust, o MachineScheduler e o runtime SMS/SG-1000 continuam preservados.
 
 **Entregas integradas relevantes:**
 - PR #747: POC Slint 1.18 + WGPU 30 + Vulkan (R1).
@@ -17,6 +18,10 @@ A main está atualizada até o merge da PR #774 (H3 — PCM SMS/SG-1000 com taxa
 - PR #754: preferências persistentes do desktop.
 - PR #770: saída física CPAL 0.18.2.
 - PR #774: fonte PCM interna SMS/SG-1000 em 48 kHz, taxa de entrada/saída explícita e prova de que a taxa PCM não altera a progressão do Scheduler.
+- PR #775: consolidação documental do estado do projeto.
+- PR #776: preservação de `SpriteLimitMode` após Reset.
+- PR #780: contrato portátil de `FrameMailbox`.
+- PR #784: vetores diferenciais independentes de ruído SMS A1.2/A1.3.
 
 **Conclusão principal:** a base de runtime e as entregas incrementais estão integradas, mas R2 ainda tem aceite manual incompleto; a estabilidade de frame pacing é P0; CPAL está integrado em software, mas validação física prolongada, hotplug e formatos Hi-Fi adaptativos ainda não estão demonstrados; SDL3 e R5 permanecem pendentes.
 
