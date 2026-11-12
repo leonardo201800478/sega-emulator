@@ -94,12 +94,12 @@ pub struct NativeAudioSession<S: PcmSink> {
 }
 
 impl<S: PcmSink> NativeAudioSession<S> {
-    /// Construct a session around an explicitly selected output sink.
+    /// Construct a session with an explicit source rate and negotiated sink rate.
     pub fn new(input_rate: u32, output_rate: u32, volume: u8, sink: S) -> Result<Self, String> {
         Self::with_sink_factory(input_rate, output_rate, volume, || Ok(sink))
     }
 
-    /// Validate DSP configuration before opening the host sink.
+    /// Validate both PCM rates and volume before opening the host sink.
     pub fn with_sink_factory<F>(input_rate: u32, output_rate: u32, volume: u8, make_sink: F) -> Result<Self, String>
     where
         F: FnOnce() -> Result<S, String>,
@@ -328,6 +328,22 @@ mod tests {
 
         assert_eq!(session.sink.blocks, blocks_at_flush);
         assert!(session.sink.closed);
+    }
+
+    #[test]
+    fn session_resamples_48khz_source_to_the_negotiated_44100_endpoint() {
+        let input: Vec<f64> = (0..4_800)
+            .map(|index| 0.5 * (index as f64 * 0.031).sin())
+            .collect();
+        let mut session =
+            NativeAudioSession::new(48_000, 44_100, 100, RecordingSink::default()).unwrap();
+
+        session.process_samples(&input).unwrap();
+        session.close();
+
+        let output_bytes: usize = session.sink.blocks.iter().map(Vec::len).sum();
+        assert_eq!(output_bytes / 2, 4_410);
+        assert!(session.sink.blocks.iter().all(|block| block.len().is_multiple_of(2)));
     }
 
     #[test]
