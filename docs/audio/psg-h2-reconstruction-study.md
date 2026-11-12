@@ -102,3 +102,58 @@ A CI registra, separadamente para SMS e SG-1000, o tempo de captura de eventos, 
 O protótipo atual é deliberadamente offline: armazena a lista completa de eventos e aloca buffers para toda a duração. Não é adequado para callback de áudio nem deve ser promovido diretamente para produção. A resposta simétrica de 65 taps requer lookahead causal aproximado de 32 frames (0,667 ms a 48 kHz). Uma implementação de produção precisaria de fila de eventos limitada e acumulador circular, mantendo o callback CPAL sem locks e sem alocações.
 
 Os tempos de CI são medições de referência, não gates rígidos de performance; variam com runner e carga. A comparação de fator realtime não substitui medição física nem prova de latência ponta a ponta.
+
+
+## 10. Resultados reproduzíveis da CI — 2026-11-12
+
+**Execução:** [CI #43289661184](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661184), concluída com sucesso.  
+**SMS Debugger Runtime:** [#43289661057](https://github.com/leonardo201800478/sega-emulator/actions/runs/43289661057), concluído com sucesso.  
+**HEAD validada:** `4dc0a906da1f5795c3078e59fb627ed2fda71f00`.  
+**Artefato:** `psg-audio-ab-reference`, ID `13977310503`, SHA-256 `ffaa58a1ffa3bf467a585cafdc3eb636f30c61b7712a7b08778ff9d5b0fafd4a`.
+
+### 10.1 Comparação integral dos traces
+
+| Perfil | Baseline × atual NRMSE | Baseline × evento NRMSE | Atual × evento NRMSE | Correlação baseline × evento |
+|---|---:|---:|---:|---:|
+| SMS | 3,903223% | 3,066105% | 5,704215% | 0,999528123 |
+| SG-1000 | 3,874234% | 3,042106% | 5,660919% | 0,999535897 |
+
+O NRMSE menor do evento em relação ao baseline, comparado ao atual, indica maior proximidade amostral no trace integral específico. Isso não constitui prova de fidelidade elétrica, preferência auditiva ou superioridade universal. A comparação é dependente do trace e do alinhamento temporal adotado.
+
+### 10.2 Varredura e resposta do kernel
+
+- Foram cobertos todos os 1.022 períodos válidos, de 2 a 1023; períodos 0 e 1 foram testados separadamente como saídas constantes.
+- Maior ganho de stopband nos períodos 2–4: 0,000015671835.
+- Ganho de transição no período 5: 0,333425223.
+- Menor ganho de passband nos períodos 6–1023: 0,999969259.
+- Kernel: 65 taps, Kaiser beta 7,85726, 1.024 fases, cutoff 0,46 ciclos/amostra.
+- Atraso de grupo: 31,25 amostras; lookahead causal estimado: 32 frames (0,666667 ms).
+- Overshoot: +8,905564%; undershoot: -8,905564%; settling a 0,1%: 51,785 amostras.
+
+O ringing de aproximadamente 8,9% é mensurável e deve ser tratado como compromisso do kernel, não como comportamento automaticamente desejável. Os resultados de tons isolados também mostram NRMSE elevado nos períodos próximos/acima da banda útil, em parte por normalização sobre sinais de amplitude muito baixa; esses pontos não devem ser resumidos pelo NRMSE sem RMS, ganho do kernel e frequência de alias.
+
+### 10.3 Ruído
+
+| Perfil | Modo | NRMSE atual × evento | Centróide do evento | Maior autocorrelação de curto atraso |
+|---|---|---:|---:|---:|
+| SMS | Periódico | 4,595224% | 1.085,783 Hz | 0,884296 |
+| SMS | Branco | 9,273552% | 2.592,077 Hz | 0,891960 |
+| SG-1000 | Periódico | 4,754251% | 1.143,134 Hz | 0,883710 |
+| SG-1000 | Branco | 9,065867% | 2.538,507 Hz | 0,897005 |
+
+A diferença no ruído branco é material e permanece como limitação aberta para qualquer proposta de adoção em produção. Os testes determinísticos verificam a sequência interna do LFSR, seed, taps, periodicidade e reinício; eles não provam equivalência acústica entre os renderizadores.
+
+### 10.4 Custo e restrição de execução
+
+| Perfil | Captura | Render evento | Core atual | Memória estimada |
+|---|---:|---:|---:|---:|
+| SMS | 12,990 ms | 36,228 ms | 508,033 ms | 6.612.224 bytes |
+| SG-1000 | 12,248 ms | 30,322 ms | 508,099 ms | 6.608.352 bytes |
+
+O fator realtime do pipeline em lote foi 0,011011 (SMS) e 0,009524 (SG-1000), para traces de 4,469833 s. A medição é offline e não representa latência de streaming. O protótipo mantém todos os eventos e buffers de duração integral; `streaming_ready=false`. Não pode ser ligado ao callback CPAL.
+
+### 10.5 Gate e decisão
+
+**H2 — investigação e caracterização experimental: concluído.** A CI, os WAVs e os relatórios reproduzíveis estão preservados. O módulo continua exclusivamente de teste. A síntese de produção, o Scheduler e o callback CPAL não foram modificados.
+
+**H2 — promoção do reconstruidor para produção: NÃO APROVADA.** A divergência mensurável no ruído branco, o ringing do kernel, os resultados de tons de baixa amplitude e a ausência de avaliação auditiva A/B controlada impedem a promoção. Qualquer adoção futura exige desenho streaming bounded-memory, análise adicional do ruído/transientes, validação física e aceite auditivo separado.
