@@ -236,13 +236,8 @@ mod windows_host {
                         if root.active-menu == "audio": VerticalLayout {
                             Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
                             CompactButton { text: "Áudio ativo"; enabled: false; }
-                            FlexboxLayout {
-                                flex-direction: row; flex-wrap: wrap; spacing: 4px;
-                                CompactButton { text: "WASAPI Shared"; enabled: false; }
-                                CompactButton { text: "XAudio2"; enabled: false; }
-                            }
-                            Text { font-size: 12px; text: "Volume: 100%"; color: #b9c5ce; }
-                            Text { font-size: 12px; text: "Saída física, dispositivos e volume serão conectados na etapa R3 (CPAL 0.18.2)."; color: #9baab6; }
+                            CompactButton { text: "CPAL 0.18.2 — dispositivo padrão"; enabled: false; }
+                            Text { font-size: 12px; text: "A sessão PCM do worker SMS utiliza CPAL; seleção manual de dispositivo e controle de volume na GUI permanecem pendentes."; color: #9baab6; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
                             Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
