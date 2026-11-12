@@ -130,7 +130,7 @@ mod tests {
     use sega_machine_scheduler::{
         ClockDomainId, ClockRatio, EventPriority, MachineScheduler, MachineTime,
     };
-    use sega_sn76489::PsgProfile;
+    use sega_sn76489::{PsgProfile, Sn76489Core};
     use std::sync::{Arc, Mutex};
 
     #[derive(Default)]
@@ -177,6 +177,90 @@ mod tests {
         psg.write_at_dispatch(dispatch.event.payload);
         assert_eq!(psg.core().clock_divider_phase(), 10);
         assert_eq!(scheduler.now(), MachineTime::from_ticks(30));
+    }
+
+    #[test]
+    fn scheduled_psg_matches_direct_core_for_identical_register_timestamps() {
+        const CLOCK_HZ: u64 = 3_579_545;
+        const SAMPLE_RATE: u64 = 48_000;
+        const TOTAL_CLOCKS: u64 = 16_000_000;
+        const TRACE: &[(u64, u8)] = &[
+            (0, 0x85),
+            (0, 0x12),
+            (0, 0x90),
+            (0, 0xE4),
+            (0, 0xF0),
+            (0, 0xC7),
+            (0, 0xD0),
+            (0, 0xA2),
+            (0, 0xB0),
+            (2_000_000, 0x91),
+            (4_000_000, 0xE7),
+            (6_000_000, 0xF3),
+            (8_000_000, 0x86),
+            (8_000_000, 0x08),
+            (10_000_000, 0xB4),
+            (12_000_000, 0xE3),
+            (14_000_000, 0xF0),
+        ];
+
+        let domain = ClockDomainId(17);
+        let mut scheduler = MachineScheduler::<Option<u8>>::new();
+        let mut scheduled =
+            ScheduledPsg::new(domain, PsgProfile::Sms, CLOCK_HZ, SAMPLE_RATE).unwrap();
+        scheduled
+            .register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
+            .unwrap();
+
+        for &(clock, value) in TRACE {
+            scheduler
+                .schedule_at(
+                    MachineTime::from_ticks(u128::from(clock)),
+                    EventPriority::new(0),
+                    Some(value),
+                )
+                .unwrap();
+        }
+        scheduler
+            .schedule_at(
+                MachineTime::from_ticks(u128::from(TOTAL_CLOCKS)),
+                EventPriority::new(0),
+                None,
+            )
+            .unwrap();
+
+        let mut direct =
+            Sn76489Core::new_with_profile(CLOCK_HZ, SAMPLE_RATE, PsgProfile::Sms).unwrap();
+        let mut direct_samples = Vec::new();
+        let mut scheduled_samples = Vec::new();
+        let mut elapsed = 0_u64;
+
+        while let Some(dispatch) = scheduler.dispatch_next().unwrap() {
+            let advance = dispatch
+                .clock_advances
+                .iter()
+                .find(|advance| advance.domain == domain)
+                .unwrap();
+            let elapsed_cycles =
+                u64::try_from(advance.elapsed_cycles).expect("test interval fits in u64");
+
+            direct.advance_clocks(elapsed_cycles);
+            direct_samples.extend(direct.drain_samples(None));
+            scheduled.apply_clock_advance(advance).unwrap();
+            scheduled_samples.extend(scheduled.core_mut().drain_samples(None));
+
+            if let Some(value) = dispatch.event.payload {
+                direct.write(value);
+                scheduled.write_at_dispatch(value);
+            }
+            elapsed += elapsed_cycles;
+        }
+
+        assert_eq!(elapsed, TOTAL_CLOCKS);
+        direct_samples.extend(direct.drain_samples(None));
+        scheduled_samples.extend(scheduled.core_mut().drain_samples(None));
+        assert_eq!(scheduled_samples, direct_samples);
+        assert_eq!(scheduled.core(), &direct);
     }
 
     #[test]
