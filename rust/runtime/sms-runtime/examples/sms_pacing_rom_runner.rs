@@ -113,7 +113,7 @@ fn parse_args() -> Result<Args, String> {
     if rom_sha256.len() != 64 || !rom_sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("--rom-sha256 must contain exactly 64 hexadecimal characters".to_owned());
     }
-    if duration_seconds == 0 || duration_seconds > 3_600 {
+    if !(1..=3_600).contains(&duration_seconds) {
         return Err("--duration-seconds must be between 1 and 3600".to_owned());
     }
     if warmup_seconds > 300 {
