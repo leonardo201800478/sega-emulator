@@ -133,3 +133,20 @@ The renderer selection belongs to the SMS worker/runtime. The GUI sends a coarse
 ## 7. Required tests before production use
 
 See `h2-validation.md`. No production H2 claim is permitted until the event observer, streaming kernel, runtime integration and fallback have passed the stated gates on CI. Benchmarks and physical Windows listening are separate evidence categories.
+
+
+## 8. Implementation checkpoint — bounded event observer
+
+The first production-facing prerequisite has now been added on the feature branch:
+
+- `Sn76489Core` exposes opt-in amplitude-event capture; it is disabled by default.
+- Events are recorded from the existing core's real `mix()` before/after internal ticks and bus writes.
+- Event timestamps use an absolute PSG-clock counter and the exact /16 divider-edge offset.
+- Same-timestamp writes remain separate ordered events for canonicalization by the renderer.
+- The observer uses a preallocated bounded `VecDeque`; overflow is sticky, counted and stops further capture instead of silently evicting older events.
+- `SmsTemporalBus` and `SmsTemporalMachine` expose coarse-grained enable/disable/drain/status methods. No CPU-instruction callback was added.
+- The PSG output-generation code path is otherwise unchanged; capture-disabled operation does not call `mix()` for event observation.
+
+Targeted unit tests have been added for immediate volume transitions, internal tone transitions, chunk-invariant timestamps, explicit bounded overflow, reset epoch behavior and exact PCM equality with capture enabled versus disabled. These tests have **not yet been executed** in this environment.
+
+This is an event-observer prerequisite only. It does not implement the H2 streaming kernel, worker renderer selection, Slint selector, preference persistence or runtime fallback. Do not enable this observer in production UI until those components are complete and the tests pass.
