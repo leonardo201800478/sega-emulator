@@ -1784,13 +1784,16 @@ mod tests {
         }
 
         whole.advance_clocks(120_000);
-        for clocks in [1, 7, 16, 997, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384] {
+        let mut remaining = 120_000_u64;
+        for chunk in [1, 7, 16, 997, 16_384] {
+            let clocks = chunk.min(remaining);
             chunked.advance_clocks(clocks);
+            remaining -= clocks;
         }
-        // Advance any remainder so both executions end at the same PSG clock.
-        let remaining = 120_000_u64.saturating_sub(chunked.elapsed_clocks());
-        if remaining > 0 {
-            chunked.advance_clocks(remaining);
+        while remaining > 0 {
+            let clocks = 16_384_u64.min(remaining);
+            chunked.advance_clocks(clocks);
+            remaining -= clocks;
         }
 
         let mut whole_events = Vec::new();
