@@ -1438,6 +1438,7 @@ impl Drop for SmsTemporalWorker {
     }
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn execute_frame(
     machine: &mut SmsTemporalMachine,
