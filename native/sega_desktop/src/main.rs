@@ -1096,12 +1096,7 @@ mod windows_host {
             self.empty_wakeups = self.empty_wakeups.saturating_add(1);
         }
 
-        fn record_frame(
-            &mut self,
-            now: Instant,
-            sequence: u64,
-            published_at: Instant,
-        ) {
+        fn record_frame(&mut self, now: Instant, sequence: u64, published_at: Instant) {
             self.consumed = self.consumed.saturating_add(1);
             if let Some(previous) = self.last_consumed {
                 let elapsed = now
