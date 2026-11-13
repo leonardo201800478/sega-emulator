@@ -64,6 +64,16 @@ impl FramePacingDeadline {
     }
 }
 
+/// Advance the host presentation target without inheriting scheduler wake lateness.
+/// The first frame starts a new epoch; later frames advance from the prior target.
+fn calculate_next_frame_deadline(
+    frame_started: Instant,
+    frame_duration: Duration,
+    previous_deadline: Option<Instant>,
+) -> Instant {
+    previous_deadline.unwrap_or(frame_started) + frame_duration
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -1543,6 +1553,7 @@ fn execute_frame(
         video_mailbox,
         video_sequence,
         telemetry,
+    None,
     )
 }
 
@@ -1557,6 +1568,7 @@ fn execute_frame_with_renderer(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
+    previous_deadline: Option<Instant>,
 ) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
     let diagnostics_enabled = telemetry.diagnostics_enabled();
@@ -1729,7 +1741,9 @@ fn execute_frame_with_renderer(
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
     let processing_elapsed = frame_started.elapsed();
-    let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
+    let frame_deadline = frame_completed.then(|| {
+        calculate_next_frame_deadline(frame_started, frame_duration, previous_deadline)
+    });
     let frame_wait = frame_deadline
         .map(|deadline| deadline.saturating_duration_since(Instant::now()))
         .unwrap_or(Duration::ZERO);
@@ -1844,7 +1858,7 @@ fn worker_loop(
                             wait_finished.saturating_duration_since(deadline),
                         );
                     }
-                    frame_deadline.clear();
+                    // Keep the expired target as the next frame's phase anchor.
                     None
                 }
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1911,6 +1925,7 @@ fn worker_loop(
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
+        frame_deadline.deadline,
         ) {
             Ok((_, next_frame_deadline, breakpoint_hit)) => {
                 drain_machine_trace(&mut machine, &mut trace_history);
@@ -2224,6 +2239,7 @@ fn handle_command(
                     video_mailbox,
                     video_sequence,
                     telemetry,
+                frame_deadline.deadline,
                 ) {
                     Ok((instructions, _, _)) => {
                         let _ = reply.send(Ok(instructions));
@@ -2726,6 +2742,7 @@ mod tests {
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
+        None,
         )
         .unwrap();
 
@@ -3282,6 +3299,42 @@ mod tests {
         assert_eq!(
             pacing.remaining(now + Duration::from_millis(50)),
             Some(Duration::from_millis(12))
+        );
+    }
+
+    #[test]
+    fn phase_locked_deadlines_do_not_accumulate_late_wakeups() {
+        let epoch = Instant::now();
+        let frame_duration = Duration::from_micros(16_687);
+        let first = calculate_next_frame_deadline(epoch, frame_duration, None);
+
+        let wake_lateness = Duration::from_micros(449);
+        let second_frame_started = first + wake_lateness;
+        let second = calculate_next_frame_deadline(
+            second_frame_started,
+            frame_duration,
+            Some(first),
+        );
+        let third_frame_started = second + wake_lateness;
+        let third = calculate_next_frame_deadline(
+            third_frame_started,
+            frame_duration,
+            Some(second),
+        );
+
+        assert_eq!(second, first + frame_duration);
+        assert_eq!(third, second + frame_duration);
+        assert!(second < second_frame_started + frame_duration);
+        assert!(third < third_frame_started + frame_duration);
+    }
+
+    #[test]
+    fn phase_locked_deadline_starts_a_new_epoch_without_previous_target() {
+        let frame_started = Instant::now();
+        let duration = Duration::from_micros(16_687);
+        assert_eq!(
+            calculate_next_frame_deadline(frame_started, duration, None),
+            frame_started + duration
         );
     }
 
