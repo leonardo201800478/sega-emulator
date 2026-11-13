@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hash a diagnostic ROM and invoke the Rust full-machine SMS runner."""
+"""Snapshot, hash, and invoke the Rust full-machine SMS diagnostic runner."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -23,12 +24,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def sha256_file(path: Path) -> str:
-    """Return the SHA-256 digest of a ROM using bounded-memory streaming reads."""
+def snapshot_and_hash(source: Path, destination: Path) -> str:
+    """Copy one immutable-for-this-run ROM snapshot while hashing those exact bytes."""
     digest = hashlib.sha256()
-    with path.open("rb") as rom_file:
-        for chunk in iter(lambda: rom_file.read(1024 * 1024), b""):
+    with source.open("rb") as source_file, destination.open("xb") as snapshot_file:
+        for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+            snapshot_file.write(chunk)
             digest.update(chunk)
+    if destination.stat().st_size == 0:
+        raise ValueError("ROM image is empty")
     return digest.hexdigest()
 
 
@@ -45,7 +49,7 @@ def git_revision(repository_root: Path) -> str:
 
 
 def main() -> int:
-    """Validate inputs, compute provenance, and launch the Rust machine runner."""
+    """Snapshot the ROM, compute its provenance, and launch the Rust machine runner."""
     args = parse_args()
     rom_path = args.rom.resolve()
     if not rom_path.is_file():
@@ -56,35 +60,43 @@ def main() -> int:
         return 64
 
     repository_root = Path(__file__).resolve().parents[3]
-    command = ["cargo", "run"]
-    if not args.debug:
-        command.append("--release")
-    command.extend(
-        [
-            "-p",
-            "sega-sms-core",
-            "--example",
-            "sms_rom_runner",
-            "--",
-            "--rom",
-            str(rom_path),
-            "--rom-sha256",
-            sha256_file(rom_path),
-            "--emulator-sha",
-            git_revision(repository_root),
-            "--suite-id",
-            args.suite_id,
-            "--suite-revision",
-            args.suite_revision,
-            "--region",
-            args.region,
-            "--frames",
-            str(args.frames),
-            "--max-instructions-per-frame",
-            str(args.max_instructions_per_frame),
-        ]
-    )
-    return subprocess.run(command, cwd=repository_root, check=False).returncode
+    with tempfile.TemporaryDirectory(prefix="sega-sms-rom-") as temporary_directory:
+        snapshot_path = Path(temporary_directory) / f"input{rom_path.suffix or '.sms'}"
+        try:
+            rom_sha256 = snapshot_and_hash(rom_path, snapshot_path)
+        except (OSError, ValueError) as error:
+            print(f"cannot snapshot ROM: {error}", file=sys.stderr)
+            return 64
+
+        command = ["cargo", "run"]
+        if not args.debug:
+            command.append("--release")
+        command.extend(
+            [
+                "-p",
+                "sega-sms-core",
+                "--example",
+                "sms_rom_runner",
+                "--",
+                "--rom",
+                str(snapshot_path),
+                "--rom-sha256",
+                rom_sha256,
+                "--emulator-sha",
+                git_revision(repository_root),
+                "--suite-id",
+                args.suite_id,
+                "--suite-revision",
+                args.suite_revision,
+                "--region",
+                args.region,
+                "--frames",
+                str(args.frames),
+                "--max-instructions-per-frame",
+                str(args.max_instructions_per_frame),
+            ]
+        )
+        return subprocess.run(command, cwd=repository_root, check=False).returncode
 
 
 if __name__ == "__main__":
