@@ -987,6 +987,85 @@ mod windows_host {
         }
     }
 
+    /// Cumulative snapshot from the host PCM queue. Window rates are derived from deltas.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    struct AudioOutputSnapshot {
+        sample_rate_hz: u32,
+        queue_capacity_frames: u64,
+        queue_queued_frames: u64,
+        queue_high_water_frames: u64,
+        accepted_frames: u64,
+        consumed_frames: u64,
+        dropped_frames: u64,
+        dropped_blocks: u64,
+        underrun_frames: u64,
+        underrun_events: u64,
+        flushed_frames: u64,
+    }
+
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    struct AudioOutputDelta {
+        accepted_frames: u64,
+        consumed_frames: u64,
+        dropped_frames: u64,
+        dropped_blocks: u64,
+        underrun_frames: u64,
+        underrun_events: u64,
+        flushed_frames: u64,
+        counter_reset: bool,
+    }
+
+    impl AudioOutputSnapshot {
+        /// Calculate monotonic counter deltas; if a reset/configuration change is observed,
+        /// treat the current snapshot as the beginning of a new measurement epoch.
+        fn delta_since(self, previous: Self) -> AudioOutputDelta {
+            let counter_reset = self.sample_rate_hz != previous.sample_rate_hz
+                || self.queue_capacity_frames != previous.queue_capacity_frames
+                || self.accepted_frames < previous.accepted_frames
+                || self.consumed_frames < previous.consumed_frames
+                || self.dropped_frames < previous.dropped_frames
+                || self.dropped_blocks < previous.dropped_blocks
+                || self.underrun_frames < previous.underrun_frames
+                || self.underrun_events < previous.underrun_events
+                || self.flushed_frames < previous.flushed_frames;
+            let delta = |current: u64, prior: u64| {
+                if counter_reset {
+                    current
+                } else {
+                    current.saturating_sub(prior)
+                }
+            };
+
+            AudioOutputDelta {
+                accepted_frames: delta(self.accepted_frames, previous.accepted_frames),
+                consumed_frames: delta(self.consumed_frames, previous.consumed_frames),
+                dropped_frames: delta(self.dropped_frames, previous.dropped_frames),
+                dropped_blocks: delta(self.dropped_blocks, previous.dropped_blocks),
+                underrun_frames: delta(self.underrun_frames, previous.underrun_frames),
+                underrun_events: delta(self.underrun_events, previous.underrun_events),
+                flushed_frames: delta(self.flushed_frames, previous.flushed_frames),
+                counter_reset,
+            }
+        }
+    }
+
+    impl AudioOutputDelta {
+        /// Every requested stereo frame was either consumed from the FIFO or zero-filled.
+        fn requested_frames(self) -> u64 {
+            self.consumed_frames.saturating_add(self.underrun_frames)
+        }
+
+        /// Percentage of requested output frames replaced with digital silence.
+        fn zero_fill_percent(self) -> f64 {
+            let requested = self.requested_frames();
+            if requested == 0 {
+                0.0
+            } else {
+                self.underrun_frames as f64 * 100.0 / requested as f64
+            }
+        }
+    }
+
     /// Bounded host-side measurements for mailbox consumption and WGPU upload.
     ///
     /// This deliberately stops at queue.write_texture: Slint owns the Winit surface
@@ -1000,6 +1079,8 @@ mod windows_host {
         last_fps_uploaded: u64,
         last_fps_sample: Instant,
         uploaded: u64,
+        last_audio_snapshot: Option<AudioOutputSnapshot>,
+        last_audio_snapshot_at: Option<Instant>,
         wakeups: u64,
         empty_wakeups: u64,
         consumed: u64,
@@ -1043,6 +1124,8 @@ mod windows_host {
                 last_fps_uploaded: 0,
                 last_fps_sample: Instant::now(),
                 uploaded: 0,
+                last_audio_snapshot: None,
+                last_audio_snapshot_at: None,
                 wakeups: 0,
                 empty_wakeups: 0,
                 consumed: 0,
@@ -1195,9 +1278,42 @@ mod windows_host {
             };
             let audio_output = {
                 let guard = worker_slot.borrow();
-                guard
-                    .as_ref()
-                    .map(|worker| (worker.audio_output_metrics(), worker.audio_output_error()))
+                guard.as_ref().map(|worker| {
+                    let metrics = worker.audio_output_metrics();
+                    (
+                        AudioOutputSnapshot {
+                            sample_rate_hz: metrics.sample_rate_hz,
+                            queue_capacity_frames: metrics.queue_capacity_frames,
+                            queue_queued_frames: metrics.queue_queued_frames,
+                            queue_high_water_frames: metrics.queue_high_water_frames,
+                            accepted_frames: metrics.accepted_frames,
+                            consumed_frames: metrics.consumed_frames,
+                            dropped_frames: metrics.dropped_frames,
+                            dropped_blocks: metrics.dropped_blocks,
+                            underrun_frames: metrics.underrun_frames,
+                            underrun_events: metrics.underrun_events,
+                            flushed_frames: metrics.flushed_frames,
+                        },
+                        worker.audio_output_error(),
+                    )
+                })
+            };
+            let audio_window = if let Some((audio, _)) = audio_output {
+                let now = Instant::now();
+                let previous = self.last_audio_snapshot.zip(self.last_audio_snapshot_at);
+                let window = previous.map(|(previous, previous_at)| {
+                    (
+                        audio.delta_since(previous),
+                        now.saturating_duration_since(previous_at),
+                    )
+                });
+                self.last_audio_snapshot = Some(audio);
+                self.last_audio_snapshot_at = Some(now);
+                window
+            } else {
+                self.last_audio_snapshot = None;
+                self.last_audio_snapshot_at = None;
+                None
             };
             // QPC shares the timestamp domain used by PresentMon --qpc_time.
             // This marker is diagnostic only and never participates in frame pacing.
@@ -1321,8 +1437,23 @@ mod windows_host {
             );
 
             if let Some((audio, output_error)) = audio_output {
+                let (delta, window_ms, window_valid) = audio_window.map_or(
+                    (AudioOutputDelta::default(), 0_u64, false),
+                    |(delta, elapsed)| (delta, elapsed.as_millis().min(u128::from(u64::MAX)) as u64, true),
+                );
+                let requested_frames = delta.requested_frames();
+                let producer_frames_per_second = if window_ms > 0 {
+                    delta.accepted_frames as f64 * 1_000.0 / window_ms as f64
+                } else {
+                    0.0
+                };
+                let requested_frames_per_second = if window_ms > 0 {
+                    requested_frames as f64 * 1_000.0 / window_ms as f64
+                } else {
+                    0.0
+                };
                 eprintln!(
-                    "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames={} consumed_frames={} dropped_frames={} dropped_blocks={} underrun_frames={} underrun_events={} flushed_frames={} output_error={:?}",
+                    "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames_total={} consumed_frames_total={} dropped_frames_total={} dropped_blocks_total={} underrun_frames_total={} underrun_events_total={} flushed_frames_total={} window_valid={} window_ms={} counter_reset={} accepted_frames_delta={} consumed_frames_delta={} requested_frames_delta={} dropped_frames_delta={} dropped_blocks_delta={} underrun_frames_delta={} underrun_events_delta={} flushed_frames_delta={} producer_frames_per_second={:.1} requested_frames_per_second={:.1} zero_fill_percent={:.3} output_error={:?}",
                     u8::from(audio.sample_rate_hz > 0),
                     audio.sample_rate_hz,
                     audio.queue_capacity_frames,
@@ -1335,6 +1466,20 @@ mod windows_host {
                     audio.underrun_frames,
                     audio.underrun_events,
                     audio.flushed_frames,
+                    u8::from(window_valid),
+                    window_ms,
+                    u8::from(delta.counter_reset),
+                    delta.accepted_frames,
+                    delta.consumed_frames,
+                    requested_frames,
+                    delta.dropped_frames,
+                    delta.dropped_blocks,
+                    delta.underrun_frames,
+                    delta.underrun_events,
+                    delta.flushed_frames,
+                    producer_frames_per_second,
+                    requested_frames_per_second,
+                    delta.zero_fill_percent(),
                     output_error,
                 );
             }
@@ -3030,6 +3175,63 @@ mod windows_host {
             assert_eq!(samples.percentile_ns(50), 257);
             assert_eq!(samples.percentile_ns(95), 488);
             assert_eq!(samples.percentile_ns(99), 508);
+        }
+
+        #[test]
+        fn audio_output_delta_uses_consumed_plus_zero_filled_frames_as_output_total() {
+            let previous = AudioOutputSnapshot {
+                sample_rate_hz: 48_000,
+                queue_capacity_frames: 4_096,
+                accepted_frames: 10_000,
+                consumed_frames: 9_000,
+                underrun_frames: 1_000,
+                ..AudioOutputSnapshot::default()
+            };
+            let current = AudioOutputSnapshot {
+                sample_rate_hz: 48_000,
+                queue_capacity_frames: 4_096,
+                accepted_frames: 58_000,
+                consumed_frames: 54_000,
+                underrun_frames: 5_000,
+                underrun_events: 20,
+                ..AudioOutputSnapshot::default()
+            };
+
+            let delta = current.delta_since(previous);
+            assert!(!delta.counter_reset);
+            assert_eq!(delta.accepted_frames, 48_000);
+            assert_eq!(delta.consumed_frames, 45_000);
+            assert_eq!(delta.underrun_frames, 4_000);
+            assert_eq!(delta.requested_frames(), 49_000);
+            assert!((delta.zero_fill_percent() - (4_000.0 / 49_000.0 * 100.0)).abs() < 0.0001);
+        }
+
+        #[test]
+        fn audio_output_delta_starts_a_new_window_when_counters_reset() {
+            let previous = AudioOutputSnapshot {
+                sample_rate_hz: 48_000,
+                queue_capacity_frames: 4_096,
+                accepted_frames: 100_000,
+                consumed_frames: 99_000,
+                underrun_frames: 1_000,
+                ..AudioOutputSnapshot::default()
+            };
+            let current = AudioOutputSnapshot {
+                sample_rate_hz: 48_000,
+                queue_capacity_frames: 4_096,
+                accepted_frames: 480,
+                consumed_frames: 450,
+                underrun_frames: 30,
+                underrun_events: 2,
+                ..AudioOutputSnapshot::default()
+            };
+
+            let delta = current.delta_since(previous);
+            assert!(delta.counter_reset);
+            assert_eq!(delta.accepted_frames, 480);
+            assert_eq!(delta.consumed_frames, 450);
+            assert_eq!(delta.underrun_frames, 30);
+            assert_eq!(delta.requested_frames(), 480);
         }
 
         #[test]
