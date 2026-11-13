@@ -1,8 +1,8 @@
 # P0 — Frame pacing: investigação da regressão após MachineScheduler
 
-**Issue principal:** #755  
-**Baseline de investigação:** main em `744ebe8e55cbebe731e6393f992a2970d79a0aa1`  
-**Data:** 2026-11-13  
+**Issue principal:** #755
+**Baseline de investigação:** main em `744ebe8e55cbebe731e6393f992a2970d79a0aa1`
+**Data:** 2026-11-13
 **Estado:** INVESTIGAÇÃO BLOQUEADORA — nenhuma expansão funcional até a causa raiz ser corrigida e validada.
 
 ## Mandato
@@ -115,3 +115,38 @@ Só propor patch após hipótese ser confirmada por experimento reproduzível. O
 6. Relatório de validação e decisão explícita de liberar ou manter o bloqueio.
 
 **Regra de conclusão:** compilar, abrir o emulador ou observar 60 FPS por alguns segundos não fecha P0. A correção precisa sustentar a cadência e preservar o determinismo.
+
+
+## Auditoria inicial do GitHub — 2026-11-13
+
+### Estado confirmado
+
+- `main`: `2942abfe0d4754dd857be0bc103d594abfd9b865`.
+- Issue #755 permanece aberta.
+- PR #795 permanece aberta, não integrada e baseada no HEAD atual da main.
+- PR #795 contém somente documentação; nenhuma alteração de runtime foi introduzida.
+- CI da main no HEAD atual: workflows CI e SMS Debugger Runtime concluídos com sucesso.
+- CI da PR #795: Documentation patch hygiene falhou por whitespace final; o job agregador Rust quality também falhou por depender dessa validação. Os testes Rust não foram executados por esse job na PR documental.
+
+### Achado histórico prioritário
+
+O primeiro commit do crate MachineScheduler é `355779a6dc1b8da207e2872fc3f4c978eb9ab406` (2026-11-01 20:57 UTC). Isso não identifica, por si só, a regressão.
+
+A integração do worker temporal SMS ocorreu na PR #571, merge commit `76f2a4d6f18c87bca2728f8dc524af12b7474a7d` (2026-11-05 23:34 UTC). O worker já calculava a espera por frame a partir de `frame_started`, usando a duração derivada das amostras PSG e `recv_timeout(frame_wait)`.
+
+A PR #763 (2026-11-12) refatorou essa espera para `FramePacingDeadline`, mas manteve a âncora em `frame_started`. Portanto, a política relativa por frame antecede a instrumentação P0.
+
+### Achado de semântica de medição
+
+`pacing_wait_budget` é calculado em `execute_frame_with_renderer` antes do registro da amostra e de `drain_machine_trace`. O timeout efetivamente passado a `recv_timeout` é recalculado depois, no `worker_loop`. Os dois valores não são necessariamente iguais.
+
+`worker_frame_interval` é registrado no momento de conclusão da etapa de máquina, antes da publicação de vídeo e da submissão de áudio. A lateness calculada diretamente contra o deadline é a medida de despertar mais direta disponível.
+
+### Decisão
+
+Nenhuma causa raiz foi confirmada. Não alterar Scheduler, clocks, CPU, VDP, PSG ou política de pacing nesta etapa. Manter BLOQUEIO P0 até os experimentos controlados e a captura física pareada.
+
+Consulte também:
+- `p0-frame-pacing-root-cause-report.md`
+- `p0-frame-pacing-git-forensics.md`
+- `p0-frame-pacing-validation.md`
