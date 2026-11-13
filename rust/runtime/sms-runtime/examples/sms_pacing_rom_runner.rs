@@ -11,7 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use sega_sms_runtime::SmsTemporalWorker;
-use sega_sms_runtime::worker::ControllerButtons;
+use sega_sms_core::ControllerButtons;
 
 #[derive(Debug)]
 struct Args {
