@@ -150,3 +150,21 @@ The first production-facing prerequisite has now been added on the feature branc
 Targeted unit tests have been added for immediate volume transitions, internal tone transitions, chunk-invariant timestamps, explicit bounded overflow, reset epoch behavior and exact PCM equality with capture enabled versus disabled. These tests have **not yet been executed** in this environment.
 
 This is an event-observer prerequisite only. It does not implement the H2 streaming kernel, worker renderer selection, Slint selector, preference persistence or runtime fallback. Do not enable this observer in production UI until those components are complete and the tests pass.
+
+
+## 9. Implementation checkpoint — standalone streaming kernel
+
+A production-facing renderer type now exists in `native/sn76489/src/psg_h2_streaming.rs` and is exported from the SN76489 crate:
+
+- Precomputes the same 1024x oversampled integrated Kaiser-sinc step response as the offline reference.
+- Retains the reference's 0.46 cutoff, Kaiser beta 7.85726, 32-sample half-span and -0.75 fractional alignment.
+- Uses two fixed 128-sample accumulation rings; pending storage does not scale with session duration.
+- Consumes same-clock event groups with deterministic sorted-delta summation.
+- Emits the closed PCM prefix as each event group arrives, keeping the ring bounded even when a worker block contains many events.
+- Uses integer quotient/remainder for clock-to-sample positioning.
+- Rejects backdated/out-of-horizon events and pending-horizon violations rather than silently corrupting PCM.
+- Supports explicit epoch start and final drain.
+
+Tests now compare the streaming output to the original offline H2 reference, verify block-boundary invariance, same-clock ordering and invalid/backdated event rejection. These tests are **added but not executed**.
+
+The streaming renderer is not yet connected to `SmsTemporalWorker`, `AudioSession`, Slint or preferences. The event observer and streaming kernel are independently available, but the game still uses the original PSG path only.
