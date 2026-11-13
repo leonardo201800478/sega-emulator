@@ -1,10 +1,10 @@
 # P0 — Dossiê de evidências: frame pacing, apresentação e áudio
 
-**Data de consolidação:** 2026-11-13  
-**Investigação relacionada:** [Issue #755](https://github.com/leonardo201800478/sega-emulator/issues/755)  
-**PR de execução determinística:** [PR #806](https://github.com/leonardo201800478/sega-emulator/pull/806)  
-**Commit do build capturado:** `d093037bd5fbfef1278d4980f775efa2c549171c`  
-**Captura:** `audio-paired-20261113-143303.zip`  
+**Data de consolidação:** 2026-11-13
+**Investigação relacionada:** [Issue #755](https://github.com/leonardo201800478/sega-emulator/issues/755)
+**PR de execução determinística:** [PR #806](https://github.com/leonardo201800478/sega-emulator/pull/806)
+**Commit do build capturado:** `d093037bd5fbfef1278d4980f775efa2c549171c`
+**Captura:** `audio-paired-20261113-143303.zip`
 **ROM:** `combined.sms`, SHA-256 `434A4B34F87FA96B52D94EF4005A7D0D3D654D3B6594BFD7AA45A27FA09B306E`
 
 > Este documento separa fatos medidos, interpretações e hipóteses. Nenhuma causa-raiz foi demonstrada. Os resultados não autorizam alterações empíricas no MachineScheduler, Z80, VDP ou PSG.
@@ -135,13 +135,22 @@ CPAL abriu em todas as três execuções audio-active:
 | 3 | 14.479.443 | 14.478.480 | 620.976 | 3.920 |
 
 - Underrun events: aproximadamente 767–788 por minuto.
-- Razão `underrun_frames / consumed_frames`: aproximadamente 4,20–4,30%.
+- Frames solicitados ao callback (`consumed_frames + underrun_frames`): aproximadamente 15,06–15,08 milhões nos snapshots registrados.
+- Razão de zero-fill (`underrun_frames / (consumed_frames + underrun_frames)`): aproximadamente 4,03–4,12% dos frames solicitados ao consumidor.
 - Ocupação típica da fila: ~800–963 frames; high-water ~1.443–1.444 de 4.096.
 - Sem evidência de overflow; os contadores de underrun aumentaram continuamente.
 
-**Interpretação permitida:** existe uma anomalia mensurável no caminho de áudio CPAL, com eventos de underrun reportados pelo runtime.
+**Auditoria da semântica dos contadores no código atual:**
+- `PcmFrameConsumer::read_frames` consome os frames disponíveis e preenche com `[0.0, 0.0]` todos os frames restantes do buffer. Portanto, `underrun_frames` conta frames de silêncio digital efetivamente inseridos no buffer de saída, não apenas eventos abstratos.
+- `consumed_frames` conta somente frames retirados da FIFO. O total de frames solicitados ao consumidor é `consumed_frames + underrun_frames`.
+- `underrun_events` incrementa uma vez por chamada de `read_frames` que precisou inserir pelo menos um frame de silêncio. O callback CPAL pode chamar `read_frames` mais de uma vez quando divide buffers maiores que o scratch; portanto, não equivale necessariamente a callbacks ou a episódios acústicos independentes.
+- A fração correta de frames de saída preenchidos com silêncio nos snapshots cumulativos é aproximadamente 4,03–4,12%. A razão antiga `underrun_frames / consumed_frames` (4,20–4,30%) usa denominador inadequado para percentual do buffer de saída.
 
-**Não concluir ainda:** que 4,2–4,3% do tempo audível foi silêncio, que houve dropout audível nessa proporção ou que a causa seja o callback. É obrigatório auditar a semântica exata dos contadores, a unidade de cada contador e a relação produtor/consumidor. Não houve loopback acústico; a abertura do stream e a contagem de frames não certificam qualidade perceptiva.
+**Limite temporal importante:** os contadores são acumulados desde a criação da FIFO/sessão e não são reiniciados no início exato da captura PresentMon. O dossiê não contém snapshots baseline/final delimitando exclusivamente os 300 s. Assim, os valores e percentuais descrevem a vida útil acumulada da fila até a leitura do snapshot; a normalização dos eventos por 300 s é apenas aproximada, não uma taxa exata do intervalo capturado.
+
+**Interpretação permitida:** houve zero-fill de áudio mensurável no caminho CPAL e não houve overflow (`dropped_frames=0`) nos snapshots. Isso é uma deficiência objetiva de preenchimento do buffer.
+
+**Não concluir ainda:** que a mesma fração foi percebida como silêncio pelo ouvinte, que corresponde a dropout acústico contínuo ou que a causa seja o callback. Não houve loopback acústico. É necessário medir deltas em uma janela temporal explícita e, na etapa física final, correlacionar com loopback.
 
 ### 3.5 Comparação pareada
 
@@ -154,7 +163,7 @@ A questão de áudio é separada e real no plano dos contadores, mas sua semânt
 ### Fatos medidos
 1. Os seis processos foram capturados por 300 s com PresentMon e terminaram normalmente.
 2. CPAL abriu nas três execuções audio-active, sem `output_error`.
-3. Os contadores CPAL registraram milhares de eventos de underrun.
+3. Os contadores CPAL registraram milhares de operações de leitura com zero-fill; os snapshots mostram aproximadamente 4,03–4,12% dos frames solicitados preenchidos com silêncio digital, mas são cumulativos desde a criação da FIFO.
 4. Em cinco execuções, processing P50 ficou em ~12,8–13,0 ms; a cauda P99 aproximou-se ou passou do budget de 16,688 ms.
 5. O worker apresentou interval P50 em ~17,33–17,39 ms nas execuções típicas.
 6. A execução offline dos quatro perfis foi determinística segundo o critério do runner.
@@ -250,7 +259,7 @@ A documentação pública do RetroArch/Libretro oferece referências concretas, 
 2. Auditar a implementação do worker e a política de deadline; desenhar linha temporal de cada frame.
 3. Adicionar identidade monotônica por frame e timestamps para: frame-ready no runtime → publish → consume → texture update → submit → present. Identificar explicitamente repetidos e descartados.
 4. Repetir teste de 5 minutos com carga controlada e captura ETW/PresentMon, incluindo baseline sem overlay e sem atividade secundária; registrar condições ambientais.
-5. Auditar CPAL e provar o significado dos contadores com teste unitário/instrumentado e loopback, se possível.
+5. Adicionar métricas por janela explícita (baseline/final ou deltas monotônicos) para CPAL, expondo `requested_frames = consumed_frames + underrun_frames` e a fração zero-fill; validar a semântica por teste unitário/instrumentado. Loopback acústico permanece para a etapa física final.
 6. Fazer experimentos A/B de uma variável por vez: deadline absoluto, timer, polling/evento, buffers 1/2, modo de janela, refresh/VSync.
 7. Só então escolher correção local, redesenho limitado do host ou alternativa de arquitetura. Cada experimento deve ter hipótese, variável única, métrica primária, critério de sucesso e rollback.
 8. Revalidar execução contínua vs. em blocos e determinismo; manter o Scheduler como autoridade.
@@ -268,7 +277,7 @@ A documentação pública do RetroArch/Libretro oferece referências concretas, 
 
 A descrição original da Issue #755 afirmava que a saída física de áudio ainda não estava conectada/ativa e que não havia evidência para investigar CPAL. Isso era correto para a evidência disponível naquele momento, mas ficou desatualizado após a captura pareada de 13/11/2026: CPAL abriu fisicamente em três execuções audio-active e produziu métricas de consumo/underrun.
 
-A atualização não muda o diagnóstico visual: CPAL não foi demonstrado como causa da instabilidade de vídeo. Ela cria uma trilha de investigação de áudio independente. A existência de contadores de underrun ainda não prova dropout audível nem causa-raiz.
+A atualização não muda o diagnóstico visual: CPAL não foi demonstrado como causa da instabilidade de vídeo. Ela cria uma trilha de investigação de áudio independente. A auditoria do código confirma que `underrun_frames` representa frames preenchidos com zero pelo consumidor, mas os snapshots são cumulativos desde a criação da FIFO e não delimitam exatamente a janela de 300 s. A existência de zero-fill não prova, por si só, dropout acústico percebido nem causa-raiz; a medição por janela e o loopback continuam pendentes.
 
 ## 9. Prompts para consulta externa independente
 
@@ -330,3 +339,18 @@ Copie o texto abaixo para outro assistente. Anexe este dossiê e, se possível, 
 - ROM hash: `434A4B34F87FA96B52D94EF4005A7D0D3D654D3B6594BFD7AA45A27FA09B306E`.
 
 Ao anexar artefatos em novas execuções, registrar SHA-256 de ZIP, CSVs, logs e executável; não sobrescrever capturas anteriores. Relatórios futuros devem incluir build SHA, configuração, ambiente, processo/PID, duração efetiva e códigos de saída.
+
+
+## 11. Auditoria complementar da fila CPAL — sem alteração de runtime
+
+A leitura de `native/audio_output/src/pcm_fifo.rs` e `native/audio_output/src/lib.rs` confirma:
+
+- A FIFO SPSC é limitada; o produtor rejeita os frames mais novos quando cheia e contabiliza `dropped_frames`.
+- O callback não espera pelo produtor. `read_frames` copia o que existe e preenche a parte ausente com silêncio digital, sem alocação ou bloqueio.
+- `consumed_frames` e `underrun_frames` são contadores diferentes, ambos cumulativos. O total solicitado ao callback pode ser reconstruído pela soma.
+- `underrun_events` conta operações de leitura com ao menos um frame de silêncio, não necessariamente um evento de callback ou um dropout audível.
+- O código não oferece, atualmente, snapshot baseline/final por janela de captura. Os snapshots expostos pela sessão refletem contadores desde a criação da fila.
+
+**Correção analítica necessária:** usar `underrun_frames / (consumed_frames + underrun_frames)` para estimar a fração de frames de saída preenchidos com silêncio. Não usar `underrun_frames / consumed_frames` como percentual de silêncio. Para comparar execuções, calcular deltas entre dois snapshots do mesmo epoch/sessão, e registrar o tempo monotônico de cada snapshot.
+
+**Correção de instrumentação pendente:** expor total de frames solicitados e taxa/fração zero-fill por janela de diagnóstico, com tratamento explícito de reset/novo epoch. Não ajustar tamanho de FIFO, prebuffer, resampler, clock PSG ou prioridade do worker antes de comparar deltas em janelas equivalentes.
