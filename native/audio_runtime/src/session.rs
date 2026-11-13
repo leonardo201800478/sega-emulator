@@ -208,6 +208,8 @@ impl<S: PcmSink> NativeAudioSession<S> {
             // leak into the first audible block of the resumed epoch.
             self.resampler.reset();
             self.mixed_samples.clear();
+            self.analog_samples.clear();
+            self.analog_output.reset();
         }
         self.sink.resume()?;
         self.suspended = false;
