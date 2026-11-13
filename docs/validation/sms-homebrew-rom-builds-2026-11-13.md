@@ -64,3 +64,21 @@ The pinned SmsVdpTest and SMS Test Suite revisions did not expose an explicit li
 ## CI
 
 The workflow is `.github/workflows/sms-vdp-homebrew-build.yml`. It runs both builds independently and records their output sizes and SHA-256 hashes in the job logs.
+
+
+## Local build for physical testing
+
+A local builder is available at `tests/sms/scripts/build_homebrew_diagnostics.sh`. It checks out the exact upstream revisions listed above, builds both ROMs, verifies their expected sizes and the SMS Test Suite header, and prints SHA-256 hashes.
+
+Run it from the repository root in Ubuntu or WSL2 with Git, CMake, a C/C++ build toolchain, Make, Python 3, and SDCC 4.5.0 installed:
+
+```bash
+bash tests/sms/scripts/build_homebrew_diagnostics.sh
+```
+
+The output files are written to `test-results/homebrew-roms/`:
+
+- `SmsVdpTest.sms`
+- `SMS-Test-Suite-0.38.sms`
+
+An optional first argument overrides the output directory. The script does not commit ROM binaries to Git. It builds from the pinned upstream sources locally; it does not grant redistribution rights. The generated files should be kept local unless the upstream authors grant permission to redistribute them.
