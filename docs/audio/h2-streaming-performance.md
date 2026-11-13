@@ -1,7 +1,7 @@
 # H2 streaming performance
 
-Status: renderer and SMS worker integration implemented on feature branch; performance NOT MEASURED  
-Target: SMS NTSC/PAL, 48 kHz internal PCM  
+Status: renderer and SMS worker integration implemented on feature branch; performance NOT MEASURED
+Target: SMS NTSC/PAL, 48 kHz internal PCM
 Reference study: `native/sn76489/src/psg_h2_model.rs`
 
 ## 1. Do not interpret offline measurements as real-time results
