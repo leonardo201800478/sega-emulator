@@ -78,3 +78,18 @@ A PR #787 foi integrada por squash em `323f295f459feaed457550db2b8d2c2e4188d81e`
 Até a conclusão dos gates físicos/lifecycle restantes, R3 permanece **IN_PROGRESS**, não concluída.
 
 **Lockfiles:** CPAL 0.18.2 e os lockfiles aplicáveis foram integrados pela PR #770. A branch H4 não altera dependências nem lockfiles; a CI `--locked` deve confirmar a consistência.
+
+
+## Auditoria de underrun e métricas por janela — 2026-11-13
+
+A semântica dos contadores foi auditada diretamente no callback e na FIFO:
+
+- `underrun_frames` é a quantidade de frames estéreo que `PcmFrameConsumer::read_frames` preencheu com zero quando não havia dados disponíveis. É zero-fill efetivo no buffer entregue pelo callback, não apenas um evento abstrato.
+- `consumed_frames` conta os frames retirados da FIFO. O total de frames solicitados ao consumidor é `consumed_frames + underrun_frames`.
+- `underrun_events` conta chamadas de leitura que precisaram inserir ao menos um frame de silêncio. Não equivale necessariamente a um callback CPAL nem a um episódio acústico.
+- Os contadores originais continuam cumulativos desde a criação da fila. O host agora calcula deltas entre snapshots monotônicos consecutivos, com `window_ms`, `window_valid` e `counter_reset` para identificar a primeira janela ou um reset/configuração alterada.
+- O log `R3_AUDIO_HEALTH` passa a expor `accepted_frames_delta`, `consumed_frames_delta`, `requested_frames_delta`, `underrun_frames_delta`, `underrun_events_delta`, taxas de produção/consumo solicitadas e `zero_fill_percent`.
+- `zero_fill_percent` usa `underrun_frames_delta / requested_frames_delta`, onde `requested_frames_delta = consumed_frames_delta + underrun_frames_delta`. Não usar `underrun_frames / consumed_frames` como percentual de silêncio.
+- Se um reset de contador for detectado, a janela atual é marcada com `counter_reset=1` e deve ser tratada como início de uma nova epoch; a taxa dessa primeira janela não deve ser comparada diretamente com uma janela estável.
+
+Esta instrumentação não altera FIFO, prebuffer, resampler, sample rate da máquina, PSG ou Scheduler. A validação física/loopback continua pendente e será feita somente na etapa final de aceitação.
