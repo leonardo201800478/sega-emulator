@@ -284,7 +284,7 @@ mod windows_host {
                             CheckBox {
                                 text: "Filtro passa-baixas";
                                 checked <=> root.audio-lpf-enabled;
-                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, enabled, root.audio-lpf-cutoff); }
+                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, self.checked, root.audio-lpf-cutoff); }
                             }
                             Text { font-size: 11px; text: "Corte LPF: \\{round(root.audio-lpf-cutoff)} Hz"; color: #b9c5ce; }
                             Slider {
