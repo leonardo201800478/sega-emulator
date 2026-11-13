@@ -23,10 +23,10 @@ The build is pinned to:
 
 - SDCC 4.6.0 (official upstream Linux x64 archive in CI);
 - devkitSMS commit `561bc2cb9829cdf2e31ad8cd43835037c8c44a63`;
-- devkitSMS `crt0/crt0_sms.rel` and the matching `SMSlib/src/SMSlib.c` core object (the startup object references SMSlib ISR and initialization symbols);
+- devkitSMS `crt0/crt0_sms.rel`, `SMSlib/src/SMSlib.c`, and `SMSlib/src/SMSlib_sprite.c` (the startup initialization path references the SMSlib core ISR/init symbols and sprite-table initialization);
 - devkitSMS `tools/makesms/src/makesms.c`.
 
-The build script checks the exact devkitSMS Git revision and compiler version. It compiles the four profile variants and the matching SMSlib core, links the startup object with those real definitions (without suppressing unresolved symbols), converts each IHX image using the converter source from the same pinned devkitSMS checkout, checks the ROM size and records SHA-256 plus build provenance.
+The build script checks the exact devkitSMS Git revision and compiler version. It compiles the four profile variants and the required SMSlib core and sprite objects, links the startup object with those real definitions (without suppressing unresolved symbols), converts each IHX image using the converter source from the same pinned devkitSMS checkout, checks the ROM size and records SHA-256 plus build provenance.
 
 Run from the repository root:
 
