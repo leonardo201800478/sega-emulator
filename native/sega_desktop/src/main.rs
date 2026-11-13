@@ -1946,7 +1946,6 @@ mod windows_host {
             }
         });
 
-
         let keyboard_state = Rc::new(RefCell::new(KeyboardInputState::default()));
 
         let keyboard_press_state = Rc::clone(&keyboard_state);
