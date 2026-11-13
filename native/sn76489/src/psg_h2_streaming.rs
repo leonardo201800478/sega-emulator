@@ -77,6 +77,7 @@ pub struct H2StreamingRenderer {
     settled_level: f64,
     epoch_start_clock: u64,
     last_event_clock: u64,
+    last_render_clock: u64,
     metrics: H2StreamingMetrics,
 }
 
@@ -137,6 +138,7 @@ impl H2StreamingRenderer {
             settled_level: 0.0,
             epoch_start_clock: 0,
             last_event_clock: 0,
+            last_render_clock: 0,
             metrics: H2StreamingMetrics::default(),
         };
         renderer.begin_epoch(0, 0.0)?;
@@ -163,6 +165,7 @@ impl H2StreamingRenderer {
         self.settled_level = initial_level;
         self.epoch_start_clock = start_clock;
         self.last_event_clock = start_clock;
+        self.last_render_clock = start_clock;
         self.metrics = H2StreamingMetrics::default();
         Ok(())
     }
@@ -181,7 +184,7 @@ impl H2StreamingRenderer {
         let mut index = 0;
         while index < events.len() {
             let clock = events[index].clock;
-            if clock < self.last_event_clock {
+            if clock < self.last_event_clock || clock < self.last_render_clock {
                 return Err(H2StreamingError::EventOutOfOrder);
             }
             if clock < self.epoch_start_clock {
@@ -220,6 +223,7 @@ impl H2StreamingRenderer {
 
         let safe_exclusive = self.sample_index_at_clock(end_clock)?.saturating_sub(1);
         self.emit_until(safe_exclusive, output)?;
+        self.last_render_clock = end_clock;
         Ok(output.len())
     }
 
@@ -251,7 +255,10 @@ impl H2StreamingRenderer {
     }
 
     fn validate_horizon(&self, end_clock: u64) -> Result<(), H2StreamingError> {
-        if end_clock < self.epoch_start_clock || end_clock < self.last_event_clock {
+        if end_clock < self.epoch_start_clock
+            || end_clock < self.last_event_clock
+            || end_clock < self.last_render_clock
+        {
             return Err(H2StreamingError::ClockWentBackwards);
         }
         Ok(())
@@ -309,9 +316,13 @@ impl H2StreamingRenderer {
         if first < self.next_sample_index {
             return Err(H2StreamingError::LateEvent);
         }
-        if settled.saturating_sub(self.next_sample_index) >= PENDING_CAPACITY as u64 {
+        let pending_horizon = settled.saturating_sub(self.next_sample_index);
+        if pending_horizon >= PENDING_CAPACITY as u64 {
             return Err(H2StreamingError::PendingHorizonExceeded);
         }
+        self.metrics.max_pending_samples = self.metrics.max_pending_samples.max(
+            usize::try_from(pending_horizon).unwrap_or(usize::MAX),
+        );
 
         for sample_index in first..settled {
             let slot = sample_index as usize % PENDING_CAPACITY;
@@ -346,11 +357,6 @@ impl H2StreamingRenderer {
                 .ok_or(H2StreamingError::SampleIndexOverflow)?;
             self.metrics.output_samples = self.metrics.output_samples.saturating_add(1);
         }
-        let safe_exclusive = end_exclusive;
-        let pending = safe_exclusive.saturating_sub(self.next_sample_index);
-        self.metrics.max_pending_samples = self.metrics.max_pending_samples.max(
-            usize::try_from(pending).unwrap_or(usize::MAX),
-        );
         Ok(())
     }
 }
@@ -395,18 +401,17 @@ mod tests {
         continuous.finish(total_clock, &mut continuous_block).unwrap();
         continuous_output.extend_from_slice(&continuous_block);
 
-        let mut previous_clock = 0;
+        let mut event_cursor = 0;
         for end_clock in [1_000, 12_345, 50_000, 100_000, 200_000, 300_000, total_clock] {
-            let block_events: Vec<_> = events
-                .iter()
-                .copied()
-                .filter(|event| event.clock >= previous_clock && event.clock <= end_clock)
-                .collect();
+            let start = event_cursor;
+            while event_cursor < events.len() && events[event_cursor].clock <= end_clock {
+                event_cursor += 1;
+            }
+            let block_events = &events[start..event_cursor];
             chunked
-                .render_until(&block_events, end_clock, &mut chunked_block)
+                .render_until(block_events, end_clock, &mut chunked_block)
                 .unwrap();
             chunked_output.extend_from_slice(&chunked_block);
-            previous_clock = end_clock;
         }
         chunked.finish(total_clock, &mut chunked_block).unwrap();
         chunked_output.extend_from_slice(&chunked_block);
