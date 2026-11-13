@@ -1801,8 +1801,7 @@ mod windows_host {
         settings: &SmsWorkerSettings,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
-        let (next, next_save_context) =
-            create_sms_worker(rom, settings, save_store)?;
+        let (next, next_save_context) = create_sms_worker(rom, settings, save_store)?;
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -1908,10 +1907,7 @@ mod windows_host {
         let save_store = cartridge_save_store()?;
         let worker_settings = SmsWorkerSettings {
             region: region.clone(),
-            audio_volume: effective_audio_volume(
-                preferences.audio_volume,
-                preferences.audio_muted,
-            ),
+            audio_volume: effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
             dsp_config: audio_dsp_config(
                 preferences.audio_dsp_preset,
                 preferences.audio_hpf_enabled,
