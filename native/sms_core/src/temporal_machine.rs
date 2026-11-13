@@ -3372,6 +3372,7 @@ mod temporal_frame_tests {
             Territory::Export,
         )
         .unwrap();
+        machine.enable_psg_event_capture(16_384).unwrap();
 
         machine.step_frame(100_000).unwrap();
 
@@ -3391,6 +3392,11 @@ mod temporal_frame_tests {
         let samples = machine.drain_audio_samples(None);
         assert!(!samples.is_empty());
         assert!(samples.iter().any(|sample| sample.abs() > 1.0e-9));
+
+        let mut events = Vec::new();
+        assert!(machine.drain_psg_amplitude_events(&mut events) > 0);
+        assert!(events.windows(2).all(|pair| pair[0].clock <= pair[1].clock));
+        assert!(!machine.psg_event_capture_overflowed());
     }
 
     #[test]
