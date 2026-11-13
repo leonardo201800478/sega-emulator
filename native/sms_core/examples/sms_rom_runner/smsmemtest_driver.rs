@@ -225,10 +225,10 @@ fn decode_smsmemtest_text_row(vram: &[u8], row: usize) -> Option<DecodedTextRow>
 fn decode_font_tile(tile: u16) -> Option<(char, SmsmemtestTextColor)> {
     let (offset, color) = match tile {
         0..FONT_TILE_COUNT => (0, SmsmemtestTextColor::White),
-        GREEN_TILE_OFFSET..(GREEN_TILE_OFFSET + FONT_TILE_COUNT) => {
+        value if (GREEN_TILE_OFFSET..GREEN_TILE_OFFSET + FONT_TILE_COUNT).contains(&value) => {
             (GREEN_TILE_OFFSET, SmsmemtestTextColor::Green)
         }
-        RED_TILE_OFFSET..(RED_TILE_OFFSET + FONT_TILE_COUNT) => {
+        value if (RED_TILE_OFFSET..RED_TILE_OFFSET + FONT_TILE_COUNT).contains(&value) => {
             (RED_TILE_OFFSET, SmsmemtestTextColor::Red)
         }
         _ => return None,
