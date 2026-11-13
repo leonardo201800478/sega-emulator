@@ -426,6 +426,26 @@ mod tests {
         assert_eq!(session.resampler.volume(), 100);
     }
 
+
+    #[test]
+    fn changing_analog_output_config_keeps_the_existing_sink_open() {
+        let mut session =
+            NativeAudioSession::new(48_000, 48_000, 100, RecordingSink::default()).unwrap();
+
+        session
+            .set_analog_output_config(AnalogOutputConfig::sms1_experimental())
+            .unwrap();
+        session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
+        assert!(!session.sink.closed);
+
+        session
+            .set_analog_output_config(AnalogOutputConfig::default())
+            .unwrap();
+        session.process_samples(&[0.25, -0.25]).unwrap();
+        assert!(!session.sink.closed);
+        assert_eq!(session.sink.blocks.len(), 2);
+    }
+
     #[test]
     fn session_reports_sink_metrics() {
         let sink = RecordingSink {
