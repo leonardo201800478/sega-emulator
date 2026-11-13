@@ -33,9 +33,9 @@ A função `print_test_result()` é um oráculo visual: escreve `OK!` em verde o
 
 ## 2. O que o runner atual ainda não faz
 
-O runner chama `step_frame()` repetidamente, drena PCM e emite contadores JSONL. O driver SMSmemtest observa pixels brancos nas linhas de texto 3 e 14 para os prompts e usa a cor de resultado na linha 4 para reconhecer o fim da fase VRAM. Aplica pulsos de `button_1` somente em fronteiras de frame.
+O runner chama `step_frame()` repetidamente, drena PCM e emite contadores JSONL. O driver SMSmemtest lê o name table do VDP por `machine.vdp().vram()` (read-only) e decodifica os prompts e resultados a partir dos índices de tiles SMSlib. Aplica pulsos de `button_1` somente em fronteiras de frame.
 
-A navegação continua sendo um heurístico de presença de texto branco, não OCR: não valida o conteúdo literal dos prompts. A classificação de resultado, porém, usa as cores explícitas de `print_test_result()`: a fonte carrega os tiles com paletas 1/2/3 e configura BG palette 1 como branco, 2 como verde e 3 como vermelho. O renderer SMS converte CRAM 6-bit para RGB24 com cada canal em passos de 85; portanto, verde e vermelho são observáveis como pixels RGB dominantes exatos. Os testes unitários exercitam cores sintéticas, mas a integração ainda precisa ser validada com ROM real. Se o prompt não for detectado, o runner retorna `INPUT_DRIVER_TIMEOUT_NO_ORACLE`. Quando uma cor de resultado estável é observada na linha 4 de VRAM, retorna `SMSMEMTEST_COLOR_RESULTS_UNVALIDATED_ON_ROM`; isso também captura o caminho de falha, no qual a ROM não exibe o prompt de continuação. O driver não aciona a última espera para SRAM.
+A navegação valida os prompts literais pelo tilemap, sem OCR ou leitura de pixels RGB. SMSlib documenta que `SMS_configureTextRenderer()` adiciona um offset ao código ASCII; a ROM carrega as 96 letras nos ranges 0–95 (branco), 96–191 (verde) e 192–287 (vermelho). O decoder remove o atributo de tile, mapeia esses ranges para ASCII e valida a cor do sufixo `OK!`/`FAILED!`. O driver usa a PNT base `0x3800`, derivada do `SMS_PNTAddress` upstream `0x7800` (flag de escrita removida). Se o prompt não for detectado, o runner retorna `INPUT_DRIVER_TIMEOUT_NO_ORACLE`. A fase VRAM identifica o rótulo exato do padrão que falhou ou `vram_all_tests` no caminho de sucesso. O driver não aciona a última espera para SRAM.
 
 A máquina já expõe APIs read-only/seguras para esta finalidade:
 - `SmsTemporalMachine::set_controller()` atualiza níveis do controle sem avançar o tempo;
@@ -62,13 +62,14 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 ### Fase M1 — Entrada determinística por fase
 
 - Implementado um driver específico que aplica pulsos de `button_1` somente depois de frames completos, mantendo o botão pressionado durante o frame seguinte e liberando-o na próxima fronteira.
-- A transição usa atividade de pixels brancos nas linhas de texto documentadas (3 e 14), estável por dois frames; o término da fase VRAM é detectado pela presença estável de verde/vermelho na linha 4, mas somente depois de observar ao menos um frame sem cor de resultado, evitando reutilizar o resultado RAM anterior. Não usa atrasos fixos como substituto de conclusão.
+- A transição exige os textos exatos `Press any button to start`, `Press any controller button` e `to start VIDEO RAM tests`, estáveis por dois frames. O fim da fase VRAM exige a heading `Testing system VIDEO RAM:` e um resultado textual reconhecido na linha 4.
 - O detector de prompts é heurístico e ainda precisa ser validado com uma ROM SMSmemtest construída a partir da revisão upstream fixada.
 - Eventos de pressionar/liberar são registrados em JSONL com índice de frame.
 - A revisão fixada do devkitSMS (`561bc2cb9829cdf2e31ad8cd43835037c8c44a63`) define `SMS_getKeysPressed()` como `KeysStatus & ~PreviousKeysStatus`; por isso o driver aplica uma transição press/release, mantendo o botão durante um frame completo para que o handler de frame a amostre.
-- O classificador de RAM lê linhas 4–10 e reconhece verde como `PASS`, vermelho como `FAIL`, ausência como `NOT_OBSERVED` e mistura como `AMBIGUOUS`.
-- O classificador de VRAM lê a linha 4: verde significa que a ROM reportou todos os testes aprovados; vermelho significa que a ROM reportou uma falha, mas não identifica qual teste da cadeia `if/else` falhou.
-- Não há OCR nem leitura de texto tilemap; a classificação visual foi unit-tested com cores RGB sintéticas, mas ainda não validada contra saída real da ROM.
+- O decoder lê 32 entradas do name table por linha, remove o atributo de tile e mapeia os ranges 0–95/96–191/192–287 de volta a ASCII branco/verde/vermelho.
+- O classificador RAM exige o rótulo exato de cada uma das sete linhas e o sufixo `OK!`/`FAILED!` com a variante de cor correspondente.
+- O classificador VRAM reconhece `vram_all_zero`, `vram_all_one`, `vram_pattern_55`, `vram_pattern_aa`, `vram_variable` ou `vram_all_tests`.
+- Não há OCR nem leitura/modificação de portas VDP; o acesso é read-only por `SmsVdp::vram()`.
 
 ### Fase M2 — Captura read-only
 
