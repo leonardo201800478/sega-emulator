@@ -1018,6 +1018,11 @@ impl SmsTemporalMachine {
         self.bus.psg()
     }
 
+    /// Current normalized digital PSG mix before the production FIR.
+    pub fn psg_mixed_amplitude(&self) -> f64 {
+        self.bus.psg_mixed_amplitude()
+    }
+
     /// Drain audio samples already produced by scheduler-owned PSG clocks.
     pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.bus.drain_audio_samples(max_samples)
