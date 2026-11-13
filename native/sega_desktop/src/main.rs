@@ -429,13 +429,39 @@ mod windows_host {
                     }
                 }
                 "audio_muted" => {
-                    if let Ok(value) = value.trim().parse() { preferences.audio_muted = value; }
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_muted = value;
+                    }
                 }
-                "audio_dsp_preset" => { if let Ok(value) = value.trim().parse() { preferences.audio_dsp_preset = value; } }
-                "audio_hpf_enabled" => { if let Ok(value) = value.trim().parse() { preferences.audio_hpf_enabled = value; } }
-                "audio_hpf_cutoff_hz" => { if let Ok(value) = value.trim().parse::<u16>() && (5..=500).contains(&value) { preferences.audio_hpf_cutoff_hz = value; } }
-                "audio_lpf_enabled" => { if let Ok(value) = value.trim().parse() { preferences.audio_lpf_enabled = value; } }
-                "audio_lpf_cutoff_hz" => { if let Ok(value) = value.trim().parse::<u16>() && (4_000..=20_000).contains(&value) { preferences.audio_lpf_cutoff_hz = value; } }
+                "audio_dsp_preset" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_dsp_preset = value;
+                    }
+                }
+                "audio_hpf_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_hpf_enabled = value;
+                    }
+                }
+                "audio_hpf_cutoff_hz" => {
+                    if let Ok(value) = value.trim().parse::<u16>()
+                        && (5..=500).contains(&value)
+                    {
+                        preferences.audio_hpf_cutoff_hz = value;
+                    }
+                }
+                "audio_lpf_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_lpf_enabled = value;
+                    }
+                }
+                "audio_lpf_cutoff_hz" => {
+                    if let Ok(value) = value.trim().parse::<u16>()
+                        && (4_000..=20_000).contains(&value)
+                    {
+                        preferences.audio_lpf_cutoff_hz = value;
+                    }
+                }
                 _ => {}
             }
         }
@@ -1421,9 +1447,21 @@ mod windows_host {
     }
 
     /// Converte as preferências da GUI em configuração DSP validada pelo runtime.
-    fn audio_dsp_config(preset: bool, hpf_enabled: bool, hpf_cutoff: f64, lpf_enabled: bool, lpf_cutoff: f64) -> AnalogOutputConfig {
-        if preset { return AnalogOutputConfig::sms1_experimental(); }
-        AnalogOutputConfig { enabled: hpf_enabled || lpf_enabled, high_pass_hz: hpf_enabled.then_some(hpf_cutoff), low_pass_hz: lpf_enabled.then_some(lpf_cutoff) }
+    fn audio_dsp_config(
+        preset: bool,
+        hpf_enabled: bool,
+        hpf_cutoff: f64,
+        lpf_enabled: bool,
+        lpf_cutoff: f64,
+    ) -> AnalogOutputConfig {
+        if preset {
+            return AnalogOutputConfig::sms1_experimental();
+        }
+        AnalogOutputConfig {
+            enabled: hpf_enabled || lpf_enabled,
+            high_pass_hz: hpf_enabled.then_some(hpf_cutoff),
+            low_pass_hz: lpf_enabled.then_some(lpf_cutoff),
+        }
     }
 
     /// Cria a sessão CPAL com volume e configuração DSP persistidos.
@@ -1555,7 +1593,13 @@ mod windows_host {
                 &region,
                 &mailbox,
                 effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
-                audio_dsp_config(preferences.audio_dsp_preset, preferences.audio_hpf_enabled, f64::from(preferences.audio_hpf_cutoff_hz), preferences.audio_lpf_enabled, f64::from(preferences.audio_lpf_cutoff_hz)),
+                audio_dsp_config(
+                    preferences.audio_dsp_preset,
+                    preferences.audio_hpf_enabled,
+                    f64::from(preferences.audio_hpf_cutoff_hz),
+                    preferences.audio_lpf_enabled,
+                    f64::from(preferences.audio_lpf_cutoff_hz),
+                ),
             )?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
@@ -1747,12 +1791,25 @@ mod windows_host {
                             app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
                             app.get_audio_muted(),
                         ),
-                        audio_dsp_config(app.get_audio_dsp_preset(), app.get_audio_hpf_enabled(), f64::from(app.get_audio_hpf_cutoff().round() as u16), app.get_audio_lpf_enabled(), f64::from(app.get_audio_lpf_cutoff().round() as u16)),
+                        audio_dsp_config(
+                            app.get_audio_dsp_preset(),
+                            app.get_audio_hpf_enabled(),
+                            f64::from(app.get_audio_hpf_cutoff().round() as u16),
+                            app.get_audio_lpf_enabled(),
+                            f64::from(app.get_audio_lpf_cutoff().round() as u16),
+                        ),
                     )
                 })
                 .unwrap_or_else(|| ("usa".to_owned(), true, 70, AnalogOutputConfig::default()));
 
-            match replace_sms_worker(&path, &region, &open_worker, &open_mailbox, audio_volume, dsp_config) {
+            match replace_sms_worker(
+                &path,
+                &region,
+                &open_worker,
+                &open_mailbox,
+                audio_volume,
+                dsp_config,
+            ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
                         SpriteLimitMode::HardwareLimit
@@ -1862,11 +1919,13 @@ mod windows_host {
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
                     audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
                     audio_muted: app.get_audio_muted(),
-                audio_dsp_preset: app.get_audio_dsp_preset(),
-                audio_hpf_enabled: app.get_audio_hpf_enabled(),
-                audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
-                audio_lpf_enabled: app.get_audio_lpf_enabled(),
-                audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0) as u16,
+                    audio_dsp_preset: app.get_audio_dsp_preset(),
+                    audio_hpf_enabled: app.get_audio_hpf_enabled(),
+                    audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0)
+                        as u16,
+                    audio_lpf_enabled: app.get_audio_lpf_enabled(),
+                    audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0)
+                        as u16,
                 };
                 let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
@@ -1921,7 +1980,8 @@ mod windows_host {
                 audio_hpf_enabled: app.get_audio_hpf_enabled(),
                 audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
                 audio_lpf_enabled: app.get_audio_lpf_enabled(),
-                audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0) as u16,
+                audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0)
+                    as u16,
             };
             if let Err(error) = save_desktop_preferences(&prefs) {
                 eprintln!("R2_PREFERENCES save_failed error={error}");
@@ -1988,17 +2048,38 @@ mod windows_host {
 
         let audio_dsp_worker = Rc::clone(&worker);
         let audio_dsp_app = app.as_weak();
-        app.on_audio_dsp_changed(move |preset, hpf_enabled, hpf_cutoff, lpf_enabled, lpf_cutoff| {
-            let Some(app) = audio_dsp_app.upgrade() else { return; };
-            let config = audio_dsp_config(preset, hpf_enabled, f64::from(hpf_cutoff.round() as u16), lpf_enabled, f64::from(lpf_cutoff.round() as u16));
-            let result = audio_dsp_worker.borrow().as_ref().map(|worker| worker.set_audio_dsp_config(config));
-            match result {
-                Some(Ok(())) => app.set_audio_status(if config.enabled { "DSP aplicado no worker; filtros ativos na saída PCM.".into() } else { "DSP analógico adicional desativado; saída original preservada.".into() }),
-                Some(Err(error)) => app.set_audio_status(format!("Falha ao aplicar DSP: {error}").into()),
-                None => app.set_audio_status("Preferências DSP salvas; serão aplicadas ao carregar uma ROM SMS.".into()),
-            }
-            app.invoke_preferences_changed();
-        });
+        app.on_audio_dsp_changed(
+            move |preset, hpf_enabled, hpf_cutoff, lpf_enabled, lpf_cutoff| {
+                let Some(app) = audio_dsp_app.upgrade() else {
+                    return;
+                };
+                let config = audio_dsp_config(
+                    preset,
+                    hpf_enabled,
+                    f64::from(hpf_cutoff.round() as u16),
+                    lpf_enabled,
+                    f64::from(lpf_cutoff.round() as u16),
+                );
+                let result = audio_dsp_worker
+                    .borrow()
+                    .as_ref()
+                    .map(|worker| worker.set_audio_dsp_config(config));
+                match result {
+                    Some(Ok(())) => app.set_audio_status(if config.enabled {
+                        "DSP aplicado no worker; filtros ativos na saída PCM.".into()
+                    } else {
+                        "DSP analógico adicional desativado; saída original preservada.".into()
+                    }),
+                    Some(Err(error)) => {
+                        app.set_audio_status(format!("Falha ao aplicar DSP: {error}").into())
+                    }
+                    None => app.set_audio_status(
+                        "Preferências DSP salvas; serão aplicadas ao carregar uma ROM SMS.".into(),
+                    ),
+                }
+                app.invoke_preferences_changed();
+            },
+        );
 
         let fullscreen_app = app.as_weak();
         app.on_fullscreen_requested(move |enabled| {
