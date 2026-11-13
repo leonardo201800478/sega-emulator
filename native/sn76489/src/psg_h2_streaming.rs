@@ -430,6 +430,30 @@ mod tests {
     }
 
     #[test]
+    fn streaming_output_matches_the_offline_h2_reference() {
+        let events = fixture_events();
+        let pairs = events
+            .iter()
+            .map(|event| (event.clock, event.delta))
+            .collect::<Vec<_>>();
+        let total_clock = 500_000;
+        let expected =
+            super::super::h2_model::render_reference_events(&pairs, 0.0, total_clock);
+
+        let mut renderer = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
+        let mut block = Vec::with_capacity(1024);
+        let mut actual = Vec::new();
+        renderer
+            .render_until(&events, total_clock, &mut block)
+            .unwrap();
+        actual.extend_from_slice(&block);
+        renderer.finish(total_clock, &mut block).unwrap();
+        actual.extend_from_slice(&block);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn same_clock_events_are_summed_independent_of_input_order() {
         let mut first = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut second = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
