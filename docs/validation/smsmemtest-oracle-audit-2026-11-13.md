@@ -35,7 +35,7 @@ A função `print_test_result()` é um oráculo visual: escreve `OK!` em verde o
 
 O runner atual chama `step_frame()` repetidamente, drena PCM e emite contadores JSONL. Ele não chama `set_controller()`, não observa o framebuffer e não decodifica o texto/cores apresentados pela ROM.
 
-Consequentemente, sem entrada, a ROM fica parada em `wait_start()`; completar o orçamento de frames não significa que os testes de RAM começaram. Mesmo que uma entrada inicial seja adicionada, duas esperas adicionais precisam ser satisfeitas para avançar pelas fases de VRAM e SRAM.
+Esse mecanismo é intencionalmente um heurístico de presença de linha, não OCR: não valida que o texto esperado esteja presente nem que `OK!`/`FAILED!` tenha sido produzido. A ROM pode continuar parada se o marcador não for detectado; o runner então retorna `INPUT_DRIVER_TIMEOUT_NO_ORACLE`. Quando detecta atividade nas três linhas esperadas, retorna `PROMPT_ROW_HEURISTIC_COMPLETED_NO_CASE_ORACLE`. O driver não aciona a última espera para SRAM.
 
 A máquina já expõe APIs read-only/seguras para esta finalidade:
 - `SmsTemporalMachine::set_controller()` atualiza níveis do controle sem avançar o tempo;
@@ -61,10 +61,11 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 
 ### Fase M1 — Entrada determinística por fase
 
-- Adicionar ao runner uma configuração de entrada reproduzível, aplicada somente em fronteiras seguras de frame.
-- Gerar um pulso de botão (pressionar e liberar) para sair de cada espera.
-- Não assumir que um intervalo fixo de frames representa conclusão de uma rotina; detectar o marcador visual de conclusão antes de avançar.
-- Registrar cada evento de entrada com frame/tempo virtual.
+- Implementado um driver específico que aplica pulsos de `button_1` somente depois de frames completos, mantendo o botão pressionado durante o frame seguinte e liberando-o na próxima fronteira.
+- A transição usa atividade de pixels nas linhas de texto documentadas (3, 14 e 12), estável por dois frames; não usa atrasos fixos como substituto de conclusão.
+- O detector é heurístico e ainda precisa ser validado com uma ROM SMSmemtest construída a partir da revisão upstream fixada.
+- Eventos de pressionar/liberar são registrados em JSONL com índice de frame.
+- Não há OCR, leitura de texto tilemap nem classificação de `OK!`/`FAILED!`.
 
 ### Fase M2 — Captura read-only
 
@@ -94,10 +95,10 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 | Runner full-machine via Scheduler | Implementado |
 | CI de workspace e SMS runtime no HEAD anterior | PASS |
 | Snapshot/hash do mesmo input ROM | Implementado no wrapper; CI do novo HEAD pendente |
-| Entrada automática por fase | NOT IMPLEMENTED |
+| Entrada automática por fase | IMPLEMENTADA — heurística de atividade de linha; não validada em ROM real |
 | Captura/oráculo visual | NOT IMPLEMENTED |
-| Testes RAM | BLOCKED — entrada/oráculo |
-| Testes VRAM | BLOCKED — entrada/oráculo e capacidade temporal por caso |
+| Testes RAM | BLOCKED — oráculo por caso ausente; driver heurístico ainda não validado em ROM real |
+| Testes VRAM | BLOCKED — oráculo por caso ausente; driver heurístico ainda não validado em ROM real e capacidade temporal por caso |
 | Testes cart SRAM | BLOCKED_CAPABILITY — sem SRAM no mapper |
 | Execução real de ROM externa | NOT RUN |
 
