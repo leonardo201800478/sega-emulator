@@ -83,6 +83,63 @@ impl fmt::Display for PsgError {
 
 impl std::error::Error for PsgError {}
 
+/// A change in the mixed digital PSG amplitude at an absolute PSG-clock edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PsgAmplitudeEvent {
+    /// Absolute PSG input clocks since the most recent core reset.
+    pub clock: u64,
+    /// Signed change in the normalized digital mix.
+    pub delta: f64,
+}
+
+/// Failure to enable the optional amplitude-event observer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PsgEventCaptureError {
+    ZeroCapacity,
+}
+
+impl fmt::Display for PsgEventCaptureError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ZeroCapacity => write!(f, "PSG event capture capacity must be positive"),
+        }
+    }
+}
+
+impl std::error::Error for PsgEventCaptureError {}
+
+#[derive(Debug, Clone, PartialEq)]
+struct PsgEventCapture {
+    events: VecDeque<PsgAmplitudeEvent>,
+    capacity: usize,
+    overflow_count: u64,
+    overflowed: bool,
+}
+
+impl PsgEventCapture {
+    fn new(capacity: usize) -> Self {
+        Self {
+            events: VecDeque::with_capacity(capacity),
+            capacity,
+            overflow_count: 0,
+            overflowed: false,
+        }
+    }
+
+    fn record(&mut self, clock: u64, previous_level: f64, current_level: f64) {
+        let delta = current_level - previous_level;
+        if delta == 0.0 || self.overflowed {
+            return;
+        }
+        if self.events.len() == self.capacity {
+            self.overflow_count = self.overflow_count.saturating_add(1);
+            self.overflowed = true;
+            return;
+        }
+        self.events.push_back(PsgAmplitudeEvent { clock, delta });
+    }
+}
+
 /// Approximate the modified Bessel function I0 for the Kaiser window.
 fn bessel_i0(value: f64) -> f64 {
     let quarter_square = value * value * 0.25;
@@ -205,6 +262,8 @@ pub struct Sn76489Core {
     filter_coefficients: Vec<f64>,
     filter_history: Vec<f64>,
     filter_position: usize,
+    elapsed_clocks: u64,
+    event_capture: Option<PsgEventCapture>,
 }
 
 impl Sn76489Core {
@@ -267,6 +326,8 @@ impl Sn76489Core {
             filter_coefficients,
             filter_history,
             filter_position: 0,
+            elapsed_clocks: 0,
+            event_capture: None,
         };
         device.reset_inner();
         Ok(device)
@@ -348,6 +409,54 @@ impl Sn76489Core {
         self.output_phase
     }
 
+    /// Absolute PSG input clocks elapsed since the last reset.
+    pub fn elapsed_clocks(&self) -> u64 {
+        self.elapsed_clocks
+    }
+
+    /// Enable bounded observation of real digital mix transitions.
+    ///
+    /// Capture is disabled by default and does not alter PSG synthesis. Calling
+    /// this method starts a fresh event epoch at the current mixed amplitude.
+    pub fn enable_event_capture(
+        &mut self,
+        capacity: usize,
+    ) -> Result<(), PsgEventCaptureError> {
+        if capacity == 0 {
+            return Err(PsgEventCaptureError::ZeroCapacity);
+        }
+        self.event_capture = Some(PsgEventCapture::new(capacity));
+        Ok(())
+    }
+
+    /// Disable event observation and release its bounded queue.
+    pub fn disable_event_capture(&mut self) {
+        self.event_capture = None;
+    }
+
+    /// Drain captured events into a caller-owned reusable buffer.
+    pub fn drain_amplitude_events(&mut self, output: &mut Vec<PsgAmplitudeEvent>) -> usize {
+        output.clear();
+        if let Some(capture) = self.event_capture.as_mut() {
+            output.extend(capture.events.drain(..));
+        }
+        output.len()
+    }
+
+    /// Number of transitions lost after the bounded event queue overflowed.
+    pub fn event_capture_overflow_count(&self) -> u64 {
+        self.event_capture
+            .as_ref()
+            .map_or(0, |capture| capture.overflow_count)
+    }
+
+    /// Whether capture overflowed and must no longer be used for rendering.
+    pub fn event_capture_overflowed(&self) -> bool {
+        self.event_capture
+            .as_ref()
+            .is_some_and(|capture| capture.overflowed)
+    }
+
     pub fn reset(&mut self) {
         sega_observability::tracing::debug!(
             target: "sega::psg",
@@ -362,7 +471,11 @@ impl Sn76489Core {
             value,
             "SN76489 register write"
         );
+        let previous_level = self.event_capture.as_ref().map(|_| self.mix());
         self.write_inner(value);
+        if let Some(previous_level) = previous_level {
+            self.record_amplitude_change(self.elapsed_clocks, previous_level);
+        }
     }
 
     pub fn advance_clocks(&mut self, clocks: u64) {
@@ -422,7 +535,13 @@ impl Sn76489Core {
         self.pending_samples.clear();
         self.render_pending.clear();
         self.dropped_samples = 0;
+        self.elapsed_clocks = 0;
         self.refresh_noise_period();
+        if let Some(capture) = self.event_capture.as_mut() {
+            capture.events.clear();
+            capture.overflow_count = 0;
+            capture.overflowed = false;
+        }
     }
 
     fn write_inner(&mut self, value: u8) {
@@ -521,9 +640,13 @@ impl Sn76489Core {
     }
 
     fn advance_clocks_inner(&mut self, clocks: u64, render_sink: bool) {
-        let (internal_clocks, phase) = split_clock_advance(clocks, self.clock_divider_phase);
+        let starting_clock = self.elapsed_clocks;
+        let starting_divider_phase = self.clock_divider_phase;
+        let first_tick_offset = CLOCK_DIVIDER - starting_divider_phase;
+        let (internal_clocks, phase) = split_clock_advance(clocks, starting_divider_phase);
         self.clock_divider_phase = phase;
-        for _ in 0..internal_clocks {
+        for tick_index in 0..internal_clocks {
+            let previous_level = self.event_capture.as_ref().map(|_| self.mix());
             let previous_phase = self.output_phase;
             let (sample_count, next_phase) =
                 advance_output_phase(previous_phase, self.sample_rate, self.clock_hz);
@@ -534,6 +657,12 @@ impl Sn76489Core {
             };
 
             self.tick_internal_clock();
+            if let Some(previous_level) = previous_level {
+                let tick_offset = first_tick_offset
+                    .saturating_add(tick_index.saturating_mul(CLOCK_DIVIDER));
+                let event_clock = starting_clock.saturating_add(tick_offset);
+                self.record_amplitude_change(event_clock, previous_level);
+            }
             self.push_filter_sample();
             self.output_phase = next_phase;
 
@@ -564,6 +693,14 @@ impl Sn76489Core {
                     }
                 }
             }
+        }
+        self.elapsed_clocks = self.elapsed_clocks.saturating_add(clocks);
+    }
+
+    fn record_amplitude_change(&mut self, clock: u64, previous_level: f64) {
+        let current_level = self.mix();
+        if let Some(capture) = self.event_capture.as_mut() {
+            capture.record(clock, previous_level, current_level);
         }
     }
 
