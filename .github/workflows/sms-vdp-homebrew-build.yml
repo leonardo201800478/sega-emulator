@@ -77,7 +77,7 @@ jobs:
           ref: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
           path: .build/devkitSMS
 
-      - name: Checkout Banjo minimal sound driver at pinned commit
+      - name: Checkout Banjo sound driver at pinned commit
         uses: actions/checkout@v4
         with:
           repository: joffb/banjo
@@ -102,7 +102,7 @@ jobs:
           cp .build/devkitSMS/PSGlib/src/PSGlib.h .build/PSGlib/PSGlib.h
           mkdir -p .build/banjo_lib_minimal
           cp .build/banjo/music_driver_sdas/banjo.h .build/banjo_lib_minimal/banjo.h
-          cp .build/banjo/lib_experimental/devkitsms_MINIMAL/*.rel .build/banjo_lib_minimal/
+          cp .build/banjo/lib/devkitsms/*.rel .build/banjo_lib_minimal/
           test -f .build/SMSTestSuite/sn_opll_loop.rel
           test -f .build/banjo_lib_minimal/banjo.rel
           test -f .build/banjo_lib_minimal/banjo_opll.rel
