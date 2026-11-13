@@ -37,6 +37,19 @@ The offline runner advances emulated time as fast as the host allows. This valid
 
 A successful compile or frame budget is not a hardware certification. VBlank/VDP/PSG behavior and visual output still require independent validation.
 
+## Recorded automated evidence
+
+The full-machine execution gate passed in [CI run #7155](https://github.com/leonardo201800478/sega-emulator/actions/runs/43461260038), at emulator commit `38d32297b0c511838c3dd44180a0e42933be9db3`. Each of the four profiles completed 600 frames twice with identical decoded JSONL records and `EXECUTED_NO_ORACLE` status. The first execution reported:
+
+| Profile | CPU instructions | PCM samples drained |
+|---|---:|---:|
+| CPU-light | 4,005,916 | 480,618 |
+| CPU-fixed | 4,687,438 | 480,618 |
+| VDP/sprites | 4,099,321 | 480,618 |
+| Combined | 4,780,488 | 480,618 |
+
+These are offline full-machine workload measurements. The PCM count is sample accounting, not an audio-amplitude or audibility assertion. The test does not measure live worker pacing, WGPU presentation, VSync, or physical display cadence; it does not certify VDP/PSG hardware correctness.
+
 ## Build locally
 
 ```bash
