@@ -54,6 +54,7 @@ jobs:
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
       smsmemtest: ${{ steps.filter.outputs.smsmemtest }}
+      pacing_rom: ${{ steps.filter.outputs.pacing_rom }}
       full: ${{ steps.filter.outputs.full }}
     steps:
       - name: Checkout history for push path classification
@@ -188,6 +189,11 @@ jobs:
               - 'native/sms_core/**'
               - 'native/video_core/src/sms/**'
               - 'Cargo.lock'
+            pacing_rom:
+              - 'tests/sms/pacing-rom/**'
+              - 'tests/sms/scripts/run_rom.py'
+              - 'native/sms_core/examples/sms_rom_runner.rs'
+              - 'native/sms_core/examples/sms_rom_runner/**'
             full:
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -915,6 +921,77 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  sms-pacing-rom-runtime:
+    name: SMS P0 pacing ROM full-machine execution (four profiles)
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.pacing_rom == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+
+      - name: Install pinned SDCC 4.6.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/sdcc-4.6.0.tar.bz2"
+          curl --fail --location --connect-timeout 20 --max-time 180 \
+            --retry 2 --retry-all-errors --retry-max-time 240 \
+            "https://downloads.sourceforge.net/project/sdcc/sdcc-linux-amd64/4.6.0/sdcc-4.6.0-amd64-unknown-linux2.5.tar.bz2" \
+            --output "$archive"
+          mkdir -p "$RUNNER_TEMP/sdcc"
+          tar -xjf "$archive" -C "$RUNNER_TEMP/sdcc"
+          sdcc_bin="$(find "$RUNNER_TEMP/sdcc" -type f -path '*/bin/sdcc' -print -quit)"
+          if [[ -z "$sdcc_bin" ]]; then
+            echo "SDCC binary was not found in the official 4.6.0 archive" >&2
+            exit 1
+          fi
+          echo "SDCC_BIN=$sdcc_bin" >> "$GITHUB_ENV"
+          dirname "$sdcc_bin" >> "$GITHUB_PATH"
+          "$sdcc_bin" --version
+
+      - name: Checkout pinned devkitSMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/sverx/devkitSMS.git "$RUNNER_TEMP/devkitSMS"
+          git -C "$RUNNER_TEMP/devkitSMS" fetch --depth 1 origin 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
+          git -C "$RUNNER_TEMP/devkitSMS" checkout --detach 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
+          echo "DEVKIT_SMS_ROOT=$RUNNER_TEMP/devkitSMS" >> "$GITHUB_ENV"
+          echo "OUT_DIR=$RUNNER_TEMP/sms-pacing-rom-output" >> "$GITHUB_ENV"
+
+      - name: Validate Python harness syntax
+        run: python -m py_compile tests/sms/pacing-rom/run_profiles.py tests/sms/scripts/run_rom.py
+
+      - name: Build all four deterministic pacing ROMs
+        run: bash tests/sms/pacing-rom/build.sh
+
+      - name: Execute each ROM twice through SmsTemporalMachine
+        run: |
+          python tests/sms/pacing-rom/run_profiles.py \
+            --rom-dir "$OUT_DIR" \
+            --report-dir "$RUNNER_TEMP/sms-pacing-rom-reports" \
+            --frames 600 \
+            --max-instructions-per-frame 100000
+
+      - name: Upload ROMs, provenance and full-machine JSONL reports
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sms-p0-pacing-rom-runtime-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/sms-pacing-rom-output/*.sms
+            ${{ runner.temp }}/sms-pacing-rom-output/*.build-info.txt
+            ${{ runner.temp }}/sms-pacing-rom-reports/*.jsonl
+            ${{ runner.temp }}/sms-pacing-rom-reports/*.stderr.log
+          if-no-files-found: error
+          retention-days: 14
 
 
   quality-gate:
@@ -934,6 +1011,7 @@ jobs:
       - scheduler-stress
       - refresh-lockfiles
       - windows-cpal-output
+      - sms-pacing-rom-runtime
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
@@ -965,6 +1043,8 @@ jobs:
           SCHEDULER: ${{ needs.scheduler-stress.result }}
           EXPECT_WINDOWS_CPAL_OUTPUT: ${{ needs.changes.outputs.audio == 'true' }}
           WINDOWS_CPAL_OUTPUT: ${{ needs.windows-cpal-output.result }}
+          EXPECT_SMS_PACING_ROM: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.pacing_rom == 'true' }}
+          SMS_PACING_ROM: ${{ needs.sms-pacing-rom-runtime.result }}
         run: |
           set -euo pipefail
           check_job() {
@@ -1001,6 +1081,7 @@ jobs:
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
           check_job "Windows x64 CPAL audio output" "$EXPECT_WINDOWS_CPAL_OUTPUT" "$WINDOWS_CPAL_OUTPUT"
+          check_job "SMS P0 pacing ROM full-machine execution" "$EXPECT_SMS_PACING_ROM" "$SMS_PACING_ROM"
 
   windows-d3d12-retired:
     name: Windows x64 D3D12 compile

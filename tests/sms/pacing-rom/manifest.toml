@@ -1,0 +1,47 @@
+# Original deterministic SMS frame pacing workloads.
+# This manifest describes build inputs; it does not claim runtime validation.
+
+[project]
+id = "sega_sms_frame_pacing"
+name = "Sega Emulator SMS Frame Pacing Reference"
+source = "tests/sms/pacing-rom/src/main.c"
+license = "MIT"
+target = "sega_master_system"
+initial_region = "usa_ntsc"
+runtime_validation = "PASSED_EXECUTED_NO_ORACLE_NOT_HARDWARE_CERTIFIED"
+
+[toolchain]
+sdcc_version = "4.6.0"
+devkitsms_revision = "561bc2cb9829cdf2e31ad8cd43835037c8c44a63"
+crt0 = "crt0/crt0_sms.rel"
+converter_source = "tools/makesms/src/makesms.c"
+
+[[profile]]
+id = "cpu_light"
+compile_define = "PACING_PROFILE=0"
+description = "VBlank boundary and deterministic frame marker"
+
+[[profile]]
+id = "cpu_fixed"
+compile_define = "PACING_PROFILE=1"
+description = "CPU-light plus fixed 256-iteration arithmetic workload"
+
+[[profile]]
+id = "vdp_sprites"
+compile_define = "PACING_PROFILE=2"
+description = "CPU-light plus eight deterministic sprite attribute updates"
+
+[[profile]]
+id = "combined"
+compile_define = "PACING_PROFILE=3"
+description = "CPU-fixed, VDP/sprites and deterministic PSG tone update"
+
+[validation]
+status = "PASSED_EXECUTED_NO_ORACLE"
+ci_run = 7155
+emulator_commit = "38d32297b0c511838c3dd44180a0e42933be9db3"
+frames_per_execution = 600
+repetitions_per_profile = 2
+profile_count = 4
+physical_pacing = "NOT_MEASURED"
+hardware_certification = "NOT_CLAIMED"
