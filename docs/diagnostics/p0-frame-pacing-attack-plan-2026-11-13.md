@@ -3,7 +3,7 @@
 - **Data:** 2026-11-13
 - **Baseline:** `main` — `d093037bd5fbfef1278d4980f775efa2c549171c`
 - **Issue:** #755
-- **Status:** ABERTA — causa raiz não demonstrada; nenhuma correção definitiva aprovada.
+- **Status:** P0 ABERTA — defeito audiovisual perceptível confirmado pelo usuário; causa raiz e correção definitiva ainda não demonstradas.
 
 ## 1. Fechamento da frente SRAM
 
@@ -172,3 +172,50 @@ A PR #807 implementa uma candidata de correção no pacing do host e na entrega 
 5. P0-E/P0-G: manter novas capturas físicas e aceitação PresentMon/ETW para a etapa final, depois de concluídos os pontos de instrumentação/correção. Não inferir apresentação física a partir do HUD ou de `queue.write_texture`.
 
 Nenhuma alteração foi feita no Z80, VDP, PSG, MachineScheduler, WAIT states, master clock ou estado de máquina. O P0 continua **ABERTO** até evidência correlacionada e aceitação final.
+
+
+## 8. Esclarecimento do sintoma primário — confirmação do usuário (2026-11-13)
+
+Este registro corrige a prioridade e a interpretação dos objetivos de diagnóstico. O problema não é uma suspeita de lentidão a ser descoberta por benchmark: **o defeito audiovisual é perceptível durante a utilização normal, após poucos segundos de jogo**.
+
+### 8.1 Sintoma observado
+
+O usuário confirma que:
+- a imagem apresenta atraso/instabilidade perceptível;
+- o áudio apresenta atraso/instabilidade perceptível;
+- o contador de FPS exibido na interface fica totalmente instável;
+- o comportamento se manifesta em poucos segundos de execução, sem depender de captura longa, percentis ou análise laboratorial para constatar que há defeito.
+
+Esta confirmação estabelece a existência e a prioridade do bug P0. Não estabelece, por si só, a causa técnica nem identifica qual subsistema inicia a degradação.
+
+### 8.2 Objetivo correto dos testes
+
+Os testes, traces, ROMs determinísticas e capturas foram criados para **localizar a origem do defeito e distinguir as fronteiras envolvidas**, e não para decidir se o atraso existe.
+
+A investigação deve explicar a relação temporal entre:
+1. progresso do tempo virtual e produção de frames pelo runtime;
+2. execução do worker e cumprimento dos deadlines;
+3. produção, enfileiramento e consumo dos samples de áudio;
+4. publicação e substituição de frames no mailbox;
+5. conversão/upload da textura e solicitação de redraw;
+6. present do host, composição do Windows e apresentação efetiva no monitor.
+
+A instabilidade do contador de FPS da interface é um sintoma adicional. O contador `FPS UI upload` mede uploads de textura WGPU; não deve ser tratado isoladamente como FPS do VDP, taxa de present ou taxa de atualização física do monitor.
+
+### 8.3 Critério de diagnóstico e correção
+
+- Não usar a ausência de uma medição física ou de um benchmark para questionar a existência do defeito relatado.
+- Não declarar o problema resolvido apenas porque uma métrica isolada melhorou, porque a ROM executou 600 frames ou porque CI passou.
+- Usar os testes automatizados para preservar determinismo, causalidade e invariantes; usar traces correlacionados para localizar a origem; usar captura audiovisual/ETW/PresentMon e teste real no Windows para confirmar a correção no caminho completo.
+- Cada hipótese deve ser vinculada a evidência reproduzível e a um ponto concreto do pipeline. Corrigir a causa demonstrada, sem alterar arbitrariamente Scheduler, master clock, Z80, VDP, PSG ou WAIT states.
+- A validação final deverá confirmar que áudio e imagem permanecem estáveis durante jogo contínuo e que o contador de FPS deixa de apresentar a oscilação anormal. Os critérios quantitativos de jitter e cadência complementam essa verificação; não substituem o sintoma audiovisual.
+
+### 8.4 Estado das entregas relacionadas
+
+- PR #807 está integrada à `main`: phase-lock dos deadlines do worker e notificação de frames orientada a eventos. É uma alteração candidata no caminho host-side, não prova de que a causa raiz foi eliminada.
+- PR #805 foi integrada à `main`: ROM homebrew de pacing com quatro perfis e proveniência reproduzível. Isso fecha a geração do workload, não a execução física nem a correção do defeito.
+- PR #806 executa os workloads pela máquina SMS completa e valida repetibilidade/determinismo offline. Essa execução não exercita o worker desktop, CPAL, WGPU, VSync ou apresentação física.
+- PR #809 corrige a semântica da janela de zero-fill da telemetria CPAL. Trata-se de correção de medição, não de correção de underruns ou do áudio audível.
+- PR #797 ainda precisa ser sincronizada com a `main` atual e integrada antes de #806, pois #806 depende do runner introduzido por #797.
+
+**Conclusão:** o defeito audiovisual P0 é confirmado e permanece aberto. As entregas de instrumentação e workloads tornam a investigação mais precisa, mas nenhuma delas deve ser apresentada como comprovação de que o atraso audiovisual foi eliminado.
