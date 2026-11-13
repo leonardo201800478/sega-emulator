@@ -2029,9 +2029,19 @@ mod windows_host {
         let stop_app = app.as_weak();
         app.on_stop_requested(move || {
             let result = stop_worker.borrow().as_ref().map_or(Ok(()), |worker| {
-                worker.stop().and_then(|()| {
-                    persist_worker_sram(worker, stop_save_context.borrow().as_ref())
-                })
+                let stop_result = worker.stop();
+                let save_result =
+                    persist_worker_sram(worker, stop_save_context.borrow().as_ref());
+                match (stop_result, save_result) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Err(stop_error), Err(save_error)) => Err(format!(
+                        "{stop_error}; a persistência da SRAM também falhou: {save_error}"
+                    )),
+                    (Err(stop_error), Ok(())) => Err(stop_error),
+                    (Ok(()), Err(save_error)) => {
+                        Err(format!("máquina desligada, mas a SRAM não foi gravada: {save_error}"))
+                    }
+                }
             });
             if let Some(app) = stop_app.upgrade() {
                 match result {
