@@ -1497,7 +1497,7 @@ mod windows_host {
     ) -> Result<(), sega_video_runtime::FrameMailboxError> {
         let app_weak = app.as_weak();
         let notification_pending = Arc::new(AtomicBool::new(false));
-        let notifier: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+        let notifier: Arc<dyn Fn(FrameMailbox) + Send + Sync> = Arc::new(move |published_mailbox| {
             if notification_pending.swap(true, Ordering::AcqRel) {
                 return;
             }
@@ -1505,7 +1505,7 @@ mod windows_host {
             let callback_pending = Arc::clone(&notification_pending);
             let callback_app = app_weak.clone();
             let callback_queue = Arc::clone(&queue_slot);
-            let callback_mailbox = mailbox.clone();
+            let callback_mailbox = published_mailbox;
             let callback_metrics = Arc::clone(&host_pacing);
             let result = slint::invoke_from_event_loop(move || {
                 // Clear before taking the frame. A concurrent publication either
@@ -1526,7 +1526,7 @@ mod windows_host {
 
         mailbox.set_frame_available_notifier(Some(Arc::clone(&notifier)))?;
         // Drain a frame that may have been published before the notifier was attached.
-        notifier();
+        notifier(mailbox.clone());
         Ok(())
     }
 
