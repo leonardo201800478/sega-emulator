@@ -41,7 +41,7 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 | Suite | Primary coverage | Current gate |
 |---|---|---|
-| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Runner available; execution and result oracle not yet validated |
+| SMSmemtest | Internal RAM, VRAM and cartridge RAM | BLOCKED: input schedule and visual oracle absent; cartridge SRAM is not implemented |
 | SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Runner available; build dependencies and case oracles remain to be validated |
 | SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Runner available; timing assertions blocked by missing dot/fetch and sub-scanline model |
 | ZEXALL-SMS | Z80 documented and undocumented behavior/flags | E8 gate only; do not execute before formal E7 closure |
@@ -73,7 +73,7 @@ A valid result record must include:
 ## Next engineering steps
 
 1. CI validation passed for the runner-related workspace changes and the SMS runtime Release workflow; the synthetic in-memory fixture checks two complete frames through the Scheduler. No external ROM was run by CI.
-2. Add suite-specific adapters/oracles for SMSmemtest and non-timing-sensitive SMSTestSuite checks.
+2. SMSmemtest requires deterministic controller pulses and a framebuffer/text oracle; its cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
 5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
