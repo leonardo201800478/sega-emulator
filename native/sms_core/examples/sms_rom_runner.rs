@@ -288,7 +288,9 @@ fn run(args: Args) -> Result<(), String> {
         None => "EXECUTED_NO_ORACLE",
     };
     let sram_gate = if args.suite_id == "smsmemtest" {
-        "BLOCKED_CAPABILITY"
+        // The driver deliberately stops after the VRAM oracle. Cartridge SRAM
+        // product support is validated separately; this runner does not exercise it.
+        "NOT_EXERCISED_BY_DRIVER"
     } else {
         "NOT_APPLICABLE"
     };
