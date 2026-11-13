@@ -264,3 +264,22 @@ fn main() {
         process::exit(2);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_escape_preserves_json_string_boundaries() {
+        assert_eq!(json_escape("quote \" slash \\ line\n"), "quote \\\" slash \\\\ line\\n");
+    }
+
+    #[test]
+    fn regional_profiles_are_explicit_and_reject_unknown_values() {
+        assert!(regional_profile("usa").is_ok());
+        assert!(regional_profile("brazil").is_ok());
+        assert!(regional_profile("europe").is_ok());
+        assert!(regional_profile("japan").is_ok());
+        assert!(regional_profile("pal").is_err());
+    }
+}
