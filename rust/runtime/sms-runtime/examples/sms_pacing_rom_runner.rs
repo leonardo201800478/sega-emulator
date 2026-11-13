@@ -233,6 +233,12 @@ fn parse_args() -> Result<Args, String> {
     {
         return Err("only one controller button may be pulsed per frame".to_owned());
     }
+    if input_pulses
+        .windows(2)
+        .any(|pair| pair[1].frame <= pair[0].frame.saturating_add(1))
+    {
+        return Err("controller pulses must leave at least one full released frame".to_owned());
+    }
 
     if !matches!(region.as_str(), "usa" | "brazil" | "europe" | "japan") {
         return Err(format!("unsupported region '{region}'"));
