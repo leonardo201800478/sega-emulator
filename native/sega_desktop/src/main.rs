@@ -824,6 +824,7 @@ mod windows_host {
     fn attach_gpu_texture(
         app: &MainWindow,
         queue_slot: Arc<Mutex<Option<wgpu::Queue>>>,
+        mailbox: FrameMailbox,
         setup_counter: Rc<Cell<u64>>,
         teardown_counter: Rc<Cell<u64>>,
     ) -> Result<(), Box<dyn Error>> {
@@ -863,6 +864,7 @@ mod windows_host {
                             *queue_slot.lock().unwrap() = Some(queue.clone());
 
                             let app_weak = app_weak.clone();
+                            let mailbox = mailbox.clone();
                             let status = format!(
                                 "PASS API: Vulkan | adapter: {} | Slint/WGPU 30 compartilham device/queue",
                                 adapter_info.name
@@ -879,6 +881,11 @@ mod windows_host {
                                     app.set_gpu_texture(image);
                                     app.set_gpu_status(status.into());
                                     app.set_lifecycle_status(lifecycle_status.into());
+                                    if let Err(error) = mailbox.notify_if_pending() {
+                                        eprintln!(
+                                            "R2_FRAME_NOTIFY renderer_recovery_failed error={error}"
+                                        );
+                                    }
                                 }
                             });
                         }
@@ -1526,8 +1533,7 @@ mod windows_host {
             });
 
         mailbox.set_frame_available_notifier(Some(Arc::clone(&notifier)))?;
-        // Drain a frame that may have been published before the notifier was attached.
-        notifier(mailbox.clone());
+        mailbox.notify_if_pending()?;
         Ok(())
     }
 
@@ -2814,6 +2820,7 @@ mod windows_host {
         attach_gpu_texture(
             &app,
             Arc::clone(&queue_slot),
+            mailbox.clone(),
             setup_counter,
             teardown_counter,
         )?;
