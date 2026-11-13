@@ -47,7 +47,7 @@ OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
 mkdir -p "$BUILD_DIR"
 
-"$CC_BIN" -std=c11 -O2 -Wall -Wextra \
+"$CC_BIN" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra \
     "$MAKESMS_SOURCE" -o "$OUT_DIR/makesms"
 
 for profile in 0 1 2 3; do
