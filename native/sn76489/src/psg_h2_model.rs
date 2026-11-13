@@ -288,6 +288,21 @@ fn advance_digital_to(
     }
 }
 
+pub(super) fn render_reference_events(
+    events: &[(u64, f64)],
+    initial_level: f64,
+    total_clocks: u64,
+) -> Vec<f64> {
+    let events = events
+        .iter()
+        .map(|(clock, delta)| PsgAmplitudeEvent {
+            clock: *clock,
+            delta: *delta,
+        })
+        .collect::<Vec<_>>();
+    EventBasedKernel::new().render(&events, initial_level, total_clocks)
+}
+
 fn capture_events(
     profile: PsgProfile,
     trace: &[(u64, u8)],
