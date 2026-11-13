@@ -621,10 +621,7 @@ impl SmsTemporalBus {
     }
 
     /// Drain real PSG amplitude transitions into a reusable worker-owned buffer.
-    pub fn drain_psg_amplitude_events(
-        &mut self,
-        output: &mut Vec<PsgAmplitudeEvent>,
-    ) -> usize {
+    pub fn drain_psg_amplitude_events(&mut self, output: &mut Vec<PsgAmplitudeEvent>) -> usize {
         self.psg.core_mut().drain_amplitude_events(output)
     }
 
