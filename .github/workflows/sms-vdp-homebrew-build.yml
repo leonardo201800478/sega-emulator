@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build-sms-vdp-test:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout project
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -58,7 +58,7 @@ jobs:
           sha256sum output.sms
 
   build-sms-test-suite:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout project
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
