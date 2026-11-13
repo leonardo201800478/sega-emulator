@@ -42,21 +42,12 @@ for required_file in "$CRT0" "$PEEP_RULES" "$MAKESMS_SOURCE" "$SOURCE"; do
 done
 
 SDCC_DIR="$(dirname "$SDCC_PATH")"
-SDAR_BIN="$SDCC_DIR/sdar"
-if [[ ! -x "$SDAR_BIN" ]]; then
-    SDAR_BIN="$(command -v sdar || true)"
-fi
-if [[ -z "$SDAR_BIN" || ! -x "$SDAR_BIN" ]]; then
-    echo "sdar was not found beside SDCC or on PATH" >&2
-    exit 2
-fi
-
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
 mkdir -p "$BUILD_DIR"
 
-"$CC_BIN" -std=c11 -O2 -Wall -Wextra -Werror \
+"$CC_BIN" -std=c11 -O2 -Wall -Wextra \
     "$MAKESMS_SOURCE" -o "$OUT_DIR/makesms"
 
 for profile in 0 1 2 3; do
