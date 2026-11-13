@@ -64,6 +64,27 @@ impl FramePacingDeadline {
     }
 }
 
+/// Calculate the next host deadline without changing virtual machine time.
+///
+/// The default policy re-anchors every frame to its actual host start. The
+/// experimental phase-locked policy advances the previous target by the
+/// current frame duration, preventing a late wake from shifting every later
+/// frame target.
+fn calculate_next_frame_deadline(
+    frame_started: Instant,
+    frame_duration: Duration,
+    previous_deadline: Option<Instant>,
+    phase_locked: bool,
+) -> Instant {
+    if phase_locked {
+        previous_deadline
+            .map(|deadline| deadline + frame_duration)
+            .unwrap_or(frame_started + frame_duration)
+    } else {
+        frame_started + frame_duration
+    }
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -1460,6 +1481,8 @@ fn execute_frame(
         &mut renderer,
         video_mailbox,
         video_sequence,
+        None,
+        false,
         telemetry,
     )
 }
@@ -1474,6 +1497,8 @@ fn execute_frame_with_renderer(
     audio_renderer: &mut AudioRendererState,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
+    pacing_deadline_base: Option<Instant>,
+    phase_locked_pacing: bool,
     telemetry: &WorkerTelemetry,
 ) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
@@ -1643,11 +1668,18 @@ fn execute_frame_with_renderer(
     let pacing_sample_count = sample_count.max(1) as f64;
     let frame_duration =
         Duration::from_secs_f64(pacing_sample_count / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64);
-    // Anchor the pacing deadline to the beginning of this frame's host work.
-    // Time spent publishing diagnostics after this point consumes the same budget
-    // instead of shifting every subsequent frame later.
+    // In baseline mode, anchor to this frame's actual host start. In the
+    // experimental phase-locked mode, advance the previous target instead.
+    // Work after this calculation still consumes the same deadline budget.
     let processing_elapsed = frame_started.elapsed();
-    let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
+    let frame_deadline = frame_completed.then(|| {
+        calculate_next_frame_deadline(
+            frame_started,
+            frame_duration,
+            pacing_deadline_base,
+            phase_locked_pacing,
+        )
+    });
     let frame_wait = frame_deadline
         .map(|deadline| deadline.saturating_duration_since(Instant::now()))
         .unwrap_or(Duration::ZERO);
@@ -1720,6 +1752,12 @@ fn worker_loop(
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
     let mut frame_deadline = FramePacingDeadline::default();
+    let phase_locked_pacing = std::env::var_os("SEGA_P0_PHASE_LOCKED_PACING").is_some();
+    sega_observability::tracing::info!(
+        target: "sega::audio::pacing",
+        phase_locked_pacing,
+        "SMS worker pacing mode"
+    );
 
     loop {
         if telemetry.shutdown.load(Ordering::Acquire) {
@@ -1762,7 +1800,9 @@ fn worker_loop(
                             wait_finished.saturating_duration_since(deadline),
                         );
                     }
-                    frame_deadline.clear();
+                    if !phase_locked_pacing {
+                        frame_deadline.clear();
+                    }
                     None
                 }
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1828,6 +1868,12 @@ fn worker_loop(
             &mut audio_renderer,
             &mut video_mailbox,
             &mut video_sequence,
+            if phase_locked_pacing {
+                frame_deadline.deadline
+            } else {
+                None
+            },
+            phase_locked_pacing,
             &telemetry,
         ) {
             Ok((_, next_frame_deadline, breakpoint_hit)) => {
@@ -2132,6 +2178,8 @@ fn handle_command(
                     audio_renderer,
                     video_mailbox,
                     video_sequence,
+                    None,
+                    false,
                     telemetry,
                 ) {
                     Ok((instructions, _, _)) => {
@@ -2594,6 +2642,8 @@ mod tests {
             &mut renderer,
             &mut video_mailbox,
             &mut video_sequence,
+            None,
+            false,
             &telemetry,
         )
         .unwrap();
@@ -3152,6 +3202,55 @@ mod tests {
             pacing.remaining(now + Duration::from_millis(50)),
             Some(Duration::from_millis(12))
         );
+    }
+
+    #[test]
+    fn phase_locked_deadlines_do_not_accumulate_a_late_wakeup() {
+        let epoch = Instant::now();
+        let frame_duration = Duration::from_micros(16_687);
+        let wake_lateness = Duration::from_micros(449);
+
+        let first_deadline =
+            calculate_next_frame_deadline(epoch, frame_duration, None, true);
+        let second_frame_started = first_deadline + wake_lateness;
+        let second_deadline = calculate_next_frame_deadline(
+            second_frame_started,
+            frame_duration,
+            Some(first_deadline),
+            true,
+        );
+        let third_frame_started = second_deadline + wake_lateness;
+        let third_deadline = calculate_next_frame_deadline(
+            third_frame_started,
+            frame_duration,
+            Some(second_deadline),
+            true,
+        );
+
+        assert_eq!(second_deadline, first_deadline + frame_duration);
+        assert_eq!(third_deadline, second_deadline + frame_duration);
+        assert_ne!(
+            second_deadline,
+            second_frame_started + frame_duration,
+            "phase-locked pacing must not re-anchor to a late frame start"
+        );
+    }
+
+    #[test]
+    fn relative_deadlines_reanchor_after_a_late_wakeup() {
+        let epoch = Instant::now();
+        let frame_duration = Duration::from_micros(16_687);
+        let first_deadline =
+            calculate_next_frame_deadline(epoch, frame_duration, None, false);
+        let late_frame_started = first_deadline + Duration::from_micros(449);
+        let second_deadline = calculate_next_frame_deadline(
+            late_frame_started,
+            frame_duration,
+            Some(first_deadline),
+            false,
+        );
+
+        assert_eq!(second_deadline, late_frame_started + frame_duration);
     }
 
     #[test]
