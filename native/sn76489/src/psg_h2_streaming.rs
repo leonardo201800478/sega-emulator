@@ -235,12 +235,12 @@ impl H2StreamingRenderer {
             deltas[..delta_count].sort_by(f64::total_cmp);
             let delta = deltas[..delta_count].iter().sum::<f64>();
             self.last_event_clock = clock;
+            self.metrics.events_processed = self
+                .metrics
+                .events_processed
+                .saturating_add(u64::try_from(delta_count).unwrap_or(u64::MAX));
             if delta != 0.0 {
                 self.accumulate_event(clock, delta)?;
-                self.metrics.events_processed = self
-                    .metrics
-                    .events_processed
-                    .saturating_add(u64::try_from(delta_count).unwrap_or(u64::MAX));
             }
         }
 
