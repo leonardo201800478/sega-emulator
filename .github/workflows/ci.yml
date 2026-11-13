@@ -532,6 +532,8 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component clippy --component rustfmt && rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Test cartridge SRAM and profile crates (Windows x64)
+        run: cargo test --release --locked -p sega-media -p sega-save-runtime -p sega-sms-core -p sega-sms-runtime --target x86_64-pc-windows-msvc
       - name: Format Slint desktop POC
         run: cargo fmt --manifest-path native/sega_desktop/Cargo.toml -- --check
       - name: Clippy Slint desktop POC (Windows x64 Release)

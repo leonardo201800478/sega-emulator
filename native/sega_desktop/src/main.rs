@@ -11,9 +11,13 @@ mod windows_host {
         path::PathBuf,
         process::Command,
         rc::Rc,
+        sync::Arc,
+        thread,
         time::{Duration, Instant},
     };
 
+    use sega_media::{CartridgeCatalog, CartridgeHardwareProfile, CartridgeIdentity};
+    use sega_save_runtime::SaveRamStore;
     use sega_sms_core::ControllerButtons;
     use sega_sms_runtime::{
         AnalogOutputConfig, AudioRendererMode, SmsTemporalWorker, SpriteLimitMode,
@@ -528,6 +532,14 @@ mod windows_host {
         std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .map(|path| path.join(APP_DATA_DIRECTORY))
+    }
+
+    /// Cria o armazenamento SRM dentro do diretório de dados do usuário.
+    fn cartridge_save_store() -> Result<Arc<SaveRamStore>, String> {
+        let root = app_data_directory()
+            .ok_or_else(|| "APPDATA não está definido para armazenar SRAM".to_owned())?
+            .join("saves");
+        Ok(Arc::new(SaveRamStore::new(root)))
     }
 
     /// Carrega preferências com fallback individual para valores seguros e conhecidos.
@@ -1672,35 +1684,124 @@ mod windows_host {
         }
     }
 
+    /// Resolve um perfil apenas pela identidade binária e carrega o SRM, se existir.
+    fn prepare_cartridge(
+        rom: &[u8],
+        store: Arc<SaveRamStore>,
+    ) -> Result<PreparedCartridge, String> {
+        let identity = CartridgeIdentity::from_bytes(rom);
+        let catalog = CartridgeCatalog::sms_default()
+            .map_err(|error| format!("falha ao carregar catálogo SMS: {error}"))?;
+        let profile = catalog
+            .lookup_runtime_profile(&identity)
+            .map_err(|error| format!("falha ao identificar cartucho SMS: {error}"))?
+            .cloned();
+
+        let Some(profile) = profile else {
+            eprintln!(
+                "SRAM_PROFILE status=unknown sha1={} sha256={}",
+                identity.sha1_hex(),
+                identity.sha256_hex()
+            );
+            return Ok(PreparedCartridge {
+                sram_capacity: None,
+                initial_sram: None,
+                save_context: None,
+            });
+        };
+
+        let initial_sram = store
+            .load(&identity, &profile)
+            .map_err(|error| format!("não foi possível validar/restaurar o SRM: {error}"))?;
+        let save_context = profile
+            .requires_persistent_store()
+            .then(|| CartridgeSaveContext {
+                identity: identity.clone(),
+                profile: profile.clone(),
+                store,
+            });
+        eprintln!(
+            "SRAM_PROFILE status=verified sha1={} sha256={} capacity={} persistent={} restored={}",
+            identity.sha1_hex(),
+            identity.sha256_hex(),
+            profile.ram_capacity_bytes().unwrap_or_default(),
+            profile.requires_persistent_store(),
+            initial_sram.is_some()
+        );
+        Ok(PreparedCartridge {
+            sram_capacity: profile.ram_capacity_bytes(),
+            initial_sram,
+            save_context,
+        })
+    }
+
+    /// Cria o worker já configurado com o perfil físico e o snapshot SRM restaurado.
     fn create_sms_worker(
         rom: Vec<u8>,
-        region: &str,
-        mailbox: &FrameMailbox,
-        audio_volume: u8,
-        dsp_config: AnalogOutputConfig,
-        renderer_mode: &str,
-    ) -> Result<SmsTemporalWorker, String> {
-        let worker = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&worker, audio_volume, dsp_config, renderer_mode);
-        worker.attach_video_mailbox(mailbox.clone())?;
+        settings: &SmsWorkerSettings,
+        save_store: Arc<SaveRamStore>,
+    ) -> Result<(SmsTemporalWorker, Option<CartridgeSaveContext>), String> {
+        let prepared = prepare_cartridge(&rom, save_store)?;
+        let worker = SmsTemporalWorker::new_with_cartridge_sram_size(
+            rom,
+            &settings.region,
+            prepared.sram_capacity,
+            prepared.initial_sram,
+        )?;
+        configure_sms_audio(
+            &worker,
+            settings.audio_volume,
+            settings.dsp_config,
+            &settings.renderer_mode,
+        );
         worker.set_diagnostics_enabled(true);
-        Ok(worker)
+        Ok((worker, prepared.save_context))
+    }
+
+    /// Persistência executada no host, após snapshot imutável obtido no worker.
+    /// O Scheduler e o caminho da CPU nunca executam operações de filesystem.
+    fn persist_worker_sram(
+        worker: &SmsTemporalWorker,
+        context: Option<&CartridgeSaveContext>,
+    ) -> Result<(), String> {
+        let Some(context) = context else {
+            return Ok(());
+        };
+        let snapshot = worker
+            .export_cartridge_sram()?
+            .ok_or_else(|| "perfil persistente não expôs SRAM ao worker".to_owned())?;
+        let store = Arc::clone(&context.store);
+        let identity = context.identity.clone();
+        let profile = context.profile.clone();
+        let save = thread::Builder::new()
+            .name("sms-sram-save".to_owned())
+            .spawn(move || {
+                store
+                    .save(&identity, &profile, &snapshot)
+                    .map_err(|error| error.to_string())
+            })
+            .map_err(|error| format!("não foi possível iniciar gravação SRM: {error}"))?;
+        save.join()
+            .map_err(|_| "thread de gravação SRM encerrou inesperadamente".to_owned())??;
+        eprintln!(
+            "SRAM_SAVE status=written sha256={} bytes={}",
+            context.identity.sha256_hex(),
+            context.profile.ram_capacity_bytes().unwrap_or_default()
+        );
+        Ok(())
     }
 
     /// Substitui a máquina sem permitir dois produtores simultâneos no FrameMailbox.
     fn replace_sms_worker(
         path: &PathBuf,
-        region: &str,
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
+        save_context_slot: &Rc<RefCell<Option<CartridgeSaveContext>>>,
+        save_store: Arc<SaveRamStore>,
         mailbox: &FrameMailbox,
-        audio_volume: u8,
-        dsp_config: AnalogOutputConfig,
-        renderer_mode: &str,
+        settings: &SmsWorkerSettings,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
-        let next = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&next, audio_volume, dsp_config, renderer_mode);
-        next.set_diagnostics_enabled(true);
+        let (next, next_save_context) = create_sms_worker(rom, settings, save_store)?;
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -1709,7 +1810,20 @@ mod windows_host {
                 *worker_slot.borrow_mut() = Some(previous);
                 return Err(error);
             }
+            let previous_context = save_context_slot.borrow().clone();
+            if let Err(error) = persist_worker_sram(&previous, previous_context.as_ref()) {
+                if was_running {
+                    let _ = previous.start();
+                }
+                *worker_slot.borrow_mut() = Some(previous);
+                return Err(format!(
+                    "ROM anterior preservada; falha ao gravar SRAM: {error}"
+                ));
+            }
             if let Err(error) = previous.detach_video_mailbox() {
+                if was_running {
+                    let _ = previous.start();
+                }
                 *worker_slot.borrow_mut() = Some(previous);
                 return Err(error);
             }
@@ -1723,13 +1837,36 @@ mod windows_host {
             }
 
             *worker_slot.borrow_mut() = Some(next);
+            *save_context_slot.borrow_mut() = next_save_context;
             drop(previous);
         } else {
             next.attach_video_mailbox(mailbox.clone())?;
             *worker_slot.borrow_mut() = Some(next);
+            *save_context_slot.borrow_mut() = next_save_context;
         }
 
         Ok(())
+    }
+
+    /// Contexto host-side que associa um worker ao arquivo SRM da ROM exata.
+    #[derive(Clone)]
+    struct CartridgeSaveContext {
+        identity: CartridgeIdentity,
+        profile: CartridgeHardwareProfile,
+        store: Arc<SaveRamStore>,
+    }
+
+    struct PreparedCartridge {
+        sram_capacity: Option<usize>,
+        initial_sram: Option<Vec<u8>>,
+        save_context: Option<CartridgeSaveContext>,
+    }
+
+    struct SmsWorkerSettings {
+        region: String,
+        audio_volume: u8,
+        dsp_config: AnalogOutputConfig,
+        renderer_mode: String,
     }
 
     /// Material Icons are decoded to Slint SVG images once during application startup.
@@ -1766,21 +1903,28 @@ mod windows_host {
 
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
+        let save_store = cartridge_save_store()?;
+        let worker_settings = SmsWorkerSettings {
+            region: region.clone(),
+            audio_volume: effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
+            dsp_config: audio_dsp_config(
+                preferences.audio_dsp_preset,
+                preferences.audio_hpf_enabled,
+                f64::from(preferences.audio_hpf_cutoff_hz),
+                preferences.audio_lpf_enabled,
+                f64::from(preferences.audio_lpf_cutoff_hz),
+            ),
+            renderer_mode: preferences.audio_renderer_mode.clone(),
+        };
+        let mut initial_save_context = None;
         let worker = if let Some(path) = rom_path.as_ref() {
-            let worker = create_sms_worker(
+            let (worker, context) = create_sms_worker(
                 read_rom_image(path)?,
-                &region,
-                &mailbox,
-                effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
-                audio_dsp_config(
-                    preferences.audio_dsp_preset,
-                    preferences.audio_hpf_enabled,
-                    f64::from(preferences.audio_hpf_cutoff_hz),
-                    preferences.audio_lpf_enabled,
-                    f64::from(preferences.audio_lpf_cutoff_hz),
-                ),
-                &preferences.audio_renderer_mode,
+                &worker_settings,
+                Arc::clone(&save_store),
             )?;
+            initial_save_context = context;
+            worker.attach_video_mailbox(mailbox.clone())?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
@@ -1792,6 +1936,7 @@ mod windows_host {
             record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
         }
         let worker = Rc::new(RefCell::new(worker));
+        let save_context = Rc::new(RefCell::new(initial_save_context));
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
 
         let app = MainWindow::new()?;
@@ -1895,12 +2040,24 @@ mod windows_host {
         });
 
         let stop_worker = Rc::clone(&worker);
+        let stop_save_context = Rc::clone(&save_context);
         let stop_app = app.as_weak();
         app.on_stop_requested(move || {
-            let result = stop_worker
-                .borrow()
-                .as_ref()
-                .map_or(Ok(()), |worker| worker.stop());
+            let result = stop_worker.borrow().as_ref().map_or(Ok(()), |worker| {
+                let stop_result = worker.stop();
+                let save_result =
+                    persist_worker_sram(worker, stop_save_context.borrow().as_ref());
+                match (stop_result, save_result) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Err(stop_error), Err(save_error)) => Err(format!(
+                        "{stop_error}; a persistência da SRAM também falhou: {save_error}"
+                    )),
+                    (Err(stop_error), Ok(())) => Err(stop_error),
+                    (Ok(()), Err(save_error)) => {
+                        Err(format!("máquina desligada, mas a SRAM não foi gravada: {save_error}"))
+                    }
+                }
+            });
             if let Some(app) = stop_app.upgrade() {
                 match result {
                     Ok(()) => {
@@ -2030,6 +2187,8 @@ mod windows_host {
 
         let open_app = app.as_weak();
         let open_worker = Rc::clone(&worker);
+        let open_save_context = Rc::clone(&save_context);
+        let open_save_store = Arc::clone(&save_store);
         let open_recent = Rc::clone(&recent_rom);
         let open_recent_list = Rc::clone(&recent_roms);
         let open_mailbox = mailbox.clone();
@@ -2073,15 +2232,20 @@ mod windows_host {
                         "psg".to_owned(),
                     )
                 });
+            let open_settings = SmsWorkerSettings {
+                region,
+                audio_volume,
+                dsp_config,
+                renderer_mode,
+            };
 
             match replace_sms_worker(
                 &path,
-                &region,
                 &open_worker,
+                &open_save_context,
+                Arc::clone(&open_save_store),
                 &open_mailbox,
-                audio_volume,
-                dsp_config,
-                &renderer_mode,
+                &open_settings,
             ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
@@ -2163,11 +2327,41 @@ mod windows_host {
 
         let close_app = app.as_weak();
         let close_worker = Rc::clone(&worker);
+        let close_save_context = Rc::clone(&save_context);
         app.on_close_rom_requested(move || {
-            if let Some(previous) = close_worker.borrow_mut().take() {
+            let previous = close_worker.borrow_mut().take();
+            if let Some(previous) = previous {
+                let was_running = previous.is_running();
+                if let Err(error) = previous.pause() {
+                    if was_running {
+                        let _ = previous.start();
+                    }
+                    *close_worker.borrow_mut() = Some(previous);
+                    if let Some(app) = close_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Falha ao pausar antes de salvar SRAM: {error}").into(),
+                        );
+                    }
+                    return;
+                }
+                if let Err(error) =
+                    persist_worker_sram(&previous, close_save_context.borrow().as_ref())
+                {
+                    if was_running {
+                        let _ = previous.start();
+                    }
+                    *close_worker.borrow_mut() = Some(previous);
+                    if let Some(app) = close_app.upgrade() {
+                        app.set_rom_status(
+                            format!("ROM mantida; falha ao gravar SRAM: {error}").into(),
+                        );
+                    }
+                    return;
+                }
                 let _ = previous.stop();
                 let _ = previous.detach_video_mailbox();
                 drop(previous);
+                *close_save_context.borrow_mut() = None;
             }
             if let Some(app) = close_app.upgrade() {
                 app.set_has_rom(false);
@@ -2179,8 +2373,37 @@ mod windows_host {
         });
 
         let exit_recent = Rc::clone(&recent_roms);
+        let exit_worker = Rc::clone(&worker);
+        let exit_save_context = Rc::clone(&save_context);
         let exit_prefs_app = app.as_weak();
         app.on_exit_requested(move || {
+            if let Some(active_worker) = exit_worker.borrow().as_ref() {
+                let was_running = active_worker.is_running();
+                if let Err(error) = active_worker.pause() {
+                    if was_running {
+                        let _ = active_worker.start();
+                    }
+                    if let Some(app) = exit_prefs_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Saída cancelada; falha ao pausar a máquina: {error}").into(),
+                        );
+                    }
+                    return;
+                }
+                if let Err(error) =
+                    persist_worker_sram(active_worker, exit_save_context.borrow().as_ref())
+                {
+                    if was_running {
+                        let _ = active_worker.start();
+                    }
+                    if let Some(app) = exit_prefs_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Saída cancelada; falha ao gravar SRAM: {error}").into(),
+                        );
+                    }
+                    return;
+                }
+            }
             let _ = save_recent_roms(&exit_recent.borrow());
             if let Some(app) = exit_prefs_app.upgrade() {
                 let prefs = DesktopPreferences {
@@ -2460,7 +2683,7 @@ mod windows_host {
         let _frame_timer =
             start_frame_presentation(&app, queue_slot, mailbox.clone(), Rc::clone(&worker));
 
-        app.run()?;
+        let run_result = app.run();
         let final_preferences = DesktopPreferences {
             region: app.get_selected_region().to_string(),
             aspect: app.get_selected_aspect().to_string(),
@@ -2480,13 +2703,26 @@ mod windows_host {
         let _ = save_desktop_preferences(&final_preferences);
         let _ = save_recent_roms(&recent_roms.borrow());
 
-        if let Some(worker) = worker.borrow_mut().take() {
-            let _ = worker.pause();
-            let _ = worker.detach_video_mailbox();
-            drop(worker);
+        let mut final_save_error = None;
+        if let Some(active_worker) = worker.borrow_mut().take() {
+            if let Err(error) = active_worker.pause() {
+                eprintln!("SRAM_SAVE pause_before_exit_failed error={error}");
+            }
+            if let Err(error) = persist_worker_sram(&active_worker, save_context.borrow().as_ref())
+            {
+                final_save_error = Some(error);
+            }
+            let _ = active_worker.stop();
+            let _ = active_worker.detach_video_mailbox();
+            drop(active_worker);
         }
+        *save_context.borrow_mut() = None;
         let _ = mailbox.close();
         app.set_gpu_texture(slint::Image::default());
+        if let Some(error) = final_save_error {
+            return Err(error.into());
+        }
+        run_result?;
         Ok(())
     }
 

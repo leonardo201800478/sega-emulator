@@ -332,15 +332,40 @@ impl SmsTemporalMachine {
         vdp_profile: SmsVdpProfile,
         territory: Territory,
     ) -> Result<Self, SmsTemporalMachineError> {
+        Self::new_with_hardware_profile_and_sram_size(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            vdp_profile,
+            territory,
+            None,
+        )
+    }
+
+    /// Construct the temporal machine with an explicit cartridge SRAM hardware capacity.
+    ///
+    /// The capacity comes from the selected cartridge profile, never from the
+    /// size of a save file or the ROM image.
+    pub fn new_with_hardware_profile_and_sram_size(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+        cartridge_sram_size: Option<usize>,
+    ) -> Result<Self, SmsTemporalMachineError> {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
-            bus: SmsTemporalBus::new_with_hardware_profile(
+            bus: SmsTemporalBus::new_with_hardware_profile_and_sram_size(
                 rom,
                 master_ticks_per_tstate,
                 psg_clock_hz,
                 sample_rate,
                 vdp_profile,
                 territory,
+                cartridge_sram_size,
             )?,
             external_int_line: None,
             instruction_started_at: None,
@@ -1011,6 +1036,11 @@ impl SmsTemporalMachine {
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
+    }
+
+    /// Restore the cartridge battery RAM before execution starts.
+    pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), crate::SmsCoreError> {
+        self.bus.load_cartridge_sram(contents)
     }
 
     /// Inspect the SMS-profile PSG without advancing machine time.

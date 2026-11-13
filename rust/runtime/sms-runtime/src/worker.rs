@@ -123,17 +123,44 @@ fn receive_worker_reply<T>(receiver: Receiver<T>, operation: &str) -> Result<T, 
 }
 
 fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
+    build_sms_temporal_machine_with_sram_size(rom, region, None)
+}
+
+fn build_sms_temporal_machine_with_sram_size(
+    rom: Vec<u8>,
+    region: &str,
+    cartridge_sram_size: Option<usize>,
+) -> Result<SmsTemporalMachine, String> {
     let (territory, vdp_profile, psg_clock_hz) =
         sms_temporal_region_profile(region).map_err(str::to_owned)?;
-    SmsTemporalMachine::new_with_hardware_profile(
+    SmsTemporalMachine::new_with_hardware_profile_and_sram_size(
         rom,
         SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE,
         psg_clock_hz,
         SMS_INTERNAL_AUDIO_SAMPLE_RATE,
         vdp_profile,
         territory,
+        cartridge_sram_size,
     )
     .map_err(|error| error.to_string())
+}
+
+/// Rebuild power-on machine state while retaining the exact physical SRAM image.
+fn rebuild_sms_temporal_machine_preserving_sram(
+    current: &SmsTemporalMachine,
+    rom: Vec<u8>,
+    region: &str,
+) -> Result<SmsTemporalMachine, String> {
+    let sram = current.memory().cartridge_sram().map(<[u8]>::to_vec);
+    let capacity = sram.as_ref().map(Vec::len);
+    let mut rebuilt = build_sms_temporal_machine_with_sram_size(rom, region, capacity)?;
+    if let Some(contents) = sram {
+        rebuilt
+            .load_cartridge_sram(&contents)
+            .map_err(|error| error.to_string())?;
+    }
+    rebuilt.set_sprite_limit_mode(current.vdp().sprite_limit_mode());
+    Ok(rebuilt)
 }
 
 /// Host-clock measurements taken only when the SMS worker completes a full frame.
@@ -799,6 +826,7 @@ enum WorkerCommand {
     Pause(SyncSender<Result<(), String>>),
     Stop(SyncSender<Result<(), String>>),
     Reset(SyncSender<Result<(), String>>),
+    ExportCartridgeSram(SyncSender<Option<Vec<u8>>>),
     LoadRom(Vec<u8>, SyncSender<Result<(), String>>),
     StepFrame(usize, SyncSender<Result<usize, String>>),
     StepInstruction(SyncSender<Result<(), String>>),
@@ -825,6 +853,7 @@ impl WorkerCommand {
             Self::Pause(_) => "pause",
             Self::Stop(_) => "stop",
             Self::Reset(_) => "reset",
+            Self::ExportCartridgeSram(_) => "export_cartridge_sram",
             Self::LoadRom(_, _) => "load_rom",
             Self::StepFrame(_, _) => "step_frame",
             Self::StepInstruction(_) => "step_instruction",
@@ -977,8 +1006,38 @@ impl SmsTemporalWorker {
         }
     }
 
-    /// Start the native worker and wait until the first machine is constructed.
+    /// Start the native worker with the default no-cartridge-SRAM hardware profile.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
+        Self::new_with_cartridge_sram_size(rom, region, None, None)
+    }
+
+    /// Start the worker with an explicit cartridge SRAM capacity and optional persisted image.
+    /// Capacity must come from a verified cartridge profile; save-file length never configures hardware.
+    pub fn new_with_cartridge_sram_size(
+        rom: Vec<u8>,
+        region: &str,
+        cartridge_sram_size: Option<usize>,
+        initial_sram: Option<Vec<u8>>,
+    ) -> Result<Self, String> {
+        if initial_sram.is_some() && cartridge_sram_size.is_none() {
+            return Err("cannot restore SRAM without a verified cartridge RAM profile".to_owned());
+        }
+        if let Some(capacity) = cartridge_sram_size
+            && !matches!(capacity, 0x2000 | 0x4000 | 0x8000)
+        {
+            return Err(format!(
+                "unsupported SMS cartridge SRAM capacity: {capacity} bytes"
+            ));
+        }
+        if let (Some(contents), Some(capacity)) = (initial_sram.as_ref(), cartridge_sram_size)
+            && contents.len() != capacity
+        {
+            return Err(format!(
+                "persisted SRAM has {} bytes; cartridge profile requires {capacity}",
+                contents.len()
+            ));
+        }
+
         let region = region.to_owned();
         let telemetry = Arc::new(WorkerTelemetry::default());
         if let Ok((_, _, clock_hz)) = sms_temporal_region_profile(&region) {
@@ -994,7 +1053,19 @@ impl SmsTemporalWorker {
         let worker = thread::Builder::new()
             .name("sms-temporal-machine".to_owned())
             .spawn(move || {
-                let machine = match build_sms_temporal_machine(rom.clone(), &worker_region) {
+                let machine = match build_sms_temporal_machine_with_sram_size(
+                    rom.clone(),
+                    &worker_region,
+                    cartridge_sram_size,
+                )
+                .and_then(|mut machine| {
+                    if let Some(contents) = initial_sram.as_deref() {
+                        machine
+                            .load_cartridge_sram(contents)
+                            .map_err(|error| error.to_string())?;
+                    }
+                    Ok(machine)
+                }) {
                     Ok(machine) => {
                         let _ = ready_sender.send(Ok(()));
                         machine
@@ -1044,6 +1115,17 @@ impl SmsTemporalWorker {
 
     pub fn load_rom(&self, rom: Vec<u8>) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::LoadRom(rom, reply))
+    }
+
+    /// Capture an owned SRAM snapshot on the machine thread at a command-safe boundary.
+    /// No filesystem operation is performed by the worker or Scheduler.
+    pub fn export_cartridge_sram(&self) -> Result<Option<Vec<u8>>, String> {
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        enqueue_worker_command(
+            &self.commands,
+            WorkerCommand::ExportCartridgeSram(reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "exporting cartridge SRAM")
     }
 
     /// Enable or disable optional diagnostic telemetry without changing emulation.
@@ -1936,14 +2018,16 @@ fn handle_command(
             }
             let _ = reply.send(result);
         }
+        WorkerCommand::ExportCartridgeSram(reply) => {
+            let snapshot = machine.memory().cartridge_sram().map(<[u8]>::to_vec);
+            let _ = reply.send(snapshot);
+        }
         WorkerCommand::Stop(reply) => {
             // POWER-off is different from Pause: retain the ROM, but cold-reset the machine.
             *running = false;
             telemetry.running.store(false, Ordering::Release);
-            let sprite_limit_mode = machine.vdp().sprite_limit_mode();
-            let result =
-                build_sms_temporal_machine(rom.clone(), region).and_then(|mut powered_off| {
-                    powered_off.set_sprite_limit_mode(sprite_limit_mode);
+            let result = rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region)
+                .and_then(|powered_off| {
                     audio_session
                         .as_mut()
                         .map_or(Ok::<(), String>(()), |session| {
@@ -1965,40 +2049,9 @@ fn handle_command(
             }
             let _ = reply.send(result);
         }
-        WorkerCommand::Reset(reply) => match build_sms_temporal_machine(rom.clone(), region) {
-            Ok(mut reset_machine) => {
-                // Reset rebuilds machine state but preserves host-selected VDP compatibility policy.
-                reset_machine.set_sprite_limit_mode(machine.vdp().sprite_limit_mode());
-                *running = false;
-                telemetry.running.store(false, Ordering::Release);
-                let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
-                    session.suspend_and_flush()?;
-                    session.reset_dsp();
-                    Ok(())
-                });
-                if let Some(session) = audio_session.as_ref() {
-                    telemetry.record_audio_session_metrics(session.as_ref());
-                }
-                match result {
-                    Ok(()) => {
-                        *machine = reset_machine;
-                        audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                        telemetry.reset_machine_counters();
-                        let _ = reply.send(Ok(()));
-                    }
-                    Err(error) => {
-                        telemetry.set_audio_error(Some(error.clone()));
-                        let _ = reply.send(Err(error));
-                    }
-                }
-            }
-            Err(error) => {
-                let _ = reply.send(Err(error));
-            }
-        },
-        WorkerCommand::LoadRom(new_rom, reply) => {
-            match build_sms_temporal_machine(new_rom.clone(), region) {
-                Ok(new_machine) => {
+        WorkerCommand::Reset(reply) => {
+            match rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region) {
+                Ok(reset_machine) => {
                     *running = false;
                     telemetry.running.store(false, Ordering::Release);
                     let result: Result<(), String> =
@@ -2012,9 +2065,8 @@ fn handle_command(
                     }
                     match result {
                         Ok(()) => {
-                            *machine = new_machine;
+                            *machine = reset_machine;
                             audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                            *rom = new_rom;
                             telemetry.reset_machine_counters();
                             let _ = reply.send(Ok(()));
                         }
@@ -2026,6 +2078,45 @@ fn handle_command(
                 }
                 Err(error) => {
                     let _ = reply.send(Err(error));
+                }
+            }
+        }
+        WorkerCommand::LoadRom(new_rom, reply) => {
+            if machine.memory().cartridge_sram().is_some() {
+                let _ = reply.send(Err(
+                    "cannot replace a cartridge with SRAM through load_rom; persist it and create a new worker".to_owned(),
+                ));
+            } else {
+                match build_sms_temporal_machine(new_rom.clone(), region) {
+                    Ok(new_machine) => {
+                        *running = false;
+                        telemetry.running.store(false, Ordering::Release);
+                        let result: Result<(), String> =
+                            audio_session.as_mut().map_or(Ok(()), |session| {
+                                session.suspend_and_flush()?;
+                                session.reset_dsp();
+                                Ok(())
+                            });
+                        if let Some(session) = audio_session.as_ref() {
+                            telemetry.record_audio_session_metrics(session.as_ref());
+                        }
+                        match result {
+                            Ok(()) => {
+                                *machine = new_machine;
+                                audio_renderer.reset_epoch_if_selected(machine, telemetry);
+                                *rom = new_rom;
+                                telemetry.reset_machine_counters();
+                                let _ = reply.send(Ok(()));
+                            }
+                            Err(error) => {
+                                telemetry.set_audio_error(Some(error.clone()));
+                                let _ = reply.send(Err(error));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        let _ = reply.send(Err(error));
+                    }
                 }
             }
         }
@@ -2561,6 +2652,46 @@ mod tests {
     }
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
+
+    #[test]
+    fn worker_exports_sram_and_preserves_it_across_reset_and_power_off() {
+        let initial = vec![0x5A; 0x2000];
+        let worker = SmsTemporalWorker::new_with_cartridge_sram_size(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            Some(0x2000),
+            Some(initial.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            worker.export_cartridge_sram().unwrap(),
+            Some(initial.clone())
+        );
+
+        worker.reset().unwrap();
+        assert_eq!(
+            worker.export_cartridge_sram().unwrap(),
+            Some(initial.clone())
+        );
+
+        worker.stop().unwrap();
+        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial));
+    }
+
+    #[test]
+    fn worker_rejects_persisted_sram_without_a_verified_hardware_profile() {
+        let error = match SmsTemporalWorker::new_with_cartridge_sram_size(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            None,
+            Some(vec![0; 0x2000]),
+        ) {
+            Ok(_) => panic!("worker unexpectedly accepted SRAM without a profile"),
+            Err(error) => error,
+        };
+        assert!(error.contains("verified cartridge RAM profile"));
+    }
 
     #[test]
     fn h2_renderer_is_selected_at_worker_boundary_and_consumes_real_psg_events() {
