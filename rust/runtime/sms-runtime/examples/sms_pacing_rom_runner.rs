@@ -68,7 +68,7 @@ impl InputButton {
         }
     }
 
-    const fn controller_state(self) -> ControllerButtons {
+    fn controller_state(self) -> ControllerButtons {
         match self {
             Self::Up => ControllerButtons { up: true, ..ControllerButtons::default() },
             Self::Down => ControllerButtons { down: true, ..ControllerButtons::default() },
