@@ -14,20 +14,20 @@ permissions:
 
 jobs:
   build-sms-vdp-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Checkout SmsVdpTest source at pinned revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: FluBBaOfWard/SmsVdpTest
           ref: 490c00b38c83012dee5a7a582097f080c210a3e7
           path: .build/SmsVdpTest
 
       - name: Checkout WLA-DX v10.7 at pinned commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: vhelin/wla-dx
           ref: 91c52b1f4ef3cc8ba3c0638f7536539579af6a9f
@@ -58,27 +58,27 @@ jobs:
           sha256sum output.sms
 
   build-sms-test-suite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Checkout SMS Test Suite source at pinned revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: sverx/SMSTestSuite
           ref: 985bc04fef6f3dc3c3450fbc84242676f241d316
           path: .build/SMSTestSuite
 
       - name: Checkout devkitSMS toolchain and libraries at pinned commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: sverx/devkitSMS
           ref: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
           path: .build/devkitSMS
 
       - name: Checkout Banjo sound driver at pinned commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: joffb/banjo
           ref: 7aaf837ebbe67e567e019b5819b5467bf62253ad
@@ -87,7 +87,7 @@ jobs:
       - name: Install SDCC toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes sdcc make python3
+          sudo apt-get install --yes sdcc=4.5.0+dfsg-4 sdcc-libraries=4.5.0+dfsg-4 make python3
           sdcc --version
           sdar --version
 
