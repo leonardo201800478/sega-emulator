@@ -848,8 +848,8 @@ fn render_scanline_for_revision(
         } else {
             usize::from(regs[8])
         };
-        // The SMS VDP blanks the leading fine-scroll pixels with the
-        // backdrop instead of wrapping the last name-table column into view.
+        // Fine-scroll leading pixels use the VDP's special tile-$100 palette
+        // selector rather than wrapping the last name-table column.
         if x < (hs & 7) {
             // The SMS fine-scroll leading pixels are not the R7 backdrop.
             // The VDP selects color 0 from one of the two BG palettes using
