@@ -1684,6 +1684,25 @@ mod windows_host {
         }
     }
 
+    const DIAGNOSTIC_SRAM_CAPACITY_ENV: &str = "SEGA_SMS_DIAGNOSTIC_SRAM_BYTES";
+
+    /// Analisa a capacidade SRAM volátil solicitada explicitamente para diagnóstico.
+    /// A opção nunca cria contexto de persistência nem altera perfis do catálogo.
+    fn parse_diagnostic_sram_capacity(value: Option<&str>) -> Result<Option<usize>, String> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let capacity = value.trim().parse::<usize>().map_err(|_| {
+            format!("{DIAGNOSTIC_SRAM_CAPACITY_ENV} deve ser 8192, 16384 ou 32768 bytes")
+        })?;
+        if !matches!(capacity, 0x2000 | 0x4000 | 0x8000) {
+            return Err(format!(
+                "{DIAGNOSTIC_SRAM_CAPACITY_ENV} deve ser 8192, 16384 ou 32768 bytes; recebido {capacity}"
+            ));
+        }
+        Ok(Some(capacity))
+    }
+
     /// Resolve um perfil apenas pela identidade binária e carrega o SRM, se existir.
     fn prepare_cartridge(
         rom: &[u8],
@@ -1698,6 +1717,22 @@ mod windows_host {
             .cloned();
 
         let Some(profile) = profile else {
+            let diagnostic_capacity = parse_diagnostic_sram_capacity(
+                std::env::var(DIAGNOSTIC_SRAM_CAPACITY_ENV).ok().as_deref(),
+            )?;
+            if let Some(capacity) = diagnostic_capacity {
+                eprintln!(
+                    "SRAM_PROFILE status=diagnostic-override sha1={} sha256={} capacity={} persistent=false restored=false",
+                    identity.sha1_hex(),
+                    identity.sha256_hex(),
+                    capacity
+                );
+                return Ok(PreparedCartridge {
+                    sram_capacity: Some(capacity),
+                    initial_sram: None,
+                    save_context: None,
+                });
+            }
             eprintln!(
                 "SRAM_PROFILE status=unknown sha1={} sha256={}",
                 identity.sha1_hex(),
@@ -2729,6 +2764,25 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn diagnostic_sram_capacity_accepts_only_supported_volatile_sizes() {
+            assert_eq!(parse_diagnostic_sram_capacity(None).unwrap(), None);
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("8192")).unwrap(),
+                Some(0x2000)
+            );
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("16384")).unwrap(),
+                Some(0x4000)
+            );
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("32768")).unwrap(),
+                Some(0x8000)
+            );
+            assert!(parse_diagnostic_sram_capacity(Some("4096")).is_err());
+            assert!(parse_diagnostic_sram_capacity(Some("invalid")).is_err());
+        }
 
         #[test]
         fn master_volume_is_bounded_and_mute_is_independent() {
