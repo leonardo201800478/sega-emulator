@@ -14,7 +14,7 @@ use crate::{
     ControllerButtons, SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState,
     SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
 };
-use sega_sn76489::Sn76489Core;
+use sega_sn76489::{PsgAmplitudeEvent, PsgEventCaptureError, Sn76489Core};
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
@@ -1021,6 +1021,40 @@ impl SmsTemporalMachine {
     /// Drain audio samples already produced by scheduler-owned PSG clocks.
     pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.bus.drain_audio_samples(max_samples)
+    }
+
+    /// Enable bounded observation of the existing PSG's digital mix transitions.
+    ///
+    /// The observer is opt-in and does not advance or otherwise modify the
+    /// machine Scheduler, CPU, VDP, PSG registers or hardware clock domains.
+    pub fn enable_psg_event_capture(
+        &mut self,
+        capacity: usize,
+    ) -> Result<(), PsgEventCaptureError> {
+        self.bus.enable_psg_event_capture(capacity)
+    }
+
+    /// Disable PSG event observation without changing the current PSG state.
+    pub fn disable_psg_event_capture(&mut self) {
+        self.bus.disable_psg_event_capture();
+    }
+
+    /// Drain observed PSG transitions into a reusable worker-owned buffer.
+    pub fn drain_psg_amplitude_events(
+        &mut self,
+        output: &mut Vec<PsgAmplitudeEvent>,
+    ) -> usize {
+        self.bus.drain_psg_amplitude_events(output)
+    }
+
+    /// Check whether the bounded PSG event queue overflowed.
+    pub fn psg_event_capture_overflowed(&self) -> bool {
+        self.bus.psg_event_capture_overflowed()
+    }
+
+    /// Return the number of lost events after the observer queue overflowed.
+    pub fn psg_event_capture_overflow_count(&self) -> u64 {
+        self.bus.psg_event_capture_overflow_count()
     }
 
     /// Current absolute machine time.
