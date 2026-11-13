@@ -453,14 +453,14 @@ mod tests {
     }
 
     #[test]
-    fn late_events_fail_instead_of_corrupting_already_emitted_samples() {
+    fn backdated_events_fail_instead_of_corrupting_already_emitted_samples() {
         let mut renderer = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut output = Vec::new();
         renderer.render_until(&[], 100_000, &mut output).unwrap();
-        let late = [PsgAmplitudeEvent { clock: 0, delta: 0.25 }];
+        let backdated = [PsgAmplitudeEvent { clock: 99_999, delta: 0.25 }];
         assert_eq!(
-            renderer.render_until(&late, 110_000, &mut output),
-            Err(H2StreamingError::LateEvent)
+            renderer.render_until(&backdated, 110_000, &mut output),
+            Err(H2StreamingError::EventOutOfOrder)
         );
     }
 
