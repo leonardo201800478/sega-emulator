@@ -14,7 +14,7 @@ python tests/sms/scripts/run_rom.py --rom .\path\to\diagnostic.sms --suite-id sm
 
 Supported regional profiles are `usa`, `brazil` (PAL-M), `europe` (PAL) and `japan`. The runner uses the same VDP revision, sprite-limit mode and PSG clocks selected by the SMS runtime worker. The current runner uses a direct-cartridge, no-BIOS startup profile; it does not reproduce BIOS initialization.
 
-The Python wrapper computes the ROM SHA-256 using the standard library, obtains the checked-out Git revision, and invokes Cargo. The Rust runner emits JSON Lines:
+The Python wrapper copies the input into a temporary per-run snapshot while calculating SHA-256 over the exact bytes written, then passes that same snapshot to Rust. It also obtains the checked-out Git revision and invokes Cargo. The source ROM can change during Cargo compilation without changing the bytes executed by this run. The Rust runner emits JSON Lines:
 - `start`: ROM provenance, image size, selected machine profile and execution limits;
 - `frame`: completed frame, instruction count, drained PSG sample count and virtual machine timestamp;
 - `summary`: `EXECUTED_NO_ORACLE` when the requested frames completed, or `EXECUTION_ERROR` if execution stopped.
@@ -72,7 +72,7 @@ A valid result record must include:
 
 ## Next engineering steps
 
-1. Validate the runner's build and bounded execution in CI; a synthetic in-memory homebrew loop fixture now checks two complete frames through the Scheduler.
+1. CI validation passed for the runner-related workspace changes and the SMS runtime Release workflow; the synthetic in-memory fixture checks two complete frames through the Scheduler. No external ROM was run by CI.
 2. Add suite-specific adapters/oracles for SMSmemtest and non-timing-sensitive SMSTestSuite checks.
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
