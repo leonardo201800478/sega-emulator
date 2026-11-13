@@ -1,9 +1,9 @@
 # Auditoria de fidelidade raster do SMS VDP — 2026-11-13
 
-**Branch:** `audit/sms-vdp-raster-fidelity-20261113`  
-**Base auditada:** `main` em `45684820d57bf5a80a0ff4a33df7a7990c566f5d`  
-**Engine ativo:** `native/video_core/src/sms/vdp.rs`  
-**Integração temporal:** `SmsTemporalMachine -> SmsTemporalBus -> SmsVdp`  
+**Branch:** `audit/sms-vdp-raster-fidelity-20261113`
+**Base auditada:** `main` em `45684820d57bf5a80a0ff4a33df7a7990c566f5d`
+**Engine ativo:** `native/video_core/src/sms/vdp.rs`
+**Integração temporal:** `SmsTemporalMachine -> SmsTemporalBus -> SmsVdp`
 **Estado:** auditoria estática inicial; nenhuma correção de runtime declarada ou validada nesta revisão.
 
 ## 1. Sintomas de usuário que motivam a auditoria
