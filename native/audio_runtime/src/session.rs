@@ -164,9 +164,14 @@ impl<S: PcmSink> NativeAudioSession<S> {
         self.mixer
             .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
-        self.analog_output
-            .process_block(&self.mixed_samples, &mut self.analog_samples);
-        let samples = self.resampler.process(&self.analog_samples);
+        let samples = if self.analog_output.config().enabled {
+            self.analog_output
+                .process_block(&self.mixed_samples, &mut self.analog_samples);
+            self.resampler.process(&self.analog_samples)
+        } else {
+            // Preserve the original digital path and avoid a redundant block copy.
+            self.resampler.process(&self.mixed_samples)
+        };
         if publish && !samples.is_empty() {
             self.sink.write_samples(samples)?;
         }
