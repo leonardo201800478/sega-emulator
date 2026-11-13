@@ -64,6 +64,26 @@ impl FramePacingDeadline {
     }
 }
 
+/// Advance the host presentation target without inheriting scheduler wake lateness.
+/// The first frame starts a new epoch; later frames advance from the prior target.
+fn calculate_next_frame_deadline(
+    frame_started: Instant,
+    frame_duration: Duration,
+    previous_deadline: Option<Instant>,
+) -> Instant {
+    previous_deadline.unwrap_or(frame_started) + frame_duration
+}
+
+/// Convert completed MachineScheduler ticks to host duration using the active region clock.
+/// `None` is returned only when the worker has no valid clock configuration.
+fn frame_duration_from_machine_ticks(
+    machine_ticks: u128,
+    machine_clock_hz: u64,
+) -> Option<Duration> {
+    (machine_clock_hz > 0)
+        .then(|| Duration::from_secs_f64(machine_ticks as f64 / machine_clock_hz as f64))
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -1543,6 +1563,7 @@ fn execute_frame(
         video_mailbox,
         video_sequence,
         telemetry,
+        None,
     )
 }
 
@@ -1557,17 +1578,21 @@ fn execute_frame_with_renderer(
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
+    previous_deadline: Option<Instant>,
 ) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
     let diagnostics_enabled = telemetry.diagnostics_enabled();
-    let diagnostic_machine_start = diagnostics_enabled.then(|| machine.now().ticks());
+    // MachineScheduler ticks, not audio sample quantization, define the frame's virtual duration.
+    let machine_time_start_ticks = machine.now().ticks();
+    let diagnostic_machine_start = diagnostics_enabled.then_some(machine_time_start_ticks);
     let diagnostic_step_start = diagnostics_enabled.then(Instant::now);
     let (instructions, breakpoint_hit) = machine
         .step_frame_until(max_instructions, |pc| breakpoints.contains(u32::from(pc)))
         .map_err(|error| error.to_string())?;
     let step_frame_elapsed =
         diagnostic_step_start.map_or(Duration::ZERO, |started| started.elapsed());
-    let diagnostic_machine_end = diagnostic_machine_start.map(|_| machine.now().ticks());
+    let machine_time_end_ticks = machine.now().ticks();
+    let diagnostic_machine_end = diagnostics_enabled.then_some(machine_time_end_ticks);
     let frame_completed = !breakpoint_hit;
 
     if diagnostics_enabled {
@@ -1722,22 +1747,28 @@ fn execute_frame_with_renderer(
     }
 
     let sample_count = samples.len();
-    let pacing_sample_count = sample_count.max(1) as f64;
+    let machine_ticks_per_frame = machine_time_end_ticks.saturating_sub(machine_time_start_ticks);
+    let machine_clock_hz = telemetry.machine_clock_hz.load(Ordering::Acquire);
+    // The source-sample fallback is retained for isolated tests that construct telemetry
+    // directly; a live worker always receives its validated region clock at construction.
     let frame_duration =
-        Duration::from_secs_f64(pacing_sample_count / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64);
+        frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz)
+            .unwrap_or_else(|| {
+                Duration::from_secs_f64(
+                    sample_count.max(1) as f64 / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64,
+                )
+            });
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
     let processing_elapsed = frame_started.elapsed();
-    let frame_deadline = frame_completed.then(|| frame_started + frame_duration);
+    let frame_deadline = frame_completed
+        .then(|| calculate_next_frame_deadline(frame_started, frame_duration, previous_deadline));
     let frame_wait = frame_deadline
         .map(|deadline| deadline.saturating_duration_since(Instant::now()))
         .unwrap_or(Duration::ZERO);
 
     if frame_completed && diagnostics_enabled && publish_audio {
-        let machine_ticks_per_frame = diagnostic_machine_start
-            .zip(diagnostic_machine_end)
-            .map_or(0, |(start, end)| end.saturating_sub(start));
         telemetry.record_frame_pacing_sample(FramePacingSample {
             frame_interval_ns: frame_interval_ns.unwrap_or_default(),
             machine_ticks_per_frame: u64::try_from(machine_ticks_per_frame).unwrap_or(u64::MAX),
@@ -1844,7 +1875,7 @@ fn worker_loop(
                             wait_finished.saturating_duration_since(deadline),
                         );
                     }
-                    frame_deadline.clear();
+                    // Keep the expired target as the next frame's phase anchor.
                     None
                 }
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1911,6 +1942,7 @@ fn worker_loop(
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
+            frame_deadline.deadline,
         ) {
             Ok((_, next_frame_deadline, breakpoint_hit)) => {
                 drain_machine_trace(&mut machine, &mut trace_history);
@@ -2224,6 +2256,7 @@ fn handle_command(
                     video_mailbox,
                     video_sequence,
                     telemetry,
+                    None,
                 ) {
                     Ok((instructions, _, _)) => {
                         let _ = reply.send(Ok(instructions));
@@ -2373,7 +2406,8 @@ mod tests {
         AudioRendererMode, AudioRendererState, BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS,
         FRAME_PACING_WINDOW_CAPACITY, FramePacingDeadline, FramePacingSample, FramePacingWindow,
         Ordering, SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode,
-        WorkerTelemetry, build_sms_temporal_machine, execute_frame, execute_frame_with_renderer,
+        WorkerTelemetry, build_sms_temporal_machine, calculate_next_frame_deadline, execute_frame,
+        execute_frame_with_renderer, frame_duration_from_machine_ticks,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
@@ -2726,6 +2760,7 @@ mod tests {
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
+            None,
         )
         .unwrap();
 
@@ -3282,6 +3317,59 @@ mod tests {
         assert_eq!(
             pacing.remaining(now + Duration::from_millis(50)),
             Some(Duration::from_millis(12))
+        );
+    }
+
+    #[test]
+    fn machine_scheduler_ticks_define_frame_budget_independently_of_audio_samples() {
+        let duration = frame_duration_from_machine_ticks(1_000, 1_000_000).unwrap();
+        assert_eq!(duration, Duration::from_millis(1));
+        assert_eq!(frame_duration_from_machine_ticks(1_000, 0), None);
+    }
+
+    #[test]
+    fn phase_locked_deadlines_do_not_accumulate_late_wakeups() {
+        let epoch = Instant::now();
+        let frame_duration = Duration::from_micros(16_687);
+        let first = calculate_next_frame_deadline(epoch, frame_duration, None);
+
+        let wake_lateness = Duration::from_micros(449);
+        let second_frame_started = first + wake_lateness;
+        let second =
+            calculate_next_frame_deadline(second_frame_started, frame_duration, Some(first));
+        let third_frame_started = second + wake_lateness;
+        let third =
+            calculate_next_frame_deadline(third_frame_started, frame_duration, Some(second));
+
+        assert_eq!(second, first + frame_duration);
+        assert_eq!(third, second + frame_duration);
+        assert!(second < second_frame_started + frame_duration);
+        assert!(third < third_frame_started + frame_duration);
+    }
+
+    #[test]
+    fn phase_locked_deadlines_accumulate_fractional_frame_budgets() {
+        let epoch = Instant::now();
+        let first_duration = Duration::from_nanos(16_683_333);
+        let second_duration = Duration::from_nanos(16_683_334);
+        let first = calculate_next_frame_deadline(epoch, first_duration, None);
+        let second = calculate_next_frame_deadline(
+            first + Duration::from_micros(700),
+            second_duration,
+            Some(first),
+        );
+
+        assert_eq!(second, first + second_duration);
+        assert_eq!(second, epoch + first_duration + second_duration);
+    }
+
+    #[test]
+    fn phase_locked_deadline_starts_a_new_epoch_without_previous_target() {
+        let frame_started = Instant::now();
+        let duration = Duration::from_micros(16_687);
+        assert_eq!(
+            calculate_next_frame_deadline(frame_started, duration, None),
+            frame_started + duration
         );
     }
 
