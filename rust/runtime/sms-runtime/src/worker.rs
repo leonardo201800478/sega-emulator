@@ -2574,7 +2574,7 @@ mod tests {
             .select(&mut machine, AudioRendererMode::H2Experimental)
             .unwrap();
 
-        let mut breakpoints = BreakpointSet::default();
+        let breakpoints = BreakpointSet::default();
         let mut audio_session = None;
         let mut video_mailbox = None;
         let mut video_sequence = 0;
