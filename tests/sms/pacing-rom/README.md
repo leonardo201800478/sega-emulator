@@ -13,7 +13,7 @@ The same source is compiled into four independent ROMs:
 | VDP/sprites | 2 | CPU-light plus eight deterministic sprite attribute updates |
 | Combined | 3 | CPU-fixed + VDP/sprites + audible deterministic PSG tone-period update |
 
-All profiles use the same video mode, palette, tile set, initial name table, frame boundary, and deterministic frame counter. The PSG is muted in CPU-light, CPU-fixed and VDP/sprites profiles; only the combined profile enables the audible tone and updates its period each frame. The sprite and tile marker movement is a visual workload signature, not a measurement of physical presentation.
+All profiles use the same video mode, palette, tile set, initial name table, frame boundary, and deterministic frame-signature marker. The PSG is muted in CPU-light, CPU-fixed and VDP/sprites profiles; only the combined profile enables the audible tone and updates its period each frame. The sprite and tile marker movement is a visual workload signature, not a measurement of physical presentation.
 
 The initial target is USA/NTSC. The runner must explicitly select the USA profile when executing these images. Region-specific ROM behavior is not inferred from the image itself.
 
@@ -26,7 +26,7 @@ The build is pinned to:
 - devkitSMS `crt0/crt0_sms.rel`, `SMSlib/src/SMSlib.c`, and `SMSlib/src/SMSlib_sprite.c` (the startup initialization path references the SMSlib core ISR/init symbols and sprite-table initialization);
 - devkitSMS `tools/makesms/src/makesms.c`.
 
-The build script checks the exact devkitSMS Git revision and compiler version. It compiles the four profile variants and the required SMSlib core and sprite objects, links the startup object with those real definitions (without suppressing unresolved symbols), converts each IHX image using the converter source from the same pinned devkitSMS checkout, checks the ROM size and records SHA-256 plus build provenance.
+The build script checks the exact devkitSMS Git revision and SDCC version line. It compiles the four profile variants and the required SMSlib core and sprite objects, links the startup object with those real definitions (without suppressing unresolved symbols), converts each IHX image using the converter source from the same pinned devkitSMS checkout, checks the ROM size and records SHA-256 plus build provenance. Each `.build-info.txt` records the checked-out project commit, source SHA-256, USA/NTSC region, SDCC version line, host C compiler version, source/SMSlib/link/converter flags, hashes of `makesms` source/binary and devkitSMS CRT0/peephole rules, and the generated IHX/ROM hashes.
 
 Run from the repository root:
 
