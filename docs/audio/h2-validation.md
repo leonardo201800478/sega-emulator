@@ -1,6 +1,6 @@
 # H2 streaming validation
 
-Status: acceptance plan; no production H2 validation has been run  
+Status: acceptance plan; no production H2 validation has been run
 Baseline: existing SN76489 PSG renderer remains authoritative and default
 
 ## 1. Evidence rules
