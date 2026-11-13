@@ -765,7 +765,7 @@ jobs:
               ["sdcc", "--version"], text=True, stderr=subprocess.STDOUT
           ).splitlines()
           expected_sdcc_version_line = next(
-              (line for line in sdcc_version_lines if line.startswith("Version 4.6.0")),
+              (line for line in sdcc_version_lines if "TD- 4.6.0" in line),
               "",
           )
           if not expected_sdcc_version_line:
