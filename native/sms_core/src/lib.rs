@@ -33,7 +33,7 @@ pub use error::SmsCoreError;
 pub use input::{ControllerButtons, LightPhaserState, SmsInputState};
 pub use io::{SmsIo, SmsIoError};
 pub use memory::SmsMemory;
-pub use sega_sn76489::PsgError;
+pub use sega_sn76489::{PsgAmplitudeEvent, PsgError, PsgEventCaptureError};
 pub use temporal::{
     SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_VDP_CLOCK_DOMAIN_ID,
     SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator, SmsTemporalCoordinatorError,

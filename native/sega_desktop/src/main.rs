@@ -13,7 +13,9 @@ mod windows_host {
         time::{Duration, Instant},
     };
 
-    use sega_sms_runtime::{AnalogOutputConfig, SmsTemporalWorker, SpriteLimitMode};
+    use sega_sms_runtime::{
+        AnalogOutputConfig, AudioRendererMode, SmsTemporalWorker, SpriteLimitMode,
+    };
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
     use std::os::windows::process::CommandExt;
     use zip::ZipArchive;
@@ -91,6 +93,7 @@ mod windows_host {
             in-out property <float> audio-volume: 70;
             in-out property <bool> audio-muted: false;
             in-out property <string> audio-status: "Aguardando configuração da saída de áudio.";
+            in-out property <string> audio-renderer-mode: "psg";
             in-out property <bool> audio-dsp-preset: false;
             in-out property <bool> audio-hpf-enabled: false;
             in-out property <float> audio-hpf-cutoff: 20;
@@ -117,6 +120,7 @@ mod windows_host {
             callback preferences-changed();
             callback audio-volume-changed(float);
             callback audio-mute-changed(bool);
+            callback audio-renderer-changed(string);
             callback audio-dsp-changed(bool, bool, float, bool, float);
             FocusScope {
                 width: 100%; height: 100%;
@@ -255,6 +259,31 @@ mod windows_host {
                                 CompactButton { text: "Volume 50%"; clicked => { root.audio-volume = 50; root.audio-volume-changed(50); } }
                                 CompactButton { text: "Volume 70%"; clicked => { root.audio-volume = 70; root.audio-volume-changed(70); } }
                             }
+                            Text { font-size: 14px; text: "Reconstrução digital do PSG"; color: #f2f5f7; }
+                            HorizontalLayout {
+                                spacing: 5px;
+                                CompactButton {
+                                    text: root.audio-renderer-mode == "psg" ? "PSG — padrão ✓" : "PSG — padrão";
+                                    clicked => {
+                                        root.audio-renderer-mode = "psg";
+                                        root.audio-renderer-changed("psg");
+                                    }
+                                }
+                                CompactButton {
+                                    text: root.audio-renderer-mode == "h2-experimental" ? "H2 — experimental ✓" : "H2 — experimental";
+                                    clicked => {
+                                        root.audio-renderer-mode = "h2-experimental";
+                                        root.audio-renderer-changed("h2-experimental");
+                                    }
+                                }
+                            }
+                            Text {
+                                font-size: 11px;
+                                text: root.audio-renderer-mode == "h2-experimental"
+                                    ? "H2 reconstrói transições do mesmo SN76489. Recurso experimental; em caso de falha o worker retorna ao PSG."
+                                    : "PSG usa o renderer SN76489 validado e permanece como opção padrão.";
+                                color: #d6b879; wrap: word-wrap;
+                            }
                             Text { font-size: 14px; text: "Processamento DSP"; color: #f2f5f7; }
                             CheckBox {
                                 text: "Preset SMS1 — experimental";
@@ -348,6 +377,7 @@ mod windows_host {
         sprite_limit_enabled: bool,
         audio_volume: u8,
         audio_muted: bool,
+        audio_renderer_mode: String,
         audio_dsp_preset: bool,
         audio_hpf_enabled: bool,
         audio_hpf_cutoff_hz: u16,
@@ -366,6 +396,7 @@ mod windows_host {
                 sprite_limit_enabled: true,
                 audio_volume: 70,
                 audio_muted: false,
+                audio_renderer_mode: "psg".to_owned(),
                 audio_dsp_preset: false,
                 audio_hpf_enabled: false,
                 audio_hpf_cutoff_hz: 20,
@@ -433,6 +464,9 @@ mod windows_host {
                         preferences.audio_muted = value;
                     }
                 }
+                "audio_renderer_mode" if ["psg", "h2-experimental"].contains(&value.trim()) => {
+                    preferences.audio_renderer_mode = value.trim().to_owned();
+                }
                 "audio_dsp_preset" => {
                     if let Ok(value) = value.trim().parse() {
                         preferences.audio_dsp_preset = value;
@@ -474,7 +508,7 @@ mod windows_host {
             app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = format!(
-            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\naudio_volume={}\naudio_muted={}\naudio_dsp_preset={}\naudio_hpf_enabled={}\naudio_hpf_cutoff_hz={}\naudio_lpf_enabled={}\naudio_lpf_cutoff_hz={}\n",
+            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\naudio_volume={}\naudio_muted={}\naudio_renderer_mode={}\naudio_dsp_preset={}\naudio_hpf_enabled={}\naudio_hpf_cutoff_hz={}\naudio_lpf_enabled={}\naudio_lpf_cutoff_hz={}\n",
             preferences.region,
             preferences.aspect,
             preferences.show_fps,
@@ -483,6 +517,7 @@ mod windows_host {
             preferences.sprite_limit_enabled,
             preferences.audio_volume,
             preferences.audio_muted,
+            preferences.audio_renderer_mode,
             preferences.audio_dsp_preset,
             preferences.audio_hpf_enabled,
             preferences.audio_hpf_cutoff_hz,
@@ -1193,6 +1228,18 @@ mod windows_host {
                 host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
+            let renderer_fallback = worker_slot
+                .borrow()
+                .as_ref()
+                .and_then(|worker| worker.runtime_error())
+                .filter(|error| error.starts_with("H2 renderer"));
+            if let Some(error) = renderer_fallback
+                && app.get_audio_renderer_mode().as_str() != "psg"
+            {
+                app.set_audio_renderer_mode("psg".into());
+                app.set_audio_status(error.into());
+                app.invoke_preferences_changed();
+            }
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
                 host_pacing.report_if_due(&worker_slot);
                 host_pacing.record_callback(callback_started.elapsed());
@@ -1465,7 +1512,20 @@ mod windows_host {
     }
 
     /// Cria a sessão CPAL com volume e configuração DSP persistidos.
-    fn configure_sms_audio(worker: &SmsTemporalWorker, volume: u8, dsp_config: AnalogOutputConfig) {
+    fn configure_sms_audio(
+        worker: &SmsTemporalWorker,
+        volume: u8,
+        dsp_config: AnalogOutputConfig,
+        renderer_mode: &str,
+    ) {
+        let renderer = if renderer_mode == "h2-experimental" {
+            AudioRendererMode::H2Experimental
+        } else {
+            AudioRendererMode::Psg
+        };
+        if let Err(error) = worker.set_audio_renderer(renderer) {
+            eprintln!("R3_AUDIO renderer selection failed; PSG remains the fallback: {error}");
+        }
         if video_only_capture_enabled() {
             eprintln!(
                 "R3_AUDIO skipped: SEGA_EMULATOR_VIDEO_ONLY enabled; digital PSG generation remains active"
@@ -1501,9 +1561,10 @@ mod windows_host {
         mailbox: &FrameMailbox,
         audio_volume: u8,
         dsp_config: AnalogOutputConfig,
+        renderer_mode: &str,
     ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&worker, audio_volume, dsp_config);
+        configure_sms_audio(&worker, audio_volume, dsp_config, renderer_mode);
         worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok(worker)
@@ -1517,10 +1578,11 @@ mod windows_host {
         mailbox: &FrameMailbox,
         audio_volume: u8,
         dsp_config: AnalogOutputConfig,
+        renderer_mode: &str,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&next, audio_volume, dsp_config);
+        configure_sms_audio(&next, audio_volume, dsp_config, renderer_mode);
         next.set_diagnostics_enabled(true);
 
         let previous = worker_slot.borrow_mut().take();
@@ -1600,6 +1662,7 @@ mod windows_host {
                     preferences.audio_lpf_enabled,
                     f64::from(preferences.audio_lpf_cutoff_hz),
                 ),
+                &preferences.audio_renderer_mode,
             )?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
@@ -1630,6 +1693,7 @@ mod windows_host {
         app.set_sprite_limit_enabled(preferences.sprite_limit_enabled);
         app.set_audio_volume(f32::from(preferences.audio_volume));
         app.set_audio_muted(preferences.audio_muted);
+        app.set_audio_renderer_mode(preferences.audio_renderer_mode.clone().into());
         app.set_audio_dsp_preset(preferences.audio_dsp_preset);
         app.set_audio_hpf_enabled(preferences.audio_hpf_enabled);
         app.set_audio_hpf_cutoff(f32::from(preferences.audio_hpf_cutoff_hz));
@@ -1781,7 +1845,7 @@ mod windows_host {
                 return;
             }
 
-            let (region, sprite_limit_enabled, audio_volume, dsp_config) = open_app
+            let (region, sprite_limit_enabled, audio_volume, dsp_config, renderer_mode) = open_app
                 .upgrade()
                 .map(|app| {
                     (
@@ -1798,9 +1862,18 @@ mod windows_host {
                             app.get_audio_lpf_enabled(),
                             f64::from(app.get_audio_lpf_cutoff().round() as u16),
                         ),
+                        app.get_audio_renderer_mode().to_string(),
                     )
                 })
-                .unwrap_or_else(|| ("usa".to_owned(), true, 70, AnalogOutputConfig::default()));
+                .unwrap_or_else(|| {
+                    (
+                        "usa".to_owned(),
+                        true,
+                        70,
+                        AnalogOutputConfig::default(),
+                        "psg".to_owned(),
+                    )
+                });
 
             match replace_sms_worker(
                 &path,
@@ -1809,6 +1882,7 @@ mod windows_host {
                 &open_mailbox,
                 audio_volume,
                 dsp_config,
+                &renderer_mode,
             ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
@@ -1919,6 +1993,7 @@ mod windows_host {
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
                     audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
                     audio_muted: app.get_audio_muted(),
+                    audio_renderer_mode: app.get_audio_renderer_mode().to_string(),
                     audio_dsp_preset: app.get_audio_dsp_preset(),
                     audio_hpf_enabled: app.get_audio_hpf_enabled(),
                     audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0)
@@ -1976,6 +2051,7 @@ mod windows_host {
                 sprite_limit_enabled: app.get_sprite_limit_enabled(),
                 audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
                 audio_muted: app.get_audio_muted(),
+                audio_renderer_mode: app.get_audio_renderer_mode().to_string(),
                 audio_dsp_preset: app.get_audio_dsp_preset(),
                 audio_hpf_enabled: app.get_audio_hpf_enabled(),
                 audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
@@ -2081,6 +2157,37 @@ mod windows_host {
             },
         );
 
+        let audio_renderer_worker = Rc::clone(&worker);
+        let audio_renderer_app = app.as_weak();
+        app.on_audio_renderer_changed(move |value| {
+            let mode = if value.as_str() == "h2-experimental" {
+                AudioRendererMode::H2Experimental
+            } else {
+                AudioRendererMode::Psg
+            };
+            let Some(app) = audio_renderer_app.upgrade() else {
+                return;
+            };
+            let result = audio_renderer_worker
+                .borrow()
+                .as_ref()
+                .map(|worker| worker.set_audio_renderer(mode));
+            match result {
+                Some(Ok(())) => app.set_audio_status(match mode {
+                    AudioRendererMode::Psg => "Renderer PSG selecionado.".into(),
+                    AudioRendererMode::H2Experimental => "H2 experimental selecionado; fallback automático para PSG em caso de falha.".into(),
+                }),
+                Some(Err(error)) => {
+                    app.set_audio_renderer_mode("psg".into());
+                    app.set_audio_status(format!("H2 indisponível; PSG preservado: {error}").into());
+                }
+                None => app.set_audio_status(
+                    "Preferência do renderer salva; será aplicada ao iniciar uma ROM SMS.".into(),
+                ),
+            }
+            app.invoke_preferences_changed();
+        });
+
         let fullscreen_app = app.as_weak();
         app.on_fullscreen_requested(move |enabled| {
             if let Some(app) = fullscreen_app.upgrade() {
@@ -2164,6 +2271,7 @@ mod windows_host {
             sprite_limit_enabled: app.get_sprite_limit_enabled(),
             audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
             audio_muted: app.get_audio_muted(),
+            audio_renderer_mode: app.get_audio_renderer_mode().to_string(),
             audio_dsp_preset: app.get_audio_dsp_preset(),
             audio_hpf_enabled: app.get_audio_hpf_enabled(),
             audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,

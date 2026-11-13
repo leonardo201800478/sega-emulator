@@ -1,3 +1,11 @@
+## Renderer H2 experimental — 2026-11-12
+
+- Conecta o renderer H2 streaming ao `SmsTemporalWorker`, consumindo eventos limitados do mesmo SN76489 dirigido pelo Scheduler.
+- Mantém PSG como padrão e expõe seleção mutuamente exclusiva PSG/H2 no menu Slint, com preferência persistida.
+- Troca de renderer por comando do worker, sem reiniciar CPAL; aplica fade-in curto e fallback para PSG em overflow ou falha do H2.
+- Reinicializa o epoch H2 em Reset, Stop/power-off e Load ROM; mantém DSP analógico independente e posterior ao renderer.
+- Validação automatizada, benchmarks de tempo real e comparação física/auditiva permanecem pendentes até conclusão dos gates da PR #793.
+
 ## Audio DSP controls — 2026-11-12
 
 - Adds optional post-mixer analog output processing to the Slint audio menu.

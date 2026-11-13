@@ -2877,6 +2877,7 @@ dependencies = [
  "sega-debugger-core",
  "sega-observability",
  "sega-sms-core",
+ "sega-sn76489",
  "sega-video-runtime",
 ]
 

@@ -16,14 +16,17 @@ use crate::audio::AudioSession;
 use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
-    ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
-    SpriteLimitMode, Territory, VideoStandard,
+    ControllerButtons, PsgAmplitudeEvent, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
+    SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
+use sega_sn76489::H2StreamingRenderer;
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
 use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
 
 const SMS_INTERNAL_AUDIO_SAMPLE_RATE: u64 = DEFAULT_PCM_SOURCE_RATE_HZ as u64;
+const H2_EVENT_CAPTURE_CAPACITY: usize = 16_384;
+const AUDIO_RENDERER_FADE_SAMPLES: usize = 256;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 const DEBUG_TRACE_CAPACITY: usize = 2_048;
@@ -699,6 +702,98 @@ impl WorkerTelemetry {
 
 type AudioSessionFactory = Box<dyn FnOnce() -> Result<Box<dyn AudioSession>, String> + Send>;
 
+/// SMS digital PSG reconstruction selected for the common audio output path.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AudioRendererMode {
+    /// Existing SN76489 FIR/PCM renderer. This remains the default.
+    #[default]
+    Psg,
+    /// Experimental event-domain H2 reconstruction.
+    H2Experimental,
+}
+
+struct AudioRendererState {
+    mode: AudioRendererMode,
+    h2: Option<H2StreamingRenderer>,
+    events: Vec<PsgAmplitudeEvent>,
+    h2_samples: Vec<f64>,
+    transition_samples: Vec<f64>,
+    fade_remaining: usize,
+}
+
+impl Default for AudioRendererState {
+    fn default() -> Self {
+        Self {
+            mode: AudioRendererMode::Psg,
+            h2: None,
+            events: Vec::with_capacity(H2_EVENT_CAPTURE_CAPACITY),
+            h2_samples: Vec::with_capacity(2_048),
+            transition_samples: Vec::with_capacity(2_048),
+            fade_remaining: 0,
+        }
+    }
+}
+
+impl AudioRendererState {
+    fn select(
+        &mut self,
+        machine: &mut SmsTemporalMachine,
+        mode: AudioRendererMode,
+    ) -> Result<(), String> {
+        if self.mode == mode {
+            return Ok(());
+        }
+        match mode {
+            AudioRendererMode::Psg => {
+                machine.disable_psg_event_capture();
+                machine.drain_psg_amplitude_events(&mut self.events);
+                self.h2 = None;
+                self.h2_samples.clear();
+                self.mode = AudioRendererMode::Psg;
+            }
+            AudioRendererMode::H2Experimental => {
+                let clock_hz = machine.psg().clock_hz();
+                let start_clock = machine.psg().elapsed_clocks();
+                let initial_level = machine.psg_mixed_amplitude();
+                let mut renderer =
+                    H2StreamingRenderer::new(clock_hz, SMS_INTERNAL_AUDIO_SAMPLE_RATE)
+                        .map_err(|error| format!("could not initialize H2 renderer: {error}"))?;
+                renderer
+                    .begin_epoch(start_clock, initial_level)
+                    .map_err(|error| format!("could not start H2 audio epoch: {error}"))?;
+                machine
+                    .enable_psg_event_capture(H2_EVENT_CAPTURE_CAPACITY)
+                    .map_err(|error| format!("could not enable PSG event capture: {error}"))?;
+                self.h2 = Some(renderer);
+                self.events.clear();
+                self.h2_samples.clear();
+                self.mode = AudioRendererMode::H2Experimental;
+            }
+        }
+        self.fade_remaining = AUDIO_RENDERER_FADE_SAMPLES;
+        Ok(())
+    }
+
+    fn reset_epoch_if_selected(
+        &mut self,
+        machine: &mut SmsTemporalMachine,
+        telemetry: &WorkerTelemetry,
+    ) {
+        if self.mode == AudioRendererMode::H2Experimental {
+            // The machine was rebuilt; discard the previous renderer epoch even
+            // though the user-visible mode remains H2.
+            self.h2 = None;
+            self.mode = AudioRendererMode::Psg;
+            if let Err(error) = self.select(machine, AudioRendererMode::H2Experimental) {
+                let _ = self.select(machine, AudioRendererMode::Psg);
+                telemetry.set_runtime_error(Some(format!(
+                    "H2 renderer returned to PSG after machine epoch reset: {error}"
+                )));
+            }
+        }
+    }
+}
+
 enum WorkerCommand {
     Start(SyncSender<Result<(), String>>),
     Pause(SyncSender<Result<(), String>>),
@@ -717,6 +812,7 @@ enum WorkerCommand {
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
     SetAudioDspConfig(AnalogOutputConfig, SyncSender<Result<(), String>>),
+    SetAudioRenderer(AudioRendererMode, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
@@ -742,6 +838,7 @@ impl WorkerCommand {
             Self::ConfigureAudio(_, _) => "configure_audio",
             Self::SetAudioVolume(_, _) => "set_audio_volume",
             Self::SetAudioDspConfig(_, _) => "set_audio_dsp_config",
+            Self::SetAudioRenderer(_, _) => "set_audio_renderer",
             Self::CloseAudio(_) => "close_audio",
             Self::SetVideoMailbox(_, _) => "set_video_mailbox",
             Self::Shutdown => "shutdown",
@@ -1082,6 +1179,12 @@ impl SmsTemporalWorker {
         self.request_unit(|reply| WorkerCommand::SetAudioDspConfig(config, reply))
     }
 
+    /// Select the SMS PSG reconstruction at a worker-safe frame/command boundary.
+    /// H2 is opt-in; the existing PSG renderer remains the default.
+    pub fn set_audio_renderer(&self, mode: AudioRendererMode) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetAudioRenderer(mode, reply))
+    }
+
     pub fn close_audio_output(&self) -> Result<(), String> {
         let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
         enqueue_worker_command(&self.commands, WorkerCommand::CloseAudio(reply_sender))?;
@@ -1335,6 +1438,7 @@ impl Drop for SmsTemporalWorker {
     }
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn execute_frame(
     machine: &mut SmsTemporalMachine,
@@ -1342,6 +1446,32 @@ fn execute_frame(
     max_instructions: usize,
     publish_audio: bool,
     audio_session: &mut Option<Box<dyn AudioSession>>,
+    video_mailbox: &mut Option<FrameMailbox>,
+    video_sequence: &mut u64,
+    telemetry: &WorkerTelemetry,
+) -> Result<(usize, Option<Instant>, bool), String> {
+    let mut renderer = AudioRendererState::default();
+    execute_frame_with_renderer(
+        machine,
+        breakpoints,
+        max_instructions,
+        publish_audio,
+        audio_session,
+        &mut renderer,
+        video_mailbox,
+        video_sequence,
+        telemetry,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_frame_with_renderer(
+    machine: &mut SmsTemporalMachine,
+    breakpoints: &BreakpointSet,
+    max_instructions: usize,
+    publish_audio: bool,
+    audio_session: &mut Option<Box<dyn AudioSession>>,
+    audio_renderer: &mut AudioRendererState,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
@@ -1422,15 +1552,71 @@ fn execute_frame(
     let video_publish_elapsed =
         diagnostic_publish_start.map_or(Duration::ZERO, |started| started.elapsed());
 
-    // Do not send audio generated by a partial frame stopped at a breakpoint.
-    // Drain it through the discard path so paused single-step state stays bounded.
-    let samples = machine.drain_audio_samples(None);
+    // Keep the legacy PSG FIFO bounded in both modes. H2 consumes events from
+    // this same Scheduler-driven PSG instance; it never runs a second PSG.
+    let psg_samples = machine.drain_audio_samples(None);
+    let mut use_h2 = false;
+    if audio_renderer.mode == AudioRendererMode::H2Experimental {
+        machine.drain_psg_amplitude_events(&mut audio_renderer.events);
+        let h2_result = if machine.psg_event_capture_overflowed() {
+            Err("bounded PSG event capture overflowed".to_owned())
+        } else if let Some(renderer) = audio_renderer.h2.as_mut() {
+            renderer
+                .render_until(
+                    &audio_renderer.events,
+                    machine.psg().elapsed_clocks(),
+                    &mut audio_renderer.h2_samples,
+                )
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        } else {
+            Err("H2 renderer state is unavailable".to_owned())
+        };
+        match h2_result {
+            Ok(()) => use_h2 = true,
+            Err(error) => {
+                machine.disable_psg_event_capture();
+                audio_renderer.h2 = None;
+                audio_renderer.events.clear();
+                audio_renderer.mode = AudioRendererMode::Psg;
+                audio_renderer.fade_remaining = AUDIO_RENDERER_FADE_SAMPLES;
+                telemetry.set_runtime_error(Some(format!(
+                    "H2 renderer fault; safely falling back to PSG: {error}"
+                )));
+            }
+        }
+    }
+
+    let source_samples = if use_h2 {
+        audio_renderer.h2_samples.as_slice()
+    } else {
+        psg_samples.as_slice()
+    };
+    let samples = if audio_renderer.fade_remaining > 0 && !source_samples.is_empty() {
+        audio_renderer.transition_samples.clear();
+        audio_renderer
+            .transition_samples
+            .extend_from_slice(source_samples);
+        let fade_start = AUDIO_RENDERER_FADE_SAMPLES - audio_renderer.fade_remaining;
+        for (index, sample) in audio_renderer.transition_samples.iter_mut().enumerate() {
+            let position = fade_start.saturating_add(index).saturating_add(1);
+            let gain = (position as f64 / AUDIO_RENDERER_FADE_SAMPLES as f64).min(1.0);
+            *sample *= gain;
+        }
+        audio_renderer.fade_remaining = audio_renderer
+            .fade_remaining
+            .saturating_sub(audio_renderer.transition_samples.len());
+        audio_renderer.transition_samples.as_slice()
+    } else {
+        source_samples
+    };
+
     let diagnostic_audio_start = diagnostics_enabled.then(Instant::now);
     let audio_result = audio_session.as_mut().map(|session| {
         if publish_audio && frame_completed {
-            session.process_samples(&samples)
+            session.process_samples(samples)
         } else {
-            session.process_samples_discarding_output(&samples)
+            session.process_samples_discarding_output(samples)
         }
     });
     let audio_submit_elapsed =
@@ -1530,6 +1716,7 @@ fn worker_loop(
     let mut trace_history = BoundedHistory::new(DEBUG_TRACE_CAPACITY);
     let mut trace_enabled = false;
     let mut audio_session: Option<Box<dyn AudioSession>> = None;
+    let mut audio_renderer = AudioRendererState::default();
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
     let mut frame_deadline = FramePacingDeadline::default();
@@ -1601,6 +1788,7 @@ fn worker_loop(
                 &region,
                 &mut running,
                 &mut audio_session,
+                &mut audio_renderer,
                 &mut video_mailbox,
                 &mut video_sequence,
                 &telemetry,
@@ -1631,12 +1819,13 @@ fn worker_loop(
             continue;
         }
 
-        match execute_frame(
+        match execute_frame_with_renderer(
             &mut machine,
             &breakpoints,
             DEFAULT_MAX_FRAME_INSTRUCTIONS,
             true,
             &mut audio_session,
+            &mut audio_renderer,
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
@@ -1706,6 +1895,7 @@ fn handle_command(
     region: &str,
     running: &mut bool,
     audio_session: &mut Option<Box<dyn AudioSession>>,
+    audio_renderer: &mut AudioRendererState,
     video_mailbox: &mut Option<FrameMailbox>,
     video_sequence: &mut u64,
     telemetry: &WorkerTelemetry,
@@ -1765,6 +1955,7 @@ fn handle_command(
                         telemetry.record_audio_session_metrics(session.as_ref());
                     }
                     *machine = powered_off;
+                    audio_renderer.reset_epoch_if_selected(machine, telemetry);
                     telemetry.reset_machine_counters();
                     trace_history.clear();
                     Ok(())
@@ -1791,6 +1982,7 @@ fn handle_command(
                 match result {
                     Ok(()) => {
                         *machine = reset_machine;
+                        audio_renderer.reset_epoch_if_selected(machine, telemetry);
                         telemetry.reset_machine_counters();
                         let _ = reply.send(Ok(()));
                     }
@@ -1821,6 +2013,7 @@ fn handle_command(
                     match result {
                         Ok(()) => {
                             *machine = new_machine;
+                            audio_renderer.reset_epoch_if_selected(machine, telemetry);
                             *rom = new_rom;
                             telemetry.reset_machine_counters();
                             let _ = reply.send(Ok(()));
@@ -1930,12 +2123,13 @@ fn handle_command(
             } else if max_instructions == 0 {
                 let _ = reply.send(Err("max_instructions must be positive".to_owned()));
             } else {
-                match execute_frame(
+                match execute_frame_with_renderer(
                     machine,
                     breakpoints,
                     max_instructions,
                     false,
                     audio_session,
+                    audio_renderer,
                     video_mailbox,
                     video_sequence,
                     telemetry,
@@ -2028,6 +2222,15 @@ fn handle_command(
                 .and_then(|session| session.set_analog_output_config(config));
             let _ = reply.send(result);
         }
+        WorkerCommand::SetAudioRenderer(mode, reply) => {
+            let result = audio_renderer.select(machine, mode);
+            if result.is_ok() {
+                telemetry.set_runtime_error(None);
+            } else if mode == AudioRendererMode::H2Experimental {
+                let _ = audio_renderer.select(machine, AudioRendererMode::Psg);
+            }
+            let _ = reply.send(result);
+        }
         WorkerCommand::CloseAudio(reply) => {
             let close_error = audio_session.take().and_then(|mut session| {
                 let error = session.suspend_and_flush().err();
@@ -2076,10 +2279,10 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
-        FramePacingDeadline, FramePacingSample, FramePacingWindow, Ordering,
-        SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
-        build_sms_temporal_machine, execute_frame,
+        AudioRendererMode, AudioRendererState, BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS,
+        FRAME_PACING_WINDOW_CAPACITY, FramePacingDeadline, FramePacingSample, FramePacingWindow,
+        Ordering, SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode,
+        WorkerTelemetry, build_sms_temporal_machine, execute_frame, execute_frame_with_renderer,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
@@ -2358,6 +2561,49 @@ mod tests {
     }
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
+
+    #[test]
+    fn h2_renderer_is_selected_at_worker_boundary_and_consumes_real_psg_events() {
+        let mut rom = vec![0; 0x4000];
+        let program = [
+            0xF3, 0x31, 0xF0, 0xDF, // DI; LD SP,$DFF0
+            0x3E, 0x80, 0xD3, 0x7F, // PSG tone 0 period low
+            0x3E, 0x02, 0xD3, 0x7F, // PSG tone 0 period high
+            0x3E, 0x90, 0xD3, 0x7F, // PSG tone 0 volume
+            0x18, 0xFE, // JR $
+        ];
+        rom[..program.len()].copy_from_slice(&program);
+        let mut machine = build_sms_temporal_machine(rom, "usa").unwrap();
+        let mut renderer = AudioRendererState::default();
+        assert_eq!(renderer.mode, AudioRendererMode::Psg);
+        renderer
+            .select(&mut machine, AudioRendererMode::H2Experimental)
+            .unwrap();
+
+        let breakpoints = BreakpointSet::default();
+        let mut audio_session = None;
+        let mut video_mailbox = None;
+        let mut video_sequence = 0;
+        let telemetry = WorkerTelemetry::default();
+        execute_frame_with_renderer(
+            &mut machine,
+            &breakpoints,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut renderer,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert_eq!(renderer.mode, AudioRendererMode::H2Experimental);
+        let metrics = renderer.h2.as_ref().unwrap().metrics();
+        assert!(metrics.events_processed > 0);
+        assert!(metrics.output_samples > 0);
+        assert!(!machine.psg_event_capture_overflowed());
+    }
 
     fn av_test_rom() -> Vec<u8> {
         let mut rom = vec![0; 0x4000];

@@ -6,6 +6,17 @@ O menu **Áudio** oferece volume mestre de 0 a 100%, mute independente, atalhos 
 
 As alterações são encaminhadas por comandos coarse-grained ao `SmsTemporalWorker`. Volume e filtros não reiniciam CPAL, não avançam nem pausam a máquina e não alteram PSG, CPU, VDP, MachineScheduler ou clocks.
 
+## Renderer PSG e H2 experimental
+
+O menu também permite escolher a reconstrução digital do PSG:
+
+- **PSG — padrão:** mantém o renderer SN76489 existente; instalações sem preferência continuam nesta opção.
+- **H2 — experimental:** reconstrói a forma de onda a partir de transições observadas no mesmo SN76489 executado pelo Scheduler. Não cria uma segunda instância de PSG nem altera os clocks do hardware.
+
+A seleção é enviada ao `SmsTemporalWorker` por comando coarse-grained, aplicada na fronteira segura do worker e persistida em `slint_ui_settings.txt`. A troca não reinicia CPAL. A captura de eventos tem capacidade limitada; em overflow ou erro do renderer, o worker desativa H2 e retorna ao PSG, publicando o motivo no estado de áudio. Reset, Stop e Load ROM reiniciam o epoch do renderer quando H2 está selecionado.
+
+O DSP analógico permanece independente e posterior à reconstrução digital: PSG ou H2 podem alimentar o mesmo `AnalogOutputProcessor`. Nenhuma resposta elétrica específica de placa é ativada automaticamente.
+
 ## Processamento DSP opcional
 
 O submenu de som oferece:
