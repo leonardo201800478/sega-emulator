@@ -759,10 +759,10 @@ jobs:
               ["git", "rev-parse", "HEAD"], text=True
           ).strip()
           expected_cc_version = subprocess.check_output(
-              ["cc", "--version"], text=True
+              ["cc", "--version"], text=True, stderr=subprocess.STDOUT
           ).splitlines()[0]
           sdcc_version_lines = subprocess.check_output(
-              ["sdcc", "--version"], text=True
+              ["sdcc", "--version"], text=True, stderr=subprocess.STDOUT
           ).splitlines()
           expected_sdcc_version_line = next(
               (line for line in sdcc_version_lines if line.startswith("Version 4.6.0")),
