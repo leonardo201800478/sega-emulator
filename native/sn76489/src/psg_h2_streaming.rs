@@ -269,7 +269,7 @@ impl H2StreamingRenderer {
         self.metrics
     }
 
-    /// Number of samples still waiting for the safe emission horizon.
+    /// Number of samples that are currently safe to emit at the supplied clock.
     pub fn pending_sample_count(&self, end_clock: u64) -> Result<usize, H2StreamingError> {
         self.validate_horizon(end_clock)?;
         let safe_exclusive = self.sample_index_at_clock(end_clock)?.saturating_sub(1);
