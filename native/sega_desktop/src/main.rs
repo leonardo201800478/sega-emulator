@@ -260,7 +260,7 @@ mod windows_host {
                                 text: "Preset SMS1 — experimental";
                                 checked <=> root.audio-dsp-preset;
                                 toggled => {
-                                    if self.checked {
+                                    if (self.checked) {
                                         root.audio-hpf-enabled = true; root.audio-hpf-cutoff = 20;
                                         root.audio-lpf-enabled = true; root.audio-lpf-cutoff = 18000;
                                     } else {
