@@ -9,6 +9,9 @@ on:
       - "native/sms_core/examples/sms_rom_runner/**"
       - "native/sms_core/src/**"
       - "native/video_core/src/sms/**"
+      - "native/sms_core/Cargo.toml"
+      - "native/video_core/Cargo.toml"
+      - "Cargo.lock"
   workflow_dispatch:
 
 permissions:
@@ -121,6 +124,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sms-memtest-diagnostic-evidence
-          path: ${{ runner.temp }}/smsmemtest-output/
-          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/smsmemtest-output/SMSmemtest.sms
+            ${{ runner.temp }}/smsmemtest-output/SMSmemtest.build-info.txt
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run.jsonl
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run.stderr
+            ${{ runner.temp }}/smsmemtest-output/runner-exit-code.txt
+          if-no-files-found: warn
           retention-days: 14
