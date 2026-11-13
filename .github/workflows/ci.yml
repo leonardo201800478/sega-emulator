@@ -250,7 +250,7 @@ jobs:
         run: cargo test --release --manifest-path native/observability/Cargo.toml --features runtime --locked
 
   smsmemtest-rom-diagnostic:
-    name: SMSmemtest pinned ROM build and diagnostic (non-gating result)
+    name: SMSmemtest pinned ROM regression (RAM + VRAM)
     needs: [changes]
     if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.smsmemtest == 'true'
     runs-on: ubuntu-latest
@@ -317,7 +317,7 @@ jobs:
       - name: Build full-machine diagnostic runner (Release)
         run: cargo build --release --locked -p sega-sms-core --example sms_rom_runner
 
-      - name: Run bounded full-machine diagnostic twice (ROM result is non-gating)
+      - name: Run and validate two deterministic full-machine SMSmemtest passes
         shell: bash
         run: |
           set -euo pipefail
@@ -385,17 +385,69 @@ jobs:
           for number, exit_code in enumerate(exit_codes, start=1):
               print(f"runner_{number}_exit_code={exit_code}")
 
-          has_two_summaries = (
-              sum(item.get("record") == "summary" for item in first) == 1
-              and sum(item.get("record") == "summary" for item in second) == 1
-          )
-          if exit_codes != ["0", "0"] or not has_two_summaries:
-              print("determinism=NOT_EVALUATED")
-          elif first == second:
-              print("determinism=IDENTICAL")
-          else:
+          expected_ram_cases = {
+              "ram_all_zero",
+              "ram_all_one",
+              "ram_pattern_55",
+              "ram_pattern_aa",
+              "ram_variable_1",
+              "ram_variable_19",
+              "ram_variable_71",
+          }
+
+          def validate_run(records, exit_code, run_number):
+              if exit_code != "0":
+                  raise SystemExit(f"run {run_number}: runner exit code {exit_code}")
+              summaries = [item for item in records if item.get("record") == "summary"]
+              if len(summaries) != 1:
+                  raise SystemExit(f"run {run_number}: expected exactly one summary record")
+              summary = summaries[0]
+              if summary.get("status") != "SMSMEMTEST_ROM_RESULTS_OBSERVED_NOT_HARDWARE_CERTIFIED":
+                  raise SystemExit(f"run {run_number}: ROM result flow did not complete")
+              if summary.get("sram_phase") != "BLOCKED_CAPABILITY":
+                  raise SystemExit(f"run {run_number}: SRAM gate was not reported")
+
+              ram_cases = [
+                  item for item in records
+                  if item.get("record") == "smsmemtest_case" and item.get("phase") == "system_ram"
+              ]
+              observed_ids = {item.get("case_id") for item in ram_cases}
+              if observed_ids != expected_ram_cases or len(ram_cases) != 7:
+                  raise SystemExit(f"run {run_number}: expected all seven RAM cases, got {observed_ids}")
+              if any(item.get("status") != "PASS" for item in ram_cases):
+                  raise SystemExit(f"run {run_number}: at least one system RAM case did not PASS")
+
+              vram_cases = [
+                  item for item in records
+                  if item.get("record") == "smsmemtest_case" and item.get("phase") == "video_ram"
+              ]
+              if len(vram_cases) != 1 or vram_cases[0].get("status") != "PASS_ALL_REPORTED_BY_ROM":
+                  raise SystemExit(f"run {run_number}: VRAM suite did not report aggregate PASS")
+
+              input_events = [
+                  item for item in records if item.get("record") == "smsmemtest_input"
+              ]
+              if sum(item.get("event") == "button_pressed" for item in input_events) != 2:
+                  raise SystemExit(f"run {run_number}: expected two deterministic controller presses")
+              if sum(item.get("event") == "button_released" for item in input_events) != 2:
+                  raise SystemExit(f"run {run_number}: expected two deterministic controller releases")
+              if sum(item.get("event") == "vram_result_color_observed" for item in input_events) != 1:
+                  raise SystemExit(f"run {run_number}: VRAM result color was not observed")
+
+              return summary
+
+          summary_1 = validate_run(first, exit_codes[0], 1)
+          summary_2 = validate_run(second, exit_codes[1], 2)
+          if summary_1.get("rom_sha256") != summary_2.get("rom_sha256"):
+              raise SystemExit("ROM hash changed between repeated runs")
+          if summary_1.get("emulator_sha") != summary_2.get("emulator_sha"):
+              raise SystemExit("emulator revision changed between repeated runs")
+          if first != second:
               print("determinism=DIVERGENT")
               sys.exit(1)
+
+          print("determinism=IDENTICAL")
+          print("smsmemtest_regression=PASS_RAM_VRAM")
           PY
 
       - name: Publish ROM and diagnostic evidence
