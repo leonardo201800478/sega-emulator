@@ -25,6 +25,7 @@ struct Args {
     warmup_seconds: u64,
     sample_interval_ms: u64,
     button1_pulse_frames: Vec<u64>,
+    diagnostics_enabled: bool,
 }
 
 fn usage() -> &'static str {
@@ -66,8 +67,13 @@ fn parse_args() -> Result<Args, String> {
     let mut warmup_seconds = 10;
     let mut sample_interval_ms = 1_000;
     let mut button1_pulse_frames = Vec::new();
+    let mut diagnostics_enabled = true;
 
     while let Some(flag) = args.next() {
+        if flag == "--diagnostics-disabled" {
+            diagnostics_enabled = false;
+            continue;
+        }
         if flag == "--help" || flag == "-h" {
             println!("{}", usage());
             process::exit(0);
@@ -131,6 +137,7 @@ fn parse_args() -> Result<Args, String> {
         warmup_seconds,
         sample_interval_ms,
         button1_pulse_frames,
+        diagnostics_enabled,
     })
 }
 
@@ -203,6 +210,7 @@ fn emit_sample(
         metrics.total_samples,
         worker.total_instructions(),
         worker.machine_time_ticks(),
+        args.diagnostics_enabled,
         worker.machine_clock_hz(),
     );
 
@@ -218,7 +226,7 @@ fn run(args: Args) -> Result<(), String> {
     }
 
     let worker = SmsTemporalWorker::new(rom, &args.region)?;
-    worker.set_diagnostics_enabled(true);
+    worker.set_diagnostics_enabled(args.diagnostics_enabled);
 
     if args.warmup_seconds > 0 {
         worker.start()?;
@@ -326,6 +334,7 @@ fn run(args: Args) -> Result<(), String> {
     println!(
         "{{\"record\":\"summary\",\"status\":\"{}\",\"elapsed_ns\":{},\"completed_frames\":{},\"observed_fps\":{:.3},\"frame_interval_p50_ns\":{},\"frame_interval_p95_ns\":{},\"frame_interval_p99_ns\":{},\"step_frame_p50_ns\":{},\"step_frame_p95_ns\":{},\"step_frame_p99_ns\":{},\"frame_processing_p50_ns\":{},\"frame_processing_p95_ns\":{},\"frame_processing_p99_ns\":{},\"pacing_wait_budget_p50_ns\":{},\"pacing_wait_elapsed_p50_ns\":{},\"pacing_timeout_lateness_p50_ns\":{},\"pacing_timeout_lateness_p95_ns\":{},\"pacing_timeout_lateness_p99_ns\":{},\"pacing_timeout_count_total\":{},\"machine_ticks_per_frame_min\":{},\"machine_ticks_per_frame_p50\":{},\"machine_ticks_per_frame_max\":{},\"audio_samples_p50\":{},\"audio_samples_p95\":{},\"audio_samples_p99\":{},\"window_sample_count\":{},\"total_frame_samples\":{},\"total_instructions\":{},\"machine_time_ticks\":{},\"machine_clock_hz\":{},\"input_pulses_sent\":{},\"runtime_error\":{}}}",
         status,
+        args.diagnostics_enabled,
         elapsed.as_nanos(),
         frames,
         fps,
