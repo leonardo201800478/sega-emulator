@@ -10,8 +10,8 @@ use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use sega_sms_runtime::SmsTemporalWorker;
 use sega_sms_core::ControllerButtons;
+use sega_sms_runtime::SmsTemporalWorker;
 
 #[derive(Debug)]
 struct Args {
@@ -317,7 +317,11 @@ fn run(args: Args) -> Result<(), String> {
         frames as f64 / elapsed.as_secs_f64()
     };
     let runtime_error = worker.runtime_error();
-    let status = if runtime_error.is_some() { "RUNTIME_ERROR" } else { "CAPTURED" };
+    let status = if runtime_error.is_some() {
+        "RUNTIME_ERROR"
+    } else {
+        "CAPTURED"
+    };
 
     println!(
         "{{\"record\":\"summary\",\"status\":\"{}\",\"elapsed_ns\":{},\"completed_frames\":{},\"observed_fps\":{:.3},\"frame_interval_p50_ns\":{},\"frame_interval_p95_ns\":{},\"frame_interval_p99_ns\":{},\"step_frame_p50_ns\":{},\"step_frame_p95_ns\":{},\"step_frame_p99_ns\":{},\"frame_processing_p50_ns\":{},\"frame_processing_p95_ns\":{},\"frame_processing_p99_ns\":{},\"pacing_wait_budget_p50_ns\":{},\"pacing_wait_elapsed_p50_ns\":{},\"pacing_timeout_lateness_p50_ns\":{},\"pacing_timeout_lateness_p95_ns\":{},\"pacing_timeout_lateness_p99_ns\":{},\"pacing_timeout_count_total\":{},\"machine_ticks_per_frame_min\":{},\"machine_ticks_per_frame_p50\":{},\"machine_ticks_per_frame_max\":{},\"audio_samples_p50\":{},\"audio_samples_p95\":{},\"audio_samples_p99\":{},\"window_sample_count\":{},\"total_frame_samples\":{},\"total_instructions\":{},\"machine_time_ticks\":{},\"machine_clock_hz\":{},\"input_pulses_sent\":{},\"runtime_error\":{}}}",
