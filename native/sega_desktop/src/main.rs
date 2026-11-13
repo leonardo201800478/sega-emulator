@@ -1716,13 +1716,13 @@ mod windows_host {
         let initial_sram = store
             .load(&identity, &profile)
             .map_err(|error| format!("não foi possível validar/restaurar o SRM: {error}"))?;
-        let save_context = profile.requires_persistent_store().then(|| {
-            CartridgeSaveContext {
+        let save_context = profile
+            .requires_persistent_store()
+            .then(|| CartridgeSaveContext {
                 identity: identity.clone(),
                 profile: profile.clone(),
                 store,
-            }
-        });
+            });
         eprintln!(
             "SRAM_PROFILE status=verified sha1={} sha256={} capacity={} persistent={} restored={}",
             identity.sha1_hex(),
@@ -1772,7 +1772,11 @@ mod windows_host {
         let profile = context.profile.clone();
         let save = thread::Builder::new()
             .name("sms-sram-save".to_owned())
-            .spawn(move || store.save(&identity, &profile, &snapshot).map_err(|error| error.to_string()))
+            .spawn(move || {
+                store
+                    .save(&identity, &profile, &snapshot)
+                    .map_err(|error| error.to_string())
+            })
             .map_err(|error| format!("não foi possível iniciar gravação SRM: {error}"))?;
         save.join()
             .map_err(|_| "thread de gravação SRM encerrou inesperadamente".to_owned())??;
@@ -1819,7 +1823,9 @@ mod windows_host {
                     let _ = previous.start();
                 }
                 *worker_slot.borrow_mut() = Some(previous);
-                return Err(format!("ROM anterior preservada; falha ao gravar SRAM: {error}"));
+                return Err(format!(
+                    "ROM anterior preservada; falha ao gravar SRAM: {error}"
+                ));
             }
             if let Err(error) = previous.detach_video_mailbox() {
                 if was_running {
@@ -2320,7 +2326,9 @@ mod windows_host {
                     }
                     *close_worker.borrow_mut() = Some(previous);
                     if let Some(app) = close_app.upgrade() {
-                        app.set_rom_status(format!("Falha ao pausar antes de salvar SRAM: {error}").into());
+                        app.set_rom_status(
+                            format!("Falha ao pausar antes de salvar SRAM: {error}").into(),
+                        );
                     }
                     return;
                 }
@@ -2332,7 +2340,9 @@ mod windows_host {
                     }
                     *close_worker.borrow_mut() = Some(previous);
                     if let Some(app) = close_app.upgrade() {
-                        app.set_rom_status(format!("ROM mantida; falha ao gravar SRAM: {error}").into());
+                        app.set_rom_status(
+                            format!("ROM mantida; falha ao gravar SRAM: {error}").into(),
+                        );
                     }
                     return;
                 }
@@ -2657,9 +2667,7 @@ mod windows_host {
             if let Err(error) = active_worker.pause() {
                 eprintln!("SRAM_SAVE pause_before_exit_failed error={error}");
             }
-            if let Err(error) =
-                persist_worker_sram(&active_worker, save_context.borrow().as_ref())
-            {
+            if let Err(error) = persist_worker_sram(&active_worker, save_context.borrow().as_ref()) {
                 final_save_error = Some(error);
             }
             let _ = active_worker.stop();
