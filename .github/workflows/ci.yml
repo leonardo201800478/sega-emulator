@@ -455,6 +455,58 @@ jobs:
           print("smsmemtest_regression=PASS_RAM_VRAM")
           PY
 
+      - name: Run SMSmemtest through production worker pacing (60 seconds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/sms/scripts/run_pacing_rom.py \
+            --rom "$OUT_DIR/SMSmemtest.sms" \
+            --suite-id smsmemtest \
+            --suite-revision "$SMSMEMTEST_REVISION" \
+            --region usa \
+            --duration-seconds 60 \
+            --warmup-seconds 2 \
+            --sample-interval-ms 1000 \
+            --button1-pulse-frames 26,441 \
+            > "$OUT_DIR/smsmemtest-pacing-worker.jsonl" \
+            2> "$OUT_DIR/smsmemtest-pacing-worker.stderr"
+
+          python3 - "$OUT_DIR/smsmemtest-pacing-worker.jsonl" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          records = []
+          for line in path.read_text(errors="replace").splitlines():
+              try:
+                  records.append(json.loads(line))
+              except json.JSONDecodeError:
+                  continue
+
+          summaries = [item for item in records if item.get("record") == "summary"]
+          samples = [item for item in records if item.get("record") == "sample"]
+          if len(summaries) != 1:
+              raise SystemExit("worker pacing run did not emit exactly one summary")
+          summary = summaries[0]
+          if summary.get("status") != "CAPTURED":
+              raise SystemExit(f"worker pacing run status was {summary.get('status')}")
+          if summary.get("completed_frames", 0) < 100:
+              raise SystemExit("worker pacing run completed fewer than 100 frames")
+          if summary.get("machine_clock_hz") != 3579545:
+              raise SystemExit("worker pacing run did not use the USA NTSC machine clock")
+          if summary.get("machine_ticks_per_frame_p50", 0) == 0:
+              raise SystemExit("worker pacing metrics did not capture virtual ticks/frame")
+          if summary.get("input_pulses_sent") != 2:
+              raise SystemExit("worker pacing run did not send both evidenced SMSmemtest inputs")
+          if not samples:
+              raise SystemExit("worker pacing run emitted no rolling-window samples")
+
+          print(json.dumps(summary, sort_keys=True))
+          print(f"worker_pacing_samples={len(samples)}")
+          print("smsmemtest_worker_pacing=CAPTURED_NOT_HARDWARE_CERTIFIED")
+          PY
+
       - name: Publish ROM and diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
