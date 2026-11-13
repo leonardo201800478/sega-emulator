@@ -295,6 +295,7 @@ impl<S: PcmSink> Drop for NativeAudioSession<S> {
 #[cfg(test)]
 mod tests {
     use super::{AudioOutputMetrics, NativeAudioSession, PcmSink};
+    use crate::AnalogOutputConfig;
 
     #[derive(Default)]
     struct RecordingSink {
