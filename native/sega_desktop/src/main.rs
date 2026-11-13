@@ -4,6 +4,7 @@
 mod windows_host {
     use std::{
         cell::{Cell, RefCell},
+        collections::HashSet,
         error::Error,
         fs,
         io::{Cursor, Read},
@@ -13,6 +14,7 @@ mod windows_host {
         time::{Duration, Instant},
     };
 
+    use sega_sms_core::ControllerButtons;
     use sega_sms_runtime::{
         AnalogOutputConfig, AudioRendererMode, SmsTemporalWorker, SpriteLimitMode,
     };
@@ -33,6 +35,86 @@ mod windows_host {
     const MAX_ROM_ARCHIVE_BYTES: usize = 32 * 1024 * 1024;
     const MAX_ROM_BYTES: u64 = 16 * 1024 * 1024;
     const MAX_ZIP_ENTRIES: usize = 4_096;
+
+    /// Ações do teclado do host. Não representam ciclos nem instruções da máquina.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    enum KeyboardAction {
+        Up,
+        Down,
+        Left,
+        Right,
+        Button1,
+        Button2,
+        Nmi,
+        Start,
+        Pause,
+        Stop,
+        Reset,
+        StepFrame,
+    }
+
+    impl KeyboardAction {
+        fn from_slint_key(key: &str) -> Option<Self> {
+            match key {
+                "up" => Some(Self::Up),
+                "down" => Some(Self::Down),
+                "left" => Some(Self::Left),
+                "right" => Some(Self::Right),
+                "button1" => Some(Self::Button1),
+                "button2" => Some(Self::Button2),
+                "nmi" => Some(Self::Nmi),
+                "start" => Some(Self::Start),
+                "pause" => Some(Self::Pause),
+                "stop" => Some(Self::Stop),
+                "reset" => Some(Self::Reset),
+                "step-frame" => Some(Self::StepFrame),
+                _ => None,
+            }
+        }
+
+        fn is_controller_button(self) -> bool {
+            matches!(
+                self,
+                Self::Up | Self::Down | Self::Left | Self::Right | Self::Button1 | Self::Button2
+            )
+        }
+    }
+
+    /// Mantém níveis de teclas pressionadas e compõe um snapshot completo do controle SMS.
+    #[derive(Debug, Default)]
+    struct KeyboardInputState {
+        pressed: HashSet<KeyboardAction>,
+    }
+
+    impl KeyboardInputState {
+        /// Atualiza uma tecla e retorna a ação somente quando seu estado realmente mudou.
+        fn update(&mut self, key: &str, pressed: bool) -> Option<KeyboardAction> {
+            let action = KeyboardAction::from_slint_key(key)?;
+            let changed = if pressed {
+                self.pressed.insert(action)
+            } else {
+                self.pressed.remove(&action)
+            };
+            changed.then_some(action)
+        }
+
+        /// Compõe os níveis simultâneos das direções e dos dois botões do Master System.
+        fn controller_buttons(&self) -> ControllerButtons {
+            ControllerButtons {
+                up: self.pressed.contains(&KeyboardAction::Up),
+                down: self.pressed.contains(&KeyboardAction::Down),
+                left: self.pressed.contains(&KeyboardAction::Left),
+                right: self.pressed.contains(&KeyboardAction::Right),
+                button_1: self.pressed.contains(&KeyboardAction::Button1),
+                button_2: self.pressed.contains(&KeyboardAction::Button2),
+            }
+        }
+
+        /// Descarta todas as teclas, por exemplo quando a janela perde o foco.
+        fn clear(&mut self) {
+            self.pressed.clear();
+        }
+    }
 
     slint::slint! {
         import { Button, CheckBox, LineEdit, ScrollView, Slider } from "std-widgets.slint";
@@ -122,8 +204,42 @@ mod windows_host {
             callback audio-mute-changed(bool);
             callback audio-renderer-changed(string);
             callback audio-dsp-changed(bool, bool, float, bool, float);
+            callback keyboard-key-pressed(string);
+            callback keyboard-key-released(string);
+            callback keyboard-focus-lost();
             FocusScope {
                 width: 100%; height: 100%;
+                key-pressed(event) => {
+                    if (event.text == Key.UpArrow) { root.keyboard-key-pressed("up"); accept }
+                    else if (event.text == Key.DownArrow) { root.keyboard-key-pressed("down"); accept }
+                    else if (event.text == Key.LeftArrow) { root.keyboard-key-pressed("left"); accept }
+                    else if (event.text == Key.RightArrow) { root.keyboard-key-pressed("right"); accept }
+                    else if (event.text == "z") { root.keyboard-key-pressed("button1"); accept }
+                    else if (event.text == "x") { root.keyboard-key-pressed("button2"); accept }
+                    else if (event.text == "p") { root.keyboard-key-pressed("nmi"); accept }
+                    else if (event.text == Key.F5) { root.keyboard-key-pressed("start"); accept }
+                    else if (event.text == Key.F6) { root.keyboard-key-pressed("pause"); accept }
+                    else if (event.text == Key.F7) { root.keyboard-key-pressed("stop"); accept }
+                    else if (event.text == Key.F8) { root.keyboard-key-pressed("reset"); accept }
+                    else if (event.text == Key.F9) { root.keyboard-key-pressed("step-frame"); accept }
+                    else { reject }
+                }
+                key-released(event) => {
+                    if (event.text == Key.UpArrow) { root.keyboard-key-released("up"); accept }
+                    else if (event.text == Key.DownArrow) { root.keyboard-key-released("down"); accept }
+                    else if (event.text == Key.LeftArrow) { root.keyboard-key-released("left"); accept }
+                    else if (event.text == Key.RightArrow) { root.keyboard-key-released("right"); accept }
+                    else if (event.text == "z") { root.keyboard-key-released("button1"); accept }
+                    else if (event.text == "x") { root.keyboard-key-released("button2"); accept }
+                    else if (event.text == "p") { root.keyboard-key-released("nmi"); accept }
+                    else if (event.text == Key.F5) { root.keyboard-key-released("start"); accept }
+                    else if (event.text == Key.F6) { root.keyboard-key-released("pause"); accept }
+                    else if (event.text == Key.F7) { root.keyboard-key-released("stop"); accept }
+                    else if (event.text == Key.F8) { root.keyboard-key-released("reset"); accept }
+                    else if (event.text == Key.F9) { root.keyboard-key-released("step-frame"); accept }
+                    else { reject }
+                }
+                focus-lost => { root.keyboard-focus-lost(); }
                 KeyBinding {
                     keys: @keys(Escape);
                     activated => { root.active-menu = "none"; }
@@ -329,15 +445,15 @@ mod windows_host {
                             Text { font-size: 11px; text: "Filtros no worker, após o mixer e antes do reamostrador. Estado contínuo entre blocos; sem alteração no PSG, Scheduler ou clocks."; color: #9baab6; wrap: word-wrap; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
-                            Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Teclado — ativo"; color: #8bd5ca; }
+                            Text { font-size: 12px; text: "Setas: mover | Z: Botão 1 | X: Botão 2"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "P: solicitar NMI (borda de pressionamento)"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "F5: iniciar | F6: pausar | F7: desligar"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "F8: resetar | F9: avançar quadro | F11: tela cheia"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Gamepad SDL3 e remapeamento: etapa R4."; color: #9baab6; }
                             CompactButton { text: "Gamepad SDL3 — integração R4"; enabled: false; }
-                            Text { font-size: 12px; text: "Teclado"; color: #b9c5ce; }
-                            Text { font-size: 12px; text: "Cima / Baixo / Esquerda / Direita"; color: #9baab6; }
-                            Text { font-size: 12px; text: "Botão 1 / Botão 2 / Solicitar NMI"; color: #9baab6; }
-                            Text { font-size: 12px; text: "Iniciar / Pausar / Parar / Reset / Avançar quadro"; color: #9baab6; }
                             CompactButton { text: "Remapear teclado"; enabled: false; }
                             CompactButton { text: "Remapear controle"; enabled: false; }
-                            Text { font-size: 12px; text: "Remapeamento e leitura física aguardam a integração SDL3 da R4."; color: #9baab6; }
                         }
                         if root.active-menu == "options": VerticalLayout {
                             Text { font-size: 12px; text: "Overlay de FPS"; color: #f2f5f7; }
@@ -1829,6 +1945,86 @@ mod windows_host {
             }
         });
 
+
+        let keyboard_state = Rc::new(RefCell::new(KeyboardInputState::default()));
+
+        let keyboard_press_state = Rc::clone(&keyboard_state);
+        let keyboard_press_worker = Rc::clone(&worker);
+        let keyboard_press_app = app.as_weak();
+        app.on_keyboard_key_pressed(move |key: slint::SharedString| {
+            let Some(app) = keyboard_press_app.upgrade() else {
+                return;
+            };
+            if app.get_active_menu() != "none" || !app.get_has_rom() {
+                return;
+            }
+
+            let action = keyboard_press_state.borrow_mut().update(key.as_str(), true);
+            let Some(action) = action else {
+                return;
+            };
+
+            if action.is_controller_button() {
+                let buttons = keyboard_press_state.borrow().controller_buttons();
+                if let Some(worker) = keyboard_press_worker.borrow().as_ref()
+                    && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
+                {
+                    eprintln!("R4_INPUT action=keyboard_controller_press error={error}");
+                }
+            }
+
+            match action {
+                KeyboardAction::Nmi => {
+                    if let Some(worker) = keyboard_press_worker.borrow().as_ref()
+                        && let Err(error) = worker.request_nmi()
+                    {
+                        eprintln!("R4_INPUT action=keyboard_nmi error={error}");
+                    }
+                }
+                KeyboardAction::Start => app.invoke_start_requested(),
+                KeyboardAction::Pause => app.invoke_pause_requested(),
+                KeyboardAction::Stop => app.invoke_stop_requested(),
+                KeyboardAction::Reset => app.invoke_reset_requested(),
+                KeyboardAction::StepFrame => {
+                    app.set_emulation_paused(true);
+                    app.invoke_step_frame_requested();
+                }
+                _ => {}
+            }
+        });
+
+        let keyboard_release_state = Rc::clone(&keyboard_state);
+        let keyboard_release_worker = Rc::clone(&worker);
+        app.on_keyboard_key_released(move |key: slint::SharedString| {
+            let action = keyboard_release_state.borrow_mut().update(key.as_str(), false);
+            if action.is_some_and(KeyboardAction::is_controller_button) {
+                let buttons = keyboard_release_state.borrow().controller_buttons();
+                if let Some(worker) = keyboard_release_worker.borrow().as_ref()
+                    && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
+                {
+                    eprintln!("R4_INPUT action=keyboard_controller_release error={error}");
+                }
+            }
+        });
+
+        let keyboard_focus_state = Rc::clone(&keyboard_state);
+        let keyboard_focus_worker = Rc::clone(&worker);
+        app.on_keyboard_focus_lost(move || {
+            let previous_buttons = {
+                let mut state = keyboard_focus_state.borrow_mut();
+                let previous = state.controller_buttons();
+                state.clear();
+                previous
+            };
+            if previous_buttons != ControllerButtons::default()
+                && let Some(worker) = keyboard_focus_worker.borrow().as_ref()
+                && let Err(error) =
+                    worker.set_controller_at(1, ControllerButtons::default(), Instant::now())
+            {
+                eprintln!("R4_INPUT action=keyboard_focus_release error={error}");
+            }
+        });
+
         let open_app = app.as_weak();
         let open_worker = Rc::clone(&worker);
         let open_recent = Rc::clone(&recent_rom);
@@ -2309,6 +2505,67 @@ mod windows_host {
             let preferences = DesktopPreferences::default();
             assert_eq!(preferences.audio_volume, 70);
             assert!(!preferences.audio_muted);
+        }
+
+
+        #[test]
+        fn keyboard_mapping_recognizes_gameplay_and_transport_actions() {
+            assert_eq!(KeyboardAction::from_slint_key("up"), Some(KeyboardAction::Up));
+            assert_eq!(KeyboardAction::from_slint_key("button1"), Some(KeyboardAction::Button1));
+            assert_eq!(KeyboardAction::from_slint_key("nmi"), Some(KeyboardAction::Nmi));
+            assert_eq!(KeyboardAction::from_slint_key("start"), Some(KeyboardAction::Start));
+            assert_eq!(KeyboardAction::from_slint_key("step-frame"), Some(KeyboardAction::StepFrame));
+            assert_eq!(KeyboardAction::from_slint_key("unknown"), None);
+        }
+
+        #[test]
+        fn keyboard_state_composes_simultaneous_directions_and_buttons() {
+            let mut state = KeyboardInputState::default();
+            assert_eq!(state.update("up", true), Some(KeyboardAction::Up));
+            assert_eq!(state.update("right", true), Some(KeyboardAction::Right));
+            assert_eq!(state.update("button1", true), Some(KeyboardAction::Button1));
+            assert_eq!(state.update("button2", true), Some(KeyboardAction::Button2));
+
+            let buttons = state.controller_buttons();
+            assert!(buttons.up && buttons.right);
+            assert!(buttons.button_1 && buttons.button_2);
+            assert!(!buttons.down && !buttons.left);
+        }
+
+        #[test]
+        fn keyboard_state_ignores_repeats_and_releases_only_the_matching_key() {
+            let mut state = KeyboardInputState::default();
+            assert_eq!(state.update("up", true), Some(KeyboardAction::Up));
+            assert_eq!(state.update("up", true), None);
+            assert_eq!(state.update("right", true), Some(KeyboardAction::Right));
+            assert_eq!(state.update("up", false), Some(KeyboardAction::Up));
+
+            let buttons = state.controller_buttons();
+            assert!(!buttons.up);
+            assert!(buttons.right);
+            assert_eq!(state.update("right", false), Some(KeyboardAction::Right));
+            assert_eq!(state.controller_buttons(), ControllerButtons::default());
+        }
+
+        #[test]
+        fn keyboard_transport_actions_are_edge_triggered_until_key_release() {
+            let mut state = KeyboardInputState::default();
+            assert_eq!(state.update("start", true), Some(KeyboardAction::Start));
+            assert_eq!(state.update("start", true), None);
+            assert_eq!(state.update("start", false), Some(KeyboardAction::Start));
+            assert_eq!(state.update("start", true), Some(KeyboardAction::Start));
+        }
+
+        #[test]
+        fn keyboard_focus_loss_releases_all_held_controller_buttons() {
+            let mut state = KeyboardInputState::default();
+            state.update("left", true);
+            state.update("button1", true);
+            assert_ne!(state.controller_buttons(), ControllerButtons::default());
+
+            state.clear();
+
+            assert_eq!(state.controller_buttons(), ControllerButtons::default());
         }
 
         #[test]
