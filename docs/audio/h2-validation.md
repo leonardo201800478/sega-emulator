@@ -112,3 +112,6 @@ The source changes have been committed, but no local Rust toolchain/test runner 
 
 
 The standalone kernel's new tests include direct output comparison with `psg_h2_model.rs` using identical timestamped deltas, plus segmented/continuous output equivalence. They remain unexecuted and therefore are not PASS evidence.
+
+
+A machine-level test was also added to the synthetic SMS ROM fixture: it enables the observer through `SmsTemporalMachine`, executes an actual Scheduler-driven frame with PSG writes, drains captured transitions, checks monotonic timestamps and asserts no queue overflow. This test is added but not run.
