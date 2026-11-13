@@ -997,7 +997,7 @@ mod windows_host {
         last_wakeup: Option<Instant>,
         last_consumed: Option<Instant>,
         last_sequence: u64,
-        last_fps_sequence: u64,
+        last_fps_consumed: u64,
         last_fps_sample: Instant,
         wakeups: u64,
         empty_wakeups: u64,
@@ -1039,7 +1039,7 @@ mod windows_host {
                 last_wakeup: None,
                 last_consumed: None,
                 last_sequence: 0,
-                last_fps_sequence: 0,
+                last_fps_consumed: 0,
                 last_fps_sample: Instant::now(),
                 wakeups: 0,
                 empty_wakeups: 0,
@@ -1132,10 +1132,10 @@ mod windows_host {
 
             let fps_elapsed = now.saturating_duration_since(self.last_fps_sample);
             if fps_elapsed >= Duration::from_millis(500) {
-                let produced = sequence.saturating_sub(self.last_fps_sequence);
-                self.last_fps_sequence = sequence;
+                let consumed = self.consumed.saturating_sub(self.last_fps_consumed);
+                self.last_fps_consumed = self.consumed;
                 self.last_fps_sample = now;
-                Some(produced as f64 / fps_elapsed.as_secs_f64())
+                Some(consumed as f64 / fps_elapsed.as_secs_f64())
             } else {
                 None
             }
@@ -3051,6 +3051,47 @@ mod windows_host {
                 1_000_000
             );
             assert_eq!(window.mailbox_residence_distribution.len(), 2);
+        }
+
+        #[test]
+        fn host_frame_pacing_fps_counts_consumed_frames_not_skipped_sequences() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            window.last_fps_sample = start;
+            window.last_fps_consumed = 0;
+
+            assert_eq!(
+                window.record_frame(start + Duration::from_millis(150), 1, start),
+                None
+            );
+            assert_eq!(
+                window.record_frame(
+                    start + Duration::from_millis(300),
+                    3,
+                    start + Duration::from_millis(150),
+                ),
+                None
+            );
+            assert_eq!(
+                window.record_frame(
+                    start + Duration::from_millis(450),
+                    5,
+                    start + Duration::from_millis(300),
+                ),
+                None
+            );
+            let fps = window
+                .record_frame(
+                    start + Duration::from_millis(600),
+                    8,
+                    start + Duration::from_millis(450),
+                )
+                .unwrap();
+
+            // Four frames were consumed in 600 ms; skipped sequence numbers
+            // must not inflate the displayed presentation rate.
+            assert!((fps - (4.0 / 0.6)).abs() < 0.001);
+            assert_eq!(window.sequence_gaps, 4);
         }
 
         #[test]
