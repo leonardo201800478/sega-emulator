@@ -27,7 +27,10 @@ fn synthetic_cartridge_completes_frames_through_the_machine_scheduler() {
             .step_frame(100_000)
             .expect("synthetic CPU loop should reach the next VDP frame boundary");
 
-        assert!(instructions > 0, "frame stepping must execute CPU instructions");
+        assert!(
+            instructions > 0,
+            "frame stepping must execute CPU instructions"
+        );
         assert_eq!(
             machine.frame_number(),
             initial_frame + completed_frame,
