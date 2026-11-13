@@ -142,6 +142,7 @@ mod windows_host {
             }
         }
         export component MainWindow inherits Window {
+            forward-focus: keyboard-focus;
             title: "Sega Emulator — Slint / WGPU 30 / Vulkan";
             default-font-size: 12px;
             preferred-width: 1120px; preferred-height: 860px;
@@ -207,7 +208,7 @@ mod windows_host {
             callback keyboard-key-pressed(string);
             callback keyboard-key-released(string);
             callback keyboard-focus-lost();
-            FocusScope {
+            keyboard-focus := FocusScope {
                 width: 100%; height: 100%;
                 key-pressed(event) => {
                     if (event.text == Key.UpArrow) { root.keyboard-key-pressed("up"); accept }
