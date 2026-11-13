@@ -279,7 +279,8 @@ jobs:
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/sdcc-4.6.0.tar.bz2"
-          curl --fail --location --retry 3 \
+          curl --fail --location --connect-timeout 20 --max-time 180 \
+            --retry 2 --retry-all-errors --retry-max-time 240 \
             "https://downloads.sourceforge.net/project/sdcc/sdcc-linux-amd64/4.6.0/sdcc-4.6.0-amd64-unknown-linux2.5.tar.bz2" \
             --output "$archive"
           mkdir -p "$RUNNER_TEMP/sdcc"
