@@ -1805,6 +1805,30 @@ mod tests {
     }
 
     #[test]
+    fn enabling_event_observer_preserves_existing_psg_pcm_exactly() {
+        let mut baseline =
+            Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        let mut observed = baseline.clone();
+        observed.enable_event_capture(256).unwrap();
+
+        for psg in [&mut baseline, &mut observed] {
+            psg.write(0x90);
+            psg.write(0x85);
+            psg.write(0x12);
+            psg.write(0xE4);
+        }
+        baseline.advance_clocks(120_000);
+        observed.advance_clocks(120_000);
+
+        assert_eq!(baseline.drain_samples(None), observed.drain_samples(None));
+        assert_eq!(baseline.tone_periods(), observed.tone_periods());
+        assert_eq!(baseline.attenuations(), observed.attenuations());
+        assert_eq!(baseline.lfsr(), observed.lfsr());
+        assert_eq!(baseline.clock_divider_phase(), observed.clock_divider_phase());
+        assert_eq!(baseline.output_phase(), observed.output_phase());
+    }
+
+    #[test]
     fn amplitude_event_capture_overflow_is_bounded_and_explicit() {
         let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
         psg.enable_event_capture(1).unwrap();
