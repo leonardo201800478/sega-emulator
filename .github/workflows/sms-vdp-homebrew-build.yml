@@ -1,0 +1,55 @@
+name: SMS VDP homebrew build verification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sms-vdp-homebrew-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sms-vdp-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout SmsVdpTest source at pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: FluBBaOfWard/SmsVdpTest
+          ref: 490c00b38c83012dee5a7a582097f080c210a3e7
+          path: .build/SmsVdpTest
+
+      - name: Checkout WLA-DX v10.7 at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: vhelin/wla-dx
+          ref: 91c52b1f4ef3cc8ba3c0638f7536539579af6a9f
+          path: .build/wla-dx
+
+      - name: Build WLA-DX
+        run: |
+          cmake -S .build/wla-dx -B .build/wla-dx/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/wla-dx"
+          cmake --build .build/wla-dx/build --config Release --parallel 2
+          cmake --install .build/wla-dx/build
+          "$RUNNER_TEMP/wla-dx/bin/wla-z80" -h
+          "$RUNNER_TEMP/wla-dx/bin/wlalink" -h
+
+      - name: Assemble and link SmsVdpTest
+        working-directory: .build/SmsVdpTest
+        run: |
+          set -euxo pipefail
+          "$RUNNER_TEMP/wla-dx/bin/wla-z80" -o testmain.asm object.o
+          printf '[objects]\nobject.o\n' > linkfile
+          "$RUNNER_TEMP/wla-dx/bin/wlalink" -drvs linkfile output.sms
+          test -s output.sms
+          python3 - <<'PY'
+          from pathlib import Path
+          rom = Path("output.sms").read_bytes()
+          assert len(rom) % 16384 == 0, f"ROM size is not a 16 KiB multiple: {len(rom)}"
+          print(f"SmsVdpTest ROM generated: {len(rom)} bytes ({len(rom)//16384} banks)")
+          PY
+          sha256sum output.sms
