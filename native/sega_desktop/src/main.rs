@@ -1545,7 +1545,11 @@ mod windows_host {
         app.set_has_rom(worker.borrow().is_some());
         app.set_audio_status(if video_only_capture_enabled() {
             "Saída física desativada pelo modo de captura somente vídeo.".into()
-        } else if worker.borrow().as_ref().is_some_and(|worker| worker.audio_output_metrics().sample_rate_hz > 0) {
+        } else if worker
+            .borrow()
+            .as_ref()
+            .is_some_and(|worker| worker.audio_output_metrics().sample_rate_hz > 0)
+        {
             "CPAL ativo — volume aplicado no DSP de saída.".into()
         } else if worker.borrow().is_some() {
             "Saída CPAL indisponível; consulte R3_AUDIO nos logs.".into()
@@ -1830,16 +1834,28 @@ mod windows_host {
         let audio_volume_app = app.as_weak();
         app.on_audio_volume_changed(move |value| {
             let volume = value.round().clamp(0.0, 100.0) as u8;
-            let Some(app) = audio_volume_app.upgrade() else { return; };
+            let Some(app) = audio_volume_app.upgrade() else {
+                return;
+            };
             let effective = effective_audio_volume(volume, app.get_audio_muted());
-            let result = audio_volume_worker.borrow().as_ref()
+            let result = audio_volume_worker
+                .borrow()
+                .as_ref()
                 .map(|worker| worker.set_audio_volume(effective));
             match result {
                 Some(Ok(())) => app.set_audio_status(
-                    format!("Volume mestre aplicado: {volume}%{}.", if effective == 0 { " (silenciado)" } else { "" }).into()
+                    format!(
+                        "Volume mestre aplicado: {volume}%{}.",
+                        if effective == 0 { " (silenciado)" } else { "" }
+                    )
+                    .into(),
                 ),
-                Some(Err(error)) => app.set_audio_status(format!("Falha ao aplicar volume: {error}").into()),
-                None => app.set_audio_status("Volume salvo; será aplicado ao carregar uma ROM SMS.".into()),
+                Some(Err(error)) => {
+                    app.set_audio_status(format!("Falha ao aplicar volume: {error}").into())
+                }
+                None => app.set_audio_status(
+                    "Volume salvo; será aplicado ao carregar uma ROM SMS.".into(),
+                ),
             }
             app.invoke_preferences_changed();
         });
@@ -1847,18 +1863,27 @@ mod windows_host {
         let audio_mute_worker = Rc::clone(&worker);
         let audio_mute_app = app.as_weak();
         app.on_audio_mute_changed(move |muted| {
-            let Some(app) = audio_mute_app.upgrade() else { return; };
+            let Some(app) = audio_mute_app.upgrade() else {
+                return;
+            };
             let volume = app.get_audio_volume().round().clamp(0.0, 100.0) as u8;
             let effective = effective_audio_volume(volume, muted);
-            let result = audio_mute_worker.borrow().as_ref()
+            let result = audio_mute_worker
+                .borrow()
+                .as_ref()
                 .map(|worker| worker.set_audio_volume(effective));
             match result {
-                Some(Ok(())) => app.set_audio_status(
-                    if muted { "Áudio silenciado; volume escolhido preservado.".into() }
-                    else { format!("Áudio reativado em {volume}%.").into() }
+                Some(Ok(())) => app.set_audio_status(if muted {
+                    "Áudio silenciado; volume escolhido preservado.".into()
+                } else {
+                    format!("Áudio reativado em {volume}%.").into()
+                }),
+                Some(Err(error)) => {
+                    app.set_audio_status(format!("Falha ao alterar áudio: {error}").into())
+                }
+                None => app.set_audio_status(
+                    "Preferência salva; será aplicada ao carregar uma ROM SMS.".into(),
                 ),
-                Some(Err(error)) => app.set_audio_status(format!("Falha ao alterar áudio: {error}").into()),
-                None => app.set_audio_status("Preferência salva; será aplicada ao carregar uma ROM SMS.".into()),
             }
             app.invoke_preferences_changed();
         });
