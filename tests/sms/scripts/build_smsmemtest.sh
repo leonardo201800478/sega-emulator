@@ -64,7 +64,7 @@ BUILD_DIR="$OUT_DIR/work"
 mkdir -p "$BUILD_DIR"
 
 # Build SMSlib from the pinned devkitSMS source with the same SDCC toolchain.
-"$MAKE_BIN" -C "$SMSLIB_DIR" clean all CC="$SDCC_PATH" AR="$SDAR_BIN"
+"$MAKE_BIN" -C "$SMSLIB_DIR" clean ALL CC="$SDCC_PATH" AR="$SDAR_BIN"
 
 # Compile the pinned SMSmemtest source using devkitSMS' peephole rules and headers.
 cp "$SMSMEMTEST_ROOT/src/main.c" "$BUILD_DIR/main.c"
