@@ -252,12 +252,26 @@ pub trait VideoFrameSink: Send + Sync {
     fn submit(&self, frame: VideoFrame) -> Result<(), FrameMailboxError>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct MailboxState {
     latest: Option<(VideoFrame, std::time::Instant)>,
     last_sequence: Option<u64>,
     replaced_frames: u64,
     closed: bool,
+    frame_available_notifier: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl fmt::Debug for MailboxState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MailboxState")
+            .field("latest_sequence", &self.latest.as_ref().map(|(frame, _)| frame.sequence()))
+            .field("last_sequence", &self.last_sequence)
+            .field("replaced_frames", &self.replaced_frames)
+            .field("closed", &self.closed)
+            .field("has_frame_available_notifier", &self.frame_available_notifier.is_some())
+            .finish()
+    }
 }
 
 /// A bounded, single-slot mailbox for presentation.
@@ -267,9 +281,18 @@ struct MailboxState {
 /// This coalesces presentation work only: it does not skip machine execution,
 /// alter Scheduler time, or discard emulation events. Sequence numbers remain
 /// strictly monotonic across consumed and replaced frames.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct FrameMailbox {
     state: Arc<std::sync::Mutex<MailboxState>>,
+}
+
+impl fmt::Debug for FrameMailbox {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FrameMailbox")
+            .field("state", &self.state)
+            .finish()
+    }
 }
 
 impl FrameMailbox {
@@ -283,30 +306,56 @@ impl FrameMailbox {
     /// Frames must have strictly increasing sequence numbers. A frame already
     /// consumed by the host still participates in this monotonicity check.
     pub fn publish(&self, frame: VideoFrame) -> Result<(), FrameMailboxError> {
+        let notifier = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+
+            if state.closed {
+                return Err(FrameMailboxError::Closed);
+            }
+
+            if let Some(last) = state.last_sequence
+                && frame.sequence() <= last
+            {
+                return Err(FrameMailboxError::NonMonotonicSequence {
+                    last,
+                    incoming: frame.sequence(),
+                });
+            }
+
+            let published_at = std::time::Instant::now();
+            if state.latest.replace((frame, published_at)).is_some() {
+                state.replaced_frames = state.replaced_frames.saturating_add(1);
+            }
+
+            state.last_sequence = state.latest.as_ref().map(|(frame, _)| frame.sequence());
+            state.frame_available_notifier.clone()
+        };
+
+        // Never call host code while holding the mailbox lock. A notifier may
+        // enqueue work on another thread or even synchronously consume the frame.
+        if let Some(notifier) = notifier {
+            notifier();
+        }
+        Ok(())
+    }
+
+    /// Register or clear a host notification invoked after each accepted publication.
+    ///
+    /// The callback runs on the publishing thread and always runs after the mailbox
+    /// lock has been released. Hosts must keep the callback short and use it only to
+    /// schedule work on their presentation thread.
+    pub fn set_frame_available_notifier(
+        &self,
+        notifier: Option<Arc<dyn Fn() + Send + Sync>>,
+    ) -> Result<(), FrameMailboxError> {
         let mut state = self
             .state
             .lock()
             .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
-
-        if state.closed {
-            return Err(FrameMailboxError::Closed);
-        }
-
-        if let Some(last) = state.last_sequence
-            && frame.sequence() <= last
-        {
-            return Err(FrameMailboxError::NonMonotonicSequence {
-                last,
-                incoming: frame.sequence(),
-            });
-        }
-
-        let published_at = std::time::Instant::now();
-        if state.latest.replace((frame, published_at)).is_some() {
-            state.replaced_frames = state.replaced_frames.saturating_add(1);
-        }
-
-        state.last_sequence = state.latest.as_ref().map(|(frame, _)| frame.sequence());
+        state.frame_available_notifier = notifier;
         Ok(())
     }
 
@@ -364,6 +413,7 @@ impl FrameMailbox {
             .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
         state.closed = true;
         state.latest = None;
+        state.frame_available_notifier = None;
         Ok(())
     }
 
@@ -510,6 +560,54 @@ mod tests {
         assert_eq!(frame.sequence(), 2);
         assert_eq!(mailbox.replaced_frames().unwrap(), 1);
         assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_notifier_runs_after_publish_releases_the_lock() {
+        use std::sync::{Arc, Mutex};
+
+        let mailbox = super::FrameMailbox::new();
+        let callback_mailbox = mailbox.clone();
+        let notified_sequence = Arc::new(Mutex::new(None));
+        let callback_sequence = Arc::clone(&notified_sequence);
+
+        mailbox
+            .set_frame_available_notifier(Some(Arc::new(move || {
+                let sequence = callback_mailbox
+                    .take_latest()
+                    .unwrap()
+                    .map(|frame| frame.sequence());
+                *callback_sequence.lock().unwrap() = sequence;
+            })))
+            .unwrap();
+
+        mailbox.publish(test_frame(9)).unwrap();
+
+        assert_eq!(*notified_sequence.lock().unwrap(), Some(9));
+        assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_notifier_is_not_called_for_rejected_publications() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let mailbox = super::FrameMailbox::new();
+        let notifications = Arc::new(AtomicUsize::new(0));
+        let callback_notifications = Arc::clone(&notifications);
+
+        mailbox
+            .set_frame_available_notifier(Some(Arc::new(move || {
+                callback_notifications.fetch_add(1, Ordering::Relaxed);
+            })))
+            .unwrap();
+
+        mailbox.publish(test_frame(3)).unwrap();
+        assert!(mailbox.publish(test_frame(3)).is_err());
+
+        assert_eq!(notifications.load(Ordering::Relaxed), 1);
     }
 
     #[test]
