@@ -3723,6 +3723,8 @@ version = "0.1.0"
 dependencies = [
  "md-icons-classic",
  "sega-audio-output",
+ "sega-save-runtime",
+ "sega-media",
  "sega-sms-core",
  "sega-sms-runtime",
  "sega-video-runtime",
