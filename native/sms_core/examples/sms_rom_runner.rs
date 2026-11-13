@@ -10,6 +10,7 @@ use std::env;
 use std::fs;
 use std::process;
 
+#[path = "sms_rom_runner/smsmemtest_driver.rs"]
 mod smsmemtest_driver;
 
 use sega_sms_core::{
