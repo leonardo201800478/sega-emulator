@@ -1,7 +1,8 @@
 //! Deterministic, frame-boundary input driver for the upstream SMSmemtest flow.
 //!
-//! The driver detects only the documented prompt rows. It does not infer RAM or
-//! VRAM PASS/FAIL from rendered pixels; that requires a separate case oracle.
+//! The driver detects documented prompts and the ROM's explicit green/red result
+//! glyphs. Prompt detection is heuristic; color classification is unit-tested but
+//! still requires validation against an actual built SMSmemtest ROM.
 
 use sega_sms_core::{ControllerButtons, SmsTemporalMachine};
 
@@ -10,7 +11,7 @@ const RGB_BYTES_PER_PIXEL: usize = 3;
 const TEXT_CELL_HEIGHT: usize = 8;
 const INITIAL_PROMPT_TEXT_ROW: usize = 3;
 const RAM_COMPLETE_PROMPT_TEXT_ROW: usize = 14;
-const VRAM_COMPLETE_PROMPT_TEXT_ROW: usize = 12;
+const VRAM_RESULT_TEXT_ROW: usize = 4;
 const REQUIRED_STABLE_FRAMES: u8 = 2;
 const MIN_VISIBLE_PIXELS: usize = 8;
 const WHITE_CHANNEL_MIN: u8 = 128;
@@ -99,11 +100,18 @@ impl SmsmemtestInputDriver {
                 RAM_COMPLETE_PROMPT_TEXT_ROW,
                 Some(Stage::AwaitVramCompletePrompt),
             ),
-            Stage::AwaitVramCompletePrompt => (VRAM_COMPLETE_PROMPT_TEXT_ROW, None),
+            Stage::AwaitVramCompletePrompt => (VRAM_RESULT_TEXT_ROW, None),
             Stage::Complete => return Ok(events),
         };
 
-        if text_row_has_visible_pixels(machine.framebuffer(), row) {
+        let marker_observed = if stage == Stage::AwaitVramCompletePrompt {
+            classify_result_row(machine.framebuffer(), VRAM_RESULT_TEXT_ROW)
+                != SmsmemtestCaseResult::NotObserved
+        } else {
+            text_row_has_visible_pixels(machine.framebuffer(), row)
+        };
+
+        if marker_observed {
             self.stable_frames = self.stable_frames.saturating_add(1);
         } else {
             self.stable_frames = 0;
@@ -134,7 +142,7 @@ impl SmsmemtestInputDriver {
             }
             None => {
                 self.stage = Some(Stage::Complete);
-                events.push("vram_completion_row_activity_detected");
+                events.push("vram_result_color_observed");
             }
         }
 
