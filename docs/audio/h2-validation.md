@@ -86,12 +86,12 @@ SG-1000 tests must ensure profile-specific LFSR behavior remains unchanged if/wh
 | Existing offline H2 study | historical tests and CI documented in continuity checkpoint |
 | Production event observer | IMPLEMENTED ON FEATURE BRANCH; targeted tests added, NOT RUN |
 | Standalone streaming kernel | IMPLEMENTED ON FEATURE BRANCH; tests added, NOT RUN |
-| Event-to-PCM runtime integration | NOT IMPLEMENTED |
-| Renderer selection command | NOT IMPLEMENTED |
-| Slint PSG/H2 selector | NOT IMPLEMENTED |
-| Persisted renderer preference | NOT IMPLEMENTED |
-| Streaming determinism | NOT RUN |
-| PSG bit-exact regression after observer change | NOT RUN |
+| Event-to-PCM runtime integration | IMPLEMENTED ON FEATURE BRANCH; worker test added; CI pending |
+| Renderer selection command | IMPLEMENTED ON FEATURE BRANCH; CI pending |
+| Slint PSG/H2 selector | IMPLEMENTED ON FEATURE BRANCH; CI pending |
+| Persisted renderer preference | IMPLEMENTED ON FEATURE BRANCH; CI pending |
+| Streaming determinism | Tests added; CI pending |
+| PSG bit-exact regression after observer change | Tests added; CI pending |
 | Performance / soak test | NOT RUN |
 | Windows listening test | NOT RUN |
 
@@ -108,10 +108,12 @@ The feature branch now contains opt-in event capture in `Sn76489Core`, exposed t
 - reset epoch clearing;
 - exact PCM equality between capture-enabled and capture-disabled core runs.
 
-The source changes have been committed, but no local Rust toolchain/test runner was available during this implementation step. Therefore these tests are **added, not passed**. They must be run on CI before the event observer is accepted. No production H2 renderer or UI integration exists yet.
+The source changes have been committed. The event observer, streaming kernel, SMS worker integration and Slint selection path now exist on the feature branch. The automated tests are **added, not passed** until the exact PR HEAD completes CI. The branch must not be accepted as production-ready until the SMS runtime, workspace, Slint/Windows and relevant regression workflows pass.
 
 
 The standalone kernel's new tests include direct output comparison with `psg_h2_model.rs` using identical timestamped deltas, plus segmented/continuous output equivalence. They remain unexecuted and therefore are not PASS evidence.
 
 
-A machine-level test was also added to the synthetic SMS ROM fixture: it enables the observer through `SmsTemporalMachine`, executes an actual Scheduler-driven frame with PSG writes, drains captured transitions, checks monotonic timestamps and asserts no queue overflow. This test is added but not run.
+A machine-level test was also added to the synthetic SMS ROM fixture: it enables the observer through `SmsTemporalMachine`, executes an actual Scheduler-driven frame with PSG writes, drains captured transitions, checks monotonic timestamps and asserts no queue overflow. The worker-level H2 test additionally selects H2 at a worker command boundary, executes a synthetic tone-writing ROM through the Scheduler, and checks that captured PSG events produce H2 samples without overflow. Both tests are added; CI is the pending execution evidence.
+
+The desktop menu uses a single persisted renderer-mode property, defaults to PSG for fresh and legacy settings, exposes H2 as experimental, and reflects an automatic H2 fault fallback back to PSG. Runtime fallback and Windows UI behavior still require the active CI/build and manual validation gates.
