@@ -8,7 +8,7 @@ The Slint host presents real SMS VDP frames from the Rust runtime. R2.2 migrates
 - Arquivo: load raw `.sms` / `.bin` ROMs or a `.zip` containing exactly one supported ROM entry; reopen recent ROMs and exit. O desligamento POWER OFF mantém a ROM carregada; o comando de descarregar ROM não fica exposto neste menu.
 - Vídeo: 4:3, 1:1 and 16:9 presentation modes preserve the selected ratio while the window is resized; unused viewport space is letterboxed. The source frame remains 256×192. The optional sprite-limit compatibility mode is persisted separately from hardware state.
 - Áudio: menu retained; physical output, backend selection and volume remain disabled until R3 (CPAL 0.18.2).
-- Controles: keyboard/gamepad entries retained; physical input and remapping remain disabled until R4 (SDL3).
+- Controles: teclado SMS ativo via eventos nativos do Slint (setas, Z/X, P e F5–F9); F11 alterna fullscreen. Gamepad SDL3 e remapeamento permanecem em R4.
 - Opções: status-footer visibility. FPS size/position remain pending. Fullscreen is available from the UI and F11.
 - DEBUG: request an immutable Z80/runtime snapshot and enable/disable bounded scheduler/bus trace capture. Full debugger viewport remains a follow-up.
 
