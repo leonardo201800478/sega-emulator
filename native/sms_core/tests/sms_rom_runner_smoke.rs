@@ -15,7 +15,7 @@ fn synthetic_cartridge_completes_frames_through_the_machine_scheduler() {
         rom,
         1,
         3_579_545,
-        44_100,
+        48_000,
         SmsVdpProfile::sms1_t0_ntsc(),
         Territory::Export,
     )
