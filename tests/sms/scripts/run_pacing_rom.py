@@ -26,7 +26,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="comma-separated completed-frame numbers at which to pulse controller 1 button 1",
     )
-    parser.add_argument("--diagnostics-disabled", action="store_true", help="measure basic frame throughput without rolling diagnostic instrumentation")
+    parser.add_argument(
+        "--diagnostics-disabled",
+        action="store_true",
+        help="measure basic frame throughput without rolling diagnostic instrumentation",
+    )
     parser.add_argument("--debug", action="store_true", help="build/run without Cargo --release")
     return parser.parse_args()
 
