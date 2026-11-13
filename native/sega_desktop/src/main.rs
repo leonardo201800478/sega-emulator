@@ -241,7 +241,7 @@ mod windows_host {
                         if root.active-menu == "audio": VerticalLayout {
                             Text { font-size: 14px; text: "Saída de áudio"; color: #f2f5f7; }
                             Text { font-size: 12px; text: "Backend: CPAL 0.18.2 | dispositivo padrão do Windows"; color: #b9c5ce; }
-                            Text { font-size: 12px; text: "Volume mestre: \{round(root.audio-volume)}%"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Volume mestre: \\{round(root.audio-volume)}%"; color: #f2f5f7; }
                             Slider {
                                 minimum: 0; maximum: 100; step: 1;
                                 value <=> root.audio-volume;
@@ -370,8 +370,10 @@ mod windows_host {
                     }
                 }
                 "audio_volume" => {
-                    if let Ok(value) = value.trim().parse::<u8>() {
-                        if value <= 100 { preferences.audio_volume = value; }
+                    if let Ok(value) = value.trim().parse::<u8>()
+                        && value <= 100
+                    {
+                        preferences.audio_volume = value;
                     }
                 }
                 "audio_muted" => {
