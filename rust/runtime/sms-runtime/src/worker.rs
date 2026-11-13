@@ -1752,8 +1752,8 @@ fn worker_loop(
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
     let mut frame_deadline = FramePacingDeadline::default();
-    let phase_locked_pacing = std::env::var("SEGA_P0_PHASE_LOCKED_PACING")
-        .is_ok_and(|value| value == "1");
+    let phase_locked_pacing =
+        std::env::var("SEGA_P0_PHASE_LOCKED_PACING").is_ok_and(|value| value == "1");
     sega_observability::tracing::info!(
         target: "sega::audio::pacing",
         phase_locked_pacing,
@@ -3211,8 +3211,7 @@ mod tests {
         let frame_duration = Duration::from_micros(16_687);
         let wake_lateness = Duration::from_micros(449);
 
-        let first_deadline =
-            calculate_next_frame_deadline(epoch, frame_duration, None, true);
+        let first_deadline = calculate_next_frame_deadline(epoch, frame_duration, None, true);
         let second_frame_started = first_deadline + wake_lateness;
         let second_deadline = calculate_next_frame_deadline(
             second_frame_started,
@@ -3241,8 +3240,7 @@ mod tests {
     fn relative_deadlines_reanchor_after_a_late_wakeup() {
         let epoch = Instant::now();
         let frame_duration = Duration::from_micros(16_687);
-        let first_deadline =
-            calculate_next_frame_deadline(epoch, frame_duration, None, false);
+        let first_deadline = calculate_next_frame_deadline(epoch, frame_duration, None, false);
         let late_frame_started = first_deadline + Duration::from_micros(449);
         let second_deadline = calculate_next_frame_deadline(
             late_frame_started,
