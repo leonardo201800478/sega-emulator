@@ -22,7 +22,8 @@ pub enum H2StreamingError {
     ZeroClock,
     ZeroSampleRate,
     UnsupportedSampleRate,
-    InvalidInitialLevel,
+    InvalidAmplitude,
+    InvalidKernel,
     ClockWentBackwards,
     EventOutOfOrder,
     EventAfterRenderHorizon,
@@ -40,7 +41,8 @@ impl std::fmt::Display for H2StreamingError {
             Self::UnsupportedSampleRate => {
                 write!(f, "H2 sample rate exceeds the PSG clock domain")
             }
-            Self::InvalidInitialLevel => write!(f, "H2 initial amplitude must be finite"),
+            Self::InvalidAmplitude => write!(f, "H2 amplitude must be finite"),
+            Self::InvalidKernel => write!(f, "H2 kernel normalization is invalid"),
             Self::ClockWentBackwards => write!(f, "H2 render clock moved backwards"),
             Self::EventOutOfOrder => {
                 write!(f, "H2 amplitude events are not ordered by PSG clock")
@@ -136,7 +138,7 @@ impl H2StreamingRenderer {
 
         let area = *step_response.last().expect("H2 kernel has samples");
         if !area.is_finite() || area <= 0.0 {
-            return Err(H2StreamingError::InvalidInitialLevel);
+            return Err(H2StreamingError::InvalidKernel);
         }
         for value in &mut step_response {
             *value /= area;
