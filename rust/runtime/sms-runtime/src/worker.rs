@@ -740,6 +740,9 @@ impl AudioRendererState {
         machine: &mut SmsTemporalMachine,
         mode: AudioRendererMode,
     ) -> Result<(), String> {
+        if self.mode == mode {
+            return Ok(());
+        }
         match mode {
             AudioRendererMode::Psg => {
                 machine.disable_psg_event_capture();
@@ -779,6 +782,10 @@ impl AudioRendererState {
         telemetry: &WorkerTelemetry,
     ) {
         if self.mode == AudioRendererMode::H2Experimental {
+            // The machine was rebuilt; discard the previous renderer epoch even
+            // though the user-visible mode remains H2.
+            self.h2 = None;
+            self.mode = AudioRendererMode::Psg;
             if let Err(error) = self.select(machine, AudioRendererMode::H2Experimental) {
                 let _ = self.select(machine, AudioRendererMode::Psg);
                 telemetry.set_runtime_error(Some(format!(
