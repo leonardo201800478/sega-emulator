@@ -365,6 +365,28 @@ impl FrameMailbox {
         Ok(())
     }
 
+    /// Notify the host when a pending frame needs another presentation attempt.
+    ///
+    /// This is useful after a renderer becomes available again. The callback is
+    /// cloned under the mailbox lock and invoked only after the lock is released.
+    pub fn notify_if_pending(&self) -> Result<(), FrameMailboxError> {
+        let notifier = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+            state
+                .latest
+                .as_ref()
+                .and(state.frame_available_notifier.clone())
+        };
+
+        if let Some(notifier) = notifier {
+            notifier(self.clone());
+        }
+        Ok(())
+    }
+
     /// Take the newest pending frame, leaving the mailbox empty.
     pub fn take_latest(&self) -> Result<Option<VideoFrame>, FrameMailboxError> {
         Ok(self
@@ -590,6 +612,32 @@ mod tests {
 
         assert_eq!(*notified_sequence.lock().unwrap(), Some(9));
         assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_can_renotify_a_pending_frame_after_host_recovery() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let mailbox = super::FrameMailbox::new();
+        let notifications = Arc::new(AtomicUsize::new(0));
+        let callback_notifications = Arc::clone(&notifications);
+        mailbox
+            .set_frame_available_notifier(Some(Arc::new(move |_notified_mailbox| {
+                callback_notifications.fetch_add(1, Ordering::Relaxed);
+            })))
+            .unwrap();
+
+        mailbox.notify_if_pending().unwrap();
+        assert_eq!(notifications.load(Ordering::Relaxed), 0);
+
+        mailbox.publish(test_frame(7)).unwrap();
+        mailbox.notify_if_pending().unwrap();
+
+        assert_eq!(notifications.load(Ordering::Relaxed), 2);
+        assert_eq!(mailbox.take_latest().unwrap().unwrap().sequence(), 7);
     }
 
     #[test]
