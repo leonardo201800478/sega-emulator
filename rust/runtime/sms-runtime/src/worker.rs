@@ -1553,7 +1553,7 @@ fn execute_frame(
         video_mailbox,
         video_sequence,
         telemetry,
-    None,
+        None,
     )
 }
 
@@ -1925,7 +1925,7 @@ fn worker_loop(
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
-        frame_deadline.deadline,
+            frame_deadline.deadline,
         ) {
             Ok((_, next_frame_deadline, breakpoint_hit)) => {
                 drain_machine_trace(&mut machine, &mut trace_history);
@@ -2239,7 +2239,7 @@ fn handle_command(
                     video_mailbox,
                     video_sequence,
                     telemetry,
-                frame_deadline.deadline,
+                    None,
                 ) {
                     Ok((instructions, _, _)) => {
                         let _ = reply.send(Ok(instructions));
@@ -2742,7 +2742,7 @@ mod tests {
             &mut video_mailbox,
             &mut video_sequence,
             &telemetry,
-        None,
+            None,
         )
         .unwrap();
 
