@@ -3,6 +3,11 @@ set -euo pipefail
 
 readonly DEVKIT_SMS_REVISION="561bc2cb9829cdf2e31ad8cd43835037c8c44a63"
 readonly REQUIRED_SDCC_VERSION="4.6.0"
+readonly TARGET_REGION="USA_NTSC"
+readonly CONVERTER_FLAGS="-std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra"
+readonly SOURCE_FLAGS="-c -mz80 --peep-file=<devkitSMS>/SMSlib/src/peep-rules.txt -DPACING_PROFILE=<profile>"
+readonly SMSLIB_FLAGS="-c -mz80 --max-allocs-per-node=100000 --peep-file=<devkitSMS>/SMSlib/src/peep-rules.txt"
+readonly LINK_FLAGS="-mz80 --no-std-crt0 --data-loc=0xC000"
 
 : "${DEVKIT_SMS_ROOT:?Set DEVKIT_SMS_ROOT to the checked-out sverx/devkitSMS repository}"
 : "${OUT_DIR:?Set OUT_DIR to an output directory outside the repository}"
@@ -21,11 +26,16 @@ require_revision() {
 
 SDCC_PATH="$(command -v "$SDCC_BIN")"
 SDCC_VERSION_OUTPUT="$("$SDCC_PATH" --version 2>&1)"
-if ! grep -Fq "$REQUIRED_SDCC_VERSION" <<<"$SDCC_VERSION_OUTPUT"; then
+SDCC_VERSION_LINE="$(grep -E "^Version[[:space:]]+$REQUIRED_SDCC_VERSION([[:space:]]|$)" <<<"$SDCC_VERSION_OUTPUT" | head -n 1 || true)"
+if [[ -z "$SDCC_VERSION_LINE" ]]; then
     printf 'Frame pacing ROM requires SDCC %s; detected:\n%s\n' \
         "$REQUIRED_SDCC_VERSION" "$SDCC_VERSION_OUTPUT" >&2
     exit 2
 fi
+
+CC_PATH="$(command -v "$CC_BIN")"
+CC_VERSION_LINE="$("$CC_PATH" --version 2>&1 | head -n 1)"
+PROJECT_COMMIT="$(git rev-parse HEAD)"
 
 require_revision
 
@@ -46,8 +56,14 @@ OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
 mkdir -p "$BUILD_DIR"
 
-"$CC_BIN" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra \
+"$CC_PATH" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra \
     "$MAKESMS_SOURCE" -o "$OUT_DIR/makesms"
+
+SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+MAKESMS_SOURCE_SHA256="$(sha256sum "$MAKESMS_SOURCE" | awk '{print $1}')"
+MAKESMS_SHA256="$(sha256sum "$OUT_DIR/makesms" | awk '{print $1}')"
+CRT0_SHA256="$(sha256sum "$CRT0" | awk '{print $1}')"
+PEEP_RULES_SHA256="$(sha256sum "$PEEP_RULES" | awk '{print $1}')"
 
 for profile in 0 1 2 3; do
     case "$profile" in
@@ -93,8 +109,21 @@ for profile in 0 1 2 3; do
     {
         printf 'profile=%s\n' "$name"
         printf 'profile_value=%s\n' "$profile"
+        printf 'region=%s\n' "$TARGET_REGION"
+        printf 'project_commit=%s\n' "$PROJECT_COMMIT"
+        printf 'source_sha256=%s\n' "$SOURCE_SHA256"
         printf 'devkitsms_revision=%s\n' "$DEVKIT_SMS_REVISION"
         printf 'sdcc_version=%s\n' "$REQUIRED_SDCC_VERSION"
+        printf 'sdcc_version_line=%s\n' "$SDCC_VERSION_LINE"
+        printf 'host_cc_version=%s\n' "$CC_VERSION_LINE"
+        printf 'converter_flags=%s\n' "$CONVERTER_FLAGS"
+        printf 'source_compile_flags=%s\n' "-c -mz80 --peep-file=$PEEP_RULES -DPACING_PROFILE=$profile"
+        printf 'smslib_compile_flags=%s\n' "-c -mz80 --max-allocs-per-node=100000 --peep-file=$PEEP_RULES"
+        printf 'link_flags=%s\n' "-mz80 --no-std-crt0 --data-loc=0xC000"
+        printf 'makesms_source_sha256=%s\n' "$MAKESMS_SOURCE_SHA256"
+        printf 'makesms_sha256=%s\n' "$MAKESMS_SHA256"
+        printf 'crt0_sha256=%s\n' "$CRT0_SHA256"
+        printf 'peep_rules_sha256=%s\n' "$PEEP_RULES_SHA256"
         printf 'rom_size=%s\n' "$rom_size"
         printf 'ihx_sha256=%s\n' "$ihx_sha256"
         printf 'rom_sha256=%s\n' "$rom_sha256"
