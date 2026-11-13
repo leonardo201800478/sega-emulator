@@ -124,3 +124,38 @@ A observação publicada em fóruns SMS Power também alerta que versões/revis�
 - SMS Power, tópico SMS Test Suite: https://www.smspower.org/forums/17116-SMSTestSuite
 
 Esta auditoria é um inventário de prontidão, não um relatório de execução de ROMs.
+
+## 8. Atualização — runner full-machine implementado na branch de trabalho
+
+Após a auditoria inicial, foi criado:
+
+- `native/sms_core/examples/sms_rom_runner.rs`: runner offline que instancia `SmsTemporalMachine::new_with_hardware_profile` e avança frames exclusivamente por `step_frame`.
+- `tests/sms/scripts/run_rom.py`: wrapper que calcula SHA-256 da ROM em streaming, identifica o commit Git corrente e chama o exemplo Cargo.
+- `tests/sms/README.md`: instruções de execução e semântica dos registros JSONL.
+
+### O que o runner entrega
+
+- perfis regionais explícitos USA/NTSC, Brasil/PAL-M, Europa/PAL e Japão/NTSC, alinhados à tabela `sms_temporal_region_profile` do worker SMS;
+- limite configurável de frames e instruções por frame;
+- identificação da ROM por SHA-256 e tamanho;
+- identificação da revisão do emulador e revisão upstream da suite;
+- registros JSON Lines de início, frames concluídos e resumo;
+- drenagem dos samples PSG após cada frame para evitar crescimento ilimitado do buffer de áudio no teste offline.
+
+### Limitações deliberadas
+
+- inicialização direta do cartucho, sem executar BIOS ou reproduzir sua sequência de inicialização;
+- não interpreta texto na tela nem buffers privados de resultado das ROMs;
+- não injeta controles ou scripts de entrada nesta primeira versão;
+- não classifica sucesso de uma suite. O resumo `EXECUTED_NO_ORACLE` significa apenas que a máquina completou o orçamento de frames;
+- não normaliza automaticamente cabeçalhos de dumps de ROM;
+- não observa dots/fetches ou efeitos sub-scanline ausentes do modelo VDP atual.
+
+Foram adicionados testes unitários do escape JSON e da seleção/rejeição de perfis regionais. Esses testes ainda precisam ser executados pelo CI no HEAD da PR. Nenhuma ROM externa foi baixada ou executada nesta atualização.
+
+### Próxima validação
+
+1. CI deve compilar o exemplo e executar seus testes.
+2. Criar um fixture homebrew mínimo em teste, gerado em memória, para validar construção da máquina, stepping de frame e saída JSON sem adicionar ROM externa.
+3. Executar SMSmemtest em ambiente controlado e determinar seu oráculo de resultado a partir do código/documentação upstream.
+4. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
