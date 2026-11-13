@@ -4,7 +4,7 @@
 //! through a small sink contract, allowing the complete DSP path to be tested
 //! headlessly with deterministic in-memory sinks.
 
-use crate::{AudioMixer, MixSource, PcmResampler};
+use crate::{AnalogOutputConfig, AnalogOutputProcessor, AudioMixer, MixSource, PcmResampler};
 
 /// Copyable snapshot of host PCM output telemetry.
 ///
@@ -86,6 +86,8 @@ pub trait PcmSink {
 pub struct NativeAudioSession<S: PcmSink> {
     mixer: AudioMixer,
     mixed_samples: Vec<f64>,
+    analog_samples: Vec<f64>,
+    analog_output: AnalogOutputProcessor,
     resampler: PcmResampler,
     sink: S,
     closed: bool,
@@ -122,6 +124,8 @@ impl<S: PcmSink> NativeAudioSession<S> {
         Ok(Self {
             mixer: AudioMixer::default(),
             mixed_samples: Vec::new(),
+            analog_samples: Vec::new(),
+            analog_output: AnalogOutputProcessor::default(),
             resampler,
             sink,
             closed: false,
@@ -160,7 +164,9 @@ impl<S: PcmSink> NativeAudioSession<S> {
         self.mixer
             .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
-        let samples = self.resampler.process(&self.mixed_samples);
+        self.analog_output
+            .process_block(&self.mixed_samples, &mut self.analog_samples);
+        let samples = self.resampler.process(&self.analog_samples);
         if publish && !samples.is_empty() {
             self.sink.write_samples(samples)?;
         }
@@ -218,6 +224,8 @@ impl<S: PcmSink> NativeAudioSession<S> {
         );
         self.resampler.reset();
         self.mixed_samples.clear();
+        self.analog_samples.clear();
+        self.analog_output.reset();
         self.discarded_since_suspend = false;
     }
 
@@ -226,6 +234,20 @@ impl<S: PcmSink> NativeAudioSession<S> {
         self.resampler
             .set_volume(volume)
             .map_err(|error| error.to_string())
+    }
+
+    /// Configure optional analog output filters without touching machine timing.
+    pub fn set_analog_output_config(&mut self, config: AnalogOutputConfig) -> Result<(), String> {
+        self.analog_output
+            .set_config(self.resampler.input_rate(), config)
+            .map_err(|error| error.to_string())?;
+        self.analog_output.reset();
+        Ok(())
+    }
+
+    /// Return the active analog output configuration.
+    pub fn analog_output_config(&self) -> AnalogOutputConfig {
+        self.analog_output.config()
     }
 
     /// Return backend underrun and dropped-block counters.
