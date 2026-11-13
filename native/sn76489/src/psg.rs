@@ -128,7 +128,11 @@ impl PsgEventCapture {
 
     fn record(&mut self, clock: u64, previous_level: f64, current_level: f64) {
         let delta = current_level - previous_level;
-        if delta == 0.0 || self.overflowed {
+        if delta == 0.0 {
+            return;
+        }
+        if self.overflowed {
+            self.overflow_count = self.overflow_count.saturating_add(1);
             return;
         }
         if self.events.len() == self.capacity {
