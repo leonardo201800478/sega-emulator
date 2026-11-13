@@ -159,3 +159,16 @@ Foram adicionados testes unitários do escape JSON e da seleção/rejeição de 
 2. A validação de CI não executa ROMs externas nem demonstra que o exemplo foi exercitado com uma imagem real.
 3. Próxima etapa: construir um oráculo por caso para SMSmemtest, começando pela inspeção do código upstream e pelo mapeamento dos resultados visuais/estado da máquina.
 4. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
+
+## 8. Atualização após a baseline auditada — runner full-machine integrado
+
+As seções 1–7 registram a prontidão da baseline `2942abfe0d4754dd857be0bc103d594abfd9b865` e devem ser lidas como fotografia histórica. A PR #797 acrescentou o runner e o gate descritos abaixo:
+
+- `native/sms_core/examples/sms_rom_runner.rs` executa ROMs por `SmsTemporalMachine`, `SmsTemporalBus`, Z80, Scheduler, PSG e VDP; não usa `FlatBus` como substituto da máquina.
+- `tests/sms/scripts/run_rom.py` cria um snapshot temporário, calcula SHA-256 sobre esse mesmo arquivo e passa exatamente o snapshot ao runner.
+- O CI constrói a ROM SMSmemtest v0.40 a partir das revisões upstream pinadas e a executa duas vezes em USA/NTSC. O gate observou 7/7 casos de RAM PASS, resultado agregado `vram_all_tests` PASS e JSONL determinístico idêntico.
+- O runner classifica a fase SRAM como `NOT_EXERCISED_BY_DRIVER`: ele termina após o resultado VRAM e não inicia a fase SRAM. Isso não é bloqueio de capacidade do produto.
+- A persistência SRAM do produto foi validada separadamente em #802/#803: Phantasy Star 8 KiB salva/restaura após fechar/reabrir e dez verificações de padrões SMSmemtest passaram no modo diagnóstico volátil.
+- A classificação VRAM ainda é agregada no caminho de sucesso; falhas identificam o padrão específico. O runner não substitui um oráculo independente nem certifica hardware físico.
+- O VDP permanece scanline-based. Testes que dependem de dot/fetch, arbitragem sub-scanline ou efeitos mid-scanline continuam `BLOCKED_CAPABILITY` até existir a granularidade correspondente.
+- E8/ZEXDOC/ZEXALL continua bloqueado até fechamento formal demonstrável de E7.
