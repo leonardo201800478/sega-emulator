@@ -37,14 +37,26 @@ impl std::fmt::Display for H2StreamingError {
         match self {
             Self::ZeroClock => write!(f, "H2 PSG clock must be positive"),
             Self::ZeroSampleRate => write!(f, "H2 sample rate must be positive"),
-            Self::UnsupportedSampleRate => write!(f, "H2 sample rate exceeds the PSG clock domain"),
+            Self::UnsupportedSampleRate => {
+                write!(f, "H2 sample rate exceeds the PSG clock domain")
+            }
             Self::InvalidInitialLevel => write!(f, "H2 initial amplitude must be finite"),
             Self::ClockWentBackwards => write!(f, "H2 render clock moved backwards"),
-            Self::EventOutOfOrder => write!(f, "H2 amplitude events are not ordered by PSG clock"),
-            Self::EventAfterRenderHorizon => write!(f, "H2 event lies beyond the supplied render horizon"),
-            Self::LateEvent => write!(f, "H2 event arrived after an affected PCM sample was emitted"),
-            Self::PendingHorizonExceeded => write!(f, "H2 event exceeds the bounded pending-sample horizon"),
-            Self::TooManySimultaneousEvents => write!(f, "H2 same-clock event group exceeds the fixed limit"),
+            Self::EventOutOfOrder => {
+                write!(f, "H2 amplitude events are not ordered by PSG clock")
+            }
+            Self::EventAfterRenderHorizon => {
+                write!(f, "H2 event lies beyond the supplied render horizon")
+            }
+            Self::LateEvent => {
+                write!(f, "H2 event arrived after an affected PCM sample was emitted")
+            }
+            Self::PendingHorizonExceeded => {
+                write!(f, "H2 event exceeds the bounded pending-sample horizon")
+            }
+            Self::TooManySimultaneousEvents => {
+                write!(f, "H2 same-clock event group exceeds the fixed limit")
+            }
             Self::SampleIndexOverflow => write!(f, "H2 absolute sample index exceeds u64"),
         }
     }
@@ -117,7 +129,9 @@ impl H2StreamingRenderer {
 
         for index in 1..sample_count {
             step_response[index] = step_response[index - 1]
-                + 0.5 * (impulse_response[index - 1] + impulse_response[index]) * step_resolution;
+                + 0.5
+                    * (impulse_response[index - 1] + impulse_response[index])
+                    * step_resolution;
         }
 
         let area = *step_response.last().expect("H2 kernel has samples");
@@ -221,9 +235,10 @@ impl H2StreamingRenderer {
             self.last_event_clock = clock;
             if delta != 0.0 {
                 self.accumulate_event(clock, delta)?;
-                self.metrics.events_processed = self.metrics.events_processed.saturating_add(
-                    u64::try_from(delta_count).unwrap_or(u64::MAX),
-                );
+                self.metrics.events_processed = self
+                    .metrics
+                    .events_processed
+                    .saturating_add(u64::try_from(delta_count).unwrap_or(u64::MAX));
             }
         }
 
@@ -333,8 +348,7 @@ impl H2StreamingRenderer {
         for sample_index in first..settled {
             let slot = sample_index as usize % PENDING_CAPACITY;
             let sample_time = sample_index as f64 + 1.0;
-            let position =
-                sample_time - event_position - KERNEL_HALF - FRACTIONAL_DELAY;
+            let position = sample_time - event_position - KERNEL_HALF - FRACTIONAL_DELAY;
             self.transition_ring[slot] += delta * self.response_to_step(position);
         }
         let settled_slot = settled as usize % PENDING_CAPACITY;
