@@ -1993,6 +1993,7 @@ mod windows_host {
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
                     audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
                     audio_muted: app.get_audio_muted(),
+                    audio_renderer_mode: app.get_audio_renderer_mode().to_string(),
                     audio_dsp_preset: app.get_audio_dsp_preset(),
                     audio_hpf_enabled: app.get_audio_hpf_enabled(),
                     audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0)
@@ -2270,6 +2271,7 @@ mod windows_host {
             sprite_limit_enabled: app.get_sprite_limit_enabled(),
             audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
             audio_muted: app.get_audio_muted(),
+            audio_renderer_mode: app.get_audio_renderer_mode().to_string(),
             audio_dsp_preset: app.get_audio_dsp_preset(),
             audio_hpf_enabled: app.get_audio_hpf_enabled(),
             audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
