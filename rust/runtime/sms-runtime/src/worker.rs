@@ -2273,10 +2273,10 @@ fn handle_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS, FRAME_PACING_WINDOW_CAPACITY,
-        FramePacingDeadline, FramePacingSample, FramePacingWindow, Ordering,
-        SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode, WorkerTelemetry,
-        build_sms_temporal_machine, execute_frame,
+        AudioRendererMode, AudioRendererState, BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS,
+        FRAME_PACING_WINDOW_CAPACITY, FramePacingDeadline, FramePacingSample, FramePacingWindow,
+        Ordering, SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode,
+        WorkerTelemetry, build_sms_temporal_machine, execute_frame, execute_frame_with_renderer,
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
@@ -2555,6 +2555,49 @@ mod tests {
     }
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
+
+    #[test]
+    fn h2_renderer_is_selected_at_worker_boundary_and_consumes_real_psg_events() {
+        let mut rom = vec![0; 0x4000];
+        let program = [
+            0xF3, 0x31, 0xF0, 0xDF, // DI; LD SP,$DFF0
+            0x3E, 0x80, 0xD3, 0x7F, // PSG tone 0 period low
+            0x3E, 0x02, 0xD3, 0x7F, // PSG tone 0 period high
+            0x3E, 0x90, 0xD3, 0x7F, // PSG tone 0 volume
+            0x18, 0xFE, // JR $
+        ];
+        rom[..program.len()].copy_from_slice(&program);
+        let mut machine = build_sms_temporal_machine(rom, "usa").unwrap();
+        let mut renderer = AudioRendererState::default();
+        assert_eq!(renderer.mode, AudioRendererMode::Psg);
+        renderer
+            .select(&mut machine, AudioRendererMode::H2Experimental)
+            .unwrap();
+
+        let mut breakpoints = BreakpointSet::default();
+        let mut audio_session = None;
+        let mut video_mailbox = None;
+        let mut video_sequence = 0;
+        let telemetry = WorkerTelemetry::default();
+        execute_frame_with_renderer(
+            &mut machine,
+            &breakpoints,
+            DEFAULT_MAX_FRAME_INSTRUCTIONS,
+            false,
+            &mut audio_session,
+            &mut renderer,
+            &mut video_mailbox,
+            &mut video_sequence,
+            &telemetry,
+        )
+        .unwrap();
+
+        assert_eq!(renderer.mode, AudioRendererMode::H2Experimental);
+        let metrics = renderer.h2.as_ref().unwrap().metrics();
+        assert!(metrics.events_processed > 0);
+        assert!(metrics.output_samples > 0);
+        assert!(!machine.psg_event_capture_overflowed());
+    }
 
     fn av_test_rom() -> Vec<u8> {
         let mut rom = vec![0; 0x4000];
