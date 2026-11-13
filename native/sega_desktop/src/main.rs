@@ -1738,7 +1738,6 @@ mod windows_host {
     fn create_sms_worker(
         rom: Vec<u8>,
         region: &str,
-        mailbox: &FrameMailbox,
         audio_volume: u8,
         dsp_config: AnalogOutputConfig,
         renderer_mode: &str,
@@ -1752,7 +1751,6 @@ mod windows_host {
             initial_sram,
         )?;
         configure_sms_audio(&worker, audio_volume, dsp_config, renderer_mode);
-        worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok((worker, save_context))
     }
@@ -1802,7 +1800,6 @@ mod windows_host {
         let (next, next_save_context) = create_sms_worker(
             rom,
             region,
-            mailbox,
             audio_volume,
             dsp_config,
             renderer_mode,
@@ -1900,7 +1897,6 @@ mod windows_host {
             let (worker, context) = create_sms_worker(
                 read_rom_image(path)?,
                 &region,
-                &mailbox,
                 effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
                 audio_dsp_config(
                     preferences.audio_dsp_preset,
@@ -1913,6 +1909,7 @@ mod windows_host {
                 Arc::clone(&save_store),
             )?;
             initial_save_context = context;
+            worker.attach_video_mailbox(mailbox.clone())?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
@@ -2304,9 +2301,13 @@ mod windows_host {
         let close_worker = Rc::clone(&worker);
         let close_save_context = Rc::clone(&save_context);
         app.on_close_rom_requested(move || {
-            if let Some(previous) = close_worker.borrow_mut().take() {
+            let previous = close_worker.borrow_mut().take();
+            if let Some(previous) = previous {
                 let was_running = previous.is_running();
                 if let Err(error) = previous.pause() {
+                    if was_running {
+                        let _ = previous.start();
+                    }
                     *close_worker.borrow_mut() = Some(previous);
                     if let Some(app) = close_app.upgrade() {
                         app.set_rom_status(format!("Falha ao pausar antes de salvar SRAM: {error}").into());
