@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioSession;
-use sega_audio_runtime::{AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
+use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision,
@@ -716,6 +716,7 @@ enum WorkerCommand {
     RequestNmi,
     ConfigureAudio(AudioSessionFactory, SyncSender<Result<(), String>>),
     SetAudioVolume(u8, SyncSender<Result<(), String>>),
+    SetAudioDspConfig(AnalogOutputConfig, SyncSender<Result<(), String>>),
     CloseAudio(SyncSender<()>),
     SetVideoMailbox(Option<FrameMailbox>, SyncSender<Result<(), String>>),
     Shutdown,
@@ -740,6 +741,7 @@ impl WorkerCommand {
             Self::RequestNmi => "request_nmi",
             Self::ConfigureAudio(_, _) => "configure_audio",
             Self::SetAudioVolume(_, _) => "set_audio_volume",
+            Self::SetAudioDspConfig(_, _) => "set_audio_dsp_config",
             Self::CloseAudio(_) => "close_audio",
             Self::SetVideoMailbox(_, _) => "set_video_mailbox",
             Self::Shutdown => "shutdown",
@@ -1073,6 +1075,11 @@ impl SmsTemporalWorker {
     /// Update the configured output volume without restarting the audio backend.
     pub fn set_audio_volume(&self, volume: u8) -> Result<(), String> {
         self.request_unit(|reply| WorkerCommand::SetAudioVolume(volume, reply))
+    }
+
+    /// Apply optional analog output filters on the audio worker, without restarting CPAL.
+    pub fn set_audio_dsp_config(&self, config: AnalogOutputConfig) -> Result<(), String> {
+        self.request_unit(|reply| WorkerCommand::SetAudioDspConfig(config, reply))
     }
 
     pub fn close_audio_output(&self) -> Result<(), String> {
@@ -2012,6 +2019,13 @@ fn handle_command(
                 .as_mut()
                 .ok_or_else(|| "native audio output is not configured".to_owned())
                 .and_then(|session| session.set_volume(volume));
+            let _ = reply.send(result);
+        }
+        WorkerCommand::SetAudioDspConfig(config, reply) => {
+            let result = audio_session
+                .as_mut()
+                .ok_or_else(|| "native audio output is not configured".to_owned())
+                .and_then(|session| session.set_analog_output_config(config));
             let _ = reply.send(result);
         }
         WorkerCommand::CloseAudio(reply) => {

@@ -1,3 +1,18 @@
+## Audio DSP controls — 2026-11-12
+
+- Adds optional post-mixer analog output processing to the Slint audio menu.
+- Adds an experimental SMS1-style preset (20 Hz HPF, 18 kHz LPF), independent HPF/LPF controls and persistent cutoff settings.
+- Keeps the digital output unchanged when the optional stage is disabled.
+- Routes live DSP changes through the SMS worker command queue; no CPAL restart, PSG, Scheduler, CPU, VDP or clock changes.
+- Labels the preset experimental because the available service documentation does not provide a calibrated board transfer function.
+
+## Menu de áudio Slint — 2026-11-12
+
+- Expõe volume mestre de 0 a 100% e mute no menu Áudio do desktop Slint.
+- Aplica o volume diretamente na sessão DSP/reamostrador já pertencente ao worker SMS, sem reiniciar CPAL, a máquina ou o Scheduler.
+- Persiste volume e mute em `%APPDATA%/Sega Emulator/slint_ui_settings.txt`; o volume padrão de uma instalação sem preferência passa a 70%.
+- Mantém equalização e filtros analógicos fora desta entrega: ainda exigem calibração e validação de resposta antes de serem apresentados como controles de fidelidade.
+
 ## Atualização documental e validação do Scheduler — 2026-11-07
 
 - Registra a baseline consultada da main: `3ad1781f84b7824b5aa889a583ae6d4545987ec1`.

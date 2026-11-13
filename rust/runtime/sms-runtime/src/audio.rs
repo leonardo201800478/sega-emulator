@@ -3,7 +3,7 @@
 //! The runtime owns when samples are mixed and submitted. The application
 //! supplies a concrete session backed by its selected native audio host.
 
-use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
+use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, NativeAudioSession, PcmSink};
 
 /// Audio session accepted by the SMS runtime worker.
 pub trait AudioSession {
@@ -24,6 +24,9 @@ pub trait AudioSession {
 
     /// Update output volume without replacing the native host session.
     fn set_volume(&mut self, volume: u8) -> Result<(), String>;
+
+    /// Configure the optional post-mixer analog output stage.
+    fn set_analog_output_config(&mut self, config: AnalogOutputConfig) -> Result<(), String>;
 
     /// Return a nonblocking snapshot of the host PCM output path.
     fn metrics(&self) -> AudioOutputMetrics;
@@ -55,6 +58,10 @@ impl<S: PcmSink> AudioSession for NativeAudioSession<S> {
 
     fn set_volume(&mut self, volume: u8) -> Result<(), String> {
         NativeAudioSession::set_volume(self, volume)
+    }
+
+    fn set_analog_output_config(&mut self, config: AnalogOutputConfig) -> Result<(), String> {
+        NativeAudioSession::set_analog_output_config(self, config)
     }
 
     fn metrics(&self) -> AudioOutputMetrics {

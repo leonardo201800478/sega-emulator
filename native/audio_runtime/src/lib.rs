@@ -4,7 +4,10 @@ mod dsp;
 mod psg;
 mod session;
 
-pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
+pub use dsp::{
+    AnalogOutputConfig, AnalogOutputProcessor, AudioMixer, DspError, MixSource, OnePoleHighPass,
+    OnePoleLowPass,
+};
 pub use psg::{PsgClockError, ScheduledPsg};
 pub use session::{AudioOutputMetrics, NativeAudioSession, PcmSink};
 

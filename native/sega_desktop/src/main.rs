@@ -13,7 +13,7 @@ mod windows_host {
         time::{Duration, Instant},
     };
 
-    use sega_sms_runtime::{SmsTemporalWorker, SpriteLimitMode};
+    use sega_sms_runtime::{AnalogOutputConfig, SmsTemporalWorker, SpriteLimitMode};
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
     use std::os::windows::process::CommandExt;
     use zip::ZipArchive;
@@ -33,7 +33,7 @@ mod windows_host {
     const MAX_ZIP_ENTRIES: usize = 4_096;
 
     slint::slint! {
-        import { Button, LineEdit, ScrollView } from "std-widgets.slint";
+        import { Button, CheckBox, LineEdit, ScrollView, Slider } from "std-widgets.slint";
         component CompactButton inherits Button {
             height: 28px;
         }
@@ -88,6 +88,14 @@ mod windows_host {
             in-out property <bool> show-fps: true;
             in-out property <bool> show-status-footer: true;
             in-out property <bool> trace-enabled: false;
+            in-out property <float> audio-volume: 70;
+            in-out property <bool> audio-muted: false;
+            in-out property <string> audio-status: "Aguardando configuração da saída de áudio.";
+            in-out property <bool> audio-dsp-preset: false;
+            in-out property <bool> audio-hpf-enabled: false;
+            in-out property <float> audio-hpf-cutoff: 20;
+            in-out property <bool> audio-lpf-enabled: false;
+            in-out property <float> audio-lpf-cutoff: 18000;
             in-out property <bool> fullscreen-enabled: false;
             in-out property <string> fps-status: "FPS: --";
             in-out property <length> video-width: 768px;
@@ -107,6 +115,9 @@ mod windows_host {
             callback fullscreen-requested(bool);
             callback video-area-clicked();
             callback preferences-changed();
+            callback audio-volume-changed(float);
+            callback audio-mute-changed(bool);
+            callback audio-dsp-changed(bool, bool, float, bool, float);
             FocusScope {
                 width: 100%; height: 100%;
                 KeyBinding {
@@ -173,18 +184,18 @@ mod windows_host {
             x: min(max(root.active-menu == "system" ? 12px : root.active-menu == "file" ? 81px : root.active-menu == "video" ? 146px : root.active-menu == "audio" ? 207px : root.active-menu == "controls" ? 268px : root.active-menu == "options" ? 347px : 416px, 8px), parent.width - self.width - 8px);
             y: 88px;
             width: min(parent.width - 16px, root.active-menu == "file" ? 560px : 480px);
-            height: min(parent.height - 104px, root.active-menu == "file" ? 480px : root.active-menu == "controls" ? 300px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "system" ? 250px : root.active-menu == "debug" ? 210px : 180px);
+            height: min(parent.height - 104px, root.active-menu == "file" ? 480px : root.active-menu == "controls" ? 300px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "system" ? 250px : root.active-menu == "debug" ? 210px : root.active-menu == "audio" ? 480px : 180px);
             z: 100;
             background: #1b2834; border-radius: 5px; border-width: 1px;
             border-color: #405365; min-height: 120px; max-height: 480px; max-width: 560px;
             ScrollView {
                 width: 100%; height: 100%;
                 content-width: self.width;
-                content-height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
+                content-height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : root.active-menu == "audio" ? 260px : 180px;
                 VerticalLayout {
                     alignment: start;
                     width: 100%;
-                    height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : 180px;
+                    height: root.active-menu == "file" ? 160px + root.recent-roms.length * 80px : root.active-menu == "controls" ? 300px : root.active-menu == "system" ? 250px : root.active-menu == "video" ? 230px : root.active-menu == "options" ? 230px : root.active-menu == "debug" ? 210px : root.active-menu == "audio" ? 260px : 180px;
                     padding: 8px; spacing: 6px;
                         if root.active-menu == "system": VerticalLayout {
                             Text { font-size: 12px; text: "Sistema ativo: Sega Master System"; color: #f2f5f7; }
@@ -234,10 +245,59 @@ mod windows_host {
                             Text { font-size: 12px; text: "Ajuste aplicado na área de apresentação; o frame original do VDP permanece 256×192."; color: #9baab6; }
                         }
                         if root.active-menu == "audio": VerticalLayout {
-                            Text { font-size: 12px; text: "Configuração de áudio"; color: #f2f5f7; }
-                            CompactButton { text: "Áudio ativo"; enabled: false; }
-                            CompactButton { text: "CPAL 0.18.2 — dispositivo padrão"; enabled: false; }
-                            Text { font-size: 12px; text: "A sessão PCM do worker SMS utiliza CPAL; seleção manual de dispositivo e controle de volume na GUI permanecem pendentes."; color: #9baab6; }
+                            Text { font-size: 14px; text: "Saída de áudio"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Backend: CPAL 0.18.2 | dispositivo padrão do Windows"; color: #b9c5ce; }
+                            Text { font-size: 12px; text: "Volume mestre: \\{round(root.audio-volume)}%"; color: #f2f5f7; }
+                            Slider { minimum: 0; maximum: 100; step: 1; value <=> root.audio-volume; released(value) => { root.audio-volume-changed(value); } }
+                            HorizontalLayout {
+                                spacing: 5px;
+                                CompactButton { text: root.audio-muted ? "Ativar áudio" : "Silenciar"; clicked => { root.audio-muted = !root.audio-muted; root.audio-mute-changed(root.audio-muted); } }
+                                CompactButton { text: "Volume 50%"; clicked => { root.audio-volume = 50; root.audio-volume-changed(50); } }
+                                CompactButton { text: "Volume 70%"; clicked => { root.audio-volume = 70; root.audio-volume-changed(70); } }
+                            }
+                            Text { font-size: 14px; text: "Processamento DSP"; color: #f2f5f7; }
+                            CheckBox {
+                                text: "Preset SMS1 — experimental";
+                                checked <=> root.audio-dsp-preset;
+                                toggled => {
+                                    if (self.checked) {
+                                        root.audio-hpf-enabled = true; root.audio-hpf-cutoff = 20;
+                                        root.audio-lpf-enabled = true; root.audio-lpf-cutoff = 18000;
+                                    } else {
+                                        root.audio-hpf-enabled = false; root.audio-lpf-enabled = false;
+                                    }
+                                    root.audio-dsp-changed(self.checked, root.audio-hpf-enabled, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff);
+                                }
+                            }
+                            Text { font-size: 11px; text: "Aproximação ajustável do estágio analógico de saída; não é uma reprodução elétrica calibrada de uma revisão específica da placa."; color: #d6b879; wrap: word-wrap; }
+                            CheckBox {
+                                text: "Filtro passa-altas / acoplamento AC";
+                                checked <=> root.audio-hpf-enabled;
+                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, self.checked, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff); }
+                            }
+                            Text { font-size: 11px; text: "Corte HPF: \\{round(root.audio-hpf-cutoff)} Hz"; color: #b9c5ce; }
+                            Slider {
+                                minimum: 5; maximum: 500; step: 5; value <=> root.audio-hpf-cutoff;
+                                enabled: root.audio-hpf-enabled;
+                                released(value) => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, value, root.audio-lpf-enabled, root.audio-lpf-cutoff); }
+                            }
+                            CheckBox {
+                                text: "Filtro passa-baixas";
+                                checked <=> root.audio-lpf-enabled;
+                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, self.checked, root.audio-lpf-cutoff); }
+                            }
+                            Text { font-size: 11px; text: "Corte LPF: \\{round(root.audio-lpf-cutoff)} Hz"; color: #b9c5ce; }
+                            Slider {
+                                minimum: 4000; maximum: 20000; step: 250; value <=> root.audio-lpf-cutoff;
+                                enabled: root.audio-lpf-enabled;
+                                released(value) => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, root.audio-lpf-enabled, value); }
+                            }
+                            CompactButton {
+                                text: "Desativar todos os filtros";
+                                clicked => { root.audio-dsp-preset = false; root.audio-hpf-enabled = false; root.audio-lpf-enabled = false; root.audio-dsp-changed(false, false, root.audio-hpf-cutoff, false, root.audio-lpf-cutoff); }
+                            }
+                            Text { font-size: 12px; text: root.audio-status; color: #8bd5ca; wrap: word-wrap; }
+                            Text { font-size: 11px; text: "Filtros no worker, após o mixer e antes do reamostrador. Estado contínuo entre blocos; sem alteração no PSG, Scheduler ou clocks."; color: #9baab6; wrap: word-wrap; }
                         }
                         if root.active-menu == "controls": VerticalLayout {
                             Text { font-size: 12px; text: "Dispositivo de entrada"; color: #f2f5f7; }
@@ -286,6 +346,13 @@ mod windows_host {
         show_status_footer: bool,
         fps_size: String,
         sprite_limit_enabled: bool,
+        audio_volume: u8,
+        audio_muted: bool,
+        audio_dsp_preset: bool,
+        audio_hpf_enabled: bool,
+        audio_hpf_cutoff_hz: u16,
+        audio_lpf_enabled: bool,
+        audio_lpf_cutoff_hz: u16,
     }
 
     impl Default for DesktopPreferences {
@@ -297,6 +364,13 @@ mod windows_host {
                 show_status_footer: true,
                 fps_size: "medium".to_owned(),
                 sprite_limit_enabled: true,
+                audio_volume: 70,
+                audio_muted: false,
+                audio_dsp_preset: false,
+                audio_hpf_enabled: false,
+                audio_hpf_cutoff_hz: 20,
+                audio_lpf_enabled: false,
+                audio_lpf_cutoff_hz: 18_000,
             }
         }
     }
@@ -347,6 +421,47 @@ mod windows_host {
                         preferences.sprite_limit_enabled = value;
                     }
                 }
+                "audio_volume" => {
+                    if let Ok(value) = value.trim().parse::<u8>()
+                        && value <= 100
+                    {
+                        preferences.audio_volume = value;
+                    }
+                }
+                "audio_muted" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_muted = value;
+                    }
+                }
+                "audio_dsp_preset" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_dsp_preset = value;
+                    }
+                }
+                "audio_hpf_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_hpf_enabled = value;
+                    }
+                }
+                "audio_hpf_cutoff_hz" => {
+                    if let Ok(value) = value.trim().parse::<u16>()
+                        && (5..=500).contains(&value)
+                    {
+                        preferences.audio_hpf_cutoff_hz = value;
+                    }
+                }
+                "audio_lpf_enabled" => {
+                    if let Ok(value) = value.trim().parse() {
+                        preferences.audio_lpf_enabled = value;
+                    }
+                }
+                "audio_lpf_cutoff_hz" => {
+                    if let Ok(value) = value.trim().parse::<u16>()
+                        && (4_000..=20_000).contains(&value)
+                    {
+                        preferences.audio_lpf_cutoff_hz = value;
+                    }
+                }
                 _ => {}
             }
         }
@@ -359,13 +474,20 @@ mod windows_host {
             app_data_directory().ok_or_else(|| "APPDATA não está definido".to_owned())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let contents = format!(
-            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\n",
+            "region={}\naspect={}\nshow_fps={}\nshow_status_footer={}\nfps_size={}\nsprite_limit_enabled={}\naudio_volume={}\naudio_muted={}\naudio_dsp_preset={}\naudio_hpf_enabled={}\naudio_hpf_cutoff_hz={}\naudio_lpf_enabled={}\naudio_lpf_cutoff_hz={}\n",
             preferences.region,
             preferences.aspect,
             preferences.show_fps,
             preferences.show_status_footer,
             preferences.fps_size,
-            preferences.sprite_limit_enabled
+            preferences.sprite_limit_enabled,
+            preferences.audio_volume,
+            preferences.audio_muted,
+            preferences.audio_dsp_preset,
+            preferences.audio_hpf_enabled,
+            preferences.audio_hpf_cutoff_hz,
+            preferences.audio_lpf_enabled,
+            preferences.audio_lpf_cutoff_hz
         );
         fs::write(directory.join("slint_ui_settings.txt"), contents)
             .map_err(|error| error.to_string())
@@ -1319,8 +1441,31 @@ mod windows_host {
         video_only_capture_requested(std::env::var("SEGA_EMULATOR_VIDEO_ONLY").ok().as_deref())
     }
 
-    /// Cria um worker SMS e conecta o mailbox de apresentação antes de publicá-lo na GUI.
-    fn configure_sms_audio(worker: &SmsTemporalWorker) {
+    /// Converte volume mestre e mute no nível efetivo enviado ao DSP de saída.
+    fn effective_audio_volume(volume: u8, muted: bool) -> u8 {
+        if muted { 0 } else { volume.min(100) }
+    }
+
+    /// Converte as preferências da GUI em configuração DSP validada pelo runtime.
+    fn audio_dsp_config(
+        preset: bool,
+        hpf_enabled: bool,
+        hpf_cutoff: f64,
+        lpf_enabled: bool,
+        lpf_cutoff: f64,
+    ) -> AnalogOutputConfig {
+        if preset {
+            return AnalogOutputConfig::sms1_experimental();
+        }
+        AnalogOutputConfig {
+            enabled: hpf_enabled || lpf_enabled,
+            high_pass_hz: hpf_enabled.then_some(hpf_cutoff),
+            low_pass_hz: lpf_enabled.then_some(lpf_cutoff),
+        }
+    }
+
+    /// Cria a sessão CPAL com volume e configuração DSP persistidos.
+    fn configure_sms_audio(worker: &SmsTemporalWorker, volume: u8, dsp_config: AnalogOutputConfig) {
         if video_only_capture_enabled() {
             eprintln!(
                 "R3_AUDIO skipped: SEGA_EMULATOR_VIDEO_ONLY enabled; digital PSG generation remains active"
@@ -1330,7 +1475,7 @@ mod windows_host {
         const BUFFER_FRAMES: u32 = 512;
         const QUEUE_BLOCKS: usize = 8;
         let result = worker.configure_audio_output(
-            || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
+            move || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
                 let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
                 eprintln!(
                     "R3_AUDIO CPAL output opened: sample_rate={} Hz, channels={}, format={:?}, default_config_fallback={}, queue_capacity={} frames",
@@ -1340,7 +1485,8 @@ mod windows_host {
                     sink.used_default_config_fallback(),
                     BUFFER_FRAMES as usize * QUEUE_BLOCKS
                 );
-                let session = sink.into_audio_session(100)?;
+                let mut session = sink.into_audio_session(volume)?;
+                session.set_analog_output_config(dsp_config)?;
                 Ok(Box::new(session))
             },
         );
@@ -1353,9 +1499,11 @@ mod windows_host {
         rom: Vec<u8>,
         region: &str,
         mailbox: &FrameMailbox,
+        audio_volume: u8,
+        dsp_config: AnalogOutputConfig,
     ) -> Result<SmsTemporalWorker, String> {
         let worker = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&worker);
+        configure_sms_audio(&worker, audio_volume, dsp_config);
         worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok(worker)
@@ -1367,10 +1515,12 @@ mod windows_host {
         region: &str,
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
         mailbox: &FrameMailbox,
+        audio_volume: u8,
+        dsp_config: AnalogOutputConfig,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let next = SmsTemporalWorker::new(rom, region)?;
-        configure_sms_audio(&next);
+        configure_sms_audio(&next, audio_volume, dsp_config);
         next.set_diagnostics_enabled(true);
 
         let previous = worker_slot.borrow_mut().take();
@@ -1438,7 +1588,19 @@ mod windows_host {
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let worker = if let Some(path) = rom_path.as_ref() {
-            let worker = create_sms_worker(read_rom_image(path)?, &region, &mailbox)?;
+            let worker = create_sms_worker(
+                read_rom_image(path)?,
+                &region,
+                &mailbox,
+                effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
+                audio_dsp_config(
+                    preferences.audio_dsp_preset,
+                    preferences.audio_hpf_enabled,
+                    f64::from(preferences.audio_hpf_cutoff_hz),
+                    preferences.audio_lpf_enabled,
+                    f64::from(preferences.audio_lpf_cutoff_hz),
+                ),
+            )?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
@@ -1466,6 +1628,13 @@ mod windows_host {
         app.set_show_fps(preferences.show_fps);
         app.set_show_status_footer(preferences.show_status_footer);
         app.set_sprite_limit_enabled(preferences.sprite_limit_enabled);
+        app.set_audio_volume(f32::from(preferences.audio_volume));
+        app.set_audio_muted(preferences.audio_muted);
+        app.set_audio_dsp_preset(preferences.audio_dsp_preset);
+        app.set_audio_hpf_enabled(preferences.audio_hpf_enabled);
+        app.set_audio_hpf_cutoff(f32::from(preferences.audio_hpf_cutoff_hz));
+        app.set_audio_lpf_enabled(preferences.audio_lpf_enabled);
+        app.set_audio_lpf_cutoff(f32::from(preferences.audio_lpf_cutoff_hz));
         app.set_fps_size(preferences.fps_size.clone().into());
         app.set_fps_font_size(match preferences.fps_size.as_str() {
             "small" => 13.0,
@@ -1493,6 +1662,19 @@ mod windows_host {
             }
         }
         app.set_has_rom(worker.borrow().is_some());
+        app.set_audio_status(if video_only_capture_enabled() {
+            "Saída física desativada pelo modo de captura somente vídeo.".into()
+        } else if worker
+            .borrow()
+            .as_ref()
+            .is_some_and(|worker| worker.audio_output_metrics().sample_rate_hz > 0)
+        {
+            "CPAL ativo — volume aplicado no DSP de saída.".into()
+        } else if worker.borrow().is_some() {
+            "Saída CPAL indisponível; consulte R3_AUDIO nos logs.".into()
+        } else {
+            "Carregue uma ROM SMS para inicializar a saída CPAL.".into()
+        });
         if let Some(path) = rom_path.as_ref() {
             app.set_rom_status(format!("ROM: {} | região: {region}", path.display()).into());
             app.set_recent_rom_path(path.display().to_string().into());
@@ -1599,17 +1781,35 @@ mod windows_host {
                 return;
             }
 
-            let (region, sprite_limit_enabled) = open_app
+            let (region, sprite_limit_enabled, audio_volume, dsp_config) = open_app
                 .upgrade()
                 .map(|app| {
                     (
                         app.get_selected_region().to_string(),
                         app.get_sprite_limit_enabled(),
+                        effective_audio_volume(
+                            app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
+                            app.get_audio_muted(),
+                        ),
+                        audio_dsp_config(
+                            app.get_audio_dsp_preset(),
+                            app.get_audio_hpf_enabled(),
+                            f64::from(app.get_audio_hpf_cutoff().round() as u16),
+                            app.get_audio_lpf_enabled(),
+                            f64::from(app.get_audio_lpf_cutoff().round() as u16),
+                        ),
                     )
                 })
-                .unwrap_or_else(|| ("usa".to_owned(), true));
+                .unwrap_or_else(|| ("usa".to_owned(), true, 70, AnalogOutputConfig::default()));
 
-            match replace_sms_worker(&path, &region, &open_worker, &open_mailbox) {
+            match replace_sms_worker(
+                &path,
+                &region,
+                &open_worker,
+                &open_mailbox,
+                audio_volume,
+                dsp_config,
+            ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
                         SpriteLimitMode::HardwareLimit
@@ -1629,6 +1829,17 @@ mod windows_host {
                             recent_roms_model(&open_recent_list.borrow()),
                         )));
                         app.set_has_rom(true);
+                        app.set_audio_status(if video_only_capture_enabled() {
+                            "Saída física desativada pelo modo de captura somente vídeo.".into()
+                        } else if open_worker
+                            .borrow()
+                            .as_ref()
+                            .is_some_and(|worker| worker.audio_output_metrics().sample_rate_hz > 0)
+                        {
+                            "CPAL ativo — volume aplicado no DSP de saída.".into()
+                        } else {
+                            "Saída CPAL indisponível; consulte R3_AUDIO nos logs.".into()
+                        });
                         app.set_emulation_paused(false);
                         app.set_rom_status(
                             match start_result {
@@ -1688,6 +1899,7 @@ mod windows_host {
             if let Some(app) = close_app.upgrade() {
                 app.set_has_rom(false);
                 app.set_emulation_paused(false);
+                app.set_audio_status("Sem ROM carregada; volume e mute permanecem salvos.".into());
                 app.set_rom_status("Nenhuma ROM carregada.".into());
                 app.set_debug_status("Máquina fechada.".into());
             }
@@ -1705,6 +1917,15 @@ mod windows_host {
                     show_status_footer: app.get_show_status_footer(),
                     fps_size: app.get_fps_size().to_string(),
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
+                    audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
+                    audio_muted: app.get_audio_muted(),
+                    audio_dsp_preset: app.get_audio_dsp_preset(),
+                    audio_hpf_enabled: app.get_audio_hpf_enabled(),
+                    audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0)
+                        as u16,
+                    audio_lpf_enabled: app.get_audio_lpf_enabled(),
+                    audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0)
+                        as u16,
                 };
                 let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
@@ -1753,11 +1974,112 @@ mod windows_host {
                 show_status_footer: app.get_show_status_footer(),
                 fps_size: app.get_fps_size().to_string(),
                 sprite_limit_enabled: app.get_sprite_limit_enabled(),
+                audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
+                audio_muted: app.get_audio_muted(),
+                audio_dsp_preset: app.get_audio_dsp_preset(),
+                audio_hpf_enabled: app.get_audio_hpf_enabled(),
+                audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
+                audio_lpf_enabled: app.get_audio_lpf_enabled(),
+                audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0)
+                    as u16,
             };
             if let Err(error) = save_desktop_preferences(&prefs) {
                 eprintln!("R2_PREFERENCES save_failed error={error}");
             }
         });
+
+        let audio_volume_worker = Rc::clone(&worker);
+        let audio_volume_app = app.as_weak();
+        app.on_audio_volume_changed(move |value| {
+            let volume = value.round().clamp(0.0, 100.0) as u8;
+            let Some(app) = audio_volume_app.upgrade() else {
+                return;
+            };
+            let effective = effective_audio_volume(volume, app.get_audio_muted());
+            let result = audio_volume_worker
+                .borrow()
+                .as_ref()
+                .map(|worker| worker.set_audio_volume(effective));
+            match result {
+                Some(Ok(())) => app.set_audio_status(
+                    format!(
+                        "Volume mestre aplicado: {volume}%{}.",
+                        if effective == 0 { " (silenciado)" } else { "" }
+                    )
+                    .into(),
+                ),
+                Some(Err(error)) => {
+                    app.set_audio_status(format!("Falha ao aplicar volume: {error}").into())
+                }
+                None => app.set_audio_status(
+                    "Volume salvo; será aplicado ao carregar uma ROM SMS.".into(),
+                ),
+            }
+            app.invoke_preferences_changed();
+        });
+
+        let audio_mute_worker = Rc::clone(&worker);
+        let audio_mute_app = app.as_weak();
+        app.on_audio_mute_changed(move |muted| {
+            let Some(app) = audio_mute_app.upgrade() else {
+                return;
+            };
+            let volume = app.get_audio_volume().round().clamp(0.0, 100.0) as u8;
+            let effective = effective_audio_volume(volume, muted);
+            let result = audio_mute_worker
+                .borrow()
+                .as_ref()
+                .map(|worker| worker.set_audio_volume(effective));
+            match result {
+                Some(Ok(())) => app.set_audio_status(if muted {
+                    "Áudio silenciado; volume escolhido preservado.".into()
+                } else {
+                    format!("Áudio reativado em {volume}%.").into()
+                }),
+                Some(Err(error)) => {
+                    app.set_audio_status(format!("Falha ao alterar áudio: {error}").into())
+                }
+                None => app.set_audio_status(
+                    "Preferência salva; será aplicada ao carregar uma ROM SMS.".into(),
+                ),
+            }
+            app.invoke_preferences_changed();
+        });
+
+        let audio_dsp_worker = Rc::clone(&worker);
+        let audio_dsp_app = app.as_weak();
+        app.on_audio_dsp_changed(
+            move |preset, hpf_enabled, hpf_cutoff, lpf_enabled, lpf_cutoff| {
+                let Some(app) = audio_dsp_app.upgrade() else {
+                    return;
+                };
+                let config = audio_dsp_config(
+                    preset,
+                    hpf_enabled,
+                    f64::from(hpf_cutoff.round() as u16),
+                    lpf_enabled,
+                    f64::from(lpf_cutoff.round() as u16),
+                );
+                let result = audio_dsp_worker
+                    .borrow()
+                    .as_ref()
+                    .map(|worker| worker.set_audio_dsp_config(config));
+                match result {
+                    Some(Ok(())) => app.set_audio_status(if config.enabled {
+                        "DSP aplicado no worker; filtros ativos na saída PCM.".into()
+                    } else {
+                        "DSP analógico adicional desativado; saída original preservada.".into()
+                    }),
+                    Some(Err(error)) => {
+                        app.set_audio_status(format!("Falha ao aplicar DSP: {error}").into())
+                    }
+                    None => app.set_audio_status(
+                        "Preferências DSP salvas; serão aplicadas ao carregar uma ROM SMS.".into(),
+                    ),
+                }
+                app.invoke_preferences_changed();
+            },
+        );
 
         let fullscreen_app = app.as_weak();
         app.on_fullscreen_requested(move |enabled| {
@@ -1840,6 +2162,13 @@ mod windows_host {
             show_status_footer: app.get_show_status_footer(),
             fps_size: app.get_fps_size().to_string(),
             sprite_limit_enabled: app.get_sprite_limit_enabled(),
+            audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
+            audio_muted: app.get_audio_muted(),
+            audio_dsp_preset: app.get_audio_dsp_preset(),
+            audio_hpf_enabled: app.get_audio_hpf_enabled(),
+            audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
+            audio_lpf_enabled: app.get_audio_lpf_enabled(),
+            audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0) as u16,
         };
         let _ = save_desktop_preferences(&final_preferences);
         let _ = save_recent_roms(&recent_roms.borrow());
@@ -1857,6 +2186,22 @@ mod windows_host {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn master_volume_is_bounded_and_mute_is_independent() {
+            assert_eq!(effective_audio_volume(70, false), 70);
+            assert_eq!(effective_audio_volume(70, true), 0);
+            assert_eq!(effective_audio_volume(0, false), 0);
+            assert_eq!(effective_audio_volume(100, false), 100);
+            assert_eq!(effective_audio_volume(255, false), 100);
+        }
+
+        #[test]
+        fn default_audio_preferences_start_at_a_moderate_volume() {
+            let preferences = DesktopPreferences::default();
+            assert_eq!(preferences.audio_volume, 70);
+            assert!(!preferences.audio_muted);
+        }
 
         #[test]
         fn video_only_capture_flag_accepts_only_explicit_true_values() {

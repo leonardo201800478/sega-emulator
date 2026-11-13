@@ -20,7 +20,7 @@ impl std::fmt::Display for DspError {
             }
             Self::InvalidFilterConfiguration => write!(
                 f,
-                "low-pass filter requires 0 < cutoff < Nyquist and a positive sample rate"
+                "audio filter requires 0 < cutoff < Nyquist and a positive sample rate"
             ),
         }
     }
@@ -135,9 +135,203 @@ impl OnePoleLowPass {
     }
 }
 
+/// User-selectable analog output approximation. Values are host-independent and
+/// intentionally separate from the emulated PSG and machine timing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AnalogOutputConfig {
+    pub enabled: bool,
+    pub high_pass_hz: Option<f64>,
+    pub low_pass_hz: Option<f64>,
+}
+
+impl AnalogOutputConfig {
+    /// Experimental broad-band approximation for an SMS1-style analog output.
+    /// The service manual specifies 20 Hz–20 kHz at the output stage, but does
+    /// not publish a complete transfer function; these values are not a
+    /// component-level reconstruction or a calibrated board profile.
+    pub const fn sms1_experimental() -> Self {
+        Self {
+            enabled: true,
+            high_pass_hz: Some(20.0),
+            low_pass_hz: Some(18_000.0),
+        }
+    }
+
+    pub fn validate(self, sample_rate: u32) -> Result<Self, DspError> {
+        if sample_rate == 0
+            || self.high_pass_hz.is_some_and(|cutoff| {
+                !cutoff.is_finite() || cutoff <= 0.0 || cutoff >= sample_rate as f64 / 2.0
+            })
+            || self.low_pass_hz.is_some_and(|cutoff| {
+                !cutoff.is_finite() || cutoff <= 0.0 || cutoff >= sample_rate as f64 / 2.0
+            })
+        {
+            return Err(DspError::InvalidFilterConfiguration);
+        }
+        Ok(self)
+    }
+}
+
+/// One-pole high-pass used for AC coupling / DC blocking.
+#[derive(Clone, Copy, Debug)]
+pub struct OnePoleHighPass {
+    alpha: f64,
+    previous_input: f64,
+    previous_output: f64,
+}
+
+impl OnePoleHighPass {
+    pub fn new(sample_rate: u32, cutoff_hz: f64) -> Result<Self, DspError> {
+        if sample_rate == 0
+            || !cutoff_hz.is_finite()
+            || cutoff_hz <= 0.0
+            || cutoff_hz >= sample_rate as f64 / 2.0
+        {
+            return Err(DspError::InvalidFilterConfiguration);
+        }
+        let alpha = (-std::f64::consts::TAU * cutoff_hz / sample_rate as f64).exp();
+        Ok(Self {
+            alpha,
+            previous_input: 0.0,
+            previous_output: 0.0,
+        })
+    }
+
+    pub fn reset(&mut self) {
+        self.previous_input = 0.0;
+        self.previous_output = 0.0;
+    }
+
+    pub fn process_sample(&mut self, input: f64) -> f64 {
+        let output = self.alpha * (self.previous_output + input - self.previous_input);
+        self.previous_input = input;
+        self.previous_output = output;
+        output
+    }
+}
+
+/// Stateful analog output stage, applied after mixing and before PCM resampling.
+#[derive(Clone, Debug, Default)]
+pub struct AnalogOutputProcessor {
+    config: AnalogOutputConfig,
+    high_pass: Option<OnePoleHighPass>,
+    low_pass: Option<OnePoleLowPass>,
+}
+
+impl AnalogOutputProcessor {
+    pub fn new(sample_rate: u32, config: AnalogOutputConfig) -> Result<Self, DspError> {
+        let mut processor = Self::default();
+        processor.set_config(sample_rate, config)?;
+        Ok(processor)
+    }
+
+    pub fn config(&self) -> AnalogOutputConfig {
+        self.config
+    }
+
+    pub fn set_config(
+        &mut self,
+        sample_rate: u32,
+        config: AnalogOutputConfig,
+    ) -> Result<(), DspError> {
+        config.validate(sample_rate)?;
+        let high_pass = if config.enabled {
+            config
+                .high_pass_hz
+                .map(|cutoff| OnePoleHighPass::new(sample_rate, cutoff))
+                .transpose()?
+        } else {
+            None
+        };
+        let low_pass = if config.enabled {
+            config
+                .low_pass_hz
+                .map(|cutoff| OnePoleLowPass::new(sample_rate, cutoff))
+                .transpose()?
+        } else {
+            None
+        };
+        self.config = config;
+        self.high_pass = high_pass;
+        self.low_pass = low_pass;
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        if let Some(filter) = &mut self.high_pass {
+            filter.reset();
+        }
+        if let Some(filter) = &mut self.low_pass {
+            filter.reset();
+        }
+    }
+
+    pub fn process_block(&mut self, input: &[f64], output: &mut Vec<f64>) {
+        output.clear();
+        output.reserve(input.len());
+        for &sample in input {
+            let mut value = self
+                .high_pass
+                .as_mut()
+                .map_or(sample, |filter| filter.process_sample(sample));
+            if let Some(filter) = &mut self.low_pass {
+                value = filter.process_sample(value);
+            }
+            output.push(value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn high_pass_blocks_dc_and_preserves_state_across_samples() {
+        let mut filter = OnePoleHighPass::new(48_000, 20.0).unwrap();
+        let mut output = 0.0;
+        for _ in 0..48_000 {
+            output = filter.process_sample(1.0);
+        }
+        assert!(output.abs() < 1.0e-6, "DC component should decay to zero");
+        filter.reset();
+        assert_eq!(filter.process_sample(0.0), 0.0);
+    }
+
+    #[test]
+    fn analog_output_is_bit_exact_bypass_when_disabled() {
+        let input = [0.0, 0.25, -0.5, 0.75, -1.0];
+        let mut processor =
+            AnalogOutputProcessor::new(48_000, AnalogOutputConfig::default()).unwrap();
+        let mut output = Vec::new();
+        processor.process_block(&input, &mut output);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn sms1_profile_is_explicitly_experimental_and_valid_at_internal_rate() {
+        let config = AnalogOutputConfig::sms1_experimental();
+        assert!(config.enabled);
+        assert_eq!(config.high_pass_hz, Some(20.0));
+        assert_eq!(config.low_pass_hz, Some(18_000.0));
+        assert!(config.validate(48_000).is_ok());
+    }
+
+    #[test]
+    fn analog_filter_block_processing_preserves_filter_state_between_blocks() {
+        let config = AnalogOutputConfig::sms1_experimental();
+        let mut split = AnalogOutputProcessor::new(48_000, config).unwrap();
+        let mut whole = AnalogOutputProcessor::new(48_000, config).unwrap();
+        let first = [0.0, 0.5, 0.25];
+        let second = [-0.25, 0.0, 0.75];
+        let mut split_output = Vec::new();
+        let mut whole_output = Vec::new();
+        split.process_block(&first, &mut split_output);
+        let mut tail = Vec::new();
+        split.process_block(&second, &mut tail);
+        split_output.extend(tail);
+        whole.process_block(&[0.0, 0.5, 0.25, -0.25, 0.0, 0.75], &mut whole_output);
+        assert_eq!(split_output, whole_output);
+    }
 
     #[test]
     fn mixer_sums_sources_and_reuses_output() {
