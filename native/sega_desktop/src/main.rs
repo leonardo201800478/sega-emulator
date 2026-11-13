@@ -1969,7 +1969,7 @@ mod windows_host {
                 if let Some(worker) = keyboard_press_worker.borrow().as_ref()
                     && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
                 {
-                    eprintln!("R4_INPUT action=keyboard_controller_press error={error}");
+                    eprintln!("SLINT_KEYBOARD action=keyboard_controller_press error={error}");
                 }
             }
 
@@ -1978,7 +1978,7 @@ mod windows_host {
                     if let Some(worker) = keyboard_press_worker.borrow().as_ref()
                         && let Err(error) = worker.request_nmi()
                     {
-                        eprintln!("R4_INPUT action=keyboard_nmi error={error}");
+                        eprintln!("SLINT_KEYBOARD action=keyboard_nmi error={error}");
                     }
                 }
                 KeyboardAction::Start => app.invoke_start_requested(),
@@ -2003,7 +2003,7 @@ mod windows_host {
                 if let Some(worker) = keyboard_release_worker.borrow().as_ref()
                     && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
                 {
-                    eprintln!("R4_INPUT action=keyboard_controller_release error={error}");
+                    eprintln!("SLINT_KEYBOARD action=keyboard_controller_release error={error}");
                 }
             }
         });
@@ -2022,7 +2022,7 @@ mod windows_host {
                 && let Err(error) =
                     worker.set_controller_at(1, ControllerButtons::default(), Instant::now())
             {
-                eprintln!("R4_INPUT action=keyboard_focus_release error={error}");
+                eprintln!("SLINT_KEYBOARD action=keyboard_focus_release error={error}");
             }
         });
 
