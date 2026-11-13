@@ -70,12 +70,30 @@ impl InputButton {
 
     fn controller_state(self) -> ControllerButtons {
         match self {
-            Self::Up => ControllerButtons { up: true, ..ControllerButtons::default() },
-            Self::Down => ControllerButtons { down: true, ..ControllerButtons::default() },
-            Self::Left => ControllerButtons { left: true, ..ControllerButtons::default() },
-            Self::Right => ControllerButtons { right: true, ..ControllerButtons::default() },
-            Self::Button1 => ControllerButtons { button_1: true, ..ControllerButtons::default() },
-            Self::Button2 => ControllerButtons { button_2: true, ..ControllerButtons::default() },
+            Self::Up => ControllerButtons {
+                up: true,
+                ..ControllerButtons::default()
+            },
+            Self::Down => ControllerButtons {
+                down: true,
+                ..ControllerButtons::default()
+            },
+            Self::Left => ControllerButtons {
+                left: true,
+                ..ControllerButtons::default()
+            },
+            Self::Right => ControllerButtons {
+                right: true,
+                ..ControllerButtons::default()
+            },
+            Self::Button1 => ControllerButtons {
+                button_1: true,
+                ..ControllerButtons::default()
+            },
+            Self::Button2 => ControllerButtons {
+                button_2: true,
+                ..ControllerButtons::default()
+            },
         }
     }
 }
@@ -182,11 +200,12 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|_| format!("invalid --sample-interval-ms value: {value}"))?;
             }
             "--button1-pulse-frames" => {
-                input_pulses.extend(
-                    parse_frame_list(&value)?
-                        .into_iter()
-                        .map(|frame| InputPulse { frame, button: InputButton::Button1 }),
-                );
+                input_pulses.extend(parse_frame_list(&value)?.into_iter().map(|frame| {
+                    InputPulse {
+                        frame,
+                        button: InputButton::Button1,
+                    }
+                }));
             }
             "--input-pulses" => input_pulses.extend(parse_input_pulses(&value)?),
             _ => return Err(format!("unknown argument {flag}\n{}", usage())),
@@ -208,7 +227,10 @@ fn parse_args() -> Result<Args, String> {
         return Err("--sample-interval-ms must be between 250 and 10000".to_owned());
     }
     input_pulses.sort_by_key(|pulse| pulse.frame);
-    if input_pulses.windows(2).any(|pair| pair[0].frame == pair[1].frame) {
+    if input_pulses
+        .windows(2)
+        .any(|pair| pair[0].frame == pair[1].frame)
+    {
         return Err("only one controller button may be pulsed per frame".to_owned());
     }
 
