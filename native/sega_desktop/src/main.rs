@@ -1439,7 +1439,13 @@ mod windows_host {
             if let Some((audio, output_error)) = audio_output {
                 let (delta, window_ms, window_valid) = audio_window.map_or(
                     (AudioOutputDelta::default(), 0_u64, false),
-                    |(delta, elapsed)| (delta, elapsed.as_millis().min(u128::from(u64::MAX)) as u64, true),
+                    |(delta, elapsed)| {
+                        (
+                            delta,
+                            elapsed.as_millis().min(u128::from(u64::MAX)) as u64,
+                            true,
+                        )
+                    },
                 );
                 let requested_frames = delta.requested_frames();
                 let producer_frames_per_second = if window_ms > 0 {
