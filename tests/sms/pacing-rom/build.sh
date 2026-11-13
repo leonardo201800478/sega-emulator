@@ -26,7 +26,7 @@ require_revision() {
 
 SDCC_PATH="$(command -v "$SDCC_BIN")"
 SDCC_VERSION_OUTPUT="$("$SDCC_PATH" --version 2>&1)"
-SDCC_VERSION_LINE="$(grep -E "^Version[[:space:]]+$REQUIRED_SDCC_VERSION([[:space:]]|$)" <<<"$SDCC_VERSION_OUTPUT" | head -n 1 || true)"
+SDCC_VERSION_LINE="$(grep -F "Version $REQUIRED_SDCC_VERSION" <<<"$SDCC_VERSION_OUTPUT" | head -n 1 || true)"
 if [[ -z "$SDCC_VERSION_LINE" ]]; then
     printf 'Frame pacing ROM requires SDCC %s; detected:\n%s\n' \
         "$REQUIRED_SDCC_VERSION" "$SDCC_VERSION_OUTPUT" >&2
