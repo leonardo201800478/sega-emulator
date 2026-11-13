@@ -126,21 +126,25 @@ jobs:
         working-directory: .build/SMSTestSuite
         run: |
           set -euxo pipefail
-          python3 ../devkitSMS/tools/assets2banks/src/assets2banks.py assets --firstbank=1,32000
-          test -s bank1.c
+          python3 ../devkitSMS/tools/assets2banks/src/assets2banks.py assets --firstbank=2 --singleheader=bank1.h
+          test -s bank1.h
+          test -s bank2.c
+          test -s bank3.c
           sdcc -c -mz80 --peep-file ../SMSlib/peep-rules.txt -o main.rel main.c
-          sdcc -c -mz80 -o bank1.rel bank1.c
+          sdcc -c -mz80 --constseg BANK2 -o bank2.rel bank2.c
+          sdcc -c -mz80 --constseg BANK3 -o bank3.rel bank3.c
           test -s main.rel
-          test -s bank1.rel
+          test -s bank2.rel
+          test -s bank3.rel
 
       - name: Link and convert SMS Test Suite with the upstream-compatible IHX converter
         working-directory: .build/SMSTestSuite
         run: |
           set -euxo pipefail
-          sdcc -o output.ihx -mz80 --data-loc 0xC000 --no-std-crt0 -L ../SMSlib ../crt0/crt0_sms.rel main.rel bank1.rel SMSlib_MD_VDP.lib ../PSGlib/PSGlib.lib ../banjo_lib_minimal/banjo.rel ../banjo_lib_minimal/banjo_opll.rel ../banjo_lib_minimal/banjo_sn.rel sn_opll_loop.rel
+          sdcc -o output.ihx -mz80 --data-loc 0xC000 --no-std-crt0 -Wl-b_BANK2=0x28000 -Wl-b_BANK3=0x38000 -L ../SMSlib ../crt0/crt0_sms.rel main.rel SMSlib_MD_VDP.lib ../PSGlib/PSGlib.lib ../banjo_lib_minimal/banjo.rel ../banjo_lib_minimal/banjo_opll.rel ../banjo_lib_minimal/banjo_sn.rel sn_opll_loop.rel bank2.rel bank3.rel
           test -s output.ihx
           chmod +x ../devkitSMS/tools/legacy/ihx2sms/Linux/ihx2sms
-          SOURCE_DATE_EPOCH=1767225600 ../devkitSMS/tools/legacy/ihx2sms/Linux/ihx2sms output.ihx output.sms
+          SOURCE_DATE_EPOCH=1767225600 ../devkitSMS/tools/legacy/ihx2sms/Linux/ihx2sms -m output.map output.ihx output.sms
           test -s output.sms
           python3 - <<'PY'
           from pathlib import Path
