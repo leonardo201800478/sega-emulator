@@ -1025,7 +1025,9 @@ impl SmsTemporalWorker {
         if let Some(capacity) = cartridge_sram_size
             && !matches!(capacity, 0x2000 | 0x4000 | 0x8000)
         {
-            return Err(format!("unsupported SMS cartridge SRAM capacity: {capacity} bytes"));
+            return Err(format!(
+                "unsupported SMS cartridge SRAM capacity: {capacity} bytes"
+            ));
         }
         if let (Some(contents), Some(capacity)) = (initial_sram.as_ref(), cartridge_sram_size)
             && contents.len() != capacity
