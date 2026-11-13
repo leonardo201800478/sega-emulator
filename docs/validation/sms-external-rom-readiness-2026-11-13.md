@@ -130,7 +130,7 @@ Esta auditoria é um inventário de prontidão, não um relatório de execução
 Após a auditoria inicial, foi criado:
 
 - `native/sms_core/examples/sms_rom_runner.rs`: runner offline que instancia `SmsTemporalMachine::new_with_hardware_profile` e avança frames exclusivamente por `step_frame`.
-- `tests/sms/scripts/run_rom.py`: wrapper que calcula SHA-256 da ROM em streaming, identifica o commit Git corrente e chama o exemplo Cargo.
+- `tests/sms/scripts/run_rom.py`: wrapper que cria um snapshot temporário da ROM, calcula SHA-256 durante a cópia desses bytes, identifica o commit Git corrente e passa exatamente o snapshot ao exemplo Cargo. Isso elimina a janela entre hash e leitura do arquivo original durante o build.
 - `tests/sms/README.md`: instruções de execução e semântica dos registros JSONL.
 
 ### O que o runner entrega
@@ -151,12 +151,11 @@ Após a auditoria inicial, foi criado:
 - não normaliza automaticamente cabeçalhos de dumps de ROM;
 - não observa dots/fetches ou efeitos sub-scanline ausentes do modelo VDP atual.
 
-Foram adicionados testes unitários do escape JSON e da seleção/rejeição de perfis regionais. Esses testes ainda precisam ser executados pelo CI no HEAD da PR. Nenhuma ROM externa foi baixada ou executada nesta atualização.
+Foram adicionados testes unitários do escape JSON e da seleção/rejeição de perfis regionais, além do fixture sintético de dois frames. O CI do HEAD `b05b28d0ca172e9ca749a017a2713071bb60aacc` concluiu com sucesso: workspace unit/integration tests, Clippy e validação SMS runtime Release (incluindo build Windows x64). Nenhuma ROM externa foi baixada ou executada nesta atualização.
 
 ### Próxima validação
 
-1. CI deve compilar o exemplo e executar seus testes.
-2. Foi adicionado `native/sms_core/tests/sms_rom_runner_smoke.rs`: fixture homebrew sintético em memória, sem ROM externa, que exige dois frames completos via Scheduler.
-3. Ainda é necessário validar em CI a execução desse fixture e o exemplo.
-4. Executar SMSmemtest em ambiente controlado e determinar seu oráculo de resultado a partir do código/documentação upstream.
-5. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
+1. O CI geral e o workflow SMS runtime passaram no HEAD acima; o fixture sintético de dois frames foi executado no conjunto de testes.
+2. A validação de CI não executa ROMs externas nem demonstra que o exemplo foi exercitado com uma imagem real.
+3. Próxima etapa: construir um oráculo por caso para SMSmemtest, começando pela inspeção do código upstream e pelo mapeamento dos resultados visuais/estado da máquina.
+4. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
