@@ -98,6 +98,8 @@ jobs:
           cp -a .build/devkitSMS/PSGlib .build/PSGlib
           cp -a .build/devkitSMS/crt0 .build/crt0
           cp .build/devkitSMS/SMSlib/src/peep-rules.txt .build/SMSlib/peep-rules.txt
+          cp .build/devkitSMS/SMSlib/src/SMSlib.h .build/SMSlib/SMSlib.h
+          cp .build/devkitSMS/PSGlib/src/PSGlib.h .build/PSGlib/PSGlib.h
           mkdir -p .build/banjo_lib_minimal
           cp .build/banjo/music_driver_sdas/banjo.h .build/banjo_lib_minimal/banjo.h
           cp .build/banjo/lib_experimental/devkitsms_MINIMAL/*.rel .build/banjo_lib_minimal/
