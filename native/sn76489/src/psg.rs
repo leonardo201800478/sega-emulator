@@ -427,10 +427,7 @@ impl Sn76489Core {
     ///
     /// Capture is disabled by default and does not alter PSG synthesis. Calling
     /// this method starts a fresh event epoch at the current mixed amplitude.
-    pub fn enable_event_capture(
-        &mut self,
-        capacity: usize,
-    ) -> Result<(), PsgEventCaptureError> {
+    pub fn enable_event_capture(&mut self, capacity: usize) -> Result<(), PsgEventCaptureError> {
         if capacity == 0 {
             return Err(PsgEventCaptureError::ZeroCapacity);
         }
@@ -667,8 +664,8 @@ impl Sn76489Core {
 
             self.tick_internal_clock();
             if let Some(previous_level) = previous_level {
-                let tick_offset = first_tick_offset
-                    .saturating_add(tick_index.saturating_mul(CLOCK_DIVIDER));
+                let tick_offset =
+                    first_tick_offset.saturating_add(tick_index.saturating_mul(CLOCK_DIVIDER));
                 let event_clock = starting_clock.saturating_add(tick_offset);
                 self.record_amplitude_change(event_clock, previous_level);
             }
@@ -1819,8 +1816,7 @@ mod tests {
 
     #[test]
     fn enabling_event_observer_preserves_existing_psg_pcm_exactly() {
-        let mut baseline =
-            Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        let mut baseline = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
         let mut observed = baseline.clone();
         observed.enable_event_capture(256).unwrap();
 
@@ -1837,7 +1833,10 @@ mod tests {
         assert_eq!(baseline.tone_periods(), observed.tone_periods());
         assert_eq!(baseline.attenuations(), observed.attenuations());
         assert_eq!(baseline.lfsr(), observed.lfsr());
-        assert_eq!(baseline.clock_divider_phase(), observed.clock_divider_phase());
+        assert_eq!(
+            baseline.clock_divider_phase(),
+            observed.clock_divider_phase()
+        );
         assert_eq!(baseline.output_phase(), observed.output_phase());
     }
 
