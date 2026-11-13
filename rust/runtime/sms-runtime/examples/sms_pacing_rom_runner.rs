@@ -29,7 +29,7 @@ struct Args {
 }
 
 fn usage() -> &'static str {
-    "Usage: sms_pacing_rom_runner --rom PATH --rom-sha256 HEX64 [--emulator-sha SHA] [--suite-id ID] [--suite-revision REV] [--region usa|brazil|europe|japan] [--duration-seconds N] [--warmup-seconds N] [--sample-interval-ms N] [--button1-pulse-frames N,N,...]"
+    "Usage: sms_pacing_rom_runner --rom PATH --rom-sha256 HEX64 [--emulator-sha SHA] [--suite-id ID] [--suite-revision REV] [--region usa|brazil|europe|japan] [--duration-seconds N] [--warmup-seconds N] [--sample-interval-ms N] [--button1-pulse-frames N,N,...] [--diagnostics-disabled]"
 }
 
 fn parse_frame_list(value: &str) -> Result<Vec<u64>, String> {
@@ -210,7 +210,6 @@ fn emit_sample(
         metrics.total_samples,
         worker.total_instructions(),
         worker.machine_time_ticks(),
-        args.diagnostics_enabled,
         worker.machine_clock_hz(),
     );
 
@@ -250,6 +249,7 @@ fn run(args: Args) -> Result<(), String> {
             .map(u64::to_string)
             .collect::<Vec<_>>()
             .join(","),
+        args.diagnostics_enabled,
         worker.machine_clock_hz(),
     );
 
