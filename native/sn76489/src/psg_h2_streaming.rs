@@ -172,7 +172,7 @@ impl H2StreamingRenderer {
         initial_level: f64,
     ) -> Result<(), H2StreamingError> {
         if !initial_level.is_finite() {
-            return Err(H2StreamingError::InvalidInitialLevel);
+            return Err(H2StreamingError::InvalidAmplitude);
         }
         self.transition_ring.fill(0.0);
         self.settled_ring.fill(0.0);
@@ -217,7 +217,7 @@ impl H2StreamingRenderer {
                     return Err(H2StreamingError::TooManySimultaneousEvents);
                 }
                 if !events[index].delta.is_finite() {
-                    return Err(H2StreamingError::InvalidInitialLevel);
+                    return Err(H2StreamingError::InvalidAmplitude);
                 }
                 deltas[delta_count] = events[index].delta;
                 delta_count += 1;
@@ -368,7 +368,7 @@ impl H2StreamingRenderer {
             self.settled_level += self.settled_ring[slot];
             let sample = self.settled_level + self.transition_ring[slot];
             if !sample.is_finite() {
-                return Err(H2StreamingError::InvalidInitialLevel);
+                return Err(H2StreamingError::InvalidAmplitude);
             }
             output.push(sample);
             self.settled_ring[slot] = 0.0;
