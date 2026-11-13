@@ -93,7 +93,7 @@ or QPC frequency. Use ETW/WPA and PresentMon for physical presentation analysis.
 The upstream [SMS Test Suite v0.38 release](https://github.com/sverx/SMSTestSuite/releases/tag/v0.38)
 contains a continuously animated **Drop Shadow** test. In the pinned source
 revision `985bc04fef6f3dc3c3450fbc84242676f241d316`, the Video Tests menu has
-Drop Shadow at zero-based item 7. Its routine updates twelve adjoining sprites,
+Drop Shadow at zero-based item 7. Its routine updates twelve pairs of adjoining sprites (24 sprites),
 moves them every frame, waits for VBlank, and copies the SAT continuously until
 button 1 or 2 is pressed. This is a stronger sustained VDP/CPU workload than the
 SMSmemtest prompt/result screen.
