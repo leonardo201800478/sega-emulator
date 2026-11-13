@@ -405,6 +405,11 @@ impl Sn76489Core {
         self.noise_output
     }
 
+    /// Current unfiltered normalized digital mix, before the production PSG FIR.
+    pub fn mixed_amplitude(&self) -> f64 {
+        self.mix()
+    }
+
     pub fn clock_divider_phase(&self) -> u64 {
         self.clock_divider_phase
     }
