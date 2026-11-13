@@ -61,19 +61,24 @@ fi
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
-mkdir -p "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" "$OUT_DIR/SMSlib"
 
 # Build SMSlib from the pinned devkitSMS source with the same SDCC toolchain.
 "$MAKE_BIN" -C "$SMSLIB_DIR" clean ALL CC="$SDCC_PATH" AR="$SDAR_BIN"
+
+# SMSmemtest includes ../SMSlib/SMSlib.h; reproduce that expected layout using
+# links to the library built from the pinned devkitSMS source.
+ln -sfn "$SMSLIB_DIR/SMSlib.h" "$OUT_DIR/SMSlib/SMSlib.h"
+ln -sfn "$SMSLIB_DIR/SMSlib.lib" "$OUT_DIR/SMSlib/SMSlib.lib"
 
 # Compile the pinned SMSmemtest source using devkitSMS' peephole rules and headers.
 cp "$SMSMEMTEST_ROOT/src/main.c" "$BUILD_DIR/main.c"
 cp "$CRT0_OBJECT" "$BUILD_DIR/crt0_memtest.rel"
 (
     cd "$BUILD_DIR"
-    "$SDCC_PATH" -c -mz80 -I"$SMSLIB_DIR" --peep-file "$PEEP_RULES" main.c
+    "$SDCC_PATH" -c -mz80 --peep-file "$PEEP_RULES" main.c
     "$SDCC_PATH" -o "$OUT_DIR/SMSmemtest.ihx" -mz80 --no-std-crt0 --data-loc 0xC000 \
-        crt0_memtest.rel "$SMSLIB_DIR/SMSlib.lib" main.rel
+        crt0_memtest.rel "$OUT_DIR/SMSlib/SMSlib.lib" main.rel
 )
 
 # Build the public-domain converter from the same pinned devkitSMS revision.
