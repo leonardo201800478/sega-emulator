@@ -113,7 +113,7 @@ fn parse_args() -> Result<Args, String> {
     if warmup_seconds > 300 {
         return Err("--warmup-seconds must not exceed 300".to_owned());
     }
-    if sample_interval_ms < 250 || sample_interval_ms > 10_000 {
+    if !(250..=10_000).contains(&sample_interval_ms) {
         return Err("--sample-interval-ms must be between 250 and 10000".to_owned());
     }
     if !matches!(region.as_str(), "usa" | "brazil" | "europe" | "japan") {
@@ -217,7 +217,7 @@ fn run(args: Args) -> Result<(), String> {
         return Err("ROM image is empty".to_owned());
     }
 
-    let mut worker = SmsTemporalWorker::new(rom, &args.region)?;
+    let worker = SmsTemporalWorker::new(rom, &args.region)?;
     worker.set_diagnostics_enabled(true);
 
     if args.warmup_seconds > 0 {
