@@ -2380,7 +2380,15 @@ mod windows_host {
             if let Some(active_worker) = exit_worker.borrow().as_ref() {
                 let was_running = active_worker.is_running();
                 if let Err(error) = active_worker.pause() {
-                    eprintln!("SRAM_SAVE pause_before_exit_failed error={error}");
+                    if was_running {
+                        let _ = active_worker.start();
+                    }
+                    if let Some(app) = exit_prefs_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Saída cancelada; falha ao pausar a máquina: {error}").into(),
+                        );
+                    }
+                    return;
                 }
                 if let Err(error) =
                     persist_worker_sram(active_worker, exit_save_context.borrow().as_ref())
