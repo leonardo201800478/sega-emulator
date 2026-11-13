@@ -268,9 +268,11 @@ jobs:
       - name: Define temporary build paths
         shell: bash
         run: |
-          echo "SMSMEMTEST_ROOT=$RUNNER_TEMP/SMSmemtest" >> "$GITHUB_ENV"
-          echo "DEVKIT_SMS_ROOT=$RUNNER_TEMP/devkitSMS" >> "$GITHUB_ENV"
-          echo "OUT_DIR=$RUNNER_TEMP/smsmemtest-output" >> "$GITHUB_ENV"
+          {
+            echo "SMSMEMTEST_ROOT=$RUNNER_TEMP/SMSmemtest"
+            echo "DEVKIT_SMS_ROOT=$RUNNER_TEMP/devkitSMS"
+            echo "OUT_DIR=$RUNNER_TEMP/smsmemtest-output"
+          } >> "$GITHUB_ENV"
 
       - name: Install pinned SDCC 4.6.0
         shell: bash
