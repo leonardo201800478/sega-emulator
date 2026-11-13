@@ -259,7 +259,7 @@ mod windows_host {
                             CheckBox {
                                 text: "Preset SMS1 — experimental";
                                 checked <=> root.audio-dsp-preset;
-                                toggled(enabled) => {
+                                toggled => {
                                     if enabled {
                                         root.audio-hpf-enabled = true; root.audio-hpf-cutoff = 20;
                                         root.audio-lpf-enabled = true; root.audio-lpf-cutoff = 18000;
@@ -273,7 +273,7 @@ mod windows_host {
                             CheckBox {
                                 text: "Filtro passa-altas / acoplamento AC";
                                 checked <=> root.audio-hpf-enabled;
-                                toggled(enabled) => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, enabled, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff); }
+                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, self.checked, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff); }
                             }
                             Text { font-size: 11px; text: "Corte HPF: \\{round(root.audio-hpf-cutoff)} Hz"; color: #b9c5ce; }
                             Slider {
@@ -284,7 +284,7 @@ mod windows_host {
                             CheckBox {
                                 text: "Filtro passa-baixas";
                                 checked <=> root.audio-lpf-enabled;
-                                toggled(enabled) => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, enabled, root.audio-lpf-cutoff); }
+                                toggled => { root.audio-dsp-preset = false; root.audio-dsp-changed(false, root.audio-hpf-enabled, root.audio-hpf-cutoff, enabled, root.audio-lpf-cutoff); }
                             }
                             Text { font-size: 11px; text: "Corte LPF: \\{round(root.audio-lpf-cutoff)} Hz"; color: #b9c5ce; }
                             Slider {
