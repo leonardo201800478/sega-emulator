@@ -265,11 +265,17 @@ impl fmt::Debug for MailboxState {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("MailboxState")
-            .field("latest_sequence", &self.latest.as_ref().map(|(frame, _)| frame.sequence()))
+            .field(
+                "latest_sequence",
+                &self.latest.as_ref().map(|(frame, _)| frame.sequence()),
+            )
             .field("last_sequence", &self.last_sequence)
             .field("replaced_frames", &self.replaced_frames)
             .field("closed", &self.closed)
-            .field("has_frame_available_notifier", &self.frame_available_notifier.is_some())
+            .field(
+                "has_frame_available_notifier",
+                &self.frame_available_notifier.is_some(),
+            )
             .finish()
     }
 }
