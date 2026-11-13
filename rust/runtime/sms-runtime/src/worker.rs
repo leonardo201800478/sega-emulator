@@ -2706,13 +2706,15 @@ mod tests {
 
     #[test]
     fn worker_rejects_persisted_sram_without_a_verified_hardware_profile() {
-        let error = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+        let error = match SmsTemporalWorker::new_with_cartridge_hardware_profile(
             SYNTHETIC_ROM.to_vec(),
             "usa",
             None,
             Some(vec![0; 0x2000]),
-        )
-        .unwrap_err();
+        ) {
+            Ok(_) => panic!("worker unexpectedly accepted SRAM without a profile"),
+            Err(error) => error,
+        };
         assert!(error.contains("verified cartridge RAM profile"));
     }
 
