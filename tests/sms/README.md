@@ -19,7 +19,7 @@ The Python wrapper copies the input into a temporary per-run snapshot while calc
 - `frame`: completed frame, instruction count, drained PSG sample count and virtual machine timestamp;
 - `summary`: `EXECUTED_NO_ORACLE` when the requested frames completed, or `EXECUTION_ERROR` if execution stopped.
 
-**`EXECUTED_NO_ORACLE` is not PASS.** The runner does not interpret each ROM's display text or private result buffer, and it does not know suite-specific expected values. A separate suite adapter/oracle must classify each case as PASS/FAIL. A frame-step limit error is an execution error, not evidence of a hardware defect.
+**`EXECUTED_NO_ORACLE` is not PASS.** The SMSmemtest-specific driver now watches documented text-grid rows at completed-frame boundaries and pulses controller 1/button 1 after stable row activity to advance from the initial prompt to RAM tests and from the RAM-complete prompt to VRAM tests. This is a row-activity heuristic, not OCR: it does not verify the prompt text or individual RAM/VRAM results. It stops at the VRAM-complete prompt and does not enter the cartridge-SRAM phase. The runner still does not know suite-specific expected values. A separate suite adapter/oracle must classify each case as PASS/FAIL. A frame-step limit error is an execution error, not evidence of a hardware defect.
 
 Example options:
 - `--frames N`: number of completed VDP frames (default 120; safety ceiling 100000);
@@ -41,7 +41,7 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 | Suite | Primary coverage | Current gate |
 |---|---|---|
-| SMSmemtest | Internal RAM, VRAM and cartridge RAM | BLOCKED: input schedule and visual oracle absent; cartridge SRAM is not implemented |
+| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Frame-boundary input driver implemented; prompt-row heuristic unvalidated on ROM; case oracle absent; SRAM BLOCKED_CAPABILITY |
 | SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Runner available; build dependencies and case oracles remain to be validated |
 | SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Runner available; timing assertions blocked by missing dot/fetch and sub-scanline model |
 | ZEXALL-SMS | Z80 documented and undocumented behavior/flags | E8 gate only; do not execute before formal E7 closure |
@@ -73,7 +73,7 @@ A valid result record must include:
 ## Next engineering steps
 
 1. CI validation passed for the runner-related workspace changes and the SMS runtime Release workflow; the synthetic in-memory fixture checks two complete frames through the Scheduler. No external ROM was run by CI.
-2. SMSmemtest requires deterministic controller pulses and a framebuffer/text oracle; its cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
+2. SMSmemtest has a deterministic frame-boundary input driver based on two-frame-stable activity in the documented text rows. Validate the heuristic against a locally built ROM before relying on it; it is not OCR or a result oracle. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
 5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
