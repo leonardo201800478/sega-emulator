@@ -249,7 +249,7 @@ fn run(args: Args) -> Result<(), String> {
                     }
                 }
 
-                if event == "vram_completion_row_activity_detected" {
+                if event == "vram_result_color_observed" {
                     let result = classify_result_row(machine.framebuffer(), 4);
                     let status = match result {
                         SmsmemtestCaseResult::Pass => "PASS_ALL_REPORTED_BY_ROM",
