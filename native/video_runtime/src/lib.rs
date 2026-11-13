@@ -258,7 +258,7 @@ struct MailboxState {
     last_sequence: Option<u64>,
     replaced_frames: u64,
     closed: bool,
-    frame_available_notifier: Option<Arc<dyn Fn() + Send + Sync>>,
+    frame_available_notifier: Option<Arc<dyn Fn(FrameMailbox) + Send + Sync>>,
 }
 
 impl fmt::Debug for MailboxState {
@@ -337,7 +337,7 @@ impl FrameMailbox {
         // Never call host code while holding the mailbox lock. A notifier may
         // enqueue work on another thread or even synchronously consume the frame.
         if let Some(notifier) = notifier {
-            notifier();
+            notifier(self.clone());
         }
         Ok(())
     }
@@ -349,7 +349,7 @@ impl FrameMailbox {
     /// schedule work on their presentation thread.
     pub fn set_frame_available_notifier(
         &self,
-        notifier: Option<Arc<dyn Fn() + Send + Sync>>,
+        notifier: Option<Arc<dyn Fn(FrameMailbox) + Send + Sync>>,
     ) -> Result<(), FrameMailboxError> {
         let mut state = self
             .state
@@ -567,13 +567,12 @@ mod tests {
         use std::sync::{Arc, Mutex};
 
         let mailbox = super::FrameMailbox::new();
-        let callback_mailbox = mailbox.clone();
         let notified_sequence = Arc::new(Mutex::new(None));
         let callback_sequence = Arc::clone(&notified_sequence);
 
         mailbox
-            .set_frame_available_notifier(Some(Arc::new(move || {
-                let sequence = callback_mailbox
+            .set_frame_available_notifier(Some(Arc::new(move |notified_mailbox| {
+                let sequence = notified_mailbox
                     .take_latest()
                     .unwrap()
                     .map(|frame| frame.sequence());
@@ -599,7 +598,7 @@ mod tests {
         let callback_notifications = Arc::clone(&notifications);
 
         mailbox
-            .set_frame_available_notifier(Some(Arc::new(move || {
+            .set_frame_available_notifier(Some(Arc::new(move |_notified_mailbox| {
                 callback_notifications.fetch_add(1, Ordering::Relaxed);
             })))
             .unwrap();
