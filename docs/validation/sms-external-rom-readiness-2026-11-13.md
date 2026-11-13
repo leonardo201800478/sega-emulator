@@ -123,7 +123,7 @@ A observação publicada em fóruns SMS Power também alerta que versões/revis�
 - SMS Power, tópico SMS VDP Tester: https://www.smspower.org/forums/10695-SMSVDPTester
 - SMS Power, tópico SMS Test Suite: https://www.smspower.org/forums/17116-SMSTestSuite
 
-Esta auditoria é um inventário de prontidão, não um relatório de execução de ROMs.
+Esta auditoria foi originalmente um inventário de prontidão da baseline 2942, não um relatório de execução de ROMs. A atualização posterior de execução está registrada na seção 8.
 
 ## 8. Atualização — runner full-machine implementado na branch de trabalho
 
@@ -151,12 +151,12 @@ Após a auditoria inicial, foi criado:
 - não normaliza automaticamente cabeçalhos de dumps de ROM;
 - não observa dots/fetches ou efeitos sub-scanline ausentes do modelo VDP atual.
 
-Foram adicionados testes unitários do escape JSON e da seleção/rejeição de perfis regionais, além do fixture sintético de dois frames. O CI do HEAD `b05b28d0ca172e9ca749a017a2713071bb60aacc` concluiu com sucesso: workspace unit/integration tests, Clippy e validação SMS runtime Release (incluindo build Windows x64). Nenhuma ROM externa foi baixada ou executada nesta atualização.
+Foram adicionados testes unitários do escape JSON e da seleção/rejeição de perfis regionais, além do fixture sintético de dois frames. O CI do HEAD `b05b28d0ca172e9ca749a017a2713071bb60aacc` concluiu com sucesso: workspace unit/integration tests, Clippy e validação SMS runtime Release (incluindo build Windows x64). Na atualização histórica daquele commit, nenhuma ROM externa foi baixada ou executada; isso foi superado pela validação full-machine descrita na seção 8.
 
 ### Próxima validação
 
 1. O CI geral e o workflow SMS runtime passaram no HEAD acima; o fixture sintético de dois frames foi executado no conjunto de testes.
-2. A validação de CI não executa ROMs externas nem demonstra que o exemplo foi exercitado com uma imagem real.
+2. Na baseline auditada, a validação de CI não executava ROMs externas; essa limitação foi superada pelo gate SMSmemtest full-machine descrito na seção 8.
 3. Próxima etapa: construir um oráculo por caso para SMSmemtest, começando pela inspeção do código upstream e pelo mapeamento dos resultados visuais/estado da máquina.
 4. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
 
