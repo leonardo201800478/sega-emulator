@@ -748,36 +748,91 @@ jobs:
           set -euo pipefail
           python3 - "$OUT_DIR" "$DEVKIT_SMS_REVISION" <<'PY'
           import hashlib
+          import os
           import pathlib
+          import subprocess
           import sys
 
           output = pathlib.Path(sys.argv[1])
           expected_revision = sys.argv[2]
-          profiles = ("cpu-light", "cpu-fixed", "vdp-sprites", "combined")
+          expected_commit = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          devkit = pathlib.Path(os.environ["DEVKIT_SMS_ROOT"])
+          source = pathlib.Path("tests/sms/pacing-rom/src/main.c")
+          profiles = {
+              "cpu-light": "0",
+              "cpu-fixed": "1",
+              "vdp-sprites": "2",
+              "combined": "3",
+          }
+          sha256 = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          expected_inputs = {
+              "source_sha256": sha256(source),
+              "makesms_source_sha256": sha256(
+                  devkit / "tools/makesms/src/makesms.c"
+              ),
+              "makesms_sha256": sha256(output / "makesms"),
+              "crt0_sha256": sha256(devkit / "crt0/crt0_sms.rel"),
+              "peep_rules_sha256": sha256(devkit / "SMSlib/src/peep-rules.txt"),
+          }
+          expected_flags = {
+              "converter_flags": "-std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra",
+              "smslib_compile_flags": (
+                  "-c -mz80 --max-allocs-per-node=100000 "
+                  "--peep-file=SMSlib/src/peep-rules.txt"
+              ),
+              "link_flags": "-mz80 --no-std-crt0 --data-loc=0xC000",
+          }
           hashes = set()
 
-          for profile in profiles:
+          for profile, profile_value in profiles.items():
               rom = output / f"{profile}.sms"
+              ihx = output / f"{profile}.ihx"
               info = output / f"{profile}.build-info.txt"
-              if not rom.is_file() or not info.is_file():
-                  raise SystemExit(f"missing ROM or build metadata for {profile}")
+              if not rom.is_file() or not ihx.is_file() or not info.is_file():
+                  raise SystemExit(f"missing ROM/IHX/build metadata for {profile}")
               data = rom.read_bytes()
-              if not data or len(data) > 16384 or len(data) % 16384:
+              if len(data) != 16384:
                   raise SystemExit(f"invalid ROM size for {profile}: {len(data)}")
               metadata = dict(
                   line.split("=", 1)
                   for line in info.read_text().splitlines()
                   if "=" in line
               )
-              actual_hash = hashlib.sha256(data).hexdigest()
-              if metadata.get("devkitsms_revision") != expected_revision:
-                  raise SystemExit(f"wrong devkitSMS revision for {profile}")
-              if metadata.get("rom_sha256") != actual_hash:
-                  raise SystemExit(f"ROM SHA-256 mismatch for {profile}")
-              if metadata.get("profile") != profile:
-                  raise SystemExit(f"profile metadata mismatch for {profile}")
-              hashes.add(actual_hash)
-              print(f"PASS {profile}: {len(data)} bytes sha256={actual_hash}")
+              expected_source_flags = (
+                  "-c -mz80 --peep-file=SMSlib/src/peep-rules.txt "
+                  f"-DPACING_PROFILE={profile_value}"
+              )
+              expected = {
+                  "profile": profile,
+                  "profile_value": profile_value,
+                  "region": "USA_NTSC",
+                  "project_commit": expected_commit,
+                  "devkitsms_revision": expected_revision,
+                  "sdcc_version": "4.6.0",
+                  "source_compile_flags": expected_source_flags,
+                  **expected_flags,
+                  **expected_inputs,
+                  "rom_size": str(len(data)),
+                  "ihx_sha256": sha256(ihx),
+                  "rom_sha256": sha256(rom),
+              }
+              for field, value in expected.items():
+                  if metadata.get(field) != value:
+                      raise SystemExit(
+                          f"{profile}: {field} mismatch "
+                          f"(expected {value!r}, got {metadata.get(field)!r})"
+                      )
+              if not metadata.get("sdcc_version_line", "").startswith("Version 4.6.0"):
+                  raise SystemExit(f"{profile}: missing exact SDCC version line")
+              if not metadata.get("host_cc_version"):
+                  raise SystemExit(f"{profile}: missing host C compiler version")
+              hashes.add(metadata["rom_sha256"])
+              print(
+                  f"PASS {profile}: {len(data)} bytes "
+                  f"sha256={metadata['rom_sha256']}"
+              )
 
           if len(hashes) != len(profiles):
               raise SystemExit("workload profiles unexpectedly produced identical ROMs")
