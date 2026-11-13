@@ -41,7 +41,6 @@ for required_file in "$CRT0" "$PEEP_RULES" "$MAKESMS_SOURCE" "$SOURCE"; do
     fi
 done
 
-SDCC_DIR="$(dirname "$SDCC_PATH")"
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
@@ -64,7 +63,7 @@ for profile in 0 1 2 3; do
     (
         cd "$profile_dir"
         "$SDCC_PATH" -c -mz80 --peep-file "$PEEP_RULES" \
-            -D PACING_PROFILE="$profile" "$SOURCE"
+            -DPACING_PROFILE="$profile" "$SOURCE"
         "$SDCC_PATH" -o "$OUT_DIR/$name.ihx" -mz80 --no-std-crt0 \
             --data-loc 0xC000 "$CRT0" main.rel
     )
