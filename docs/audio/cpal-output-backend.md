@@ -88,7 +88,7 @@ A semântica dos contadores foi auditada diretamente no callback e na FIFO:
 - `consumed_frames` conta os frames retirados da FIFO. O total de frames solicitados ao consumidor é `consumed_frames + underrun_frames`.
 - `underrun_events` conta chamadas de leitura que precisaram inserir ao menos um frame de silêncio. Não equivale necessariamente a um callback CPAL nem a um episódio acústico.
 - Os contadores originais continuam cumulativos desde a criação da fila. O host agora calcula deltas entre snapshots monotônicos consecutivos, com `window_ms`, `window_valid` e `counter_reset` para identificar a primeira janela ou um reset/configuração alterada.
-- O log `R3_AUDIO_HEALTH` passa a expor `accepted_frames_delta`, `consumed_frames_delta`, `requested_frames_delta`, `underrun_frames_delta`, `underrun_events_delta`, taxas de produção/consumo solicitadas e `zero_fill_percent`.
+- O log `R3_AUDIO_HEALTH` passa a expor `accepted_frames_delta`, `consumed_frames_delta`, `requested_frames_delta`, `underrun_frames_delta`, `underrun_events_delta`, taxas de produção/consumo solicitadas e `zero_fill_percent`. `rate_valid=0` nas primeiras janelas ou após reset/configuração alterada, evitando interpretar uma taxa sem intervalo estável.
 - `zero_fill_percent` usa `underrun_frames_delta / requested_frames_delta`, onde `requested_frames_delta = consumed_frames_delta + underrun_frames_delta`. Não usar `underrun_frames / consumed_frames` como percentual de silêncio.
 - Se um reset de contador for detectado, a janela atual é marcada com `counter_reset=1` e deve ser tratada como início de uma nova epoch; a taxa dessa primeira janela não deve ser comparada diretamente com uma janela estável.
 
