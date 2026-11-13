@@ -29,6 +29,7 @@ on:
       - "native/video_core/**"
       - "native/observability/**"
       - "rust/runtime/sms-runtime/**"
+      - "tests/sms/**"
       - ".github/workflows/sms-debugger-runtime.yml"
 
 permissions:
