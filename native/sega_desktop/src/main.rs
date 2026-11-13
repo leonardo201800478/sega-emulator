@@ -1693,9 +1693,7 @@ mod windows_host {
             return Ok(None);
         };
         let capacity = value.trim().parse::<usize>().map_err(|_| {
-            format!(
-                "{DIAGNOSTIC_SRAM_CAPACITY_ENV} deve ser 8192, 16384 ou 32768 bytes"
-            )
+            format!("{DIAGNOSTIC_SRAM_CAPACITY_ENV} deve ser 8192, 16384 ou 32768 bytes")
         })?;
         if !matches!(capacity, 0x2000 | 0x4000 | 0x8000) {
             return Err(format!(
@@ -2770,9 +2768,18 @@ mod windows_host {
         #[test]
         fn diagnostic_sram_capacity_accepts_only_supported_volatile_sizes() {
             assert_eq!(parse_diagnostic_sram_capacity(None).unwrap(), None);
-            assert_eq!(parse_diagnostic_sram_capacity(Some("8192")).unwrap(), Some(0x2000));
-            assert_eq!(parse_diagnostic_sram_capacity(Some("16384")).unwrap(), Some(0x4000));
-            assert_eq!(parse_diagnostic_sram_capacity(Some("32768")).unwrap(), Some(0x8000));
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("8192")).unwrap(),
+                Some(0x2000)
+            );
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("16384")).unwrap(),
+                Some(0x4000)
+            );
+            assert_eq!(
+                parse_diagnostic_sram_capacity(Some("32768")).unwrap(),
+                Some(0x8000)
+            );
             assert!(parse_diagnostic_sram_capacity(Some("4096")).is_err());
             assert!(parse_diagnostic_sram_capacity(Some("invalid")).is_err());
         }
