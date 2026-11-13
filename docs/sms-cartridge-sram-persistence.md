@@ -135,3 +135,23 @@ Get-ChildItem -LiteralPath $saveDir -Filter '*.srm' |
 ```
 
 The desktop logs `SRAM_PROFILE` with the matched fingerprints, capacity and whether an SRM was restored, and `SRAM_SAVE` after a successful write. An `SRAM_PROFILE status=unknown` entry means the ROM did not match a verified runtime profile and no SRAM save is expected.
+
+## Volatile SRAM override for hardware diagnostics
+
+Unknown ROMs remain without cartridge SRAM by default. For a diagnostic ROM such as SMSmemtest, the desktop can be launched with an explicit, process-local capacity override:
+
+```powershell
+$env:SEGA_SMS_DIAGNOSTIC_SRAM_BYTES = '32768'
+& '.\\target\\release\\sega-desktop.exe'
+```
+
+Supported capacities are `8192`, `16384`, and `32768` bytes. The override is considered only when the ROM has no verified runtime profile. It creates volatile SRAM for the running machine, does not create or load an `.srm` file, and does not modify the cartridge catalog. The desktop logs `SRAM_PROFILE status=diagnostic-override` when it is active.
+
+Unset the variable after the diagnostic run:
+
+```powershell
+Remove-Item Env:SEGA_SMS_DIAGNOSTIC_SRAM_BYTES
+```
+
+This override is a test aid, not evidence that an unknown commercial cartridge physically contains SRAM. For SMSmemtest, 32 KiB is the relevant diagnostic capacity because the ROM tests two 16 KiB banks. The test ROM reports cartridge SRAM results separately from internal RAM and VRAM.
+
