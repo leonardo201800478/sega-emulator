@@ -14,7 +14,7 @@ python tests/sms/scripts/run_rom.py --rom .\path\to\diagnostic.sms --suite-id sm
 
 Supported regional profiles are `usa`, `brazil` (PAL-M), `europe` (PAL) and `japan`. The runner uses the same VDP revision, sprite-limit mode and PSG clocks selected by the SMS runtime worker. The current runner uses a direct-cartridge, no-BIOS startup profile; it does not reproduce BIOS initialization.
 
-The Python wrapper copies the input into a temporary per-run snapshot while calculating SHA-256 over the exact bytes written, then passes that same snapshot to Rust. It also obtains the checked-out Git revision and invokes Cargo. The source ROM can change during Cargo compilation without changing the bytes executed by this run. The Rust runner emits JSON Lines:
+The Python wrapper copies the input into a temporary per-run snapshot while calculating SHA-256 over the exact bytes written, then passes that same snapshot to Rust. It also obtains the checked-out Git revision and invokes Cargo. The source ROM can change during Cargo compilation without changing the bytes executed by this run. The runner uses the canonical 48 kHz internal PCM source rate used by the SMS runtime and records the master-tick scale, PSG clock and sample rate in its start record. The Rust runner emits JSON Lines:
 - `start`: ROM provenance, image size, selected machine profile and execution limits;
 - `frame`: completed frame, instruction count, drained PSG sample count and virtual machine timestamp;
 - `summary`: `EXECUTED_NO_ORACLE` when the requested frames completed, or `EXECUTION_ERROR` if execution stopped.
