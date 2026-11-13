@@ -30,6 +30,7 @@ on:
       - "native/video_core/**"
       - "native/observability/**"
       - "rust/runtime/sms-runtime/**"
+      - "tests/sms/**"
       - ".github/workflows/sms-debugger-runtime.yml"
 
 permissions:
@@ -125,6 +126,9 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal
           rustup default 1.99.1
 
+      - name: Build full-machine diagnostic runner (Release)
+        run: cargo build --release --locked -p sega-sms-core --example sms_rom_runner
+
       - name: Run bounded full-machine diagnostic (non-gating ROM result)
         continue-on-error: true
         shell: bash
@@ -133,7 +137,7 @@ jobs:
           rom="$OUT_DIR/SMSmemtest.sms"
           rom_sha256="$(awk -F= '$1 == "rom_sha256" { print $2 }' "$OUT_DIR/SMSmemtest.build-info.txt")"
           set +e
-          cargo run --release --locked -p sega-sms-core --example sms_rom_runner -- \
+          ./target/release/examples/sms_rom_runner \
             --rom "$rom" \
             --rom-sha256 "$rom_sha256" \
             --emulator-sha "$GITHUB_SHA" \
