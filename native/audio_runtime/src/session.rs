@@ -426,7 +426,6 @@ mod tests {
         assert_eq!(session.resampler.volume(), 100);
     }
 
-
     #[test]
     fn changing_analog_output_config_keeps_the_existing_sink_open() {
         let mut session =
