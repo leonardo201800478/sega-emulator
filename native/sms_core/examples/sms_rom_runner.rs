@@ -254,7 +254,7 @@ fn run(args: Args) -> Result<(), String> {
 
     let frames_completed = machine.frame_number().saturating_sub(initial_frame);
     let summary_status = match smsmemtest_driver.as_ref() {
-        Some(driver) if driver.is_complete() => "RAM_AND_VRAM_PHASES_REACHED_NO_CASE_ORACLE",
+        Some(driver) if driver.is_complete() => "PROMPT_ROW_HEURISTIC_COMPLETED_NO_CASE_ORACLE",
         Some(_) => "INPUT_DRIVER_TIMEOUT_NO_ORACLE",
         None => "EXECUTED_NO_ORACLE",
     };
