@@ -1,7 +1,7 @@
 # H2 streaming renderer — architecture and integration contract
 
-Status: partial production implementation on feature branch; CI validation pending  
-Target: SMS profile first; PSG remains default  
+Status: partial production implementation on feature branch; CI validation pending
+Target: SMS profile first; PSG remains default
 Branch: `feat/audio-h2-experimental-renderer`
 
 ## 1. Current production path (audited)
