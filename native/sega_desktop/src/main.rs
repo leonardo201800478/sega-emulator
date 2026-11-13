@@ -260,13 +260,13 @@ mod windows_host {
                                 text: "Preset SMS1 — experimental";
                                 checked <=> root.audio-dsp-preset;
                                 toggled => {
-                                    if enabled {
+                                    if self.checked {
                                         root.audio-hpf-enabled = true; root.audio-hpf-cutoff = 20;
                                         root.audio-lpf-enabled = true; root.audio-lpf-cutoff = 18000;
                                     } else {
                                         root.audio-hpf-enabled = false; root.audio-lpf-enabled = false;
                                     }
-                                    root.audio-dsp-changed(root.audio-dsp-preset, root.audio-hpf-enabled, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff);
+                                    root.audio-dsp-changed(self.checked, root.audio-hpf-enabled, root.audio-hpf-cutoff, root.audio-lpf-enabled, root.audio-lpf-cutoff);
                                 }
                             }
                             Text { font-size: 11px; text: "Aproximação ajustável do estágio analógico de saída; não é uma reprodução elétrica calibrada de uma revisão específica da placa."; color: #d6b879; wrap: word-wrap; }
