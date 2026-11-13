@@ -2,10 +2,10 @@
 
 Você está assumindo a investigação prioritária do **Sega Emulator — Emulação de Alta Precisão**.
 
-Repositório: https://github.com/leonardo201800478/sega-emulator  
-Issue principal: https://github.com/leonardo201800478/sega-emulator/issues/755  
-PR de investigação: consulte a PR que adicionou este prompt.  
-Baseline inicial: `744ebe8e55cbebe731e6393f992a2970d79a0aa1` (confirme o HEAD real da main antes de agir).  
+Repositório: https://github.com/leonardo201800478/sega-emulator
+Issue principal: https://github.com/leonardo201800478/sega-emulator/issues/755
+PR de investigação: consulte a PR que adicionou este prompt.
+Baseline inicial: `744ebe8e55cbebe731e6393f992a2970d79a0aa1` (confirme o HEAD real da main antes de agir).
 Arquitetura: backend 100% Rust; Slint 1.18.x + WGPU 30.x + Vulkan + CPAL 0.18.2.
 
 ## 1. Mandato e bloqueio
@@ -135,3 +135,8 @@ A investigação só termina quando:
 **Não declarar sucesso por build verde, janela aberta, FPS momentâneo ou percepção subjetiva.** Se a causa não estiver comprovada, mantenha o bloqueio e reporte a próxima experiência discriminatória.
 
 Comece pela auditoria do estado atual e pela criação/ativação da equipe de especialistas. Não faça alterações no runtime antes de entregar a primeira matriz de achados.
+
+
+## Limitação operacional da auditoria
+
+No ambiente desta investigação não há ferramenta de execução de subagentes independentes. As sete especialidades devem ser conduzidas como trilhas separadas e documentadas, sem declarar paralelismo real. A revisão independente deve questionar evidências e hipóteses, não simular uma aprovação externa inexistente.
