@@ -405,7 +405,7 @@ jobs:
               summary = summaries[0]
               if summary.get("status") != "SMSMEMTEST_ROM_RESULTS_OBSERVED_NOT_HARDWARE_CERTIFIED":
                   raise SystemExit(f"run {run_number}: ROM result flow did not complete")
-              if summary.get("sram_phase") != "BLOCKED_CAPABILITY":
+              if summary.get("sram_phase") != "NOT_EXERCISED_BY_DRIVER":
                   raise SystemExit(f"run {run_number}: SRAM gate was not reported")
 
               ram_cases = [
