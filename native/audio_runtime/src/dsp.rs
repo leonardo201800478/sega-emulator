@@ -251,6 +251,51 @@ impl AnalogOutputProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn high_pass_blocks_dc_and_preserves_state_across_samples() {
+        let mut filter = OnePoleHighPass::new(48_000, 20.0).unwrap();
+        let mut output = 0.0;
+        for _ in 0..48_000 { output = filter.process_sample(1.0); }
+        assert!(output.abs() < 1.0e-6, "DC component should decay to zero");
+        filter.reset();
+        assert_eq!(filter.process_sample(0.0), 0.0);
+    }
+
+    #[test]
+    fn analog_output_is_bit_exact_bypass_when_disabled() {
+        let input = [0.0, 0.25, -0.5, 0.75, -1.0];
+        let mut processor = AnalogOutputProcessor::new(48_000, AnalogOutputConfig::default()).unwrap();
+        let mut output = Vec::new();
+        processor.process_block(&input, &mut output);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn sms1_profile_is_explicitly_experimental_and_valid_at_internal_rate() {
+        let config = AnalogOutputConfig::sms1_experimental();
+        assert!(config.enabled);
+        assert_eq!(config.high_pass_hz, Some(20.0));
+        assert_eq!(config.low_pass_hz, Some(18_000.0));
+        assert!(config.validate(48_000).is_ok());
+    }
+
+    #[test]
+    fn analog_filter_block_processing_preserves_filter_state_between_blocks() {
+        let config = AnalogOutputConfig::sms1_experimental();
+        let mut split = AnalogOutputProcessor::new(48_000, config).unwrap();
+        let mut whole = AnalogOutputProcessor::new(48_000, config).unwrap();
+        let first = [0.0, 0.5, 0.25];
+        let second = [-0.25, 0.0, 0.75];
+        let mut split_output = Vec::new();
+        let mut whole_output = Vec::new();
+        split.process_block(&first, &mut split_output);
+        let mut tail = Vec::new();
+        split.process_block(&second, &mut tail);
+        split_output.extend(tail);
+        whole.process_block(&[0.0, 0.5, 0.25, -0.25, 0.0, 0.75], &mut whole_output);
+        assert_eq!(split_output, whole_output);
+    }
+
 
     #[test]
     fn mixer_sums_sources_and_reuses_output() {
