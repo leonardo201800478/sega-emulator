@@ -1497,32 +1497,33 @@ mod windows_host {
     ) -> Result<(), sega_video_runtime::FrameMailboxError> {
         let app_weak = app.as_weak();
         let notification_pending = Arc::new(AtomicBool::new(false));
-        let notifier: Arc<dyn Fn(FrameMailbox) + Send + Sync> = Arc::new(move |published_mailbox| {
-            if notification_pending.swap(true, Ordering::AcqRel) {
-                return;
-            }
+        let notifier: Arc<dyn Fn(FrameMailbox) + Send + Sync> =
+            Arc::new(move |published_mailbox| {
+                if notification_pending.swap(true, Ordering::AcqRel) {
+                    return;
+                }
 
-            let callback_pending = Arc::clone(&notification_pending);
-            let callback_app = app_weak.clone();
-            let callback_queue = Arc::clone(&queue_slot);
-            let callback_mailbox = published_mailbox;
-            let callback_metrics = Arc::clone(&host_pacing);
-            let result = slint::invoke_from_event_loop(move || {
-                // Clear before taking the frame. A concurrent publication either
-                // becomes the frame consumed below or queues one harmless follow-up.
-                callback_pending.store(false, Ordering::Release);
-                present_latest_frame(
-                    &callback_app,
-                    &callback_queue,
-                    &callback_mailbox,
-                    &callback_metrics,
-                );
+                let callback_pending = Arc::clone(&notification_pending);
+                let callback_app = app_weak.clone();
+                let callback_queue = Arc::clone(&queue_slot);
+                let callback_mailbox = published_mailbox;
+                let callback_metrics = Arc::clone(&host_pacing);
+                let result = slint::invoke_from_event_loop(move || {
+                    // Clear before taking the frame. A concurrent publication either
+                    // becomes the frame consumed below or queues one harmless follow-up.
+                    callback_pending.store(false, Ordering::Release);
+                    present_latest_frame(
+                        &callback_app,
+                        &callback_queue,
+                        &callback_mailbox,
+                        &callback_metrics,
+                    );
+                });
+                if let Err(error) = result {
+                    notification_pending.store(false, Ordering::Release);
+                    eprintln!("R2_FRAME_NOTIFY enqueue_failed error={error}");
+                }
             });
-            if let Err(error) = result {
-                notification_pending.store(false, Ordering::Release);
-                eprintln!("R2_FRAME_NOTIFY enqueue_failed error={error}");
-            }
-        });
 
         mailbox.set_frame_available_notifier(Some(Arc::clone(&notifier)))?;
         // Drain a frame that may have been published before the notifier was attached.
@@ -2817,17 +2818,9 @@ mod windows_host {
             teardown_counter,
         )?;
         let host_pacing = Arc::new(Mutex::new(HostFramePacingWindow::new()));
-        let _frame_diagnostics_timer = start_frame_diagnostics(
-            &app,
-            Arc::clone(&host_pacing),
-            Rc::clone(&worker),
-        );
-        start_frame_presentation(
-            &app,
-            Arc::clone(&queue_slot),
-            mailbox.clone(),
-            host_pacing,
-        )?;
+        let _frame_diagnostics_timer =
+            start_frame_diagnostics(&app, Arc::clone(&host_pacing), Rc::clone(&worker));
+        start_frame_presentation(&app, Arc::clone(&queue_slot), mailbox.clone(), host_pacing)?;
 
         let run_result = app.run();
         let final_preferences = DesktopPreferences {
