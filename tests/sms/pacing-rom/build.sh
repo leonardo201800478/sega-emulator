@@ -64,8 +64,13 @@ for profile in 0 1 2 3; do
         cd "$profile_dir"
         "$SDCC_PATH" -c -mz80 --peep-file "$PEEP_RULES" \
             -DPACING_PROFILE="$profile" "$SOURCE"
+        # crt0_sms.rel expects the SMSlib core globals and ISR entry points.
+        # Compile the pinned SMSlib core instead of suppressing unresolved symbols.
+        "$SDCC_PATH" -c -mz80 --max-allocs-per-node 100000 \
+            --peep-file "$PEEP_RULES" \
+            "$DEVKIT_SMS_ROOT/SMSlib/src/SMSlib.c"
         "$SDCC_PATH" -o "$OUT_DIR/$name.ihx" -mz80 --no-std-crt0 \
-            --data-loc 0xC000 "$CRT0" main.rel
+            --data-loc 0xC000 "$CRT0" main.rel SMSlib.rel
     )
 
     "$OUT_DIR/makesms" "$OUT_DIR/$name.ihx" "$OUT_DIR/$name.sms"
