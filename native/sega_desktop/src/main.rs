@@ -1688,14 +1688,7 @@ mod windows_host {
     fn prepare_cartridge(
         rom: &[u8],
         store: Arc<SaveRamStore>,
-    ) -> Result<
-        (
-            Option<CartridgeHardwareProfile>,
-            Option<Vec<u8>>,
-            Option<CartridgeSaveContext>,
-        ),
-        String,
-    > {
+    ) -> Result<PreparedCartridge, String> {
         let identity = CartridgeIdentity::from_bytes(rom);
         let catalog = CartridgeCatalog::sms_default()
             .map_err(|error| format!("falha ao carregar catálogo SMS: {error}"))?;
@@ -1710,7 +1703,11 @@ mod windows_host {
                 identity.sha1_hex(),
                 identity.sha256_hex()
             );
-            return Ok((None, None, None));
+            return Ok(PreparedCartridge {
+                profile: None,
+                initial_sram: None,
+                save_context: None,
+            });
         };
 
         let initial_sram = store
@@ -1731,28 +1728,36 @@ mod windows_host {
             profile.requires_persistent_store(),
             initial_sram.is_some()
         );
-        Ok((Some(profile), initial_sram, save_context))
+        Ok(PreparedCartridge {
+            profile: Some(profile),
+            initial_sram,
+            save_context,
+        })
     }
 
     /// Cria o worker já configurado com o perfil físico e o snapshot SRM restaurado.
     fn create_sms_worker(
         rom: Vec<u8>,
-        region: &str,
-        audio_volume: u8,
-        dsp_config: AnalogOutputConfig,
-        renderer_mode: &str,
+        mailbox: &FrameMailbox,
+        settings: &SmsWorkerSettings,
         save_store: Arc<SaveRamStore>,
     ) -> Result<(SmsTemporalWorker, Option<CartridgeSaveContext>), String> {
-        let (profile, initial_sram, save_context) = prepare_cartridge(&rom, save_store)?;
+        let prepared = prepare_cartridge(&rom, save_store)?;
         let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
             rom,
-            region,
-            profile,
-            initial_sram,
+            &settings.region,
+            prepared.profile,
+            prepared.initial_sram,
         )?;
-        configure_sms_audio(&worker, audio_volume, dsp_config, renderer_mode);
+        configure_sms_audio(
+            &worker,
+            settings.audio_volume,
+            settings.dsp_config.clone(),
+            &settings.renderer_mode,
+        );
+        worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
-        Ok((worker, save_context))
+        Ok((worker, prepared.save_context))
     }
 
     /// Persistência executada no host, após snapshot imutável obtido no worker.
@@ -1791,24 +1796,15 @@ mod windows_host {
     /// Substitui a máquina sem permitir dois produtores simultâneos no FrameMailbox.
     fn replace_sms_worker(
         path: &PathBuf,
-        region: &str,
         worker_slot: &Rc<RefCell<Option<SmsTemporalWorker>>>,
         save_context_slot: &Rc<RefCell<Option<CartridgeSaveContext>>>,
         save_store: Arc<SaveRamStore>,
         mailbox: &FrameMailbox,
-        audio_volume: u8,
-        dsp_config: AnalogOutputConfig,
-        renderer_mode: &str,
+        settings: &SmsWorkerSettings,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
-        let (next, next_save_context) = create_sms_worker(
-            rom,
-            region,
-            audio_volume,
-            dsp_config,
-            renderer_mode,
-            save_store,
-        )?;
+        let (next, next_save_context) =
+            create_sms_worker(rom, mailbox, settings, save_store)?;
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -1863,6 +1859,20 @@ mod windows_host {
         store: Arc<SaveRamStore>,
     }
 
+    struct PreparedCartridge {
+        profile: Option<CartridgeHardwareProfile>,
+        initial_sram: Option<Vec<u8>>,
+        save_context: Option<CartridgeSaveContext>,
+    }
+
+    #[derive(Clone)]
+    struct SmsWorkerSettings {
+        region: String,
+        audio_volume: u8,
+        dsp_config: AnalogOutputConfig,
+        renderer_mode: String,
+    }
+
     /// Material Icons are decoded to Slint SVG images once during application startup.
     struct TransportIcons {
         play: slint::Image,
@@ -1898,24 +1908,30 @@ mod windows_host {
         select_vulkan_backend()?;
         let mailbox = FrameMailbox::new();
         let save_store = cartridge_save_store()?;
+        let worker_settings = SmsWorkerSettings {
+            region: region.clone(),
+            audio_volume: effective_audio_volume(
+                preferences.audio_volume,
+                preferences.audio_muted,
+            ),
+            dsp_config: audio_dsp_config(
+                preferences.audio_dsp_preset,
+                preferences.audio_hpf_enabled,
+                f64::from(preferences.audio_hpf_cutoff_hz),
+                preferences.audio_lpf_enabled,
+                f64::from(preferences.audio_lpf_cutoff_hz),
+            ),
+            renderer_mode: preferences.audio_renderer_mode.clone(),
+        };
         let mut initial_save_context = None;
         let worker = if let Some(path) = rom_path.as_ref() {
             let (worker, context) = create_sms_worker(
                 read_rom_image(path)?,
-                &region,
-                effective_audio_volume(preferences.audio_volume, preferences.audio_muted),
-                audio_dsp_config(
-                    preferences.audio_dsp_preset,
-                    preferences.audio_hpf_enabled,
-                    f64::from(preferences.audio_hpf_cutoff_hz),
-                    preferences.audio_lpf_enabled,
-                    f64::from(preferences.audio_lpf_cutoff_hz),
-                ),
-                &preferences.audio_renderer_mode,
+                &mailbox,
+                &worker_settings,
                 Arc::clone(&save_store),
             )?;
             initial_save_context = context;
-            worker.attach_video_mailbox(mailbox.clone())?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
@@ -2180,6 +2196,7 @@ mod windows_host {
         let open_worker = Rc::clone(&worker);
         let open_save_context = Rc::clone(&save_context);
         let open_save_store = Arc::clone(&save_store);
+        let open_worker_settings = worker_settings.clone();
         let open_recent = Rc::clone(&recent_rom);
         let open_recent_list = Rc::clone(&recent_roms);
         let open_mailbox = mailbox.clone();
@@ -2231,9 +2248,7 @@ mod windows_host {
                 &open_save_context,
                 Arc::clone(&open_save_store),
                 &open_mailbox,
-                audio_volume,
-                dsp_config,
-                &renderer_mode,
+                &open_worker_settings,
             ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
