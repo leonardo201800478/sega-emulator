@@ -72,7 +72,7 @@ A valid result record must include:
 
 ## Next engineering steps
 
-1. Validate the runner's build and bounded execution in CI with a synthetic homebrew fixture that is generated in the test and not committed as an external ROM.
+1. Validate the runner's build and bounded execution in CI; a synthetic in-memory homebrew loop fixture now checks two complete frames through the Scheduler.
 2. Add suite-specific adapters/oracles for SMSmemtest and non-timing-sensitive SMSTestSuite checks.
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
