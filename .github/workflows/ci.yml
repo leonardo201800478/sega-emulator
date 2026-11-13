@@ -422,8 +422,12 @@ jobs:
                   item for item in records
                   if item.get("record") == "smsmemtest_case" and item.get("phase") == "video_ram"
               ]
-              if len(vram_cases) != 1 or vram_cases[0].get("status") != "PASS_ALL_REPORTED_BY_ROM":
-                  raise SystemExit(f"run {run_number}: VRAM suite did not report aggregate PASS")
+              if (
+                  len(vram_cases) != 1
+                  or vram_cases[0].get("case_id") != "vram_all_tests"
+                  or vram_cases[0].get("status") != "PASS_ALL_REPORTED_BY_ROM"
+              ):
+                  raise SystemExit(f"run {run_number}: VRAM suite did not report the named aggregate PASS")
 
               input_events = [
                   item for item in records if item.get("record") == "smsmemtest_input"
@@ -432,7 +436,7 @@ jobs:
                   raise SystemExit(f"run {run_number}: expected two deterministic controller presses")
               if sum(item.get("event") == "button_released" for item in input_events) != 2:
                   raise SystemExit(f"run {run_number}: expected two deterministic controller releases")
-              if sum(item.get("event") == "vram_result_color_observed" for item in input_events) != 1:
+              if sum(item.get("event") == "vram_result_text_observed" for item in input_events) != 1:
                   raise SystemExit(f"run {run_number}: VRAM result color was not observed")
 
               return summary
