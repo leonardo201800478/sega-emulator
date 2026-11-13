@@ -282,8 +282,15 @@ mod tests {
         let results = classify_ram_result_rows(&frame);
         assert_eq!(results[0], SmsmemtestCaseResult::Pass);
         assert_eq!(results[1], SmsmemtestCaseResult::Fail);
-        assert!(results[2..].iter().all(|result| *result == SmsmemtestCaseResult::NotObserved));
-        assert_eq!(classify_result_row(&frame, 23), SmsmemtestCaseResult::NotObserved);
+        assert!(
+            results[2..]
+                .iter()
+                .all(|result| *result == SmsmemtestCaseResult::NotObserved)
+        );
+        assert_eq!(
+            classify_result_row(&frame, 23),
+            SmsmemtestCaseResult::NotObserved
+        );
     }
 
     #[test]
