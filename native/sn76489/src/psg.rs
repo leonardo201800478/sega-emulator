@@ -738,7 +738,7 @@ impl Sn76489Core {
 mod tests {
     use std::collections::HashSet;
 
-    use super::{PsgProfile, Sn76489Core as Sn76489};
+    use super::{PsgAmplitudeEvent, PsgProfile, Sn76489Core as Sn76489};
 
     const WHITE_NOISE_GOLDEN_STATES: [u16; 32] = [
         0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040, 0x0020, 0x0010,
@@ -1737,6 +1737,100 @@ mod tests {
             assert_eq!(device.noise_output(), output);
             assert_eq!(device.lfsr(), next_state);
         }
+    }
+
+    #[test]
+    fn amplitude_event_capture_reports_real_tick_and_register_transitions() {
+        let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        psg.enable_event_capture(16).unwrap();
+
+        // Unmute tone 0, then set period 2. Only the attenuation write changes
+        // the current mix immediately; the first tone transition occurs at PSG
+        // clock 32 (two /16 internal ticks).
+        psg.write(0x90);
+        psg.write(0x82);
+        psg.advance_clocks(32);
+
+        let mut events = Vec::new();
+        assert_eq!(psg.drain_amplitude_events(&mut events), 2);
+        assert_eq!(
+            events,
+            vec![
+                PsgAmplitudeEvent {
+                    clock: 0,
+                    delta: 0.25,
+                },
+                PsgAmplitudeEvent {
+                    clock: 32,
+                    delta: -0.5,
+                },
+            ]
+        );
+        assert_eq!(psg.elapsed_clocks(), 32);
+    }
+
+    #[test]
+    fn amplitude_event_capture_is_chunk_invariant_and_does_not_change_pcm() {
+        let mut whole = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        let mut chunked = whole.clone();
+        whole.enable_event_capture(256).unwrap();
+        chunked.enable_event_capture(256).unwrap();
+
+        for psg in [&mut whole, &mut chunked] {
+            psg.write(0x90);
+            psg.write(0x85);
+            psg.write(0x12);
+            psg.write(0xE4);
+        }
+
+        whole.advance_clocks(120_000);
+        for clocks in [1, 7, 16, 997, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384, 16_384] {
+            chunked.advance_clocks(clocks);
+        }
+        // Advance any remainder so both executions end at the same PSG clock.
+        let remaining = 120_000_u64.saturating_sub(chunked.elapsed_clocks());
+        if remaining > 0 {
+            chunked.advance_clocks(remaining);
+        }
+
+        let mut whole_events = Vec::new();
+        let mut chunked_events = Vec::new();
+        whole.drain_amplitude_events(&mut whole_events);
+        chunked.drain_amplitude_events(&mut chunked_events);
+        assert_eq!(whole_events, chunked_events);
+        assert_eq!(whole.drain_samples(None), chunked.drain_samples(None));
+    }
+
+    #[test]
+    fn amplitude_event_capture_overflow_is_bounded_and_explicit() {
+        let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        psg.enable_event_capture(1).unwrap();
+        psg.write(0x90);
+        psg.write(0x9F);
+
+        assert!(psg.event_capture_overflowed());
+        assert_eq!(psg.event_capture_overflow_count(), 1);
+        let mut events = Vec::new();
+        assert_eq!(psg.drain_amplitude_events(&mut events), 1);
+        assert_eq!(events[0].clock, 0);
+        assert_eq!(events[0].delta, 0.25);
+    }
+
+    #[test]
+    fn amplitude_event_capture_reset_starts_a_fresh_clock_epoch() {
+        let mut psg = Sn76489::new_with_profile(3_579_545, 48_000, PsgProfile::Sms).unwrap();
+        psg.enable_event_capture(16).unwrap();
+        psg.write(0x90);
+        psg.advance_clocks(64);
+        psg.reset();
+
+        assert_eq!(psg.elapsed_clocks(), 0);
+        assert!(!psg.event_capture_overflowed());
+        let mut events = Vec::new();
+        assert_eq!(psg.drain_amplitude_events(&mut events), 0);
+        psg.write(0x90);
+        assert_eq!(psg.drain_amplitude_events(&mut events), 1);
+        assert_eq!(events[0].clock, 0);
     }
 
     #[test]
