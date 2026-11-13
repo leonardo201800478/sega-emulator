@@ -519,6 +519,8 @@ jobs:
             ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-2.jsonl
             ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-1.stderr
             ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-2.stderr
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-pacing-worker.jsonl
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-pacing-worker.stderr
             ${{ runner.temp }}/smsmemtest-output/runner-1-exit-code.txt
             ${{ runner.temp }}/smsmemtest-output/runner-2-exit-code.txt
           if-no-files-found: warn
