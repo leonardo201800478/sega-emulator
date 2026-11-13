@@ -17,8 +17,8 @@ use sega_sms_core::{
 };
 
 use smsmemtest_driver::{
-    RAM_RESULT_CASES, SmsmemtestCaseResult, SmsmemtestInputDriver,
-    classify_ram_result_rows, classify_result_row,
+    RAM_RESULT_CASES, SmsmemtestCaseResult, SmsmemtestInputDriver, classify_ram_result_rows,
+    classify_result_row,
 };
 
 const DEFAULT_FRAMES: u64 = 120;
@@ -237,8 +237,9 @@ fn run(args: Args) -> Result<(), String> {
                 );
 
                 if event == "ram_results_ready" {
-                    for (case_id, result) in
-                        RAM_RESULT_CASES.iter().zip(classify_ram_result_rows(machine.framebuffer()))
+                    for (case_id, result) in RAM_RESULT_CASES
+                        .iter()
+                        .zip(classify_ram_result_rows(machine.framebuffer()))
                     {
                         println!(
                             "{{\"record\":\"smsmemtest_case\",\"phase\":\"system_ram\",\"case_id\":\"{}\",\"status\":\"{}\",\"frame_index\":{}}}",
