@@ -16,8 +16,8 @@ use crate::audio::AudioSession;
 use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
 use sega_sms_core::{
-    ControllerButtons, PsgAmplitudeEvent, SmsTemporalMachine, SmsTemporalTraceEvent,
-    SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
+    ControllerButtons, PsgAmplitudeEvent, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
+    SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
 use sega_sn76489::H2StreamingRenderer;
 #[cfg(windows)]
@@ -755,11 +755,9 @@ impl AudioRendererState {
                 let clock_hz = machine.psg().clock_hz();
                 let start_clock = machine.psg().elapsed_clocks();
                 let initial_level = machine.psg_mixed_amplitude();
-                let mut renderer = H2StreamingRenderer::new(
-                    clock_hz,
-                    SMS_INTERNAL_AUDIO_SAMPLE_RATE,
-                )
-                .map_err(|error| format!("could not initialize H2 renderer: {error}"))?;
+                let mut renderer =
+                    H2StreamingRenderer::new(clock_hz, SMS_INTERNAL_AUDIO_SAMPLE_RATE)
+                        .map_err(|error| format!("could not initialize H2 renderer: {error}"))?;
                 renderer
                     .begin_epoch(start_clock, initial_level)
                     .map_err(|error| format!("could not start H2 audio epoch: {error}"))?;
