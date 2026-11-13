@@ -17,7 +17,7 @@ Supported regional profiles are `usa`, `brazil` (PAL-M), `europe` (PAL) and `jap
 The Python wrapper copies the input into a temporary per-run snapshot while calculating SHA-256 over the exact bytes written, then passes that same snapshot to Rust. It also obtains the checked-out Git revision and invokes Cargo. The source ROM can change during Cargo compilation without changing the bytes executed by this run. The runner uses the canonical 48 kHz internal PCM source rate used by the SMS runtime and records the master-tick scale, PSG clock and sample rate in its start record. The Rust runner emits JSON Lines:
 - `start`: ROM provenance, image size, selected machine profile and execution limits;
 - `frame`: completed frame, instruction count, drained PSG sample count and virtual machine timestamp;
-- `summary`: `EXECUTED_NO_ORACLE` when the requested frames completed, or `EXECUTION_ERROR` if execution stopped.
+- `summary`: `EXECUTED_NO_ORACLE` for generic frame-budget completion, `INPUT_DRIVER_TIMEOUT_NO_ORACLE` if the SMSmemtest prompt driver cannot advance, `SMSMEMTEST_COLOR_RESULTS_UNVALIDATED_ON_ROM` when it observes the VRAM result color, or an execution error if stepping stops.
 
 **`EXECUTED_NO_ORACLE` is not PASS.** The SMSmemtest-specific driver watches documented text-grid rows at completed-frame boundaries and pulses controller 1/button 1 after stable white-text row activity to advance from the initial prompt to RAM tests and from the RAM-complete prompt to VRAM tests. Before accepting a VRAM result, it requires a blank result row after the second pulse to reject a stale RAM result. It classifies the seven RAM result rows by the ROM's green/red result palette and classifies the VRAM result row as all-pass or first-failure-reported. This is not OCR: a red VRAM result does not identify which of the five tests failed. The color classifier is covered by synthetic unit tests but remains unvalidated against an actual built SMSmemtest ROM. The driver stops after observing the VRAM result and does not enter the cartridge-SRAM phase. The SMSmemtest classifier reports the result displayed by the ROM; it is not an independent oracle of hardware correctness and remains blocked until end-to-end ROM build/run validation. Other suites still require their own adapters/oracles. A frame-step limit error is an execution error, not evidence of a hardware defect.
 
@@ -28,6 +28,19 @@ Example options:
 - `--debug`: use Cargo's debug profile instead of release.
 
 Generated JSONL reports and ROM binaries should be stored outside Git unless a separate policy explicitly allows the artifact. Do not put ROM bytes, BIOS images, memory dumps or copyrighted traces in logs.
+
+## Reproducible SMSmemtest ROM build
+
+The upstream ROM can be built without copying its source or binary into this repository:
+
+- SMSmemtest revision: `12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9` (Unlicense);
+- devkitSMS revision: `561bc2cb9829cdf2e31ad8cd43835037c8c44a63`;
+- SDCC: `4.6.0` (devkitSMS documents 4.2.0 as its minimum);
+- the upstream modified `crt0_memtest.rel` is consumed directly from the pinned SMSmemtest checkout.
+
+The build helper is `tests/sms/scripts/build_smsmemtest.sh`. It requires `SMSMEMTEST_ROOT`, `DEVKIT_SMS_ROOT`, `OUT_DIR` and `SDCC_BIN`; it verifies both Git revisions and the compiler version, builds SMSlib from the pinned devkitSMS source, compiles/links the ROM and checks that the resulting image is 32 KiB. It records the ROM SHA-256 in `SMSmemtest.build-info.txt`.
+
+The workflow `.github/workflows/smsmemtest-rom-build.yml` builds the ROM and invokes the full-machine runner for up to 1800 frames. The emulator result is deliberately **non-gating** at this stage: a workflow success means the pinned ROM was built and the runner process was invoked, not that SMSmemtest passed. The ROM, build metadata and JSONL diagnostic output are retained as a short-lived Actions artifact, never committed to Git.
 
 ## Current execution boundary
 
@@ -72,8 +85,8 @@ A valid result record must include:
 
 ## Next engineering steps
 
-1. CI validation passed for the runner-related workspace changes and the SMS runtime Release workflow; the synthetic in-memory fixture checks two complete frames through the Scheduler. No external ROM was run by CI.
-2. SMSmemtest has a deterministic frame-boundary input driver based on two-frame-stable white-text activity in documented rows. Seven RAM rows are classified using the source-defined green/red palette; VRAM is classified as aggregate pass or unidentified first failure. Validate the complete pipeline against a locally built ROM before relying on results; it is not OCR. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
+1. CI validates the Rust runner and its synthetic in-memory fixture. The separate SMSmemtest build/diagnostic workflow now builds the pinned upstream ROM and collects full-machine output; its first real-ROM run must be inspected before the prompt/color pipeline is considered validated.
+2. SMSmemtest has a deterministic frame-boundary input driver based on two-frame-stable white-text activity in documented rows. Seven RAM rows are classified using the source-defined green/red palette; VRAM is classified as aggregate pass or unidentified first failure. Inspect the non-gating Actions artifact and validate the complete pipeline against the built ROM before relying on results; it is not OCR. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
 5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
