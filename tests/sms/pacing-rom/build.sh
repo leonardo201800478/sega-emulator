@@ -5,9 +5,9 @@ readonly DEVKIT_SMS_REVISION="561bc2cb9829cdf2e31ad8cd43835037c8c44a63"
 readonly REQUIRED_SDCC_VERSION="4.6.0"
 readonly TARGET_REGION="USA_NTSC"
 readonly CONVERTER_FLAGS="-std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra"
-readonly SOURCE_FLAGS="-c -mz80 --peep-file=<devkitSMS>/SMSlib/src/peep-rules.txt -DPACING_PROFILE=<profile>"
-readonly SMSLIB_FLAGS="-c -mz80 --max-allocs-per-node=100000 --peep-file=<devkitSMS>/SMSlib/src/peep-rules.txt"
-readonly LINK_FLAGS="-mz80 --no-std-crt0 --data-loc=0xC000"
+readonly SOURCE_FLAGS_TEMPLATE="-c -mz80 --peep-file=SMSlib/src/peep-rules.txt -DPACING_PROFILE=<profile>"
+readonly SMSLIB_FLAGS_TEXT="-c -mz80 --max-allocs-per-node=100000 --peep-file=SMSlib/src/peep-rules.txt"
+readonly LINK_FLAGS_TEXT="-mz80 --no-std-crt0 --data-loc=0xC000"
 
 : "${DEVKIT_SMS_ROOT:?Set DEVKIT_SMS_ROOT to the checked-out sverx/devkitSMS repository}"
 : "${OUT_DIR:?Set OUT_DIR to an output directory outside the repository}"
@@ -56,8 +56,8 @@ OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 BUILD_DIR="$OUT_DIR/work"
 mkdir -p "$BUILD_DIR"
 
-"$CC_PATH" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra \
-    "$MAKESMS_SOURCE" -o "$OUT_DIR/makesms"
+CONVERTER_FLAG_ARGS=(-std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra)
+"$CC_PATH" "${CONVERTER_FLAG_ARGS[@]}" "$MAKESMS_SOURCE" -o "$OUT_DIR/makesms"
 
 SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
 MAKESMS_SOURCE_SHA256="$(sha256sum "$MAKESMS_SOURCE" | awk '{print $1}')"
@@ -78,18 +78,16 @@ for profile in 0 1 2 3; do
 
     (
         cd "$profile_dir"
-        "$SDCC_PATH" -c -mz80 --peep-file "$PEEP_RULES" \
-            -DPACING_PROFILE="$profile" "$SOURCE"
+        SOURCE_FLAG_ARGS=(-c -mz80 --peep-file "$PEEP_RULES" "-DPACING_PROFILE=$profile")
+        SMSLIB_FLAG_ARGS=(-c -mz80 --max-allocs-per-node 100000 --peep-file "$PEEP_RULES")
+        LINK_FLAG_ARGS=(-mz80 --no-std-crt0 --data-loc 0xC000)
+        "$SDCC_PATH" "${SOURCE_FLAG_ARGS[@]}" "$SOURCE"
         # crt0_sms.rel expects the SMSlib core globals and ISR entry points.
         # Compile the pinned SMSlib core instead of suppressing unresolved symbols.
-        "$SDCC_PATH" -c -mz80 --max-allocs-per-node 100000 \
-            --peep-file "$PEEP_RULES" \
-            "$DEVKIT_SMS_ROOT/SMSlib/src/SMSlib.c"
-        "$SDCC_PATH" -c -mz80 --max-allocs-per-node 100000 \
-            --peep-file "$PEEP_RULES" \
-            "$DEVKIT_SMS_ROOT/SMSlib/src/SMSlib_sprite.c"
-        "$SDCC_PATH" -o "$OUT_DIR/$name.ihx" -mz80 --no-std-crt0 \
-            --data-loc 0xC000 "$CRT0" main.rel SMSlib.rel SMSlib_sprite.rel
+        "$SDCC_PATH" "${SMSLIB_FLAG_ARGS[@]}" "$DEVKIT_SMS_ROOT/SMSlib/src/SMSlib.c"
+        "$SDCC_PATH" "${SMSLIB_FLAG_ARGS[@]}" "$DEVKIT_SMS_ROOT/SMSlib/src/SMSlib_sprite.c"
+        "$SDCC_PATH" -o "$OUT_DIR/$name.ihx" "${LINK_FLAG_ARGS[@]}" \
+            "$CRT0" main.rel SMSlib.rel SMSlib_sprite.rel
     )
 
     "$OUT_DIR/makesms" "$OUT_DIR/$name.ihx" "$OUT_DIR/$name.sms"
@@ -117,9 +115,9 @@ for profile in 0 1 2 3; do
         printf 'sdcc_version_line=%s\n' "$SDCC_VERSION_LINE"
         printf 'host_cc_version=%s\n' "$CC_VERSION_LINE"
         printf 'converter_flags=%s\n' "$CONVERTER_FLAGS"
-        printf 'source_compile_flags=%s\n' "-c -mz80 --peep-file=$PEEP_RULES -DPACING_PROFILE=$profile"
-        printf 'smslib_compile_flags=%s\n' "-c -mz80 --max-allocs-per-node=100000 --peep-file=$PEEP_RULES"
-        printf 'link_flags=%s\n' "-mz80 --no-std-crt0 --data-loc=0xC000"
+        printf 'source_compile_flags=%s\n' "${SOURCE_FLAGS_TEMPLATE/<profile>/$profile}"
+        printf 'smslib_compile_flags=%s\n' "$SMSLIB_FLAGS_TEXT"
+        printf 'link_flags=%s\n' "$LINK_FLAGS_TEXT"
         printf 'makesms_source_sha256=%s\n' "$MAKESMS_SOURCE_SHA256"
         printf 'makesms_sha256=%s\n' "$MAKESMS_SHA256"
         printf 'crt0_sha256=%s\n' "$CRT0_SHA256"
