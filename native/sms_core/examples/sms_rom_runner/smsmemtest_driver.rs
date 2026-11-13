@@ -176,7 +176,7 @@ pub fn classify_result_row(framebuffer: &[u8], text_row: usize) -> SmsmemtestCas
     for y in start_y..end_y {
         let row_start = y * stride;
         let row_end = row_start + stride;
-        for pixel in framebuffer[row_start..row_end].chunks_exact(RGB_BYTES_PER_PIXEL) {
+        for pixel in framebuffer[row_start..row_end].as_chunks::<RGB_BYTES_PER_PIXEL>().0 {
             green |= pixel[1] >= WHITE_CHANNEL_MIN
                 && pixel[0] <= COLOR_CHANNEL_MAX
                 && pixel[2] <= COLOR_CHANNEL_MAX;
@@ -217,7 +217,7 @@ pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool 
     for y in start_y..end_y {
         let row_start = y * stride;
         let row_end = row_start + stride;
-        for pixel in framebuffer[row_start..row_end].chunks_exact(RGB_BYTES_PER_PIXEL) {
+        for pixel in framebuffer[row_start..row_end].as_chunks::<RGB_BYTES_PER_PIXEL>().0 {
             if pixel.iter().all(|channel| *channel >= WHITE_CHANNEL_MIN) {
                 visible_pixels += 1;
                 if visible_pixels >= MIN_VISIBLE_PIXELS {
