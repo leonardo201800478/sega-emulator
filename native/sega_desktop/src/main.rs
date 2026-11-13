@@ -1998,7 +1998,9 @@ mod windows_host {
         let keyboard_release_state = Rc::clone(&keyboard_state);
         let keyboard_release_worker = Rc::clone(&worker);
         app.on_keyboard_key_released(move |key: slint::SharedString| {
-            let action = keyboard_release_state.borrow_mut().update(key.as_str(), false);
+            let action = keyboard_release_state
+                .borrow_mut()
+                .update(key.as_str(), false);
             if action.is_some_and(KeyboardAction::is_controller_button) {
                 let buttons = keyboard_release_state.borrow().controller_buttons();
                 if let Some(worker) = keyboard_release_worker.borrow().as_ref()
@@ -2509,14 +2511,28 @@ mod windows_host {
             assert!(!preferences.audio_muted);
         }
 
-
         #[test]
         fn keyboard_mapping_recognizes_gameplay_and_transport_actions() {
-            assert_eq!(KeyboardAction::from_slint_key("up"), Some(KeyboardAction::Up));
-            assert_eq!(KeyboardAction::from_slint_key("button1"), Some(KeyboardAction::Button1));
-            assert_eq!(KeyboardAction::from_slint_key("nmi"), Some(KeyboardAction::Nmi));
-            assert_eq!(KeyboardAction::from_slint_key("start"), Some(KeyboardAction::Start));
-            assert_eq!(KeyboardAction::from_slint_key("step-frame"), Some(KeyboardAction::StepFrame));
+            assert_eq!(
+                KeyboardAction::from_slint_key("up"),
+                Some(KeyboardAction::Up)
+            );
+            assert_eq!(
+                KeyboardAction::from_slint_key("button1"),
+                Some(KeyboardAction::Button1)
+            );
+            assert_eq!(
+                KeyboardAction::from_slint_key("nmi"),
+                Some(KeyboardAction::Nmi)
+            );
+            assert_eq!(
+                KeyboardAction::from_slint_key("start"),
+                Some(KeyboardAction::Start)
+            );
+            assert_eq!(
+                KeyboardAction::from_slint_key("step-frame"),
+                Some(KeyboardAction::StepFrame)
+            );
             assert_eq!(KeyboardAction::from_slint_key("unknown"), None);
         }
 
