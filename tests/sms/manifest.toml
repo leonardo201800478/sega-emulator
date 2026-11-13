@@ -12,7 +12,7 @@ sdcc_version = "4.6.0"
 license = "Unlicense"
 license_evidence = "Upstream LICENSE.md"
 scope = ["system_ram_8k", "vram_16k", "cartridge_ram"]
-execution_gate = "PROMPT_AND_COLOR_PIPELINE_VALIDATION_REQUIRED; CART_SRAM_BLOCKED_CAPABILITY"
+execution_gate = "ROM_BUILD_AND_PROMPT_COLOR_PIPELINE_VALIDATION_REQUIRED; CART_SRAM_BLOCKED_CAPABILITY"
 redistribution = "permissive_under_unlicense_with_attribution"
 notes = "Upstream v0.40 uses controller waits between RAM/VRAM/SRAM phases and displays per-case OK/FAILED text. Frame-boundary input and green/red framebuffer classifiers are implemented but not validated against a built ROM. SMSlib input semantics are audited at devkitSMS revision 561bc2cb9829cdf2e31ad8cd43835037c8c44a63. Runtime has no cartridge SRAM backing store, so SRAM bank tests are BLOCKED_CAPABILITY. Build uses pinned devkitSMS and SDCC 4.6.0 (upstream minimum is 4.2.0) with the modified crt0. The pinned ROM build script and non-gating diagnostic workflow do not add upstream binaries or sources to the repository."
 
