@@ -214,9 +214,9 @@ mod windows_host {
                     else if (event.text == Key.DownArrow) { root.keyboard-key-pressed("down"); accept }
                     else if (event.text == Key.LeftArrow) { root.keyboard-key-pressed("left"); accept }
                     else if (event.text == Key.RightArrow) { root.keyboard-key-pressed("right"); accept }
-                    else if (event.text == "z") { root.keyboard-key-pressed("button1"); accept }
-                    else if (event.text == "x") { root.keyboard-key-pressed("button2"); accept }
-                    else if (event.text == "p") { root.keyboard-key-pressed("nmi"); accept }
+                    else if (event.text == Key.Z) { root.keyboard-key-pressed("button1"); accept }
+                    else if (event.text == Key.X) { root.keyboard-key-pressed("button2"); accept }
+                    else if (event.text == Key.P) { root.keyboard-key-pressed("nmi"); accept }
                     else if (event.text == Key.F5) { root.keyboard-key-pressed("start"); accept }
                     else if (event.text == Key.F6) { root.keyboard-key-pressed("pause"); accept }
                     else if (event.text == Key.F7) { root.keyboard-key-pressed("stop"); accept }
@@ -229,9 +229,9 @@ mod windows_host {
                     else if (event.text == Key.DownArrow) { root.keyboard-key-released("down"); accept }
                     else if (event.text == Key.LeftArrow) { root.keyboard-key-released("left"); accept }
                     else if (event.text == Key.RightArrow) { root.keyboard-key-released("right"); accept }
-                    else if (event.text == "z") { root.keyboard-key-released("button1"); accept }
-                    else if (event.text == "x") { root.keyboard-key-released("button2"); accept }
-                    else if (event.text == "p") { root.keyboard-key-released("nmi"); accept }
+                    else if (event.text == Key.Z) { root.keyboard-key-released("button1"); accept }
+                    else if (event.text == Key.X) { root.keyboard-key-released("button2"); accept }
+                    else if (event.text == Key.P) { root.keyboard-key-released("nmi"); accept }
                     else if (event.text == Key.F5) { root.keyboard-key-released("start"); accept }
                     else if (event.text == Key.F6) { root.keyboard-key-released("pause"); accept }
                     else if (event.text == Key.F7) { root.keyboard-key-released("stop"); accept }
@@ -239,7 +239,7 @@ mod windows_host {
                     else if (event.text == Key.F9) { root.keyboard-key-released("step-frame"); accept }
                     else { reject }
                 }
-                focus-lost => { root.keyboard-focus-lost(); }
+                focus-lost(_reason) => { root.keyboard-focus-lost(); }
                 KeyBinding {
                     keys: @keys(Escape);
                     activated => { root.active-menu = "none"; }
@@ -257,13 +257,13 @@ mod windows_host {
                 HorizontalLayout {
                     spacing: 3px;
                     z: 95;
-                    CompactButton { text: "Sistema"; width: 66px; clicked => { root.active-menu = root.active-menu == "system" ? "none" : "system"; } }
-                    CompactButton { text: "Arquivo"; width: 62px; clicked => { root.active-menu = root.active-menu == "file" ? "none" : "file"; } }
-                    CompactButton { text: "Vídeo"; width: 58px; clicked => { root.active-menu = root.active-menu == "video" ? "none" : "video"; } }
-                    CompactButton { text: "Áudio"; width: 58px; clicked => { root.active-menu = root.active-menu == "audio" ? "none" : "audio"; } }
-                    CompactButton { text: "Controles"; width: 76px; clicked => { root.active-menu = root.active-menu == "controls" ? "none" : "controls"; } }
-                    CompactButton { text: "Opções"; width: 66px; clicked => { root.active-menu = root.active-menu == "options" ? "none" : "options"; } }
-                    CompactButton { text: "DEBUG"; width: 58px; clicked => { root.active-menu = root.active-menu == "debug" ? "none" : "debug"; } }
+                    CompactButton { text: "Sistema"; width: 66px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "system" ? "none" : "system"; } }
+                    CompactButton { text: "Arquivo"; width: 62px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "file" ? "none" : "file"; } }
+                    CompactButton { text: "Vídeo"; width: 58px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "video" ? "none" : "video"; } }
+                    CompactButton { text: "Áudio"; width: 58px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "audio" ? "none" : "audio"; } }
+                    CompactButton { text: "Controles"; width: 76px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "controls" ? "none" : "controls"; } }
+                    CompactButton { text: "Opções"; width: 66px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "options" ? "none" : "options"; } }
+                    CompactButton { text: "DEBUG"; width: 58px; clicked => { root.keyboard-focus-lost(); root.active-menu = root.active-menu == "debug" ? "none" : "debug"; } }
                 }
                 HorizontalLayout {
                     spacing: 5px;
@@ -1955,7 +1955,7 @@ mod windows_host {
             let Some(app) = keyboard_press_app.upgrade() else {
                 return;
             };
-            if app.get_active_menu() != "none" || !app.get_has_rom() {
+            if app.get_active_menu().as_str() != "none" || !app.get_has_rom() {
                 return;
             }
 
