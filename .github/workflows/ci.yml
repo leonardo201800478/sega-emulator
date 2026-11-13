@@ -397,9 +397,12 @@ jobs:
           path: |
             ${{ runner.temp }}/smsmemtest-output/SMSmemtest.sms
             ${{ runner.temp }}/smsmemtest-output/SMSmemtest.build-info.txt
-            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run.jsonl
-            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run.stderr
-            ${{ runner.temp }}/smsmemtest-output/runner-exit-code.txt
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-1.jsonl
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-2.jsonl
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-1.stderr
+            ${{ runner.temp }}/smsmemtest-output/smsmemtest-run-2.stderr
+            ${{ runner.temp }}/smsmemtest-output/runner-1-exit-code.txt
+            ${{ runner.temp }}/smsmemtest-output/runner-2-exit-code.txt
           if-no-files-found: warn
           retention-days: 14
 
