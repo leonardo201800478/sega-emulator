@@ -8,7 +8,7 @@ source = "tests/sms/pacing-rom/src/main.c"
 license = "MIT"
 target = "sega_master_system"
 initial_region = "usa_ntsc"
-runtime_validation = "PENDING_FULL_MACHINE_ROM_EXECUTION_AND_DETERMINISM_GATE"
+runtime_validation = "PASSED_EXECUTED_NO_ORACLE_NOT_HARDWARE_CERTIFIED"
 
 [toolchain]
 sdcc_version = "4.6.0"
@@ -35,3 +35,13 @@ description = "CPU-light plus eight deterministic sprite attribute updates"
 id = "combined"
 compile_define = "PACING_PROFILE=3"
 description = "CPU-fixed, VDP/sprites and deterministic PSG tone update"
+
+[validation]
+status = "PASSED_EXECUTED_NO_ORACLE"
+ci_run = 7155
+emulator_commit = "38d32297b0c511838c3dd44180a0e42933be9db3"
+frames_per_execution = 600
+repetitions_per_profile = 2
+profile_count = 4
+physical_pacing = "NOT_MEASURED"
+hardware_certification = "NOT_CLAIMED"
