@@ -317,8 +317,7 @@ jobs:
       - name: Build full-machine diagnostic runner (Release)
         run: cargo build --release --locked -p sega-sms-core --example sms_rom_runner
 
-      - name: Run bounded full-machine diagnostic twice (non-gating ROM result)
-        continue-on-error: true
+      - name: Run bounded full-machine diagnostic twice (ROM result is non-gating)
         shell: bash
         run: |
           set -euo pipefail
@@ -374,18 +373,28 @@ jobs:
 
           first = load_records(output_dir / "smsmemtest-run-1.jsonl")
           second = load_records(output_dir / "smsmemtest-run-2.jsonl")
-          identical = first == second
-          print(f"determinism={'IDENTICAL' if identical else 'DIVERGENT'}")
+          exit_codes = [
+              (output_dir / f"runner-{number}-exit-code.txt").read_text().strip()
+              for number in (1, 2)
+          ]
 
           for item in first:
               if item.get("record") in {"smsmemtest_input", "smsmemtest_case", "summary"}:
                   print(json.dumps(item, sort_keys=True))
 
-          for run_number in (1, 2):
-              exit_code = (output_dir / f"runner-{run_number}-exit-code.txt").read_text().strip()
-              print(f"runner_{run_number}_exit_code={exit_code}")
+          for number, exit_code in enumerate(exit_codes, start=1):
+              print(f"runner_{number}_exit_code={exit_code}")
 
-          if not identical:
+          has_two_summaries = (
+              sum(item.get("record") == "summary" for item in first) == 1
+              and sum(item.get("record") == "summary" for item in second) == 1
+          )
+          if exit_codes != ["0", "0"] or not has_two_summaries:
+              print("determinism=NOT_EVALUATED")
+          elif first == second:
+              print("determinism=IDENTICAL")
+          else:
+              print("determinism=DIVERGENT")
               sys.exit(1)
           PY
 
