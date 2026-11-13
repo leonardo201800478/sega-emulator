@@ -10,6 +10,9 @@ use std::env;
 use std::fs;
 use std::process;
 
+mod smsmemtest_driver;
+
+use smsmemtest_driver::SmsmemtestInputDriver;
 use sega_sms_core::{
     SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
@@ -197,6 +200,8 @@ fn run(args: Args) -> Result<(), String> {
     let mut total_instructions = 0_u64;
     let mut total_audio_samples = 0_u64;
     let initial_frame = machine.frame_number();
+    let mut smsmemtest_driver = (args.suite_id == "smsmemtest")
+        .then(SmsmemtestInputDriver::new);
 
     for index in 0..args.frames {
         let instructions = match machine.step_frame(args.max_instructions_per_frame) {
@@ -218,6 +223,20 @@ fn run(args: Args) -> Result<(), String> {
         let audio_samples = machine.drain_audio_samples(None).len() as u64;
         total_audio_samples = total_audio_samples.saturating_add(audio_samples);
 
+        if let Some(driver) = smsmemtest_driver.as_mut() {
+            let events = driver.after_frame(&mut machine)?;
+            for event in events {
+                println!(
+                    "{{\"record\":\"smsmemtest_input\",\"frame_index\":{},\"event\":\"{}\",\"detector\":\"text_row_activity_heuristic\"}}",
+                    index + 1,
+                    event,
+                );
+            }
+            if driver.is_complete() {
+                break;
+            }
+        }
+
         println!(
             "{{\"record\":\"frame\",\"status\":\"FRAME_COMPLETED\",\"frame_index\":{},\"machine_frame_number\":{},\"instructions\":{},\"total_instructions\":{},\"audio_samples_drained\":{},\"total_audio_samples_drained\":{},\"machine_time\":\"{}\"}}",
             index + 1,
@@ -231,8 +250,19 @@ fn run(args: Args) -> Result<(), String> {
     }
 
     let frames_completed = machine.frame_number().saturating_sub(initial_frame);
+    let summary_status = match smsmemtest_driver.as_ref() {
+        Some(driver) if driver.is_complete() => "RAM_AND_VRAM_PHASES_REACHED_NO_CASE_ORACLE",
+        Some(_) => "INPUT_DRIVER_TIMEOUT_NO_ORACLE",
+        None => "EXECUTED_NO_ORACLE",
+    };
+    let sram_gate = if args.suite_id == "smsmemtest" {
+        "BLOCKED_CAPABILITY"
+    } else {
+        "NOT_APPLICABLE"
+    };
     println!(
-        "{{\"record\":\"summary\",\"status\":\"EXECUTED_NO_ORACLE\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"frames_requested\":{},\"frames_completed\":{},\"total_instructions\":{},\"total_audio_samples_drained\":{},\"mapper_banks\":[{},{},{}],\"memory_control\":{}}}",
+        "{{\"record\":\"summary\",\"status\":\"{}\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"frames_requested\":{},\"frames_completed\":{},\"total_instructions\":{},\"total_audio_samples_drained\":{},\"sram_phase\":\"{}\",\"mapper_banks\":[{},{},{}],\"memory_control\":{}}}",
+        summary_status,
         json_escape(&args.suite_id),
         json_escape(&args.suite_revision),
         args.rom_sha256,
@@ -242,6 +272,7 @@ fn run(args: Args) -> Result<(), String> {
         frames_completed,
         total_instructions,
         total_audio_samples,
+        sram_gate,
         machine.selected_mapper_banks()[0],
         machine.selected_mapper_banks()[1],
         machine.selected_mapper_banks()[2],
