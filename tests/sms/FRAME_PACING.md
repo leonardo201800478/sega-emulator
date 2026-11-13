@@ -24,8 +24,9 @@ The pinned SMSmemtest build already executed by CI provides a reproducible start
 ## What this measures
 
 - Actual worker frame interval percentiles (p50/p95/p99).
-- Time spent stepping the machine and processing each frame.
-- Requested pacing wait, measured wait elapsed, and timeout wake lateness.
+- Machine step, frame-processing, and frame-budget percentiles (p50/p95/p99).
+- Requested pacing wait and measured wait percentiles (p50/p95/p99), plus timeout wake lateness (p50/p95/p99).
+- Command wakeups, remaining deadline at command wake, and command-handler p95.
 - Virtual machine ticks per frame, PSG samples per frame, instruction count,
   frame count, region clock, and run/ROM/emulator provenance.
 - One JSONL `sample` record per sampling interval, containing rolling-window
@@ -33,7 +34,8 @@ The pinned SMSmemtest build already executed by CI provides a reproducible start
 
 The worker diagnostics window holds at most 512 per-frame samples. Sampling every
 second produces overlapping rolling windows; `window_sample_count` and
-`total_frame_samples` make that explicit. These are not raw per-frame samples.
+`total_frame_samples` make that explicit. Timeout and command wake counts are
+window totals, not whole-run totals. These are not raw per-frame samples.
 Do not reconstruct exact individual frame intervals from overlapping percentiles.
 
 ## Instrumentation overhead A/B
