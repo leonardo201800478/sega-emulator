@@ -1,7 +1,7 @@
 # Auditoria de prontidão — ROMs externas de diagnóstico SMS
 
-**Data:** 2026-11-13  
-**Baseline consultada:** `main` = `2942abfe0d4754dd857be0bc103d594abfd9b865`  
+**Data:** 2026-11-13
+**Baseline consultada:** `main` = `2942abfe0d4754dd857be0bc103d594abfd9b865`
 **Escopo:** inventário e prontidão de execução das suites públicas SMS; nenhuma alteração no runtime.
 
 ## 1. Conclusão executiva
