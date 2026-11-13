@@ -149,3 +149,12 @@ Therefore no component-derived cutoff frequency or impedance is asserted in this
 - Obtain SG-1000 board-specific audio schematic/measurement before proposing any analog profile.
 
 Until those tasks are complete, the correct software model is a neutral digital PSG path plus optional explicitly experimental output DSP, with no asserted board-calibrated analog transfer function.
+
+
+## Reconciliation with the supplied project audio specification
+
+The supplied file `Especificação Técnica de Áudio do Master System (PSG e DSP em Rust).md` is a useful engineering proposal for the software pipeline, but several numerical statements in it are not corroborated by the service-manual evidence reviewed for this document. In particular, its diagram/code proposes approximately 35 Hz high-pass, 12 kHz low-pass, 1–10 µF coupling capacitance, 1–10 kΩ mixing resistors and a transistor-like `tanh` soft clipper. The same proposal also describes a unipolar summing node and a 111.86 kHz carrier for period 0/1.
+
+Those values and circuit descriptions must remain **design hypotheses**, not board facts, until the corresponding board schematic and physical measurements support them. The service-manual check figures of 20 Hz–20 kHz and 300 mVp-p do not prove a 35 Hz or 12 kHz -3 dB corner, nor do they establish the cited capacitor/resistor ranges, clipping transfer curve or output impedance. The VDP ASIC output must also not be assumed identical to the standalone TI SN76489AN analog output buffer.
+
+For this mission, the codebase's existing 20 Hz HPF / 18 kHz LPF preset remains an optional experimental DSP profile only. Do not replace it with the proposal's 35 Hz / 12 kHz values, add a `tanh` stage, or claim analog accuracy based solely on the supplied proposal. The H2 reconstruction renderer remains logically upstream and independent of any of these output-stage hypotheses.
