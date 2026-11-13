@@ -851,8 +851,16 @@ fn render_scanline_for_revision(
         // The SMS VDP blanks the leading fine-scroll pixels with the
         // backdrop instead of wrapping the last name-table column into view.
         if x < (hs & 7) {
-            bg_color[x] = backdrop;
-            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
+            // The SMS fine-scroll leading pixels are not the R7 backdrop.
+            // The VDP selects color 0 from one of the two BG palettes using
+            // plane 1, pixel 4 of tile $100, sampled from the preceding row.
+            // This behavior is documented in the SMS Power scroll-test
+            // discussion and modeled by MAME's 315-5124 renderer.
+            let parse_row = ((y as i32 - 1) & 7) as usize;
+            let selector = vram[0x2000 + parse_row * 4 + 1] & 0x08 != 0;
+            let color = if selector { 16 } else { 0 };
+            bg_color[x] = color;
+            put_pixel(frame, x, y, palette_rgb(cram, color));
             continue;
         }
         let vs = if regs[0] & 0x80 != 0 && x >= 192 {
@@ -1784,7 +1792,7 @@ mod tests {
     }
 
     #[test]
-    fn sms_mode4_fine_scroll_leading_pixels_use_backdrop_not_wrapped_column() {
+    fn sms_mode4_fine_scroll_leading_pixels_use_tile_100_palette_selector() {
         let mut v = SmsVdp::default();
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -1792,11 +1800,16 @@ mod tests {
         v.registers[5] = 0x7E;
         v.registers[7] = 1;
         v.registers[8] = 3;
+        v.cram[0] = 0x03;
         v.cram[1] = 0x03;
-        v.cram[17] = 0x0C;
+        v.cram[16] = 0x0C;
+        v.cram[17] = 0x30;
         v.vram[0x3800 + 31 * 2] = 1;
         v.vram[32] = 0xFF;
         v.vram[0] = 0x80;
+        // For output line 0, the selector samples row 7 of tile $100.
+        // Plane 1, pixel 4 selects BG palette 1 color 0 when set.
+        v.vram[0x2000 + 7 * 4 + 1] = 0x08;
         v.vram[0x3F00] = 0xD0;
         let mut status = 0;
         render_scanline(
@@ -1808,12 +1821,12 @@ mod tests {
             0,
             true,
         );
-        let backdrop = super::palette_rgb(&v.cram, 17);
+        let palette_one_zero = super::palette_rgb(&v.cram, 16);
         let source_zero = super::palette_rgb(&v.cram, 1);
         for x in 0..3 {
             assert_eq!(
                 &v.working_framebuffer[x * 3..x * 3 + 3],
-                &backdrop,
+                &palette_one_zero,
                 "leading fine-scroll pixel x={x}"
             );
         }
@@ -1821,6 +1834,24 @@ mod tests {
             &v.working_framebuffer[3 * 3..3 * 3 + 3],
             &source_zero,
             "first non-blanked pixel must map to source x=0"
+        );
+
+        // Clearing the selector bit chooses palette 0 color 0, not R7.
+        v.vram[0x2000 + 7 * 4 + 1] = 0;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        let palette_zero_zero = super::palette_rgb(&v.cram, 0);
+        assert_eq!(
+            &v.working_framebuffer[0..3],
+            &palette_zero_zero,
+            "unset selector must choose BG palette 0 color 0"
         );
     }
 
