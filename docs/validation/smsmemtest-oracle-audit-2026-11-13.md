@@ -44,18 +44,18 @@ A máquina já expõe APIs read-only/seguras para esta finalidade:
 
 Isso permite desenvolver um driver de teste em fronteiras de frame, sem callbacks por instrução ou avanço de tempo fora do Scheduler. A entrada deve ser acionada por estado observado, não por atrasos fixos em número de frames.
 
-## 3. Limitação de cart SRAM confirmada no runtime atual
+## 3. Limitação histórica de cart SRAM no baseline 2942 — SUPERADA
 
-A implementação `SmsMemory` auditada contém ROM/cartridge image, mapper, registradores de bancos, 8 KiB de work RAM e BIOS opcional. Não há backing store de cartridge SRAM nem seleção de SRAM bank.
+A implementação `SmsMemory` auditada no baseline histórico `2942abfe0d4754dd857be0bc103d594abfd9b865` continha ROM/cartridge image, mapper, registradores de bancos, 8 KiB de work RAM e BIOS opcional, sem backing store de cartridge SRAM. Essa conclusão descreve somente aquela baseline e foi superada pelas PRs #802/#803.
 
-O código da ROM chama `SMS_enableSRAMBank(0)` e `SMS_enableSRAMBank(1)`, acessando o espaço `$8000-$BFFF`. No estado atual do runtime, essas operações não podem ser usadas para validar SRAM real; escritas comuns nessa janela não criam memória persistente de cartucho.
+A ROM chama `SMS_enableSRAMBank(0)` e `SMS_enableSRAMBank(1)`, acessando `$8000-$BFFF`. A auditoria original ocorreu antes da integração de SRAM. A capacidade de produto foi validada separadamente: Phantasy Star com 8 KiB persiste após fechar/reabrir o emulador, e o modo diagnóstico volátil aceita 8/16/32 KiB.
 
 Portanto:
 - testes de RAM interna podem ser candidatos a validação depois que o driver e o oráculo visual forem implementados;
 - testes de VRAM podem ser candidatos, mas exercitam protocolo de portas e timing de VDP e precisam de oráculo e análise de capacidades próprios;
-- testes de cart SRAM dos bancos 0 e 1 ficam `BLOCKED_CAPABILITY` até a implementação e validação independente do mapper/SRAM correspondente.
+- o driver desta ROM interrompe a navegação após o resultado VRAM e não executa a fase SRAM; a classificação correta do runner é `NOT_EXERCISED_BY_DRIVER`, não `BLOCKED_CAPABILITY` do produto.
 
-Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM deve ser tratada como bloqueio explícito, não mascarada como falha da ROM.
+Não modificar o mapper como parte desta tarefa de harness. A cobertura SRAM deste driver deve ser explicitamente marcada como não exercitada; a capacidade persistente de produto já foi validada em trabalho separado.
 
 ## 4. Plano de oráculo incremental
 
@@ -82,7 +82,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 
 - RAM: classificar os sete padrões separadamente por `OK!`/ `FAILED!`; detectar o loop de RAM fatal como estado separado.
 - VRAM: classificar os cinco padrões separadamente; marcar casos não observáveis ou dependentes de granularidade ausente como `BLOCKED`.
-- SRAM: sempre `BLOCKED_CAPABILITY` enquanto a máquina não possuir SRAM de cartucho validada.
+- SRAM: `NOT_EXERCISED_BY_DRIVER`; esta execução termina após VRAM. A persistência SRAM do produto foi validada separadamente em #802/#803.
 - Um resultado global só pode ser `PARTIAL_PASS` se cada caso executável tiver resultado individual e todos os bloqueios estiverem explicitados; nunca converter isso em PASS da suite completa.
 
 ### Fase M4 — Validação do próprio oráculo
@@ -100,7 +100,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 - Perfil: USA/NTSC; resultado RAM disponível no frame 441; resultado VRAM no frame 800.
 - RAM: `PASS` em `ram_all_zero`, `ram_all_one`, `ram_pattern_55`, `ram_pattern_aa`, `ram_variable_1`, `ram_variable_19` e `ram_variable_71`.
 - VRAM: `PASS_ALL_REPORTED_BY_ROM` — a própria ROM entrou no ramo de sucesso agregado após executar os cinco padrões.
-- Instruções: 8.496.776; áudio drenado: 640.825 amostras; SRAM: `BLOCKED_CAPABILITY`.
+- Instruções: 8.496.776; áudio drenado: 640.825 amostras. O JSONL histórico registrou `sram_phase=BLOCKED_CAPABILITY`; esse rótulo significava que o driver não executou a fase, não que a capacidade atual do produto esteja bloqueada.
 - Essa execução valida o fluxo ROM → entrada → framebuffer → classificador, mas não constitui comparação com hardware físico ou outro emulador de referência.
 - As duas execuções usam `git rev-parse HEAD` e registraram `emulator_sha=323c492ec98dae7cbed5d1d8eac0e47df8ba8f5f`. A comparação de `start`, todos os registros `frame`, eventos de entrada, resultados por caso e `summary` retornou `determinism=IDENTICAL`. O job CI também exigiu e confirmou 7/7 casos RAM `PASS` e VRAM `PASS_ALL_REPORTED_BY_ROM`.
 
@@ -115,7 +115,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 | Captura/oráculo visual | Exercitado duas vezes em ROM real: sete linhas RAM e resultado agregado VRAM classificados por cor; logs idênticos |
 | Testes RAM | PASS reportado pela ROM em 7/7 casos nas duas execuções idênticas |
 | Testes VRAM | PASS_ALL_REPORTED_BY_ROM nas duas execuções idênticas; falha individual ainda não identifica qual dos cinco padrões falhou |
-| Testes cart SRAM | BLOCKED_CAPABILITY — sem SRAM no mapper |
+| Fase cart SRAM neste runner | NOT_EXERCISED_BY_DRIVER — o driver encerra após VRAM; persistência do produto validada separadamente em #802/#803 |
 | Execução real de ROM externa | EXECUTED — 800 frames; 8.496.776 instruções; runner exit code 0 |
 
 ## 7. Referências upstream
@@ -125,3 +125,13 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 - devkitSMS: https://github.com/sverx/devkitSMS
 
 A fonte upstream descreve RAM interna de 8 KiB, VRAM de 16 KiB e cart RAM de até 32 KiB. A implementação de teste usa explicitamente dois bancos SRAM, e requer toolchain SDCC/devkitSMS e o `crt0_memtest.rel` modificado. Fixar também as revisões de todas as dependências antes de publicar ROM gerada ou comparar resultados.
+
+## 12. Atualização após o fechamento de SRAM — 2026-11-13
+
+A seção 3 acima é um registro histórico da baseline `2942abfe0d4754dd857be0bc103d594abfd9b865` e não descreve o estado atual do produto:
+
+- PR #802 integrou catálogo/perfil e persistência SRAM `.srm`; Phantasy Star com 8 KiB foi testado salvando, fechando e reabrindo o emulador, com restauração confirmada.
+- PR #803 integrou o override diagnóstico volátil `SEGA_SMS_DIAGNOSTIC_SRAM_BYTES` para 8192/16384/32768 bytes, sem persistência, e o SMSmemtest v0.40 passou dez verificações de padrões (cinco em cada banco).
+- Portanto, SRAM não é mais `BLOCKED_CAPABILITY` no produto. Não reabrir essa etapa sem regressão demonstrada.
+- O runner SMSmemtest desta PR deliberadamente termina após o resultado VRAM e não injeta o pulso que inicia a fase SRAM. O campo de resumo foi corrigido para `NOT_EXERCISED_BY_DRIVER`; o histórico antigo `BLOCKED_CAPABILITY` é apenas a classificação anterior dessa cobertura ausente.
+- A aprovação de SRAM do produto vem dos testes específicos #802/#803; não deve ser atribuída às duas execuções do runner SMSmemtest descritas neste documento.
