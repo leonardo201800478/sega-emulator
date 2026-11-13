@@ -1949,6 +1949,7 @@ fn handle_command(
                         telemetry.record_audio_session_metrics(session.as_ref());
                     }
                     *machine = powered_off;
+                    audio_renderer.reset_epoch_if_selected(machine, telemetry);
                     telemetry.reset_machine_counters();
                     trace_history.clear();
                     Ok(())
