@@ -2036,22 +2036,22 @@ fn handle_command(
             let result =
                 rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region)
                     .and_then(|powered_off| {
-                    audio_session
-                        .as_mut()
-                        .map_or(Ok::<(), String>(()), |session| {
-                            session.suspend_and_flush()?;
-                            session.reset_dsp();
-                            Ok(())
-                        })?;
-                    if let Some(session) = audio_session.as_ref() {
-                        telemetry.record_audio_session_metrics(session.as_ref());
-                    }
-                    *machine = powered_off;
-                    audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                    telemetry.reset_machine_counters();
-                    trace_history.clear();
-                    Ok(())
-                });
+                        audio_session
+                            .as_mut()
+                            .map_or(Ok::<(), String>(()), |session| {
+                                session.suspend_and_flush()?;
+                                session.reset_dsp();
+                                Ok(())
+                            })?;
+                        if let Some(session) = audio_session.as_ref() {
+                            telemetry.record_audio_session_metrics(session.as_ref());
+                        }
+                        *machine = powered_off;
+                        audio_renderer.reset_epoch_if_selected(machine, telemetry);
+                        telemetry.reset_machine_counters();
+                        trace_history.clear();
+                        Ok(())
+                    });
             if let Err(error) = &result {
                 telemetry.set_runtime_error(Some(error.clone()));
             }
@@ -2096,7 +2096,7 @@ fn handle_command(
                     "cannot replace a cartridge with SRAM through load_rom; persist it and create a new worker".to_owned(),
                 ));
             } else {
-            match build_sms_temporal_machine(new_rom.clone(), region) {
+                match build_sms_temporal_machine(new_rom.clone(), region) {
                 Ok(new_machine) => {
                     *running = false;
                     telemetry.running.store(false, Ordering::Release);
@@ -2126,7 +2126,7 @@ fn handle_command(
                 Err(error) => {
                     let _ = reply.send(Err(error));
                 }
-            }
+                }
             }
         }
         WorkerCommand::StepInstruction(reply) => {
@@ -2385,6 +2385,10 @@ mod tests {
         WorkerTelemetry, build_sms_temporal_machine, execute_frame, execute_frame_with_renderer,
     };
     use crate::SmsTemporalWorkerDebugHandle;
+    use sega_media::{
+        CartridgeHardwareProfile, CartridgeMapper, CartridgeRamKind, CartridgeRamMapping,
+        CartridgeRamProfile, CartridgeSystem, ProfileStatus,
+    };
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
@@ -2661,6 +2665,56 @@ mod tests {
     }
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
+
+    fn battery_sram_test_profile() -> CartridgeHardwareProfile {
+        CartridgeHardwareProfile {
+            system: CartridgeSystem::MasterSystem,
+            mapper: CartridgeMapper::SmsSega,
+            ram: Some(CartridgeRamProfile {
+                kind: CartridgeRamKind::BatteryBackedSram,
+                capacity_bytes: 0x2000,
+                mapping: CartridgeRamMapping::SegaMapperSlot2,
+                mapped_window_bytes: 0x4000,
+                bank_size_bytes: 0x4000,
+                mirrored: true,
+            }),
+            status: ProfileStatus::Verified,
+            board: Some("unit-test".to_owned()),
+            evidence: vec!["synthetic worker SRAM test".to_owned()],
+        }
+    }
+
+    #[test]
+    fn worker_exports_sram_and_preserves_it_across_reset_and_power_off() {
+        let initial = vec![0x5A; 0x2000];
+        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            Some(battery_sram_test_profile()),
+            Some(initial.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial.clone()));
+
+        worker.reset().unwrap();
+        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial.clone()));
+
+        worker.stop().unwrap();
+        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial));
+    }
+
+    #[test]
+    fn worker_rejects_persisted_sram_without_a_verified_hardware_profile() {
+        let error = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+            SYNTHETIC_ROM.to_vec(),
+            "usa",
+            None,
+            Some(vec![0; 0x2000]),
+        )
+        .unwrap_err();
+        assert!(error.contains("verified cartridge RAM profile"));
+    }
 
     #[test]
     fn h2_renderer_is_selected_at_worker_boundary_and_consumes_real_psg_events() {
