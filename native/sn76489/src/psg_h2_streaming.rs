@@ -5,7 +5,7 @@
 //! The 65-tap Kaiser-sinc study kernel is retained as an integrated step
 //! response so event contributions can be accumulated into a bounded ring.
 
-use super::{bessel_i0, PsgAmplitudeEvent};
+use super::{PsgAmplitudeEvent, bessel_i0};
 use std::f64::consts::PI;
 
 const KERNEL_HALF: f64 = 32.0;
@@ -51,7 +51,10 @@ impl std::fmt::Display for H2StreamingError {
                 write!(f, "H2 event lies beyond the supplied render horizon")
             }
             Self::LateEvent => {
-                write!(f, "H2 event arrived after an affected PCM sample was emitted")
+                write!(
+                    f,
+                    "H2 event arrived after an affected PCM sample was emitted"
+                )
             }
             Self::PendingHorizonExceeded => {
                 write!(f, "H2 event exceeds the bounded pending-sample horizon")
@@ -117,8 +120,7 @@ impl H2StreamingRenderer {
         for index in 0..sample_count {
             let position = -KERNEL_HALF + index as f64 * step_resolution;
             let normalized = position / KERNEL_HALF;
-            let window_argument =
-                (1.0 - normalized * normalized).max(0.0).sqrt() * KAISER_BETA;
+            let window_argument = (1.0 - normalized * normalized).max(0.0).sqrt() * KAISER_BETA;
             let window = bessel_i0(window_argument) / denominator;
             let scaled = 2.0 * KERNEL_CUTOFF * position;
             let sinc = if scaled.abs() < 1.0e-12 {
@@ -131,9 +133,7 @@ impl H2StreamingRenderer {
 
         for index in 1..sample_count {
             step_response[index] = step_response[index - 1]
-                + 0.5
-                    * (impulse_response[index - 1] + impulse_response[index])
-                    * step_resolution;
+                + 0.5 * (impulse_response[index - 1] + impulse_response[index]) * step_resolution;
         }
 
         let area = *step_response.last().expect("H2 kernel has samples");
@@ -317,20 +317,13 @@ impl H2StreamingRenderer {
         first + (second - first) * fraction
     }
 
-    fn accumulate_event(
-        &mut self,
-        clock: u64,
-        delta: f64,
-    ) -> Result<(), H2StreamingError> {
+    fn accumulate_event(&mut self, clock: u64, delta: f64) -> Result<(), H2StreamingError> {
         let event_position = self.sample_position_at_clock(clock)?;
         let first_value = (event_position + FRACTIONAL_DELAY - 1.0).ceil().max(0.0);
-        let settled_value =
-            (event_position + 2.0 * KERNEL_HALF + FRACTIONAL_DELAY - 1.0)
-                .ceil()
-                .max(0.0);
-        if !first_value.is_finite()
-            || !settled_value.is_finite()
-            || settled_value > u64::MAX as f64
+        let settled_value = (event_position + 2.0 * KERNEL_HALF + FRACTIONAL_DELAY - 1.0)
+            .ceil()
+            .max(0.0);
+        if !first_value.is_finite() || !settled_value.is_finite() || settled_value > u64::MAX as f64
         {
             return Err(H2StreamingError::SampleIndexOverflow);
         }
@@ -343,9 +336,10 @@ impl H2StreamingRenderer {
         if pending_horizon >= PENDING_CAPACITY as u64 {
             return Err(H2StreamingError::PendingHorizonExceeded);
         }
-        self.metrics.max_pending_samples = self.metrics.max_pending_samples.max(
-            usize::try_from(pending_horizon).unwrap_or(usize::MAX),
-        );
+        self.metrics.max_pending_samples = self
+            .metrics
+            .max_pending_samples
+            .max(usize::try_from(pending_horizon).unwrap_or(usize::MAX));
 
         for sample_index in first..settled {
             let slot = sample_index as usize % PENDING_CAPACITY;
@@ -393,12 +387,30 @@ mod tests {
 
     fn fixture_events() -> Vec<PsgAmplitudeEvent> {
         vec![
-            PsgAmplitudeEvent { clock: 0, delta: 0.25 },
-            PsgAmplitudeEvent { clock: 12_345, delta: -0.5 },
-            PsgAmplitudeEvent { clock: 12_345, delta: 0.125 },
-            PsgAmplitudeEvent { clock: 98_765, delta: 0.25 },
-            PsgAmplitudeEvent { clock: 200_000, delta: -0.125 },
-            PsgAmplitudeEvent { clock: 400_001, delta: 0.25 },
+            PsgAmplitudeEvent {
+                clock: 0,
+                delta: 0.25,
+            },
+            PsgAmplitudeEvent {
+                clock: 12_345,
+                delta: -0.5,
+            },
+            PsgAmplitudeEvent {
+                clock: 12_345,
+                delta: 0.125,
+            },
+            PsgAmplitudeEvent {
+                clock: 98_765,
+                delta: 0.25,
+            },
+            PsgAmplitudeEvent {
+                clock: 200_000,
+                delta: -0.125,
+            },
+            PsgAmplitudeEvent {
+                clock: 400_001,
+                delta: 0.25,
+            },
         ]
     }
 
@@ -420,11 +432,21 @@ mod tests {
             .render_until(&events, total_clock, &mut continuous_block)
             .unwrap();
         continuous_output.extend_from_slice(&continuous_block);
-        continuous.finish(total_clock, &mut continuous_block).unwrap();
+        continuous
+            .finish(total_clock, &mut continuous_block)
+            .unwrap();
         continuous_output.extend_from_slice(&continuous_block);
 
         let mut event_cursor = 0;
-        for end_clock in [1_000, 12_345, 50_000, 100_000, 200_000, 300_000, total_clock] {
+        for end_clock in [
+            1_000,
+            12_345,
+            50_000,
+            100_000,
+            200_000,
+            300_000,
+            total_clock,
+        ] {
             let start = event_cursor;
             while event_cursor < events.len() && events[event_cursor].clock <= end_clock {
                 event_cursor += 1;
@@ -453,8 +475,7 @@ mod tests {
             .map(|event| (event.clock, event.delta))
             .collect::<Vec<_>>();
         let total_clock = 500_000;
-        let expected =
-            super::super::h2_model::render_reference_events(&pairs, 0.0, total_clock);
+        let expected = super::super::h2_model::render_reference_events(&pairs, 0.0, total_clock);
 
         let mut renderer = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut block = Vec::with_capacity(1024);
@@ -474,14 +495,32 @@ mod tests {
         let mut first = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut second = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let a = [
-            PsgAmplitudeEvent { clock: 0, delta: 0.25 },
-            PsgAmplitudeEvent { clock: 0, delta: -0.5 },
-            PsgAmplitudeEvent { clock: 10_000, delta: 0.125 },
+            PsgAmplitudeEvent {
+                clock: 0,
+                delta: 0.25,
+            },
+            PsgAmplitudeEvent {
+                clock: 0,
+                delta: -0.5,
+            },
+            PsgAmplitudeEvent {
+                clock: 10_000,
+                delta: 0.125,
+            },
         ];
         let b = [
-            PsgAmplitudeEvent { clock: 0, delta: -0.5 },
-            PsgAmplitudeEvent { clock: 0, delta: 0.25 },
-            PsgAmplitudeEvent { clock: 10_000, delta: 0.125 },
+            PsgAmplitudeEvent {
+                clock: 0,
+                delta: -0.5,
+            },
+            PsgAmplitudeEvent {
+                clock: 0,
+                delta: 0.25,
+            },
+            PsgAmplitudeEvent {
+                clock: 10_000,
+                delta: 0.125,
+            },
         ];
         let mut out_a = Vec::new();
         let mut out_b = Vec::new();
@@ -497,7 +536,10 @@ mod tests {
         let mut renderer = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut output = Vec::new();
         renderer.render_until(&[], 100_000, &mut output).unwrap();
-        let backdated = [PsgAmplitudeEvent { clock: 99_999, delta: 0.25 }];
+        let backdated = [PsgAmplitudeEvent {
+            clock: 99_999,
+            delta: 0.25,
+        }];
         assert_eq!(
             renderer.render_until(&backdated, 110_000, &mut output),
             Err(H2StreamingError::EventOutOfOrder)
@@ -508,7 +550,10 @@ mod tests {
     fn renderer_rejects_events_after_the_supplied_horizon() {
         let mut renderer = H2StreamingRenderer::new(CLOCK_HZ, SAMPLE_RATE).unwrap();
         let mut output = Vec::new();
-        let future = [PsgAmplitudeEvent { clock: 10_000, delta: 0.25 }];
+        let future = [PsgAmplitudeEvent {
+            clock: 10_000,
+            delta: 0.25,
+        }];
         assert_eq!(
             renderer.render_until(&future, 9_999, &mut output),
             Err(H2StreamingError::EventAfterRenderHorizon)
