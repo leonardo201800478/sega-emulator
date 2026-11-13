@@ -15,11 +15,11 @@ use std::time::{Duration, Instant};
 use crate::audio::AudioSession;
 use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
+use sega_media::{CartridgeHardwareProfile, CartridgeMapper, CartridgeSystem};
 use sega_sms_core::{
     ControllerButtons, PsgAmplitudeEvent, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
     SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
-use sega_media::{CartridgeHardwareProfile, CartridgeMapper, CartridgeSystem};
 use sega_sn76489::H2StreamingRenderer;
 #[cfg(windows)]
 use sega_video_runtime::d3d12::D3d12MailboxSession;
@@ -2033,71 +2033,32 @@ fn handle_command(
             // POWER-off is different from Pause: retain the ROM, but cold-reset the machine.
             *running = false;
             telemetry.running.store(false, Ordering::Release);
-            let result =
-                rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region)
-                    .and_then(|powered_off| {
-                        audio_session
-                            .as_mut()
-                            .map_or(Ok::<(), String>(()), |session| {
-                                session.suspend_and_flush()?;
-                                session.reset_dsp();
-                                Ok(())
-                            })?;
-                        if let Some(session) = audio_session.as_ref() {
-                            telemetry.record_audio_session_metrics(session.as_ref());
-                        }
-                        *machine = powered_off;
-                        audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                        telemetry.reset_machine_counters();
-                        trace_history.clear();
-                        Ok(())
-                    });
+            let result = rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region)
+                .and_then(|powered_off| {
+                    audio_session
+                        .as_mut()
+                        .map_or(Ok::<(), String>(()), |session| {
+                            session.suspend_and_flush()?;
+                            session.reset_dsp();
+                            Ok(())
+                        })?;
+                    if let Some(session) = audio_session.as_ref() {
+                        telemetry.record_audio_session_metrics(session.as_ref());
+                    }
+                    *machine = powered_off;
+                    audio_renderer.reset_epoch_if_selected(machine, telemetry);
+                    telemetry.reset_machine_counters();
+                    trace_history.clear();
+                    Ok(())
+                });
             if let Err(error) = &result {
                 telemetry.set_runtime_error(Some(error.clone()));
             }
             let _ = reply.send(result);
         }
-        WorkerCommand::Reset(reply) => match rebuild_sms_temporal_machine_preserving_sram(
-            machine,
-            rom.clone(),
-            region,
-        ) {
-            Ok(reset_machine) => {
-                *running = false;
-                telemetry.running.store(false, Ordering::Release);
-                let result: Result<(), String> = audio_session.as_mut().map_or(Ok(()), |session| {
-                    session.suspend_and_flush()?;
-                    session.reset_dsp();
-                    Ok(())
-                });
-                if let Some(session) = audio_session.as_ref() {
-                    telemetry.record_audio_session_metrics(session.as_ref());
-                }
-                match result {
-                    Ok(()) => {
-                        *machine = reset_machine;
-                        audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                        telemetry.reset_machine_counters();
-                        let _ = reply.send(Ok(()));
-                    }
-                    Err(error) => {
-                        telemetry.set_audio_error(Some(error.clone()));
-                        let _ = reply.send(Err(error));
-                    }
-                }
-            }
-            Err(error) => {
-                let _ = reply.send(Err(error));
-            }
-        },
-        WorkerCommand::LoadRom(new_rom, reply) => {
-            if machine.memory().cartridge_sram().is_some() {
-                let _ = reply.send(Err(
-                    "cannot replace a cartridge with SRAM through load_rom; persist it and create a new worker".to_owned(),
-                ));
-            } else {
-                match build_sms_temporal_machine(new_rom.clone(), region) {
-                Ok(new_machine) => {
+        WorkerCommand::Reset(reply) => {
+            match rebuild_sms_temporal_machine_preserving_sram(machine, rom.clone(), region) {
+                Ok(reset_machine) => {
                     *running = false;
                     telemetry.running.store(false, Ordering::Release);
                     let result: Result<(), String> =
@@ -2111,9 +2072,8 @@ fn handle_command(
                     }
                     match result {
                         Ok(()) => {
-                            *machine = new_machine;
+                            *machine = reset_machine;
                             audio_renderer.reset_epoch_if_selected(machine, telemetry);
-                            *rom = new_rom;
                             telemetry.reset_machine_counters();
                             let _ = reply.send(Ok(()));
                         }
@@ -2126,6 +2086,44 @@ fn handle_command(
                 Err(error) => {
                     let _ = reply.send(Err(error));
                 }
+            }
+        }
+        WorkerCommand::LoadRom(new_rom, reply) => {
+            if machine.memory().cartridge_sram().is_some() {
+                let _ = reply.send(Err(
+                    "cannot replace a cartridge with SRAM through load_rom; persist it and create a new worker".to_owned(),
+                ));
+            } else {
+                match build_sms_temporal_machine(new_rom.clone(), region) {
+                    Ok(new_machine) => {
+                        *running = false;
+                        telemetry.running.store(false, Ordering::Release);
+                        let result: Result<(), String> =
+                            audio_session.as_mut().map_or(Ok(()), |session| {
+                                session.suspend_and_flush()?;
+                                session.reset_dsp();
+                                Ok(())
+                            });
+                        if let Some(session) = audio_session.as_ref() {
+                            telemetry.record_audio_session_metrics(session.as_ref());
+                        }
+                        match result {
+                            Ok(()) => {
+                                *machine = new_machine;
+                                audio_renderer.reset_epoch_if_selected(machine, telemetry);
+                                *rom = new_rom;
+                                telemetry.reset_machine_counters();
+                                let _ = reply.send(Ok(()));
+                            }
+                            Err(error) => {
+                                telemetry.set_audio_error(Some(error.clone()));
+                                let _ = reply.send(Err(error));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        let _ = reply.send(Err(error));
+                    }
                 }
             }
         }
@@ -2385,11 +2383,11 @@ mod tests {
         WorkerTelemetry, build_sms_temporal_machine, execute_frame, execute_frame_with_renderer,
     };
     use crate::SmsTemporalWorkerDebugHandle;
+    use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_media::{
         CartridgeHardwareProfile, CartridgeMapper, CartridgeRamKind, CartridgeRamMapping,
         CartridgeRamProfile, CartridgeSystem, ProfileStatus,
     };
-    use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
@@ -2695,10 +2693,16 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial.clone()));
+        assert_eq!(
+            worker.export_cartridge_sram().unwrap(),
+            Some(initial.clone())
+        );
 
         worker.reset().unwrap();
-        assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial.clone()));
+        assert_eq!(
+            worker.export_cartridge_sram().unwrap(),
+            Some(initial.clone())
+        );
 
         worker.stop().unwrap();
         assert_eq!(worker.export_cartridge_sram().unwrap(), Some(initial));
