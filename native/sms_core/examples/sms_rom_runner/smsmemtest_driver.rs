@@ -1,21 +1,20 @@
-//! Deterministic, frame-boundary input driver for the upstream SMSmemtest flow.
+//! Deterministic SMSmemtest input and result driver.
 //!
-//! The driver detects documented prompts and the ROM's explicit green/red result
-//! glyphs. Prompt detection is heuristic; color classification is unit-tested but
-//! still requires validation against an actual built SMSmemtest ROM.
+//! The decoder reads the SMS Mode 4 name table through the VDP's existing
+//! read-only VRAM accessor. SMSlib's text renderer maps ASCII characters to
+//! font tile indices 0..95 (white), 96..191 (green), and 192..287 (red).
+//! This avoids framebuffer OCR and does not mutate VDP or Scheduler state.
 
 use sega_sms_core::{ControllerButtons, SmsTemporalMachine};
 
-const FRAME_WIDTH: usize = 256;
-const RGB_BYTES_PER_PIXEL: usize = 3;
-const TEXT_CELL_HEIGHT: usize = 8;
-const INITIAL_PROMPT_TEXT_ROW: usize = 3;
-const RAM_COMPLETE_PROMPT_TEXT_ROW: usize = 14;
-const VRAM_RESULT_TEXT_ROW: usize = 4;
+const SMS_PNT_BASE: usize = 0x3800;
+const SMS_PNT_COLUMNS: usize = 32;
+const SMS_PNT_ROWS: usize = 28;
+const SMS_PNT_ROW_BYTES: usize = SMS_PNT_COLUMNS * 2;
+const FONT_TILE_COUNT: u16 = 96;
+const GREEN_TILE_OFFSET: u16 = 96;
+const RED_TILE_OFFSET: u16 = 192;
 const REQUIRED_STABLE_FRAMES: u8 = 2;
-const MIN_VISIBLE_PIXELS: usize = 8;
-const WHITE_CHANNEL_MIN: u8 = 128;
-const COLOR_CHANNEL_MAX: u8 = 32;
 
 pub const RAM_RESULT_CASES: [&str; 7] = [
     "ram_all_zero",
@@ -27,10 +26,21 @@ pub const RAM_RESULT_CASES: [&str; 7] = [
     "ram_variable_71",
 ];
 
+const RAM_RESULT_LABELS: [&str; 7] = [
+    "-all bits to zero...",
+    "-all bits to one ...",
+    "-all bytes to $55...",
+    "-all bytes to $AA...",
+    "-different values...",
+    "-different values...",
+    "-different values...",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmsmemtestCaseResult {
     Pass,
     Fail,
+    PassAllReportedByRom,
     NotObserved,
     Ambiguous,
 }
@@ -40,6 +50,7 @@ impl SmsmemtestCaseResult {
         match self {
             Self::Pass => "PASS",
             Self::Fail => "FAIL",
+            Self::PassAllReportedByRom => "PASS_ALL_REPORTED_BY_ROM",
             Self::NotObserved => "NOT_OBSERVED",
             Self::Ambiguous => "AMBIGUOUS",
         }
@@ -47,10 +58,30 @@ impl SmsmemtestCaseResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SmsmemtestTextColor {
+    White,
+    Green,
+    Red,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DecodedTextRow {
+    text: String,
+    colors: Vec<SmsmemtestTextColor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmsmemtestDecodedCase {
+    pub case_id: &'static str,
+    pub result: SmsmemtestCaseResult,
+    pub observed_text: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     AwaitInitialPrompt,
     AwaitRamCompletePrompt,
-    AwaitVramResultColor,
+    AwaitVramResult,
     Complete,
 }
 
@@ -59,7 +90,6 @@ pub struct SmsmemtestInputDriver {
     stage: Option<Stage>,
     stable_frames: u8,
     release_button_after_frame: bool,
-    vram_blank_frame_seen: bool,
 }
 
 impl SmsmemtestInputDriver {
@@ -68,14 +98,11 @@ impl SmsmemtestInputDriver {
             stage: Some(Stage::AwaitInitialPrompt),
             stable_frames: 0,
             release_button_after_frame: false,
-            vram_blank_frame_seen: false,
         }
     }
 
-    /// Observe one completed RGB24 frame and emit deterministic input events.
-    ///
-    /// Button transitions are applied only after a complete frame. A press is
-    /// held through the following frame, then released at its boundary.
+    /// Observe the SMSlib name table after a completed frame and emit input
+    /// transitions only at frame boundaries.
     pub fn after_frame(
         &mut self,
         machine: &mut SmsTemporalMachine,
@@ -94,28 +121,18 @@ impl SmsmemtestInputDriver {
             return Ok(events);
         };
 
-        let (row, next_stage) = match stage {
-            Stage::AwaitInitialPrompt => {
-                (INITIAL_PROMPT_TEXT_ROW, Some(Stage::AwaitRamCompletePrompt))
+        let vram = machine.vdp().vram();
+        let marker_observed = match stage {
+            Stage::AwaitInitialPrompt => decode_smsmemtest_text_row(vram, 3)
+                .is_some_and(|row| row_is_white(&row, "Press any button to start")),
+            Stage::AwaitRamCompletePrompt => {
+                let first = decode_smsmemtest_text_row(vram, 14);
+                let second = decode_smsmemtest_text_row(vram, 15);
+                first.is_some_and(|row| row_is_white(&row, "Press any controller button"))
+                    && second.is_some_and(|row| row_is_white(&row, "to start VIDEO RAM tests"))
             }
-            Stage::AwaitRamCompletePrompt => (
-                RAM_COMPLETE_PROMPT_TEXT_ROW,
-                Some(Stage::AwaitVramResultColor),
-            ),
-            Stage::AwaitVramResultColor => (VRAM_RESULT_TEXT_ROW, None),
+            Stage::AwaitVramResult => classify_vram_result_row(vram).is_some(),
             Stage::Complete => return Ok(events),
-        };
-
-        let marker_observed = if stage == Stage::AwaitVramResultColor {
-            let result = classify_result_row(machine.framebuffer(), VRAM_RESULT_TEXT_ROW);
-            if result == SmsmemtestCaseResult::NotObserved {
-                self.vram_blank_frame_seen = true;
-                false
-            } else {
-                self.vram_blank_frame_seen
-            }
-        } else {
-            text_row_has_visible_pixels(machine.framebuffer(), row)
         };
 
         if marker_observed {
@@ -129,31 +146,40 @@ impl SmsmemtestInputDriver {
         }
 
         self.stable_frames = 0;
-        match next_stage {
-            Some(next) => {
-                machine
-                    .set_controller(
-                        1,
-                        ControllerButtons {
-                            button_1: true,
-                            ..ControllerButtons::default()
-                        },
-                    )
-                    .map_err(|error| format!("cannot press SMSmemtest controller: {error}"))?;
-                self.release_button_after_frame = true;
-                if stage == Stage::AwaitRamCompletePrompt {
-                    events.push("ram_results_ready");
-                }
-                self.stage = Some(next);
+        match stage {
+            Stage::AwaitInitialPrompt => {
+                self.press_button(machine)?;
+                self.stage = Some(Stage::AwaitRamCompletePrompt);
                 events.push("button_pressed");
             }
-            None => {
-                self.stage = Some(Stage::Complete);
-                events.push("vram_result_color_observed");
+            Stage::AwaitRamCompletePrompt => {
+                events.push("ram_results_ready");
+                self.press_button(machine)?;
+                self.stage = Some(Stage::AwaitVramResult);
+                events.push("button_pressed");
             }
+            Stage::AwaitVramResult => {
+                self.stage = Some(Stage::Complete);
+                events.push("vram_result_text_observed");
+            }
+            Stage::Complete => {}
         }
 
         Ok(events)
+    }
+
+    fn press_button(&mut self, machine: &mut SmsTemporalMachine) -> Result<(), String> {
+        machine
+            .set_controller(
+                1,
+                ControllerButtons {
+                    button_1: true,
+                    ..ControllerButtons::default()
+                },
+            )
+            .map_err(|error| format!("cannot press SMSmemtest controller: {error}"))?;
+        self.release_button_after_frame = true;
+        Ok(())
     }
 
     pub fn is_complete(&self) -> bool {
@@ -161,161 +187,306 @@ impl SmsmemtestInputDriver {
     }
 }
 
-/// Classify one SMSmemtest result row using its documented green/red text palette.
-pub fn classify_result_row(framebuffer: &[u8], text_row: usize) -> SmsmemtestCaseResult {
-    let stride = FRAME_WIDTH * RGB_BYTES_PER_PIXEL;
-    let height = framebuffer.len() / stride;
-    let start_y = text_row.saturating_mul(TEXT_CELL_HEIGHT);
-    let end_y = start_y.saturating_add(TEXT_CELL_HEIGHT);
-    if !framebuffer.len().is_multiple_of(stride) || end_y > height {
-        return SmsmemtestCaseResult::NotObserved;
-    }
-
-    let mut green = false;
-    let mut red = false;
-    for y in start_y..end_y {
-        let row_start = y * stride;
-        let row_end = row_start + stride;
-        for pixel in framebuffer[row_start..row_end]
-            .as_chunks::<RGB_BYTES_PER_PIXEL>()
-            .0
-        {
-            green |= pixel[1] >= WHITE_CHANNEL_MIN
-                && pixel[0] <= COLOR_CHANNEL_MAX
-                && pixel[2] <= COLOR_CHANNEL_MAX;
-            red |= pixel[0] >= WHITE_CHANNEL_MIN
-                && pixel[1] <= COLOR_CHANNEL_MAX
-                && pixel[2] <= COLOR_CHANNEL_MAX;
-        }
-    }
-
-    match (green, red) {
-        (true, false) => SmsmemtestCaseResult::Pass,
-        (false, true) => SmsmemtestCaseResult::Fail,
-        (false, false) => SmsmemtestCaseResult::NotObserved,
-        (true, true) => SmsmemtestCaseResult::Ambiguous,
-    }
-}
-
-/// Classify the seven independent system-RAM result rows (text rows 4 through 10).
-pub fn classify_ram_result_rows(framebuffer: &[u8]) -> [SmsmemtestCaseResult; 7] {
-    std::array::from_fn(|index| classify_result_row(framebuffer, index + 4))
-}
-
-/// Return true when a text-cell row contains enough white RGB24 text pixels.
+/// Decode one 32-column SMSlib text row directly from the Mode 4 name table.
 ///
-/// SMSmemtest uses an 8x8 text grid. This is deliberately a prompt-presence
-/// detector, not OCR and not a per-case result classifier.
-pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool {
-    let stride = FRAME_WIDTH * RGB_BYTES_PER_PIXEL;
-    let height = framebuffer.len() / stride;
-    let start_y = text_row.saturating_mul(TEXT_CELL_HEIGHT);
-    let end_y = start_y.saturating_add(TEXT_CELL_HEIGHT);
-
-    if !framebuffer.len().is_multiple_of(stride) || end_y > height {
-        return false;
+/// SMSlib defines PNT write address 0x7800; after removing the VDP write flag,
+/// the backing VRAM offset is 0x3800. Each entry is a little-endian 16-bit
+/// tile/attribute word. The low nine bits identify the font tile.
+fn decode_smsmemtest_text_row(vram: &[u8], row: usize) -> Option<DecodedTextRow> {
+    if row >= SMS_PNT_ROWS {
+        return None;
     }
 
-    let mut visible_pixels = 0;
-    for y in start_y..end_y {
-        let row_start = y * stride;
-        let row_end = row_start + stride;
-        for pixel in framebuffer[row_start..row_end]
-            .as_chunks::<RGB_BYTES_PER_PIXEL>()
-            .0
-        {
-            if pixel.iter().all(|channel| *channel >= WHITE_CHANNEL_MIN) {
-                visible_pixels += 1;
-                if visible_pixels >= MIN_VISIBLE_PIXELS {
-                    return true;
-                }
-            }
+    let row_start = SMS_PNT_BASE.checked_add(row.checked_mul(SMS_PNT_ROW_BYTES)?)?;
+    let row_end = row_start.checked_add(SMS_PNT_ROW_BYTES)?;
+    if row_end > vram.len() {
+        return None;
+    }
+
+    let mut text = String::with_capacity(SMS_PNT_COLUMNS);
+    let mut colors = Vec::with_capacity(SMS_PNT_COLUMNS);
+    for column in 0..SMS_PNT_COLUMNS {
+        let offset = row_start + column * 2;
+        let entry = u16::from_le_bytes([vram[offset], vram[offset + 1]]);
+        let tile = entry & 0x01FF;
+        let (character, color) = decode_font_tile(tile)?;
+        text.push(character);
+        colors.push(color);
+    }
+
+    while text.ends_with(' ') {
+        text.pop();
+        colors.pop();
+    }
+
+    Some(DecodedTextRow { text, colors })
+}
+
+fn decode_font_tile(tile: u16) -> Option<(char, SmsmemtestTextColor)> {
+    let (offset, color) = match tile {
+        0..FONT_TILE_COUNT => (0, SmsmemtestTextColor::White),
+        GREEN_TILE_OFFSET..(GREEN_TILE_OFFSET + FONT_TILE_COUNT) => {
+            (GREEN_TILE_OFFSET, SmsmemtestTextColor::Green)
+        }
+        RED_TILE_OFFSET..(RED_TILE_OFFSET + FONT_TILE_COUNT) => {
+            (RED_TILE_OFFSET, SmsmemtestTextColor::Red)
+        }
+        _ => return None,
+    };
+
+    let ascii = tile.checked_sub(offset)?.checked_add(32)?;
+    char::from_u32(u32::from(ascii)).map(|character| (character, color))
+}
+
+fn row_is_white(row: &DecodedTextRow, expected_text: &str) -> bool {
+    row.text == expected_text
+        && row
+            .colors
+            .iter()
+            .all(|color| *color == SmsmemtestTextColor::White)
+}
+
+fn classify_result_text(
+    row: &DecodedTextRow,
+    expected_label: &str,
+) -> SmsmemtestCaseResult {
+    let pass_text = format!("{expected_label}OK!");
+    if row.text == pass_text {
+        let label_is_white = row.colors[..expected_label.len()]
+            .iter()
+            .all(|color| *color == SmsmemtestTextColor::White);
+        let result_is_green = row.colors[expected_label.len()..]
+            .iter()
+            .all(|color| *color == SmsmemtestTextColor::Green);
+        return if label_is_white && result_is_green {
+            SmsmemtestCaseResult::Pass
+        } else {
+            SmsmemtestCaseResult::Ambiguous
+        };
+    }
+
+    let fail_text = format!("{expected_label}FAILED!");
+    if row.text == fail_text {
+        let label_is_white = row.colors[..expected_label.len()]
+            .iter()
+            .all(|color| *color == SmsmemtestTextColor::White);
+        let result_is_red = row.colors[expected_label.len()..]
+            .iter()
+            .all(|color| *color == SmsmemtestTextColor::Red);
+        return if label_is_white && result_is_red {
+            SmsmemtestCaseResult::Fail
+        } else {
+            SmsmemtestCaseResult::Ambiguous
+        };
+    }
+
+    if row.text.is_empty() {
+        SmsmemtestCaseResult::NotObserved
+    } else {
+        SmsmemtestCaseResult::Ambiguous
+    }
+}
+
+/// Decode the seven independent RAM result rows (text rows 4 through 10).
+pub fn classify_ram_result_rows(vram: &[u8]) -> [SmsmemtestDecodedCase; 7] {
+    std::array::from_fn(|index| {
+        let decoded = decode_smsmemtest_text_row(vram, index + 4);
+        let (result, observed_text) = match decoded {
+            Some(row) => (
+                classify_result_text(&row, RAM_RESULT_LABELS[index]),
+                row.text,
+            ),
+            None => (SmsmemtestCaseResult::NotObserved, String::new()),
+        };
+
+        SmsmemtestDecodedCase {
+            case_id: RAM_RESULT_CASES[index],
+            result,
+            observed_text,
+        }
+    })
+}
+
+/// Decode the VRAM result row, including the exact failed pattern when present.
+pub fn classify_vram_result_row(vram: &[u8]) -> Option<SmsmemtestDecodedCase> {
+    let heading = decode_smsmemtest_text_row(vram, 3)?;
+    if !row_is_white(&heading, "Testing system VIDEO RAM:") {
+        return None;
+    }
+
+    let row = decode_smsmemtest_text_row(vram, 4)?;
+    let all_tests_label = "-all tests       ...";
+    let all_tests_result = classify_result_text(&row, all_tests_label);
+    if all_tests_result == SmsmemtestCaseResult::Pass {
+        return Some(SmsmemtestDecodedCase {
+            case_id: "vram_all_tests",
+            result: SmsmemtestCaseResult::PassAllReportedByRom,
+            observed_text: row.text,
+        });
+    }
+
+    const VRAM_FAILURE_CASES: [(&str, &str); 5] = [
+        ("vram_all_zero", "-all bits to zero..."),
+        ("vram_all_one", "-all bits to one ..."),
+        ("vram_pattern_55", "-all bytes to $55..."),
+        ("vram_pattern_aa", "-all bytes to $AA..."),
+        ("vram_variable", "-different values..."),
+    ];
+
+    for (case_id, label) in VRAM_FAILURE_CASES {
+        if classify_result_text(&row, label) == SmsmemtestCaseResult::Fail {
+            return Some(SmsmemtestDecodedCase {
+                case_id,
+                result: SmsmemtestCaseResult::Fail,
+                observed_text: row.text,
+            });
         }
     }
 
-    false
+    if row.text.is_empty() {
+        None
+    } else {
+        Some(SmsmemtestDecodedCase {
+            case_id: "vram_unknown_result",
+            result: SmsmemtestCaseResult::Ambiguous,
+            observed_text: row.text,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        FRAME_WIDTH, SmsmemtestCaseResult, classify_ram_result_rows, classify_result_row,
-        text_row_has_visible_pixels,
+        GREEN_TILE_OFFSET, RED_TILE_OFFSET, RAM_RESULT_CASES, SMS_PNT_BASE, SMS_PNT_COLUMNS,
+        SMS_PNT_ROW_BYTES, SmsmemtestCaseResult, classify_ram_result_rows,
+        classify_vram_result_row, decode_smsmemtest_text_row,
     };
 
-    #[test]
-    fn prompt_row_detector_accepts_visible_rgb24_text() {
-        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
-        let row_start = 3 * 8 * FRAME_WIDTH * 3;
-        for pixel in 0..12 {
-            let offset = row_start + pixel * 3;
-            frame[offset..offset + 3].copy_from_slice(&[255, 255, 255]);
+    #[derive(Clone, Copy)]
+    enum TestColor {
+        White,
+        Green,
+        Red,
+    }
+
+    fn write_text_row(vram: &mut [u8], row: usize, segments: &[(&str, TestColor)]) {
+        let mut column = 0;
+        for (text, color) in segments {
+            let tile_offset = match color {
+                TestColor::White => 0,
+                TestColor::Green => GREEN_TILE_OFFSET,
+                TestColor::Red => RED_TILE_OFFSET,
+            };
+            for character in text.chars() {
+                let tile = (character as u16 - 32) + tile_offset;
+                let offset = SMS_PNT_BASE + row * SMS_PNT_ROW_BYTES + column * 2;
+                vram[offset..offset + 2].copy_from_slice(&tile.to_le_bytes());
+                column += 1;
+            }
         }
 
-        assert!(text_row_has_visible_pixels(&frame, 3));
-    }
-
-    #[test]
-    fn prompt_row_detector_rejects_blank_and_out_of_range_rows() {
-        let frame = vec![0; FRAME_WIDTH * 192 * 3];
-        assert!(!text_row_has_visible_pixels(&frame, 3));
-        assert!(!text_row_has_visible_pixels(&frame, 24));
-    }
-
-    #[test]
-    fn prompt_row_detector_rejects_incomplete_rgb24_frames() {
-        let frame = vec![255; FRAME_WIDTH * 192 * 3 - 1];
-        assert!(!text_row_has_visible_pixels(&frame, 3));
-    }
-
-    #[test]
-    fn prompt_detector_rejects_solid_red_fatal_screen() {
-        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
-        let row_start = 14 * 8 * FRAME_WIDTH * 3;
-        for pixel in 0..FRAME_WIDTH * 8 {
-            let offset = row_start + pixel * 3;
-            frame[offset..offset + 3].copy_from_slice(&[255, 0, 0]);
+        while column < SMS_PNT_COLUMNS {
+            let offset = SMS_PNT_BASE + row * SMS_PNT_ROW_BYTES + column * 2;
+            vram[offset..offset + 2].copy_from_slice(&0_u16.to_le_bytes());
+            column += 1;
         }
-
-        assert!(!text_row_has_visible_pixels(&frame, 14));
     }
 
     #[test]
-    fn ram_result_rows_classify_green_and_red_independently() {
-        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
-        let green_row_start = 4 * 8 * FRAME_WIDTH * 3;
-        let red_row_start = 5 * 8 * FRAME_WIDTH * 3;
-        for pixel in 0..12 {
-            let green_offset = green_row_start + pixel * 3;
-            frame[green_offset..green_offset + 3].copy_from_slice(&[0, 255, 0]);
-            let red_offset = red_row_start + pixel * 3;
-            frame[red_offset..red_offset + 3].copy_from_slice(&[255, 0, 0]);
-        }
-
-        let results = classify_ram_result_rows(&frame);
-        assert_eq!(results[0], SmsmemtestCaseResult::Pass);
-        assert_eq!(results[1], SmsmemtestCaseResult::Fail);
-        assert!(
-            results[2..]
-                .iter()
-                .all(|result| *result == SmsmemtestCaseResult::NotObserved)
+    fn name_table_decoder_reads_white_prompt_text() {
+        let mut vram = vec![0; 0x4000];
+        write_text_row(
+            &mut vram,
+            3,
+            &[("Press any button to start", TestColor::White)],
         );
-        assert_eq!(
-            classify_result_row(&frame, 23),
-            SmsmemtestCaseResult::NotObserved
-        );
+
+        let row = decode_smsmemtest_text_row(&vram, 3).expect("valid SMS name table row");
+        assert_eq!(row.text, "Press any button to start");
     }
 
     #[test]
-    fn result_row_reports_ambiguous_when_both_status_colors_are_present() {
-        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
-        let row_start = 4 * 8 * FRAME_WIDTH * 3;
-        frame[row_start..row_start + 3].copy_from_slice(&[0, 255, 0]);
-        frame[row_start + 3..row_start + 6].copy_from_slice(&[255, 0, 0]);
+    fn name_table_decoder_rejects_out_of_range_rows_and_tiles() {
+        let mut vram = vec![0; 0x4000];
+        assert!(decode_smsmemtest_text_row(&vram, 28).is_none());
 
+        let offset = SMS_PNT_BASE + 3 * SMS_PNT_ROW_BYTES;
+        vram[offset..offset + 2].copy_from_slice(&400_u16.to_le_bytes());
+        assert!(decode_smsmemtest_text_row(&vram, 3).is_none());
+    }
+
+    #[test]
+    fn ram_result_rows_decode_individual_pass_and_fail_text() {
+        let mut vram = vec![0; 0x4000];
+        write_text_row(
+            &mut vram,
+            4,
+            &[
+                ("-all bits to zero...", TestColor::White),
+                ("OK!", TestColor::Green),
+            ],
+        );
+        write_text_row(
+            &mut vram,
+            5,
+            &[
+                ("-all bits to one ...", TestColor::White),
+                ("FAILED!", TestColor::Red),
+            ],
+        );
+
+        let results = classify_ram_result_rows(&vram);
+        assert_eq!(results[0].case_id, RAM_RESULT_CASES[0]);
+        assert_eq!(results[0].result, SmsmemtestCaseResult::Pass);
+        assert_eq!(results[1].case_id, RAM_RESULT_CASES[1]);
+        assert_eq!(results[1].result, SmsmemtestCaseResult::Fail);
+        assert_eq!(results[2].result, SmsmemtestCaseResult::NotObserved);
+    }
+
+    #[test]
+    fn vram_failure_decoder_identifies_the_exact_failed_pattern() {
+        let mut vram = vec![0; 0x4000];
+        write_text_row(
+            &mut vram,
+            3,
+            &[("Testing system VIDEO RAM:", TestColor::White)],
+        );
+        write_text_row(
+            &mut vram,
+            4,
+            &[
+                ("-all bytes to $55...", TestColor::White),
+                ("FAILED!", TestColor::Red),
+            ],
+        );
+
+        let result = classify_vram_result_row(&vram).expect("VRAM failure result");
+        assert_eq!(result.case_id, "vram_pattern_55");
+        assert_eq!(result.result, SmsmemtestCaseResult::Fail);
+    }
+
+    #[test]
+    fn vram_success_decoder_requires_rom_all_tests_label() {
+        let mut vram = vec![0; 0x4000];
+        write_text_row(
+            &mut vram,
+            3,
+            &[("Testing system VIDEO RAM:", TestColor::White)],
+        );
+        write_text_row(
+            &mut vram,
+            4,
+            &[
+                ("-all tests       ...", TestColor::White),
+                ("OK!", TestColor::Green),
+            ],
+        );
+
+        let result = classify_vram_result_row(&vram).expect("VRAM aggregate result");
+        assert_eq!(result.case_id, "vram_all_tests");
         assert_eq!(
-            classify_result_row(&frame, 4),
-            SmsmemtestCaseResult::Ambiguous
+            result.result,
+            SmsmemtestCaseResult::PassAllReportedByRom
         );
     }
 }
