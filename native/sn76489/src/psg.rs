@@ -1838,9 +1838,10 @@ mod tests {
         psg.enable_event_capture(1).unwrap();
         psg.write(0x90);
         psg.write(0x9F);
+        psg.write(0x90);
 
         assert!(psg.event_capture_overflowed());
-        assert_eq!(psg.event_capture_overflow_count(), 1);
+        assert_eq!(psg.event_capture_overflow_count(), 2);
         let mut events = Vec::new();
         assert_eq!(psg.drain_amplitude_events(&mut events), 1);
         assert_eq!(events[0].clock, 0);
