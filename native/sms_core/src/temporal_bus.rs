@@ -249,6 +249,28 @@ impl SmsTemporalBus {
         vdp_profile: SmsVdpProfile,
         territory: Territory,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_hardware_profile_and_sram_size(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            vdp_profile,
+            territory,
+            None,
+        )
+    }
+
+    /// Construct the temporal bus with an explicit cartridge SRAM hardware capacity.
+    /// Capacity comes from the cartridge profile, never from ROM or save-file size.
+    pub fn new_with_hardware_profile_and_sram_size(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+        cartridge_sram_size: Option<usize>,
+    ) -> Result<Self, SmsTemporalBusError> {
         sega_observability::tracing::info!(
             target: "sega::machine",
             master_ticks_per_tstate,
@@ -259,7 +281,7 @@ impl SmsTemporalBus {
             "SMS temporal bus configuration selected"
         );
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::new(cartridge)?;
+        let memory = SmsMemory::with_cartridge_sram_size(cartridge, cartridge_sram_size)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
         let psg = ScheduledPsg::new(
             SMS_PSG_CLOCK_DOMAIN_ID,
@@ -689,6 +711,11 @@ impl SmsTemporalBus {
     /// Read-only access to the mapper-backed memory image.
     pub const fn memory(&self) -> &SmsMemory {
         &self.memory
+    }
+
+    /// Load persistent cartridge SRAM before execution without advancing machine time.
+    pub fn load_cartridge_sram(&mut self, contents: &[u8]) -> Result<(), crate::SmsCoreError> {
+        self.memory.load_cartridge_sram(contents)
     }
 
     /// Read-only access to the SMS1 VDP connected to the temporal bus.
