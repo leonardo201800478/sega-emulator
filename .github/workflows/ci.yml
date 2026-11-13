@@ -758,6 +758,18 @@ jobs:
           expected_commit = subprocess.check_output(
               ["git", "rev-parse", "HEAD"], text=True
           ).strip()
+          expected_cc_version = subprocess.check_output(
+              ["cc", "--version"], text=True
+          ).splitlines()[0]
+          sdcc_version_lines = subprocess.check_output(
+              ["sdcc", "--version"], text=True
+          ).splitlines()
+          expected_sdcc_version_line = next(
+              (line for line in sdcc_version_lines if line.startswith("Version 4.6.0")),
+              "",
+          )
+          if not expected_sdcc_version_line:
+              raise SystemExit("SDCC 4.6.0 version line not found")
           devkit = pathlib.Path(os.environ["DEVKIT_SMS_ROOT"])
           source = pathlib.Path("tests/sms/pacing-rom/src/main.c")
           profiles = {
@@ -811,6 +823,8 @@ jobs:
                   "project_commit": expected_commit,
                   "devkitsms_revision": expected_revision,
                   "sdcc_version": "4.6.0",
+                  "sdcc_version_line": expected_sdcc_version_line,
+                  "host_cc_version": expected_cc_version,
                   "source_compile_flags": expected_source_flags,
                   **expected_flags,
                   **expected_inputs,
@@ -824,10 +838,6 @@ jobs:
                           f"{profile}: {field} mismatch "
                           f"(expected {value!r}, got {metadata.get(field)!r})"
                       )
-              if not metadata.get("sdcc_version_line", "").startswith("Version 4.6.0"):
-                  raise SystemExit(f"{profile}: missing exact SDCC version line")
-              if not metadata.get("host_cc_version"):
-                  raise SystemExit(f"{profile}: missing host C compiler version")
               hashes.add(metadata["rom_sha256"])
               print(
                   f"PASS {profile}: {len(data)} bytes "
