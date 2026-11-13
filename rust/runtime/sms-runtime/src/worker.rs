@@ -74,6 +74,14 @@ fn calculate_next_frame_deadline(
     previous_deadline.unwrap_or(frame_started) + frame_duration
 }
 
+/// Convert completed MachineScheduler ticks to host duration using the active region clock.
+/// `None` is returned only when the worker has no valid clock configuration.
+fn frame_duration_from_machine_ticks(machine_ticks: u128, machine_clock_hz: u64) -> Option<Duration> {
+    (machine_clock_hz > 0).then(|| {
+        Duration::from_secs_f64(machine_ticks as f64 / machine_clock_hz as f64)
+    })
+}
+
 pub fn sms_temporal_region_profile(
     region: &str,
 ) -> Result<(Territory, SmsVdpProfile, u64), &'static str> {
@@ -1572,14 +1580,17 @@ fn execute_frame_with_renderer(
 ) -> Result<(usize, Option<Instant>, bool), String> {
     let frame_started = Instant::now();
     let diagnostics_enabled = telemetry.diagnostics_enabled();
-    let diagnostic_machine_start = diagnostics_enabled.then(|| machine.now().ticks());
+    // MachineScheduler ticks, not audio sample quantization, define the frame's virtual duration.
+    let machine_time_start_ticks = machine.now().ticks();
+    let diagnostic_machine_start = diagnostics_enabled.then_some(machine_time_start_ticks);
     let diagnostic_step_start = diagnostics_enabled.then(Instant::now);
     let (instructions, breakpoint_hit) = machine
         .step_frame_until(max_instructions, |pc| breakpoints.contains(u32::from(pc)))
         .map_err(|error| error.to_string())?;
     let step_frame_elapsed =
         diagnostic_step_start.map_or(Duration::ZERO, |started| started.elapsed());
-    let diagnostic_machine_end = diagnostic_machine_start.map(|_| machine.now().ticks());
+    let machine_time_end_ticks = machine.now().ticks();
+    let diagnostic_machine_end = diagnostics_enabled.then_some(machine_time_end_ticks);
     let frame_completed = !breakpoint_hit;
 
     if diagnostics_enabled {
@@ -1734,9 +1745,14 @@ fn execute_frame_with_renderer(
     }
 
     let sample_count = samples.len();
-    let pacing_sample_count = sample_count.max(1) as f64;
-    let frame_duration =
-        Duration::from_secs_f64(pacing_sample_count / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64);
+    let machine_ticks_per_frame = machine_time_end_ticks.saturating_sub(machine_time_start_ticks);
+    let machine_clock_hz = telemetry.machine_clock_hz.load(Ordering::Acquire);
+    // The source-sample fallback is retained for isolated tests that construct telemetry
+    // directly; a live worker always receives its validated region clock at construction.
+    let frame_duration = frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz)
+        .unwrap_or_else(|| {
+            Duration::from_secs_f64(sample_count.max(1) as f64 / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64)
+        });
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
@@ -1749,9 +1765,6 @@ fn execute_frame_with_renderer(
         .unwrap_or(Duration::ZERO);
 
     if frame_completed && diagnostics_enabled && publish_audio {
-        let machine_ticks_per_frame = diagnostic_machine_start
-            .zip(diagnostic_machine_end)
-            .map_or(0, |(start, end)| end.saturating_sub(start));
         telemetry.record_frame_pacing_sample(FramePacingSample {
             frame_interval_ns: frame_interval_ns.unwrap_or_default(),
             machine_ticks_per_frame: u64::try_from(machine_ticks_per_frame).unwrap_or(u64::MAX),
@@ -3300,6 +3313,13 @@ mod tests {
             pacing.remaining(now + Duration::from_millis(50)),
             Some(Duration::from_millis(12))
         );
+    }
+
+    #[test]
+    fn machine_scheduler_ticks_define_frame_budget_independently_of_audio_samples() {
+        let duration = frame_duration_from_machine_ticks(59_736, 3_579_545).unwrap();
+        assert_eq!(duration.as_nanos(), 16_688_155);
+        assert_eq!(frame_duration_from_machine_ticks(59_736, 0), None);
     }
 
     #[test]
