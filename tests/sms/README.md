@@ -54,7 +54,7 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 | Suite | Primary coverage | Current gate |
 |---|---|---|
-| SMSmemtest | Internal RAM, VRAM and cartridge RAM | RAM row color classifier + VRAM aggregate/first-failure classifier implemented; ROM integration unvalidated; SRAM BLOCKED_CAPABILITY |
+| SMSmemtest | Internal RAM, VRAM and cartridge RAM | First real run: 7/7 RAM PASS and VRAM PASS_ALL_REPORTED_BY_ROM; deterministic replay comparison pending; SRAM BLOCKED_CAPABILITY |
 | SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Runner available; build dependencies and case oracles remain to be validated |
 | SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Runner available; timing assertions blocked by missing dot/fetch and sub-scanline model |
 | ZEXALL-SMS | Z80 documented and undocumented behavior/flags | E8 gate only; do not execute before formal E7 closure |
@@ -86,7 +86,7 @@ A valid result record must include:
 ## Next engineering steps
 
 1. CI validates the Rust runner and its synthetic in-memory fixture. The separate SMSmemtest build/diagnostic workflow now builds the pinned upstream ROM and collects full-machine output; its first real-ROM run must be inspected before the prompt/color pipeline is considered validated.
-2. SMSmemtest has a deterministic frame-boundary input driver based on two-frame-stable white-text activity in documented rows. Seven RAM rows are classified using the source-defined green/red palette; VRAM is classified as aggregate pass or unidentified first failure. Inspect the non-gating Actions artifact and validate the complete pipeline against the built ROM before relying on results; it is not OCR. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
+2. SMSmemtest has a deterministic frame-boundary input driver based on two-frame-stable white-text activity in documented rows. The first real ROM run reported PASS for all seven RAM cases and aggregate PASS for VRAM. A second identical run is being compared record-by-record; this is still not a hardware certification or a test of cartridge SRAM. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
 5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
