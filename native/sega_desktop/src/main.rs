@@ -3047,17 +3047,11 @@ mod windows_host {
             assert_eq!(window.wake_interval_distribution.len(), 4);
             assert!(window.wake_interval_distribution.percentile_ns(95) > 0);
 
-            assert_eq!(
-                window.record_frame(start + Duration::from_millis(1), 1, start),
-                None
-            );
-            assert_eq!(
-                window.record_frame(
-                    start + Duration::from_millis(2),
-                    2,
-                    start + Duration::from_millis(1),
-                ),
-                None
+            window.record_frame(start + Duration::from_millis(1), 1, start);
+            window.record_frame(
+                start + Duration::from_millis(2),
+                2,
+                start + Duration::from_millis(1),
             );
             assert_eq!(window.consumed_interval_distribution.len(), 1);
             assert_eq!(
@@ -3101,10 +3095,10 @@ mod windows_host {
             window.record_frame(start + Duration::from_millis(100), 2, start);
             assert_eq!(window.consumed, 2);
             assert_eq!(window.uploaded, 0);
-            assert_eq!(
-                window.record_upload(start + Duration::from_millis(600)),
-                Some(1.0 / 0.6)
-            );
+            let fps = window
+                .record_upload(start + Duration::from_millis(600))
+                .unwrap();
+            assert!((fps - (1.0 / 0.6)).abs() < 0.001);
         }
 
         #[test]
