@@ -13,7 +13,9 @@ mod windows_host {
         time::{Duration, Instant},
     };
 
-    use sega_sms_runtime::{AnalogOutputConfig, AudioRendererMode, SmsTemporalWorker, SpriteLimitMode};
+    use sega_sms_runtime::{
+        AnalogOutputConfig, AudioRendererMode, SmsTemporalWorker, SpriteLimitMode,
+    };
     use sega_video_runtime::{FrameMailbox, PixelFormat, VideoFrame};
     use std::os::windows::process::CommandExt;
     use zip::ZipArchive;
@@ -1863,7 +1865,15 @@ mod windows_host {
                         app.get_audio_renderer_mode().to_string(),
                     )
                 })
-                .unwrap_or_else(|| ("usa".to_owned(), true, 70, AnalogOutputConfig::default(), "psg".to_owned()));
+                .unwrap_or_else(|| {
+                    (
+                        "usa".to_owned(),
+                        true,
+                        70,
+                        AnalogOutputConfig::default(),
+                        "psg".to_owned(),
+                    )
+                });
 
             match replace_sms_worker(
                 &path,
