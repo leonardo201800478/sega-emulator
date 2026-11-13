@@ -95,3 +95,57 @@ Só aceitar correção se três repetições demonstrarem melhoria em cadência 
 - evidências, artefatos e decisão registrados.
 
 **Conclusão em 2026-11-13: SRAM validada; P0 frame pacing não resolvida.**
+
+## 6. Correção de passos defasados — atualização documental
+
+Esta seção prevalece sobre instruções anteriores conflitantes em branches/PRs ainda abertas. Ela não apaga o histórico: identifica quais registros descrevem um estado anterior e qual procedimento deve ser seguido agora.
+
+### 6.1 SRAM: investigação encerrada; não reabrir como bloqueio atual
+
+**Passos obsoletos — não executar novamente como pendência:**
+- Investigar novamente a ausência de backing store de SRAM para explicar a falha antiga do SMSmemtest.
+- Tratar os bancos Cart SRAM 0/1 como `BLOCKED_CAPABILITY` no estado atual.
+- Condicionar a validação funcional de SRAM à implementação futura do mapper, sem considerar o override diagnóstico já integrado.
+
+**Estado atual e evidências:**
+- PR #802 foi merged: perfil de cartucho verificado, persistência `.srm` e ciclo de vida de saves no Slint Desktop.
+- PR #803 foi merged: `SEGA_SMS_DIAGNOSTIC_SRAM_BYTES=32768` permite SRAM volátil explícita para ROMs de diagnóstico sem perfil conhecido; não cria saves persistentes artificiais nem altera o comportamento padrão de ROMs desconhecidas.
+- A validação posterior registrada neste plano confirmou SMSmemtest v0.40 com dez verificações SRAM aprovadas: cinco padrões em cada um dos bancos 0 e 1.
+- A validação de persistência de jogo real foi confirmada com Phantasy Star: salvar, fechar o emulador e restaurar o save após reabertura.
+
+**Como interpretar os documentos históricos:**
+- `docs/validation/smsmemtest-oracle-audit-2026-11-13.md`, produzido antes da conclusão da PR #803 e da validação subsequente, registra corretamente a limitação daquele momento. Seus trechos `BLOCKED_CAPABILITY` são históricos e não representam o estado atual.
+- A descrição original da PR #797 também registra esse bloqueio anterior. Não usar essa descrição isoladamente para decidir o estado atual da SRAM.
+- SMSmemtest deve continuar como regressão funcional de memória. A conclusão dos testes SRAM não certifica, por si só, todos os mappers, perfis de cartucho ou todos os jogos.
+
+### 6.2 SMSmemtest: não usar como benchmark primário de cadência
+
+**Passos obsoletos — substituir:**
+- Não usar a tela final/espera interativa do SMSmemtest como carga contínua representativa de CPU, VDP e sprites.
+- Não interpretar o resultado de 60 s no worker como taxa de frames fisicamente apresentados.
+- Não repetir a sequência de entrada `26,441` como se ela fosse um workload sustentado. Ela serve para reproduzir a navegação funcional específica dessa ROM.
+
+**Procedimento atual:**
+- SMSmemtest: executar para regressão funcional RAM/VRAM/SRAM e guardar os resultados do oráculo.
+- ROM homebrew de pacing do projeto: benchmark primário, com cena determinística, mudança visual por frame, modos de carga controlados e hash/proveniência fixados.
+- SMSTestSuite Drop Shadow: workload auxiliar de sprites somente depois de confirmação visual de que o menu selecionou o teste correto; respeitar a restrição de licença já documentada.
+- O resultado hosted-Linux de aproximadamente 59,7 FPS em 60 s é apenas sanity check do worker/espera. Não é baseline de apresentação nem aceitação física.
+
+### 6.3 Experimento de deadline antigo e PRs empilhadas
+
+- A branch experimental da PR #796 é evidência histórica de experimento; sua base é antiga/divergente. Não mesclar a branch inteira nem tratá-la como implementação aprovada.
+- Se algum experimento ainda for necessário, transplantar somente a alteração mínima relevante para uma branch baseada no `main` atual e repetir os testes de invariantes.
+- PR #800 está empilhada sobre a linha experimental antiga (#796). Antes de qualquer merge, reavaliar a base/dependências e reaplicar somente o código ainda necessário sobre a linha atual; não presumir que a branch esteja pronta por ter testes unitários.
+- PR #807 é a implementação atual em avaliação para phase-lock e notificação de frames. Continua draft até CI completo e validação física; não declarar sucesso de pacing apenas por compilação ou testes automatizados.
+
+### 6.4 Critérios que continuam pendentes para fechar P0
+
+1. Executar a ROM homebrew de pacing em Windows no build Slint + WGPU 30 + Vulkan.
+2. Repetir capturas controladas, com ambiente, ROM SHA, emulator SHA, região, refresh e configuração documentados.
+3. Correlacionar sequência produzida, publicação/consumo do mailbox e eventos PresentMon/ETW; distinguir chamadas Present de frames efetivamente exibidos.
+4. Repetir com CPAL desligado e ligado, sem misturar os resultados.
+5. Validar condições de janela em foco e fora de foco/oculta conforme a matriz experimental.
+6. Demonstrar melhora repetível de cadência/jitter sem alterar ticks virtuais, estado final, samples PSG ou equivalência contínua-versus-blocos.
+7. Manter P0 aberta até que a evidência física e os invariantes passem.
+
+**Regra de manutenção:** quando uma PR posterior concluir uma etapa, atualizar este plano e marcar o procedimento antigo como histórico. Não reabrir SRAM sem regressão reproduzível; não iniciar E8/ZEXDOC/ZEXALL antes do fechamento demonstrável de E7.
