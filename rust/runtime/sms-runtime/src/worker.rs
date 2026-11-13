@@ -3329,6 +3329,22 @@ mod tests {
     }
 
     #[test]
+    fn phase_locked_deadlines_accumulate_fractional_frame_budgets() {
+        let epoch = Instant::now();
+        let first_duration = Duration::from_nanos(16_683_333);
+        let second_duration = Duration::from_nanos(16_683_334);
+        let first = calculate_next_frame_deadline(epoch, first_duration, None);
+        let second = calculate_next_frame_deadline(
+            first + Duration::from_micros(700),
+            second_duration,
+            Some(first),
+        );
+
+        assert_eq!(second, first + second_duration);
+        assert_eq!(second, epoch + first_duration + second_duration);
+    }
+
+    #[test]
     fn phase_locked_deadline_starts_a_new_epoch_without_previous_target() {
         let frame_started = Instant::now();
         let duration = Duration::from_micros(16_687);
