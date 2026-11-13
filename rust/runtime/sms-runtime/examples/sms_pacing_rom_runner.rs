@@ -24,12 +24,64 @@ struct Args {
     duration_seconds: u64,
     warmup_seconds: u64,
     sample_interval_ms: u64,
-    button1_pulse_frames: Vec<u64>,
+    input_pulses: Vec<InputPulse>,
     diagnostics_enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct InputPulse {
+    frame: u64,
+    button: InputButton,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InputButton {
+    Up,
+    Down,
+    Left,
+    Right,
+    Button1,
+    Button2,
+}
+
+impl InputButton {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "up" => Ok(Self::Up),
+            "down" => Ok(Self::Down),
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            "button1" => Ok(Self::Button1),
+            "button2" => Ok(Self::Button2),
+            _ => Err(format!("unsupported controller button '{value}'")),
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Button1 => "button1",
+            Self::Button2 => "button2",
+        }
+    }
+
+    const fn controller_state(self) -> ControllerButtons {
+        match self {
+            Self::Up => ControllerButtons { up: true, ..ControllerButtons::default() },
+            Self::Down => ControllerButtons { down: true, ..ControllerButtons::default() },
+            Self::Left => ControllerButtons { left: true, ..ControllerButtons::default() },
+            Self::Right => ControllerButtons { right: true, ..ControllerButtons::default() },
+            Self::Button1 => ControllerButtons { button_1: true, ..ControllerButtons::default() },
+            Self::Button2 => ControllerButtons { button_2: true, ..ControllerButtons::default() },
+        }
+    }
+}
+
 fn usage() -> &'static str {
-    "Usage: sms_pacing_rom_runner --rom PATH --rom-sha256 HEX64 [--emulator-sha SHA] [--suite-id ID] [--suite-revision REV] [--region usa|brazil|europe|japan] [--duration-seconds N] [--warmup-seconds N] [--sample-interval-ms N] [--button1-pulse-frames N,N,...] [--diagnostics-disabled]"
+    "Usage: sms_pacing_rom_runner --rom PATH --rom-sha256 HEX64 [--emulator-sha SHA] [--suite-id ID] [--suite-revision REV] [--region usa|brazil|europe|japan] [--duration-seconds N] [--warmup-seconds N] [--sample-interval-ms N] [--button1-pulse-frames N,N,...] [--input-pulses FRAME:BUTTON,...] [--diagnostics-disabled]"
 }
 
 fn parse_frame_list(value: &str) -> Result<Vec<u64>, String> {
@@ -55,6 +107,32 @@ fn parse_frame_list(value: &str) -> Result<Vec<u64>, String> {
     Ok(frames)
 }
 
+fn parse_input_pulses(value: &str) -> Result<Vec<InputPulse>, String> {
+    if value.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    value
+        .split(',')
+        .map(|item| {
+            let (frame, button) = item
+                .split_once(':')
+                .ok_or_else(|| format!("invalid input pulse '{item}'; expected FRAME:BUTTON"))?;
+            let frame = frame
+                .trim()
+                .parse::<u64>()
+                .map_err(|_| format!("invalid frame number in input pulse '{item}'"))?;
+            if frame == 0 {
+                return Err("input pulse frame numbers must be greater than zero".to_owned());
+            }
+            Ok(InputPulse {
+                frame,
+                button: InputButton::parse(button.trim())?,
+            })
+        })
+        .collect()
+}
+
 fn parse_args() -> Result<Args, String> {
     let mut args = env::args().skip(1);
     let mut rom_path = None;
@@ -66,7 +144,7 @@ fn parse_args() -> Result<Args, String> {
     let mut duration_seconds = 300;
     let mut warmup_seconds = 10;
     let mut sample_interval_ms = 1_000;
-    let mut button1_pulse_frames = Vec::new();
+    let mut input_pulses = Vec::new();
     let mut diagnostics_enabled = true;
 
     while let Some(flag) = args.next() {
@@ -103,7 +181,14 @@ fn parse_args() -> Result<Args, String> {
                     .parse()
                     .map_err(|_| format!("invalid --sample-interval-ms value: {value}"))?;
             }
-            "--button1-pulse-frames" => button1_pulse_frames = parse_frame_list(&value)?,
+            "--button1-pulse-frames" => {
+                input_pulses.extend(
+                    parse_frame_list(&value)?
+                        .into_iter()
+                        .map(|frame| InputPulse { frame, button: InputButton::Button1 }),
+                );
+            }
+            "--input-pulses" => input_pulses.extend(parse_input_pulses(&value)?),
             _ => return Err(format!("unknown argument {flag}\n{}", usage())),
         }
     }
@@ -122,6 +207,11 @@ fn parse_args() -> Result<Args, String> {
     if !(250..=10_000).contains(&sample_interval_ms) {
         return Err("--sample-interval-ms must be between 250 and 10000".to_owned());
     }
+    input_pulses.sort_by_key(|pulse| pulse.frame);
+    if input_pulses.windows(2).any(|pair| pair[0].frame == pair[1].frame) {
+        return Err("only one controller button may be pulsed per frame".to_owned());
+    }
+
     if !matches!(region.as_str(), "usa" | "brazil" | "europe" | "japan") {
         return Err(format!("unsupported region '{region}'"));
     }
@@ -136,7 +226,7 @@ fn parse_args() -> Result<Args, String> {
         duration_seconds,
         warmup_seconds,
         sample_interval_ms,
-        button1_pulse_frames,
+        input_pulses,
         diagnostics_enabled,
     })
 }
@@ -244,7 +334,7 @@ fn run(args: Args) -> Result<(), String> {
     }
 
     println!(
-        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-worker\",\"pacing_path\":\"production_worker_recv_timeout\",\"video_output\":\"disabled\",\"physical_audio_output\":\"disabled\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"duration_seconds\":{},\"warmup_seconds\":{},\"sample_interval_ms\":{},\"button1_pulse_frames\":\"{}\",\"diagnostics_enabled\":{},\"machine_clock_hz\":{}}}",
+        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-worker\",\"pacing_path\":\"production_worker_recv_timeout\",\"video_output\":\"disabled\",\"physical_audio_output\":\"disabled\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"duration_seconds\":{},\"warmup_seconds\":{},\"sample_interval_ms\":{},\"input_pulses\":\"{}\",\"diagnostics_enabled\":{},\"machine_clock_hz\":{}}}",
         json_escape(&args.suite_id),
         json_escape(&args.suite_revision),
         args.rom_sha256,
@@ -253,9 +343,9 @@ fn run(args: Args) -> Result<(), String> {
         args.duration_seconds,
         args.warmup_seconds,
         args.sample_interval_ms,
-        args.button1_pulse_frames
+        args.input_pulses
             .iter()
-            .map(u64::to_string)
+            .map(|pulse| format!("{}:{}", pulse.frame, pulse.button.as_str()))
             .collect::<Vec<_>>()
             .join(","),
         args.diagnostics_enabled,
@@ -272,7 +362,7 @@ fn run(args: Args) -> Result<(), String> {
     let mut previous_sample = capture_started;
     let mut next_pulse = 0_usize;
     let mut release_after_frame = None;
-    let mut button_pressed = false;
+    let mut input_pressed = false;
 
     while capture_started.elapsed() < capture_duration {
         let elapsed = capture_started.elapsed();
@@ -283,22 +373,16 @@ fn run(args: Args) -> Result<(), String> {
         {
             worker.set_controller(1, ControllerButtons::default())?;
             release_after_frame = None;
-            button_pressed = false;
+            input_pressed = false;
         }
 
-        if !button_pressed
-            && let Some(target_frame) = args.button1_pulse_frames.get(next_pulse)
-            && current_frame >= *target_frame
+        if !input_pressed
+            && let Some(pulse) = args.input_pulses.get(next_pulse)
+            && current_frame >= pulse.frame
         {
-            worker.set_controller(
-                1,
-                ControllerButtons {
-                    button_1: true,
-                    ..ControllerButtons::default()
-                },
-            )?;
+            worker.set_controller(1, pulse.button.controller_state())?;
             release_after_frame = Some(current_frame.saturating_add(1));
-            button_pressed = true;
+            input_pressed = true;
             next_pulse += 1;
         }
 
@@ -320,7 +404,7 @@ fn run(args: Args) -> Result<(), String> {
         thread::sleep(Duration::from_millis(1));
     }
 
-    if button_pressed {
+    if input_pressed {
         worker.set_controller(1, ControllerButtons::default())?;
     }
     worker.pause()?;
