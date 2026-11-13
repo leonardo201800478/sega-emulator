@@ -1,10 +1,10 @@
 # SMSmemtest — auditoria de oráculo e capacidade
 
-**Data:** 2026-11-13  
-**Suite:** SMSmemtest  
-**Upstream:** https://github.com/sverx/SMSmemtest  
-**Revisão fixada no manifesto:** `12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9`  
-**Fonte auditada:** `src/main.c` (versão declarada 0.40)  
+**Data:** 2026-11-13
+**Suite:** SMSmemtest
+**Upstream:** https://github.com/sverx/SMSmemtest
+**Revisão fixada no manifesto:** `12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9`
+**Fonte auditada:** `src/main.c` (versão declarada 0.40)
 **Escopo:** determinar o que precisa ser observado para transformar execução em resultados por caso. Nenhuma ROM foi executada nesta auditoria.
 
 ## 1. Fluxo efetivo da ROM
