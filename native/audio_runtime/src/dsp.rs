@@ -144,7 +144,6 @@ pub struct AnalogOutputConfig {
     pub low_pass_hz: Option<f64>,
 }
 
-
 impl AnalogOutputConfig {
     /// Experimental broad-band approximation for an SMS1-style analog output.
     /// The service manual specifies 20 Hz–20 kHz at the output stage, but does
