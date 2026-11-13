@@ -40,7 +40,7 @@ The upstream ROM can be built without copying its source or binary into this rep
 
 The build helper is `tests/sms/scripts/build_smsmemtest.sh`. It requires `SMSMEMTEST_ROOT`, `DEVKIT_SMS_ROOT`, `OUT_DIR` and `SDCC_BIN`; it verifies both Git revisions and the compiler version, builds SMSlib from the pinned devkitSMS source, compiles/links the ROM and checks that the resulting image is 32 KiB. It records the ROM SHA-256 in `SMSmemtest.build-info.txt`.
 
-The workflow `.github/workflows/smsmemtest-rom-build.yml` builds the ROM and invokes the full-machine runner for up to 1800 frames. The emulator result is deliberately **non-gating** at this stage: a workflow success means the pinned ROM was built and the runner process was invoked, not that SMSmemtest passed. The ROM, build metadata and JSONL diagnostic output are retained as a short-lived Actions artifact, never committed to Git.
+The existing workflow `.github/workflows/sms-debugger-runtime.yml` now includes a Linux job that builds the ROM and the full-machine runner, then invokes the runner for up to 1800 frames. The emulator result is deliberately **non-gating** at this stage: a workflow success means the pinned ROM was built and the runner process was invoked, not that SMSmemtest passed. The ROM, build metadata and JSONL diagnostic output are retained as a short-lived Actions artifact, never committed to Git.
 
 ## Current execution boundary
 
