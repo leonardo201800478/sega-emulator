@@ -1340,6 +1340,8 @@ mod windows_host {
             self.started = Instant::now();
             self.last_wakeup = None;
             self.last_consumed = None;
+            self.last_fps_consumed = 0;
+            self.last_fps_sample = self.started;
             self.wakeups = 0;
             self.empty_wakeups = 0;
             self.consumed = 0;
