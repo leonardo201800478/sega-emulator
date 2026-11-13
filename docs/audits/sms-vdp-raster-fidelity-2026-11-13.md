@@ -60,6 +60,9 @@ A documentação de caracterização T0 já registra que a SAT é avaliada duran
 ### Scroll
 R8 possui latch em HPos 21 (T14 no modelo 342 HPos / 228 T-states), baseado em SmsVdpTest e comparação com MAME. Escritas no limite e após o limite têm testes unitários.
 R9 é mantido como `pending_scroll_y` durante active display e aplicado na transição da área visível.
+
+Foi identificado também um erro funcional específico na região de fine-scroll: o renderer preenchia os pixels iniciais com o backdrop de R7. A discussão do Scroll Test com Charles MacDonald esclarece que os pixels iniciais não usam o valor de R7; a implementação MAME descreve um comportamento mais específico: a cor 0 das duas paletas de background é selecionada pelo bit 1 do plano 1 do tile `$100`, pixel 4, na linha anterior. O código foi ajustado para esse seletor e o teste foi substituído por um vetor que cobre as duas paletas. Isso corrige um comportamento demonstravelmente incorreto, mas não comprova ainda a causa de qualquer divergência de sprites relatada pelo usuário.
+
 Esses testes verificam boundaries isolados, mas não cobrem uma ROM completa com alterações sequenciais de R8/R9, HINT, SAT e VRAM durante o raster.
 
 ### V Counter / VBlank / HINT
@@ -87,6 +90,7 @@ O V Counter usa fórmulas baseadas em scanline/região/modo. VBlank e line IRQ s
 - SMS Power — VDP Registers: https://www.smspower.org/Development/VDPRegisters
 - SMS Power — SMS Official Docs: https://www.smspower.org/Development/SMSOfficialDocs
 - SmsVdpTest (FluBBaOfWard): https://github.com/FluBBaOfWard/SmsVdpTest
+- Scroll Test Program / discussão técnica: https://www.smspower.org/Homebrew/ScrollTestProgram-SMS e https://www.smspower.org/forums/2221-CharlesMacDonaldsScrollTest
 - MAME 315-5124: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
 - Ares VDP SMS: https://github.com/ares-emulator/ares/tree/master/ares/ms/vdp
 
@@ -145,6 +149,7 @@ A correção só será considerada concluída quando:
 ## 8. Estado desta auditoria
 
 - Achados estáticos: documentados.
-- Correção de runtime: ainda não aplicada nesta revisão.
+- Correção funcional inicial: seletor de paleta dos pixels iniciais de fine-scroll corrigido; testes unitários atualizados.
+- Correção estrutural de avaliação temporal de sprites: ainda não aplicada.
 - ROMs de usuário executadas nesta auditoria: nenhuma; as capturas comparativas foram fornecidas pelo usuário em conversa separada.
 - VDP temporal PASS: não alcançado.
