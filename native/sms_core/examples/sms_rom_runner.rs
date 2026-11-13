@@ -289,7 +289,7 @@ fn run(args: Args) -> Result<(), String> {
     let summary_status = match smsmemtest_driver.as_ref() {
         Some(driver) if driver.is_complete() => {
             "SMSMEMTEST_ROM_RESULTS_OBSERVED_NOT_HARDWARE_CERTIFIED"
-        },
+        }
         Some(_) => "INPUT_DRIVER_TIMEOUT_NO_ORACLE",
         None => "EXECUTED_NO_ORACLE",
     };
