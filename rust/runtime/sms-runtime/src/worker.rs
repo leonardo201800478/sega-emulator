@@ -80,9 +80,8 @@ fn frame_duration_from_machine_ticks(
     machine_ticks: u128,
     machine_clock_hz: u64,
 ) -> Option<Duration> {
-    (machine_clock_hz > 0).then(|| {
-        Duration::from_secs_f64(machine_ticks as f64 / machine_clock_hz as f64)
-    })
+    (machine_clock_hz > 0)
+        .then(|| Duration::from_secs_f64(machine_ticks as f64 / machine_clock_hz as f64))
 }
 
 pub fn sms_temporal_region_profile(
@@ -1753,20 +1752,18 @@ fn execute_frame_with_renderer(
     // The source-sample fallback is retained for isolated tests that construct telemetry
     // directly; a live worker always receives its validated region clock at construction.
     let frame_duration =
-        frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz).unwrap_or_else(
-            || {
+        frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz)
+            .unwrap_or_else(|| {
                 Duration::from_secs_f64(
                     sample_count.max(1) as f64 / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64,
                 )
-            },
-        );
+            });
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
     let processing_elapsed = frame_started.elapsed();
-    let frame_deadline = frame_completed.then(|| {
-        calculate_next_frame_deadline(frame_started, frame_duration, previous_deadline)
-    });
+    let frame_deadline = frame_completed
+        .then(|| calculate_next_frame_deadline(frame_started, frame_duration, previous_deadline));
     let frame_wait = frame_deadline
         .map(|deadline| deadline.saturating_duration_since(Instant::now()))
         .unwrap_or(Duration::ZERO);
@@ -3337,17 +3334,11 @@ mod tests {
 
         let wake_lateness = Duration::from_micros(449);
         let second_frame_started = first + wake_lateness;
-        let second = calculate_next_frame_deadline(
-            second_frame_started,
-            frame_duration,
-            Some(first),
-        );
+        let second =
+            calculate_next_frame_deadline(second_frame_started, frame_duration, Some(first));
         let third_frame_started = second + wake_lateness;
-        let third = calculate_next_frame_deadline(
-            third_frame_started,
-            frame_duration,
-            Some(second),
-        );
+        let third =
+            calculate_next_frame_deadline(third_frame_started, frame_duration, Some(second));
 
         assert_eq!(second, first + frame_duration);
         assert_eq!(third, second + frame_duration);
