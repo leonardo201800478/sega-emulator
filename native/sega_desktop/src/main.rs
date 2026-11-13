@@ -1588,9 +1588,9 @@ mod windows_host {
         app.set_audio_muted(preferences.audio_muted);
         app.set_audio_dsp_preset(preferences.audio_dsp_preset);
         app.set_audio_hpf_enabled(preferences.audio_hpf_enabled);
-        app.set_audio_hpf_cutoff(f64::from(preferences.audio_hpf_cutoff_hz));
+        app.set_audio_hpf_cutoff(f32::from(preferences.audio_hpf_cutoff_hz));
         app.set_audio_lpf_enabled(preferences.audio_lpf_enabled);
-        app.set_audio_lpf_cutoff(f64::from(preferences.audio_lpf_cutoff_hz));
+        app.set_audio_lpf_cutoff(f32::from(preferences.audio_lpf_cutoff_hz));
         app.set_fps_size(preferences.fps_size.clone().into());
         app.set_fps_font_size(match preferences.fps_size.as_str() {
             "small" => 13.0,
@@ -2083,6 +2083,11 @@ mod windows_host {
             sprite_limit_enabled: app.get_sprite_limit_enabled(),
             audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
             audio_muted: app.get_audio_muted(),
+            audio_dsp_preset: app.get_audio_dsp_preset(),
+            audio_hpf_enabled: app.get_audio_hpf_enabled(),
+            audio_hpf_cutoff_hz: app.get_audio_hpf_cutoff().round().clamp(5.0, 500.0) as u16,
+            audio_lpf_enabled: app.get_audio_lpf_enabled(),
+            audio_lpf_cutoff_hz: app.get_audio_lpf_cutoff().round().clamp(4_000.0, 20_000.0) as u16,
         };
         let _ = save_desktop_preferences(&final_preferences);
         let _ = save_recent_roms(&recent_roms.borrow());
