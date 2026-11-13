@@ -1,12 +1,12 @@
 # H2 streaming performance
 
-Status: NOT MEASURED — production streaming renderer does not exist yet  
+Status: renderer and SMS worker integration implemented on feature branch; performance NOT MEASURED  
 Target: SMS NTSC/PAL, 48 kHz internal PCM  
 Reference study: `native/sn76489/src/psg_h2_model.rs`
 
 ## 1. Do not interpret offline measurements as real-time results
 
-The existing H2 study allocates full-session event and sample vectors, creates per-render temporary arrays, and performs offline convolution. Its reported historical memory estimate (~6.61 MB per profile) is not a production streaming memory bound. No current CPU-time, p95/p99, worst-block, live memory, event overflow or underrun measurements exist for a production H2 renderer.
+The offline H2 study still allocates full-session event and sample vectors and remains the numerical reference. The separate streaming renderer now uses a precomputed integrated step-response table and fixed-size accumulation rings, and is connected to the SMS worker on this feature branch. The historical offline memory estimate (~6.61 MB per profile) is not a production streaming memory bound. No CPU-time, p95/p99, worst-block, live allocation, event-overflow or underrun benchmark has yet been run for the integrated renderer.
 
 The reference kernel's historical group delay is 31.25 output samples (approximately 0.651 ms at 48 kHz). This is not the complete application latency. It does not include safe event lookahead, frame batching, worker scheduling, the CPAL queue or the device buffer.
 
