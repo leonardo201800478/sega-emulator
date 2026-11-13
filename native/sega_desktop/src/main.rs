@@ -1704,7 +1704,7 @@ mod windows_host {
                 identity.sha256_hex()
             );
             return Ok(PreparedCartridge {
-                profile: None,
+                sram_capacity: None,
                 initial_sram: None,
                 save_context: None,
             });
@@ -1729,7 +1729,7 @@ mod windows_host {
             initial_sram.is_some()
         );
         Ok(PreparedCartridge {
-            profile: Some(profile),
+            sram_capacity: profile.ram_capacity_bytes(),
             initial_sram,
             save_context,
         })
@@ -1742,16 +1742,16 @@ mod windows_host {
         save_store: Arc<SaveRamStore>,
     ) -> Result<(SmsTemporalWorker, Option<CartridgeSaveContext>), String> {
         let prepared = prepare_cartridge(&rom, save_store)?;
-        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+        let worker = SmsTemporalWorker::new_with_cartridge_sram_size(
             rom,
             &settings.region,
-            prepared.profile,
+            prepared.sram_capacity,
             prepared.initial_sram,
         )?;
         configure_sms_audio(
             &worker,
             settings.audio_volume,
-            settings.dsp_config.clone(),
+            settings.dsp_config,
             &settings.renderer_mode,
         );
         worker.set_diagnostics_enabled(true);
@@ -1857,12 +1857,11 @@ mod windows_host {
     }
 
     struct PreparedCartridge {
-        profile: Option<CartridgeHardwareProfile>,
+        sram_capacity: Option<usize>,
         initial_sram: Option<Vec<u8>>,
         save_context: Option<CartridgeSaveContext>,
     }
 
-    #[derive(Clone)]
     struct SmsWorkerSettings {
         region: String,
         audio_volume: u8,
@@ -2190,7 +2189,6 @@ mod windows_host {
         let open_worker = Rc::clone(&worker);
         let open_save_context = Rc::clone(&save_context);
         let open_save_store = Arc::clone(&save_store);
-        let open_worker_settings = worker_settings.clone();
         let open_recent = Rc::clone(&recent_rom);
         let open_recent_list = Rc::clone(&recent_roms);
         let open_mailbox = mailbox.clone();
@@ -2234,6 +2232,12 @@ mod windows_host {
                         "psg".to_owned(),
                     )
                 });
+            let open_settings = SmsWorkerSettings {
+                region,
+                audio_volume,
+                dsp_config,
+                renderer_mode,
+            };
 
             match replace_sms_worker(
                 &path,
@@ -2241,7 +2245,7 @@ mod windows_host {
                 &open_save_context,
                 Arc::clone(&open_save_store),
                 &open_mailbox,
-                &open_worker_settings,
+                &open_settings,
             ) {
                 Ok(()) => {
                     let sprite_mode = if sprite_limit_enabled {
