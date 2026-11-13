@@ -18,8 +18,7 @@ use sega_sms_core::{
 };
 
 use smsmemtest_driver::{
-    RAM_RESULT_CASES, SmsmemtestCaseResult, SmsmemtestInputDriver, classify_ram_result_rows,
-    classify_result_row,
+    SmsmemtestInputDriver, classify_ram_result_rows, classify_vram_result_row,
 };
 
 const DEFAULT_FRAMES: u64 = 120;
@@ -232,36 +231,31 @@ fn run(args: Args) -> Result<(), String> {
             let events = driver.after_frame(&mut machine)?;
             for event in events {
                 println!(
-                    "{{\"record\":\"smsmemtest_input\",\"frame_index\":{},\"event\":\"{}\",\"detector\":\"white_text_row_activity_heuristic\"}}",
+                    "{{\"record\":\"smsmemtest_input\",\"frame_index\":{},\"event\":\"{}\",\"detector\":\"smslib_vdp_name_table_text\"}}",
                     index + 1,
                     event,
                 );
 
                 if event == "ram_results_ready" {
-                    for (case_id, result) in RAM_RESULT_CASES
-                        .iter()
-                        .zip(classify_ram_result_rows(machine.framebuffer()))
-                    {
+                    for case in classify_ram_result_rows(machine.vdp().vram()) {
                         println!(
-                            "{{\"record\":\"smsmemtest_case\",\"phase\":\"system_ram\",\"case_id\":\"{}\",\"status\":\"{}\",\"frame_index\":{}}}",
-                            case_id,
-                            result.as_str(),
+                            "{{\"record\":\"smsmemtest_case\",\"phase\":\"system_ram\",\"case_id\":\"{}\",\"status\":\"{}\",\"observed_text\":\"{}\",\"frame_index\":{}}}",
+                            case.case_id,
+                            case.result.as_str(),
+                            json_escape(&case.observed_text),
                             index + 1,
                         );
                     }
                 }
 
-                if event == "vram_result_color_observed" {
-                    let result = classify_result_row(machine.framebuffer(), 4);
-                    let status = match result {
-                        SmsmemtestCaseResult::Pass => "PASS_ALL_REPORTED_BY_ROM",
-                        SmsmemtestCaseResult::Fail => "FAIL_REPORTED_CASE_UNIDENTIFIED",
-                        SmsmemtestCaseResult::NotObserved => "NOT_OBSERVED",
-                        SmsmemtestCaseResult::Ambiguous => "AMBIGUOUS",
-                    };
+                if event == "vram_result_text_observed" {
+                    let case = classify_vram_result_row(machine.vdp().vram())
+                        .ok_or_else(|| "VRAM result text disappeared after detection".to_owned())?;
                     println!(
-                        "{{\"record\":\"smsmemtest_case\",\"phase\":\"video_ram\",\"case_id\":\"aggregate_or_first_failure\",\"status\":\"{}\",\"frame_index\":{}}}",
-                        status,
+                        "{{\"record\":\"smsmemtest_case\",\"phase\":\"video_ram\",\"case_id\":\"{}\",\"status\":\"{}\",\"observed_text\":\"{}\",\"frame_index\":{}}}",
+                        case.case_id,
+                        case.result.as_str(),
+                        json_escape(&case.observed_text),
                         index + 1,
                     );
                 }
