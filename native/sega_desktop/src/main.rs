@@ -1448,18 +1448,19 @@ mod windows_host {
                     },
                 );
                 let requested_frames = delta.requested_frames();
-                let producer_frames_per_second = if window_ms > 0 {
+                let rate_valid = window_valid && !delta.counter_reset && window_ms > 0;
+                let producer_frames_per_second = if rate_valid {
                     delta.accepted_frames as f64 * 1_000.0 / window_ms as f64
                 } else {
                     0.0
                 };
-                let requested_frames_per_second = if window_ms > 0 {
+                let requested_frames_per_second = if rate_valid {
                     requested_frames as f64 * 1_000.0 / window_ms as f64
                 } else {
                     0.0
                 };
                 eprintln!(
-                    "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames_total={} consumed_frames_total={} dropped_frames_total={} dropped_blocks_total={} underrun_frames_total={} underrun_events_total={} flushed_frames_total={} window_valid={} window_ms={} counter_reset={} accepted_frames_delta={} consumed_frames_delta={} requested_frames_delta={} dropped_frames_delta={} dropped_blocks_delta={} underrun_frames_delta={} underrun_events_delta={} flushed_frames_delta={} producer_frames_per_second={:.1} requested_frames_per_second={:.1} zero_fill_percent={:.3} output_error={:?}",
+                    "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames_total={} consumed_frames_total={} dropped_frames_total={} dropped_blocks_total={} underrun_frames_total={} underrun_events_total={} flushed_frames_total={} window_valid={} window_ms={} counter_reset={} rate_valid={} accepted_frames_delta={} consumed_frames_delta={} requested_frames_delta={} dropped_frames_delta={} dropped_blocks_delta={} underrun_frames_delta={} underrun_events_delta={} flushed_frames_delta={} producer_frames_per_second={:.1} requested_frames_per_second={:.1} zero_fill_percent={:.3} output_error={:?}",
                     u8::from(audio.sample_rate_hz > 0),
                     audio.sample_rate_hz,
                     audio.queue_capacity_frames,
@@ -1475,6 +1476,7 @@ mod windows_host {
                     u8::from(window_valid),
                     window_ms,
                     u8::from(delta.counter_reset),
+                    u8::from(rate_valid),
                     delta.accepted_frames,
                     delta.consumed_frames,
                     requested_frames,
