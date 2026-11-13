@@ -65,6 +65,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 - A transição usa atividade de pixels brancos nas linhas de texto documentadas (3 e 14), estável por dois frames; o término da fase VRAM é detectado pela presença estável de verde/vermelho na linha 4. Não usa atrasos fixos como substituto de conclusão.
 - O detector de prompts é heurístico e ainda precisa ser validado com uma ROM SMSmemtest construída a partir da revisão upstream fixada.
 - Eventos de pressionar/liberar são registrados em JSONL com índice de frame.
+- A revisão fixada do devkitSMS (`561bc2cb9829cdf2e31ad8cd43835037c8c44a63`) define `SMS_getKeysPressed()` como `KeysStatus & ~PreviousKeysStatus`; por isso o driver aplica uma transição press/release, mantendo o botão durante um frame completo para que o handler de frame a amostre.
 - O classificador de RAM lê linhas 4–10 e reconhece verde como `PASS`, vermelho como `FAIL`, ausência como `NOT_OBSERVED` e mistura como `AMBIGUOUS`.
 - O classificador de VRAM lê a linha 4: verde significa que a ROM reportou todos os testes aprovados; vermelho significa que a ROM reportou uma falha, mas não identifica qual teste da cadeia `if/else` falhou.
 - Não há OCR nem leitura de texto tilemap; a classificação visual foi unit-tested com cores RGB sintéticas, mas ainda não validada contra saída real da ROM.
