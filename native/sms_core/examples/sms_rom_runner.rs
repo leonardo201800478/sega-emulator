@@ -76,8 +76,7 @@ fn parse_args() -> Result<Args, String> {
     }
 
     let rom_path = rom_path.ok_or_else(|| format!("--rom is required\n{}", usage()))?;
-    let rom_sha256 =
-        rom_sha256.ok_or_else(|| format!("--rom-sha256 is required\n{}", usage()))?;
+    let rom_sha256 = rom_sha256.ok_or_else(|| format!("--rom-sha256 is required\n{}", usage()))?;
     if rom_sha256.len() != 64 || !rom_sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("--rom-sha256 must contain exactly 64 hexadecimal characters".to_owned());
     }
@@ -125,11 +124,7 @@ fn regional_profile(region: &str) -> Result<(Territory, SmsVdpProfile, u64), Str
     let revision = SmsVdpRevision::Sega3155124;
     let sprite_limit = SpriteLimitMode::HardwareLimit;
     match region {
-        "usa" => Ok((
-            Territory::Export,
-            SmsVdpProfile::sms1_t0_ntsc(),
-            3_579_545,
-        )),
+        "usa" => Ok((Territory::Export, SmsVdpProfile::sms1_t0_ntsc(), 3_579_545)),
         "brazil" => Ok((
             Territory::Export,
             SmsVdpProfile::new(revision, VideoStandard::PalM, sprite_limit),
@@ -274,7 +269,10 @@ mod tests {
 
     #[test]
     fn json_escape_preserves_json_string_boundaries() {
-        assert_eq!(json_escape("quote \" slash \\ line\n"), "quote \\\" slash \\\\ line\\n");
+        assert_eq!(
+            json_escape("quote \" slash \\ line\n"),
+            "quote \\\" slash \\\\ line\\n"
+        );
     }
 
     #[test]
