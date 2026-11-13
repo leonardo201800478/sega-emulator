@@ -64,7 +64,7 @@ impl SmsmemtestInputDriver {
         let (row, next_stage) = match stage {
             Stage::AwaitInitialPrompt => {
                 (INITIAL_PROMPT_TEXT_ROW, Some(Stage::AwaitRamCompletePrompt))
-            },
+            }
             Stage::AwaitRamCompletePrompt => (
                 RAM_COMPLETE_PROMPT_TEXT_ROW,
                 Some(Stage::AwaitVramCompletePrompt),
