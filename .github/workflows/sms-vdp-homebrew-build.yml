@@ -1,6 +1,9 @@
 name: SMS VDP homebrew build verification
 
 on:
+  push:
+    branches:
+      - "ci/verify-sms-vdp-rom-build-20261113"
   pull_request:
     paths:
       - ".github/workflows/sms-vdp-homebrew-build.yml"
