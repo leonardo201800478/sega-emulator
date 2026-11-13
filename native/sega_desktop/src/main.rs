@@ -1696,6 +1696,17 @@ mod windows_host {
                             recent_roms_model(&open_recent_list.borrow()),
                         )));
                         app.set_has_rom(true);
+                        app.set_audio_status(if video_only_capture_enabled() {
+                            "Saída física desativada pelo modo de captura somente vídeo.".into()
+                        } else if open_worker
+                            .borrow()
+                            .as_ref()
+                            .is_some_and(|worker| worker.audio_output_metrics().sample_rate_hz > 0)
+                        {
+                            "CPAL ativo — volume aplicado no DSP de saída.".into()
+                        } else {
+                            "Saída CPAL indisponível; consulte R3_AUDIO nos logs.".into()
+                        });
                         app.set_emulation_paused(false);
                         app.set_rom_status(
                             match start_result {
@@ -1755,6 +1766,7 @@ mod windows_host {
             if let Some(app) = close_app.upgrade() {
                 app.set_has_rom(false);
                 app.set_emulation_paused(false);
+                app.set_audio_status("Sem ROM carregada; volume e mute permanecem salvos.".into());
                 app.set_rom_status("Nenhuma ROM carregada.".into());
                 app.set_debug_status("Máquina fechada.".into());
             }
