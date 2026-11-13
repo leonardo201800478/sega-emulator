@@ -95,3 +95,25 @@ O mecanismo mais suspeito é a reancoragem do deadline em cada frame, combinada 
 ## Critério de liberação
 
 P0 só pode ser liberada após causa vinculada a código/commit, determinismo preservado, testes de execução contínua/em blocos, regressões SMS/SG-1000, CI aplicável e captura física pareada de pelo menos cinco minutos por cenário, com apresentação física caracterizada.
+
+
+## Evidência complementar — captura curta de 13/11 (Library)
+
+Foi localizado um log adicional da manhã de 13/11, posterior à PR #793 e usando a fonte PCM de 48 kHz. É uma captura anterior/mais curta, não o par final de cinco minutos fornecido nos dados resumidos; deve ser tratada como corroborativa, não como substituta.
+
+Valores de uma janela de 512 amostras:
+
+- `worker_frame_interval_p50/p95/p99`: 17.332 / 19.160 / 20.751 µs.
+- `worker_step_p50/p95/p99`: 11.325 / 12.689 / 14.145 µs.
+- `frame_processing_p50/p95/p99`: 11.353 / 12.727 / 14.179 µs.
+- `frame_budget_p50`: 16.687 µs.
+- `pacing_timeout_lateness_p50/p95/p99`: 525 / 1.414 / 1.874 µs.
+- `machine_ticks_per_frame_p50`: 59.736.
+- `psg_samples_p50/p95/p99`: 801 / 802 / 802, com taxa de fonte de 48 kHz.
+- `pacing_command_wakeups_total=0` e `command_handler_p95_us=0`.
+
+O p99 de `worker_step` e `frame_processing` permanece abaixo do orçamento nominal nessa janela. Isso reduz a probabilidade de o custo de execução da máquina ser, sozinho, a explicação do déficit mediano. Não exclui custo de Scheduler nem outros atrasos de host.
+
+O registro de saúde CPAL da mesma captura mostra `dropped_frames=0`, `dropped_blocks=0`, `output_error=None`, mas 62.229 frames de underrun e 386 eventos, com 48 kHz. A taxa de produção implícita em aproximadamente 57,7 frames/s × 801 amostras/frame fica perto de 46,2 kHz, abaixo dos 48 kHz consumidos. A relação é compatível com o worker lento causando underflow, mas ainda precisa de correlação pareada por QPC; não prova causa acústica nem falha do CPAL.
+
+A telemetria dessa captura também mantém `physical_present_timestamp=unavailable_slint_owned`. Não há evidência de scan-out físico nessa métrica.
