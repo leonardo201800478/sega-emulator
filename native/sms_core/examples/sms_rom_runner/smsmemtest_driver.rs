@@ -293,6 +293,9 @@ mod tests {
         frame[row_start..row_start + 3].copy_from_slice(&[0, 255, 0]);
         frame[row_start + 3..row_start + 6].copy_from_slice(&[255, 0, 0]);
 
-        assert_eq!(classify_result_row(&frame, 4), SmsmemtestCaseResult::Ambiguous);
+        assert_eq!(
+            classify_result_row(&frame, 4),
+            SmsmemtestCaseResult::Ambiguous
+        );
     }
 }
