@@ -2241,7 +2241,6 @@ mod windows_host {
 
             match replace_sms_worker(
                 &path,
-                &region,
                 &open_worker,
                 &open_save_context,
                 Arc::clone(&open_save_store),
