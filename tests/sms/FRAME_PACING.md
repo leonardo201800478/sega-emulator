@@ -19,9 +19,7 @@ button pulses. Frame numbers are relative to the post-warm-up reset:
 python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --button1-pulse-frames 10,600 > .\artifacts\smsmemtest-pacing-ntsc.jsonl
 ```
 
-The exact pulse schedule must be selected from the ROM's observed prompt/test
-flow. A pulse is asserted at a worker frame boundary and released after the next
-completed frame. Do not assume that a pulse means the ROM passed a test.
+The pinned SMSmemtest build already executed by CI provides a reproducible starting schedule: pulse at frames 26 and 441. In the prior full-machine run, the first prompt was accepted at frame 26, all seven RAM cases were reported at frame 441, the second prompt was accepted at frame 441, and the VRAM result was observed at frame 800. That evidence used ROM SHA-256 `f7654d1dea07ce195e1d57da373a86b3f1ca9869af0d9d7dcb4de6039eb52c71`; verify the SHA emitted by the local build before reusing the schedule. A pulse is asserted at a worker frame boundary and released after the next completed frame. Do not assume that a pulse means the ROM passed a test.
 
 ## What this measures
 
@@ -54,8 +52,8 @@ or QPC frequency. Use ETW/WPA and PresentMon for physical presentation analysis.
 ## ROM selection and limits
 
 - SMSmemtest is useful for RAM/VRAM functional checks, but it is interactive.
-  Without scheduled input pulses it remains at its prompt and is not a meaningful
-  sustained stress workload.
+  Use the evidenced frame pulse schedule `26,441` with the pinned ROM hash above;
+  without input it remains at its prompt and is not a meaningful sustained workload.
 - SMSTestSuite can cover video, PSG/FM and input behavior after its pinned build
   dependencies and case oracles are established. Its audited revision has no
   explicit license located; use locally only pending clarification.
