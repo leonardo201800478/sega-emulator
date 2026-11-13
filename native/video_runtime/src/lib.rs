@@ -348,11 +348,12 @@ impl FrameMailbox {
         Ok(())
     }
 
-    /// Register or clear a host notification invoked after each accepted publication.
+    /// Register or clear a host notification for newly available presentation work.
     ///
-    /// The callback runs on the publishing thread and always runs after the mailbox
-    /// lock has been released. Hosts must keep the callback short and use it only to
-    /// schedule work on their presentation thread.
+    /// The callback runs on the publishing thread, or on the thread explicitly calling
+    /// notify_if_pending, and always runs after the mailbox lock has been released.
+    /// Hosts must keep the callback short and use it only to schedule work on their
+    /// presentation thread.
     pub fn set_frame_available_notifier(
         &self,
         notifier: Option<Arc<dyn Fn(FrameMailbox) + Send + Sync>>,
