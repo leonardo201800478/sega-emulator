@@ -17,7 +17,7 @@ use sega_sms_core::{
 const DEFAULT_FRAMES: u64 = 120;
 const DEFAULT_MAX_INSTRUCTIONS_PER_FRAME: usize = 100_000;
 const MASTER_TICKS_PER_TSTATE: u64 = 1;
-const AUDIO_SAMPLE_RATE: u64 = 44_100;
+const AUDIO_SAMPLE_RATE: u64 = sega_audio_runtime::DEFAULT_PCM_SOURCE_RATE_HZ as u64;
 
 #[derive(Debug)]
 struct Args {
@@ -180,13 +180,16 @@ fn run(args: Args) -> Result<(), String> {
     .map_err(|error| format!("cannot construct SMS temporal machine: {error}"))?;
 
     println!(
-        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-machine\",\"boot_profile\":\"direct_cartridge_no_bios\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"rom_size_bytes\":{},\"emulator_sha\":\"{}\",\"region\":\"{}\",\"vdp_profile\":\"Sega3155124\",\"frames_requested\":{},\"max_instructions_per_frame\":{}}}",
+        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-machine\",\"boot_profile\":\"direct_cartridge_no_bios\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"rom_size_bytes\":{},\"emulator_sha\":\"{}\",\"region\":\"{}\",\"vdp_profile\":\"Sega3155124\",\"master_ticks_per_tstate\":{},\"psg_clock_hz\":{},\"audio_sample_rate_hz\":{},\"frames_requested\":{},\"max_instructions_per_frame\":{}}}",
         json_escape(&args.suite_id),
         json_escape(&args.suite_revision),
         args.rom_sha256,
         rom_size,
         json_escape(&args.emulator_sha),
         json_escape(&args.region),
+        MASTER_TICKS_PER_TSTATE,
+        psg_clock_hz,
+        AUDIO_SAMPLE_RATE,
         args.frames,
         args.max_instructions_per_frame,
     );
