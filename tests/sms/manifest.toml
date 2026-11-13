@@ -10,7 +10,7 @@ revision = "12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9"
 license = "Unlicense"
 license_evidence = "Upstream LICENSE.md"
 scope = ["system_ram_8k", "vram_16k", "cartridge_ram"]
-execution_gate = "FULL_SMS_MACHINE_RUNNER_REQUIRED"
+execution_gate = "RUNNER_AVAILABLE_ORACLE_AND_ROM_EXECUTION_NOT_VALIDATED"
 redistribution = "permissive_under_unlicense_with_attribution"
 notes = "Build requires devkitSMS/SDCC and the project's modified crt0 module; exact toolchain must be recorded."
 
@@ -22,7 +22,7 @@ revision = "985bc04fef6f3dc3c3450fbc84242676f241d316"
 license = "UNSPECIFIED_AT_AUDITED_REVISION"
 license_evidence = "No explicit root LICENSE file was found during this audit; verify upstream before redistribution."
 scope = ["video_patterns", "psg_audio", "fm_audio", "controllers", "paddle", "system_identification"]
-execution_gate = "FULL_SMS_MACHINE_RUNNER_REQUIRED"
+execution_gate = "RUNNER_AVAILABLE_BUILD_DEPENDENCIES_AND_CASE_ORACLES_NOT_VALIDATED"
 redistribution = "LOCAL_TESTING_ONLY_PENDING_LICENSE_CLARIFICATION"
 notes = "Source revision corresponds to v0.38. Build depends on external SMSlib/PSGlib and related libraries; pin every dependency before creating a reproducible build."
 
@@ -34,7 +34,7 @@ revision = "490c00b38c83012dee5a7a582097f080c210a3e7"
 license = "UNSPECIFIED_AT_AUDITED_REVISION"
 license_evidence = "No explicit license file was found during this audit; verify upstream before redistribution."
 scope = ["vdp_ports", "vram_cram_protocol", "h_v_counters", "vint_hint", "sprite_collision", "sprite_overflow"]
-execution_gate = "FULL_SMS_MACHINE_RUNNER_AND_CASE_LEVEL_VDP_CAPABILITY_REQUIRED"
+execution_gate = "RUNNER_AVAILABLE_CASE_LEVEL_VDP_CAPABILITY_REQUIRED"
 redistribution = "LOCAL_TESTING_ONLY_PENDING_LICENSE_CLARIFICATION"
 notes = "Upstream README asks for ZEXALL or at least ZEXDOC and exactly 228 CPU cycles per scanline. The current VDP slice lacks dot/fetch arbitration and sub-scanline effects, so timing-sensitive cases are blocked."
 
