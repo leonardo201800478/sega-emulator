@@ -202,6 +202,7 @@ fn run(args: Args) -> Result<(), String> {
     let initial_frame = machine.frame_number();
     let mut smsmemtest_driver = (args.suite_id == "smsmemtest")
         .then(SmsmemtestInputDriver::new);
+    let mut smsmemtest_complete = false;
 
     for index in 0..args.frames {
         let instructions = match machine.step_frame(args.max_instructions_per_frame) {
@@ -232,9 +233,7 @@ fn run(args: Args) -> Result<(), String> {
                     event,
                 );
             }
-            if driver.is_complete() {
-                break;
-            }
+            smsmemtest_complete = driver.is_complete();
         }
 
         println!(
@@ -247,6 +246,10 @@ fn run(args: Args) -> Result<(), String> {
             total_audio_samples,
             json_escape(&format!("{:?}", machine.now())),
         );
+
+        if smsmemtest_complete {
+            break;
+        }
     }
 
     let frames_completed = machine.frame_number().saturating_sub(initial_frame);
