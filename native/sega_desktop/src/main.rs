@@ -2373,8 +2373,29 @@ mod windows_host {
         });
 
         let exit_recent = Rc::clone(&recent_roms);
+        let exit_worker = Rc::clone(&worker);
+        let exit_save_context = Rc::clone(&save_context);
         let exit_prefs_app = app.as_weak();
         app.on_exit_requested(move || {
+            if let Some(active_worker) = exit_worker.borrow().as_ref() {
+                let was_running = active_worker.is_running();
+                if let Err(error) = active_worker.pause() {
+                    eprintln!("SRAM_SAVE pause_before_exit_failed error={error}");
+                }
+                if let Err(error) =
+                    persist_worker_sram(active_worker, exit_save_context.borrow().as_ref())
+                {
+                    if was_running {
+                        let _ = active_worker.start();
+                    }
+                    if let Some(app) = exit_prefs_app.upgrade() {
+                        app.set_rom_status(
+                            format!("Saída cancelada; falha ao gravar SRAM: {error}").into(),
+                        );
+                    }
+                    return;
+                }
+            }
             let _ = save_recent_roms(&exit_recent.borrow());
             if let Some(app) = exit_prefs_app.upgrade() {
                 let prefs = DesktopPreferences {
