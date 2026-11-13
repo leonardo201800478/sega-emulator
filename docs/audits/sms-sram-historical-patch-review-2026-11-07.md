@@ -1,7 +1,7 @@
 # SMS — revisão técnica dos patches históricos de SRAM
 
 **Data:** 2026-11-07  
-**Baseline de comparação:** `main` = `3ca0f648c841bfe7c85a301fb561273e5c62f676`  
+**Baseline histórica de comparação:** `main` = `3ca0f648c841bfe7c85a301fb561273e5c62f676` (não é o HEAD atual).  
 **PR de acompanhamento:** #616  
 **Escopo:** revisão dos patches de #424 e #543, confrontados com o runtime atual e com a documentação primária SMS Power.  
 **Resultado:** revisão estrutural e de semântica do mapeamento; execução local de testes NOT RUN.
@@ -95,8 +95,32 @@ Testes diferenciais devem comparar o caminho convencional e temporal para a mesm
 - Confronto do contrato principal de SRAM com SMS Power: **PASS**.
 - Decisão de não fazer cherry-pick de branches obsoletas/empilhadas: **PASS**.
 - Compatibilidade exata do overlay `$FFFC-$FFFF` no slot alto: **BLOCKED** até teste/decisão documentada.
-- Execução local de Cargo/Ruff/Pytest nesta sessão: **NOT RUN**.
+- Execução local dos gates Cargo nesta sessão: **NOT RUN**.
 - Boot/gameplay com ROM legal de teste: **NOT RUN**.
 - Port de runtime: **NOT STARTED**.
 
-Próximo incremento permitido: implementar primeiro a SRAM explícita de 8 KiB no `SmsMemory` atual, com gating de cartucho e cobertura do overlay; depois estender para 16/32 KiB e persistência em mudanças isoladas. A branch deve partir do HEAD atual de `main`, e o port não deve ser publicado como concluído sem os gates Rust/Python no HEAD final.
+Próximo incremento permitido: implementar primeiro a SRAM explícita de 8 KiB no `SmsMemory` atual, com gating de cartucho e cobertura do overlay; depois estender para 16/32 KiB e persistência em mudanças isoladas. A branch deve partir do HEAD atual de `main`, e o port não deve ser publicado como concluído sem os gates Rust no HEAD final.
+
+
+## 8. Revalidação de escopo após consolidação Rust-only (2026-11-07)
+
+A revisão das PRs #424/#543 permanece uma análise histórica sobre a baseline
+`3ca0f648c841bfe7c85a301fb561273e5c62f676`. A `main` atual usada nesta
+atualização documental é `1506f93bfa06905085da9a74b64353ff086b96d9`.
+
+- A implementação de produto é Rust-only. Referências históricas a PyO3,
+  adaptadores Python e frontend Qt não são requisitos nem destinos de port.
+- Não executar nem exigir pytest/Ruff para validar o produto. Os gates
+  obrigatórios são os três comandos Cargo definidos no contrato do projeto,
+  mais gates Windows específicos quando aplicáveis.
+- A auditoria de runtime descrita nas seções anteriores não foi repetida sobre
+  a `main` atual; não atribuir status PASS à inspeção do runtime atual.
+- O overlay `$FFFC-$FFFF` na SRAM alta permanece BLOCKED até definição de
+  vetor reproduzível e decisão de hardware. Não copiar a exclusão encontrada
+  no patch #424 sem resolver esse contrato.
+- SRAM deve integrar o estado completo serializável do hardware; persistência
+  de arquivo continua separada e fora do caminho de barramento.
+
+**Classificação desta atualização:** escopo Rust-only PASS; revisão histórica
+#424/#543 PASS no escopo registrado; auditoria do runtime atual NOT RUN;
+overlay BLOCKED; implementação NOT STARTED; validação in-game NOT RUN.

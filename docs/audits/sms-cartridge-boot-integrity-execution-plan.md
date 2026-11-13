@@ -1,8 +1,8 @@
 # SMS — plano executável de integridade de boot e compatibilidade de cartuchos
 
 **Data:** 2026-11-07  
-**Base auditada:** `main` em `3ca0f648c841bfe7c85a301fb561273e5c62f676`  
-**Branch de trabalho:** `audit/sms-cartridge-boot-integrity-20261107`  
+**Baseline histórica examinada:** `main` em `3ca0f648c841bfe7c85a301fb561273e5c62f676` (não representa a `main` atual).  
+**Branch histórica de origem:** `audit/sms-cartridge-boot-integrity-main-20261107`; esta revisão foi transplantada para uma branch baseada na `main` atual apenas para atualização documental.  
 **Estado:** auditoria de código e especificação; nenhuma alteração de runtime nesta etapa.  
 **Prioridade:** P0 — bloqueador de confiabilidade do boot e dos testes in-game.
 
@@ -195,9 +195,7 @@ Gates para cada PR/HEAD:
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets --locked -- -D warnings`
 - `cargo test --workspace --locked`
-- `python -m pytest`
-- `python -m ruff check .`
-- `python -m ruff format --check .`
+- Gates adicionais específicos do app Windows, quando o escopo tocar `native/sega_app`: `cargo check --manifest-path native/sega_app/Cargo.toml --locked`, Clippy e testes equivalentes no target Windows suportado.
 
 Registrar cada gate como PASS, FAIL, BLOCKED ou NOT RUN. Não declarar validação in-game sem execução real. Não integrar com warnings/falhas. Não fazer merge sem autorização explícita.
 
@@ -313,3 +311,80 @@ A busca por PR retornou os corpos completos das duas propostas e os SHAs de cód
 - [ ] Só depois abrir branch de runtime baseada no SHA atual da `main`.
 
 **Estado desta reconciliação:** comparação estrutural PASS; decisão de não cherry-pick PASS; auditoria integral dos patches NOT RUN; port de runtime NOT STARTED; teste in-game NOT RUN.
+
+
+## 13. Revalidação documental sobre a arquitetura atual (2026-11-07)
+
+Esta seção foi adicionada em uma branch criada diretamente de `main` no SHA
+`1506f93bfa06905085da9a74b64353ff086b96d9`. O conteúdo das seções anteriores
+registra a auditoria histórica feita sobre `3ca0f648c841bfe7c85a301fb561273e5c62f676`;
+não deve ser interpretado como uma inspeção executada sobre o HEAD atual.
+
+- Produto atual: Rust-only, com frontend egui/eframe. Python, PyO3, Qt,
+  pytest e Ruff não fazem parte dos gates do produto.
+- Os gates normativos são `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` e
+  `cargo test --workspace --locked`, complementados por validações específicas
+  do app Windows e de hardware quando aplicáveis.
+- As referências a PyO3/Python/Qt nas comparações de #424 e #543 descrevem
+  somente a implementação histórica dessas PRs; não são requisitos para o
+  port atual.
+- A semântica do overlay `$FFFC-$FFFF` na SRAM mapeada em `$C000-$FFFF`
+  continua BLOCKED até existir um vetor de teste e uma decisão documentada
+  compatível com SMS Power.
+- A identificação de cartucho permanece fail-closed: fingerprints sem dump
+  exato revalidado não podem ser promovidos a evidência autoritativa.
+- Nenhuma implementação de SRAM, mapper ou mudança de runtime foi realizada
+  por esta atualização documental.
+
+**Status na baseline atual:** auditoria de código do mapper/SRAM NOT RUN;
+revalidação documental do plano PASS; semântica do overlay BLOCKED; port de
+runtime NOT STARTED; boot/gameplay NOT RUN.
+
+
+## 14. Inspeção direta do runtime na main 1506f93 (2026-11-07)
+
+Inspeção estática realizada após a criação desta atualização documental. Arquivos e
+blobs consultados diretamente na `main`:
+
+- `native/sms_core/src/memory.rs` — blob
+  `0cf76a2d0796e068b3d72d64b837d5d2dadff533`.
+- `native/sms_core/src/lib.rs` — blob
+  `90e0c2f4866336634c7316a4d3b84a4938938ba8`.
+
+### 14.1 Achados confirmados
+
+1. `MapperKind` contém somente `Sega`, `SegaExtended` e `Codemasters`.
+2. `detect_mapper()` reconhece Codemasters pela assinatura descrita no arquivo,
+   reconhece SegaExtended por tamanho/header e encaminha os demais casos para
+   `Sega`. Portanto, a política UNKNOWN/AMBIGUOUS fail-closed ainda não existe.
+3. `SmsMemory` contém `mapper_control`, três bancos ROM, work RAM de 8 KiB,
+   BIOS e `control_port`; não contém armazenamento SRAM de cartucho.
+4. Leituras em `$8000-$BFFF` continuam selecionando ROM. Escritas em
+   `$FFFC-$FFFF` atualizam o latch/registradores e o espelho de work RAM
+   conforme o estado da porta `$3E`; não há caminho de SRAM.
+5. A struct `SmsMemory` deriva `Clone`, `PartialEq` e `Eq`, mas não
+   `serde::Serialize` nem `serde::Deserialize`.
+6. O módulo raiz `native/sms_core/src/lib.rs` declara explicitamente que
+   persistent serialized save states permanecem uma acceptance gate separada.
+   A pesquisa de `Serialize` no escopo `native/sms_core/src` retornou somente
+   o arquivo `lib.rs`, não uma implementação de serialização de `SmsMemory`.
+
+### 14.2 Consequências
+
+- O port de SRAM deve ser feito no `SmsMemory` compartilhado, não em um runtime
+  alternativo, preservando o caminho de conclusão temporal do barramento.
+- Save State serializado não pode ser considerado resolvido por `Clone` ou
+  snapshot em memória. SRAM e todos os latches relevantes terão de integrar
+  o contrato serializável completo quando esse gate for implementado.
+- O comportamento atual de fallback para Sega não satisfaz o requisito de
+  identificação fail-closed; isso deve ser tratado como tarefa separada do
+  circuito SRAM para evitar misturar identidade de mídia e decodificação elétrica.
+- A ausência de SRAM no runtime atual foi confirmada por inspeção estática;
+  não houve execução de teste nem alteração de runtime nesta etapa.
+
+**Classificação atualizada:** inspeção estática de `SmsMemory` e do estado de
+serialização no SMS core: PASS; SRAM de cartucho no runtime: ausente (confirmado);
+identificação fail-closed: FAIL (não implementada); Save State serializado:
+BLOCKED / acceptance gate pendente; overlay SRAM alto: BLOCKED; port: NOT STARTED;
+testes Cargo e boot/gameplay: NOT RUN.
