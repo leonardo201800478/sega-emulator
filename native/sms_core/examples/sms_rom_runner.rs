@@ -16,7 +16,10 @@ use sega_sms_core::{
     SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
 
-use smsmemtest_driver::SmsmemtestInputDriver;
+use smsmemtest_driver::{
+    RAM_RESULT_CASES, SmsmemtestCaseResult, SmsmemtestInputDriver,
+    classify_ram_result_rows, classify_result_row,
+};
 
 const DEFAULT_FRAMES: u64 = 120;
 const DEFAULT_MAX_INSTRUCTIONS_PER_FRAME: usize = 100_000;
@@ -228,10 +231,38 @@ fn run(args: Args) -> Result<(), String> {
             let events = driver.after_frame(&mut machine)?;
             for event in events {
                 println!(
-                    "{{\"record\":\"smsmemtest_input\",\"frame_index\":{},\"event\":\"{}\",\"detector\":\"text_row_activity_heuristic\"}}",
+                    "{{\"record\":\"smsmemtest_input\",\"frame_index\":{},\"event\":\"{}\",\"detector\":\"white_text_row_activity_heuristic\"}}",
                     index + 1,
                     event,
                 );
+
+                if event == "ram_results_ready" {
+                    for (case_id, result) in
+                        RAM_RESULT_CASES.iter().zip(classify_ram_result_rows(machine.framebuffer()))
+                    {
+                        println!(
+                            "{{\"record\":\"smsmemtest_case\",\"phase\":\"system_ram\",\"case_id\":\"{}\",\"status\":\"{}\",\"frame_index\":{}}}",
+                            case_id,
+                            result.as_str(),
+                            index + 1,
+                        );
+                    }
+                }
+
+                if event == "vram_completion_row_activity_detected" {
+                    let result = classify_result_row(machine.framebuffer(), 4);
+                    let status = match result {
+                        SmsmemtestCaseResult::Pass => "PASS_ALL_REPORTED_BY_ROM",
+                        SmsmemtestCaseResult::Fail => "FAIL_REPORTED_CASE_UNIDENTIFIED",
+                        SmsmemtestCaseResult::NotObserved => "NOT_OBSERVED",
+                        SmsmemtestCaseResult::Ambiguous => "AMBIGUOUS",
+                    };
+                    println!(
+                        "{{\"record\":\"smsmemtest_case\",\"phase\":\"video_ram\",\"case_id\":\"aggregate_or_first_failure\",\"status\":\"{}\",\"frame_index\":{}}}",
+                        status,
+                        index + 1,
+                    );
+                }
             }
             smsmemtest_complete = driver.is_complete();
         }
