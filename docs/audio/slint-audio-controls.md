@@ -1,34 +1,33 @@
-# Controles de áudio do desktop Slint
+# Controles de áudio e DSP do desktop Slint
 
-## Escopo
+## Saída de áudio
 
-O menu **Áudio** expõe controles de saída para o runtime SMS atual:
+O menu **Áudio** oferece volume mestre de 0 a 100%, mute independente, atalhos de 50%/70%, estado da saída e persistência em `%APPDATA%/Sega Emulator/slint_ui_settings.txt`.
 
-- Volume mestre de 0 a 100%.
-- Mute independente, preservando o nível mestre escolhido.
-- Atalhos de volume em 50% e 70%.
-- Estado de saída e retorno de erros da aplicação do volume.
-- Persistência das preferências no arquivo `%APPDATA%/Sega Emulator/slint_ui_settings.txt`.
+As alterações são encaminhadas por comandos coarse-grained ao `SmsTemporalWorker`. Volume e filtros não reiniciam CPAL, não avançam nem pausam a máquina e não alteram PSG, CPU, VDP, MachineScheduler ou clocks.
 
-## Caminho de aplicação
+## Processamento DSP opcional
 
-O host chama `SmsTemporalWorker::set_audio_volume`, que envia um comando coarse-grained ao worker proprietário da máquina. O comando atualiza `NativeAudioSession::set_volume` no DSP/resampler de saída. A escala é linear (amostra multiplicada por volume/100) e o clamp PCM normalizado permanece na fronteira do resampler.
+O submenu de som oferece:
 
-A mudança de volume não recria o stream CPAL, não avança nem pausa a máquina e não altera PSG, MachineScheduler, CPU, VDP ou clocks.
+- **Preset SMS1 — experimental:** ativa passa-altas de 20 Hz e passa-baixas de 18 kHz.
+- **Passa-altas / acoplamento AC:** habilitação independente e ajuste de 5 a 500 Hz.
+- **Passa-baixas:** habilitação independente e ajuste de 4 a 20 kHz.
+- **Desativar todos os filtros:** retorna ao caminho digital sem processamento analógico adicional.
 
-O mute aplica volume zero à saída e mantém o volume mestre armazenado para restauração. Volume e mute são aplicados ao criar uma nova sessão quando uma ROM é carregada.
+O preset é uma aproximação de saída, não uma reconstrução elétrica calibrada de uma revisão específica. O manual de serviço do Master System indica faixa de saída de 20 Hz a 20 kHz e nível máximo de 300 mVp-p no pino 10 do IC5; também lista Q48, C49, R47 e R46 entre os pontos a verificar em falhas de áudio. Isso não fornece a função de transferência completa, impedância de carga nem a constante RC efetiva da placa. Portanto, 20 Hz e 18 kHz são valores experimentais selecionados para permitir avaliação auditiva, não valores medidos de corte dos componentes.
 
-## Valores padrão e compatibilidade
+## Caminho de sinal e invariantes
 
-- Instalações sem a chave `audio_volume` usam 70%.
-- `audio_volume` fora do intervalo 0–100 é ignorado e o padrão seguro é mantido.
-- `audio_muted` ausente usa `false`.
-- O formato de preferências existente é estendido sem invalidar as chaves antigas.
+`PSG → mixer → AnalogOutputProcessor opcional → FIR/resampler → PCM sink`
 
-## Fora do escopo
+- O processador opera na taxa PCM interna de 48 kHz, antes da conversão para a taxa negociada com o dispositivo.
+- HPF e LPF são filtros IIR de primeira ordem, com estado persistente entre blocos.
+- Atualizar a configuração recria apenas o estado dos filtros; não recria CPAL.
+- Pause/Resume preserva a história dos filtros. Reset/Load ROM reinicia o estado DSP; blocos descartados pelo debugger não contaminam o próximo trecho audível.
+- A configuração desativada é bypass: não acrescenta filtragem ao caminho original.
+- Nenhum filtro é executado por callback de instrução ou por callback do dispositivo de áudio.
 
-Não há equalizador, bass boost, treble, filtro passa-baixa selecionável ou modelo analógico nesta entrega. A filtragem do SN76489 e a reconstrução FIR existentes permanecem inalteradas. Filtros adicionais só devem ser expostos após calibração documentada, comparação espectral e testes de regressão, evitando mascarar divergências na síntese do PSG.
+## Validação
 
-## Validação necessária
-
-Os testes automatizados cobrem a conversão de volume efetivo, o comportamento independente de mute e o valor padrão. Os workflows da PR devem validar compilação Slint/Rust e os gates Windows x64 aplicáveis. A audição em dispositivo físico continua sendo validação manual separada.
+Testes unitários cobrem validação de frequências, rejeição de DC pelo HPF, bypass exato, perfil experimental e continuidade entre blocos. Os workflows da PR devem validar Slint, Clippy, testes e build Windows x64. A comparação auditiva com hardware real e captura de resposta em frequência continuam pendentes; não são declaradas como PASS.
