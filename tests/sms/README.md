@@ -1,12 +1,39 @@
 # SMS external diagnostic ROM catalog
 
-This directory tracks public upstream diagnostic suites for the Master System. It does **not** claim that these ROMs already run in the emulator or that any hardware behavior has passed.
+This directory tracks public upstream diagnostic suites for the Master System and the tooling used to execute them. The presence of a runner does **not** mean a ROM suite or any hardware behavior has passed.
+
+## Full-machine runner
+
+`native/sms_core/examples/sms_rom_runner.rs` executes through `SmsTemporalMachine`, `SmsTemporalBus`, the Z80 microsequencer, Scheduler, mapper-backed memory, PSG and SMS VDP. It is deliberately separate from the CPU-only `z80test_runner.rs`.
+
+Run from the repository root:
+
+```powershell
+python tests/sms/scripts/run_rom.py --rom .\path\to\diagnostic.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --frames 120
+```
+
+Supported regional profiles are `usa`, `brazil` (PAL-M), `europe` (PAL) and `japan`. The runner uses the same VDP revision, sprite-limit mode and PSG clocks selected by the SMS runtime worker. The current runner uses a direct-cartridge, no-BIOS startup profile; it does not reproduce BIOS initialization.
+
+The Python wrapper computes the ROM SHA-256 using the standard library, obtains the checked-out Git revision, and invokes Cargo. The Rust runner emits JSON Lines:
+- `start`: ROM provenance, image size, selected machine profile and execution limits;
+- `frame`: completed frame, instruction count, drained PSG sample count and virtual machine timestamp;
+- `summary`: `EXECUTED_NO_ORACLE` when the requested frames completed, or `EXECUTION_ERROR` if execution stopped.
+
+**`EXECUTED_NO_ORACLE` is not PASS.** The runner does not interpret each ROM's display text or private result buffer, and it does not know suite-specific expected values. A separate suite adapter/oracle must classify each case as PASS/FAIL. A frame-step limit error is an execution error, not evidence of a hardware defect.
+
+Example options:
+- `--frames N`: number of completed VDP frames (default 120; safety ceiling 100000);
+- `--max-instructions-per-frame N`: safety bound per frame (default 100000);
+- `--region usa|brazil|europe|japan`: explicit regional hardware tuple;
+- `--debug`: use Cargo's debug profile instead of release.
+
+Generated JSONL reports and ROM binaries should be stored outside Git unless a separate policy explicitly allows the artifact. Do not put ROM bytes, BIOS images, memory dumps or copyrighted traces in logs.
 
 ## Current execution boundary
 
-The existing `native/sms_core/src/bin/z80test_runner.rs` is a CPU-only runner. It loads a flat 64 KiB image into `FlatBus`; it does not instantiate the complete SMS machine, VDP, PSG, mapper, or the machine Scheduler. It must not be used to claim SMS ROM compatibility.
+The existing `native/sms_core/src/bin/z80test_runner.rs` is a CPU-only runner. It loads a flat 64 KiB image into `FlatBus`; it does not instantiate the complete SMS machine, VDP, PSG, mapper, or Scheduler. It must not be used to claim SMS ROM compatibility.
 
-The production temporal slice is more advanced: `SmsTemporalMachine` owns the resumable Z80 and `SmsTemporalBus`; the bus commits PSG and SMS VDP port effects at scheduled transaction completion. The current VDP integration advances at scanline granularity. Dot/fetch arbitration and mid-scanline effects are explicitly not implemented. Consequently, the VDP suite can be catalogued now, but timing-sensitive sub-scanline assertions must remain NOT RUN / BLOCKED until the corresponding hardware granularity exists and an end-to-end ROM runner can observe it.
+The production temporal slice integrates Z80 and scheduled bus transactions with PSG and SMS VDP. The VDP currently advances at scanline granularity. Dot/fetch arbitration and mid-scanline effects are not implemented. Therefore, the full-machine runner can execute a ROM, but timing-sensitive sub-scanline assertions remain blocked until the corresponding hardware granularity exists.
 
 ## Catalog
 
@@ -14,9 +41,9 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 | Suite | Primary coverage | Current gate |
 |---|---|---|
-| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Candidate for full-machine functional execution; ROM runner still required |
-| SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Candidate for manual/automated functional checks; no explicit license file found at pinned revision |
-| SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Timing assertions blocked by missing dot/fetch and sub-scanline model; no explicit license file found at pinned revision |
+| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Runner available; execution and result oracle not yet validated |
+| SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Runner available; build dependencies and case oracles remain to be validated |
+| SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Runner available; timing assertions blocked by missing dot/fetch and sub-scanline model |
 | ZEXALL-SMS | Z80 documented and undocumented behavior/flags | E8 gate only; do not execute before formal E7 closure |
 | NotOnlyWords | Candidate VDP edge-case suite | Unresolved source identity; do not invent a source or gate |
 
@@ -24,14 +51,14 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 - Never commit downloaded ROM binaries by default.
 - Obtain sources from the pinned upstream revision recorded in `manifest.toml`; do not use a moving `master` URL for reproducible validation.
-- Record the exact build tools, source revision, resulting ROM SHA-256, emulator commit, machine profile, region, and test output in each run record.
+- Record exact build tools, source revision, resulting ROM SHA-256, emulator commit, machine profile, region, and test output in each run record.
 - Do not treat public repository visibility or non-commercial use as a substitute for an explicit license. SMSmemtest declares Unlicense; ZEXALL-SMS declares GPL-2.0. For the two suites without an explicit license file found during this audit, use upstream material for local testing only and do not redistribute their sources or binaries in this repository unless the rights holder clarifies permission.
 - Respect upstream attribution and license terms if a source or binary is ever vendored.
 - Generated ROMs, commercial ROMs, BIOS images, memory dumps, and traces containing ROM bytes do not belong in Git history.
 
 ## Result classification
 
-Every run must be classified independently as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A ROM booting, a menu appearing, a successful compile, or a green unrelated CI job is not a test pass.
+Every test case must be classified independently as `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. A ROM booting, a menu appearing, a successful compile, a completed frame budget, or a green unrelated CI job is not a test pass.
 
 A valid result record must include:
 
@@ -45,9 +72,8 @@ A valid result record must include:
 
 ## Next engineering steps
 
-1. Implement a Rust-native full-machine ROM diagnostic runner around `SmsTemporalMachine`, not `FlatBus`.
-2. Add bounded execution, frame/instruction limits, deterministic input scripting, and machine-readable results.
-3. Expose read-only diagnostic observations at the machine boundary without bypassing the Scheduler or changing hardware timing.
-4. Start with SMSmemtest and non-timing-sensitive SMSTestSuite checks.
-5. Enable only the SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
-6. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
+1. Validate the runner's build and bounded execution in CI with a synthetic homebrew fixture that is generated in the test and not committed as an external ROM.
+2. Add suite-specific adapters/oracles for SMSmemtest and non-timing-sensitive SMSTestSuite checks.
+3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
+4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
+5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
