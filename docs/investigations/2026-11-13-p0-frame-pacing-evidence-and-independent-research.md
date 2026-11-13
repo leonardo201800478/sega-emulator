@@ -135,7 +135,7 @@ CPAL abriu em todas as três execuções audio-active:
 | 3 | 14.479.443 | 14.478.480 | 620.976 | 3.920 |
 
 - Underrun events: aproximadamente 767–788 por minuto.
-- Frames solicitados ao callback (`consumed_frames + underrun_frames`): aproximadamente 15,06–15,08 milhões nos snapshots registrados.
+- Frames solicitados ao callback (`consumed_frames + underrun_frames`): aproximadamente 15,058–15,099 milhões nos snapshots registrados.
 - Razão de zero-fill (`underrun_frames / (consumed_frames + underrun_frames)`): aproximadamente 4,03–4,12% dos frames solicitados ao consumidor.
 - Ocupação típica da fila: ~800–963 frames; high-water ~1.443–1.444 de 4.096.
 - Sem evidência de overflow; os contadores de underrun aumentaram continuamente.
