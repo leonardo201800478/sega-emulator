@@ -258,15 +258,19 @@ jobs:
     env:
       SMSMEMTEST_REVISION: 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9
       DEVKIT_SMS_REVISION: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
-      SMSMEMTEST_ROOT: ${{ runner.temp }}/SMSmemtest
-      DEVKIT_SMS_ROOT: ${{ runner.temp }}/devkitSMS
-      OUT_DIR: ${{ runner.temp }}/smsmemtest-output
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+
+      - name: Define temporary build paths
+        shell: bash
+        run: |
+          echo "SMSMEMTEST_ROOT=$RUNNER_TEMP/SMSmemtest" >> "$GITHUB_ENV"
+          echo "DEVKIT_SMS_ROOT=$RUNNER_TEMP/devkitSMS" >> "$GITHUB_ENV"
+          echo "OUT_DIR=$RUNNER_TEMP/smsmemtest-output" >> "$GITHUB_ENV"
 
       - name: Install pinned SDCC 4.6.0
         shell: bash
@@ -284,7 +288,7 @@ jobs:
             exit 1
           fi
           echo "SDCC_BIN=$sdcc_bin" >> "$GITHUB_ENV"
-          echo "$(dirname "$sdcc_bin")" >> "$GITHUB_PATH"
+          dirname "$sdcc_bin" >> "$GITHUB_PATH"
           "$sdcc_bin" --version
 
       - name: Checkout immutable upstream sources
