@@ -154,4 +154,3 @@ Remove-Item Env:SEGA_SMS_DIAGNOSTIC_SRAM_BYTES
 ```
 
 This override is a test aid, not evidence that an unknown commercial cartridge physically contains SRAM. For SMSmemtest, 32 KiB is the relevant diagnostic capacity because the ROM tests two 16 KiB banks. The test ROM reports cartridge SRAM results separately from internal RAM and VRAM.
-
