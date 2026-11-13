@@ -1831,7 +1831,7 @@ mod windows_host {
                 return;
             }
 
-            let (region, sprite_limit_enabled, audio_volume, dsp_config) = open_app
+            let (region, sprite_limit_enabled, audio_volume, dsp_config, renderer_mode) = open_app
                 .upgrade()
                 .map(|app| {
                     (
