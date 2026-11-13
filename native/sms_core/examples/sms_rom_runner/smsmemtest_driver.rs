@@ -214,10 +214,10 @@ fn decode_smsmemtest_text_row(vram: &[u8], row: usize) -> Option<DecodedTextRow>
         colors.push(color);
     }
 
-    while text.ends_with(' ') {
-        text.pop();
-        colors.pop();
-    }
+    let leading_spaces = text.bytes().take_while(|byte| *byte == b' ').count();
+    let trimmed_end = text.trim_end_matches(' ').len();
+    let text = text[leading_spaces..trimmed_end].to_owned();
+    let colors = colors[leading_spaces..trimmed_end].to_vec();
 
     Some(DecodedTextRow { text, colors })
 }
@@ -370,7 +370,7 @@ mod tests {
     }
 
     fn write_text_row(vram: &mut [u8], row: usize, segments: &[(&str, TestColor)]) {
-        let mut column = 0;
+        let mut column = 1;
         for (text, color) in segments {
             let tile_offset = match color {
                 TestColor::White => 0,
