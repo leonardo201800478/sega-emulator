@@ -1466,6 +1466,11 @@ mod windows_host {
                 } else {
                     0.0
                 };
+                let zero_fill_percent_window = if rate_valid {
+                    delta.zero_fill_percent()
+                } else {
+                    0.0
+                };
                 eprintln!(
                     "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames_total={} consumed_frames_total={} requested_frames_total={} dropped_frames_total={} dropped_blocks_total={} underrun_frames_total={} underrun_events_total={} flushed_frames_total={} zero_fill_percent_total={:.3} window_valid={} window_ms={} counter_reset={} rate_valid={} accepted_frames_delta={} consumed_frames_delta={} requested_frames_delta={} dropped_frames_delta={} dropped_blocks_delta={} underrun_frames_delta={} underrun_events_delta={} flushed_frames_delta={} accepted_frames_per_second={:.1} requested_frames_per_second={:.1} zero_fill_percent_window={:.3} output_error={:?}",
                     u8::from(audio.sample_rate_hz > 0),
@@ -1496,7 +1501,7 @@ mod windows_host {
                     delta.flushed_frames,
                     accepted_frames_per_second,
                     requested_frames_per_second,
-                    delta.zero_fill_percent(),
+                    zero_fill_percent_window,
                     output_error,
                 );
             }
