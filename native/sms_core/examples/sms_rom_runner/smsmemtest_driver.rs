@@ -62,10 +62,9 @@ impl SmsmemtestInputDriver {
         };
 
         let (row, next_stage) = match stage {
-            Stage::AwaitInitialPrompt => (
-                INITIAL_PROMPT_TEXT_ROW,
-                Some(Stage::AwaitRamCompletePrompt),
-            ),
+            Stage::AwaitInitialPrompt => {
+                (INITIAL_PROMPT_TEXT_ROW, Some(Stage::AwaitRamCompletePrompt))
+            },
             Stage::AwaitRamCompletePrompt => (
                 RAM_COMPLETE_PROMPT_TEXT_ROW,
                 Some(Stage::AwaitVramCompletePrompt),
@@ -147,7 +146,7 @@ pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool 
 
 #[cfg(test)]
 mod tests {
-    use super::{text_row_has_visible_pixels, FRAME_WIDTH};
+    use super::{FRAME_WIDTH, text_row_has_visible_pixels};
 
     #[test]
     fn prompt_row_detector_accepts_visible_rgb24_text() {
