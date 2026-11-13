@@ -3813,7 +3813,6 @@ version = "0.1.0"
 dependencies = [
  "sega-audio-runtime",
  "sega-debugger-core",
- "sega-media",
  "sega-observability",
  "sega-sms-core",
  "sega-sn76489",
