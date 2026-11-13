@@ -5,7 +5,7 @@
 **Upstream:** https://github.com/sverx/SMSmemtest
 **Revisão fixada no manifesto:** `12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9`
 **Fonte auditada:** `src/main.c` (versão declarada 0.40)
-**Escopo:** determinar o que precisa ser observado para transformar execução em resultados por caso. A ROM SMSmemtest foi construída e executada duas vezes no GitHub Actions run `43391025778`, com registros determinísticos idênticos e gate funcional aprovado. Ambas as execuções alcançaram os resultados de RAM e VRAM.
+**Escopo:** determinar o que precisa ser observado para transformar execução em resultados por caso. A ROM SMSmemtest foi construída e executada duas vezes no GitHub Actions run `43391407254`, com registros determinísticos idênticos e gate funcional aprovado. Ambas as execuções alcançaram os resultados de RAM e VRAM.
 
 ## 1. Fluxo efetivo da ROM
 
@@ -93,7 +93,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 
 ## 5. Estado
 
-### Execução real e replay determinístico (GitHub Actions run 43391025778)
+### Execução real e replay determinístico (GitHub Actions run 43391407254)
 
 - ROM SHA-256: `f7654d1dea07ce195e1d57da373a86b3f1ca9869af0d9d7dcb4de6039eb52c71`.
 - Perfil: USA/NTSC; resultado RAM disponível no frame 441; resultado VRAM no frame 800.
@@ -101,14 +101,14 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 - VRAM: `PASS_ALL_REPORTED_BY_ROM` — a própria ROM entrou no ramo de sucesso agregado após executar os cinco padrões.
 - Instruções: 8.496.776; áudio drenado: 640.825 amostras; SRAM: `BLOCKED_CAPABILITY`.
 - Essa execução valida o fluxo ROM → entrada → framebuffer → classificador, mas não constitui comparação com hardware físico ou outro emulador de referência.
-- As duas execuções usam `git rev-parse HEAD` e registraram `emulator_sha=11a4b0c3bba093770d05be6108e3e6f14940cc2d`. A comparação de `start`, todos os registros `frame`, eventos de entrada, resultados por caso e `summary` retornou `determinism=IDENTICAL`. O job CI também exigiu e confirmou 7/7 casos RAM `PASS` e VRAM `PASS_ALL_REPORTED_BY_ROM`.
+- As duas execuções usam `git rev-parse HEAD` e registraram `emulator_sha=323c492ec98dae7cbed5d1d8eac0e47df8ba8f5f`. A comparação de `start`, todos os registros `frame`, eventos de entrada, resultados por caso e `summary` retornou `determinism=IDENTICAL`. O job CI também exigiu e confirmou 7/7 casos RAM `PASS` e VRAM `PASS_ALL_REPORTED_BY_ROM`.
 
 ## 6. Estado
 
 | Componente | Estado |
 |---|---|
 | Runner full-machine via Scheduler | Implementado |
-| CI workspace, SMS runtime Release e ROM regression gate no HEAD `11a4b0c` | PASS |
+| CI workspace, SMS runtime Release e ROM regression gate no HEAD `323c492` | PASS |
 | Snapshot/hash do mesmo input ROM | PASS — wrapper e build ROM registram SHA-256 do snapshot/imagem executados |
 | Entrada automática por fase | IMPLEMENTADA e repetível; prompts detectados nos frames 26 e 441 nas duas execuções |
 | Captura/oráculo visual | Exercitado duas vezes em ROM real: sete linhas RAM e resultado agregado VRAM classificados por cor; logs idênticos |
