@@ -15,7 +15,7 @@ The SMS Test Suite build verifies the `TMR SEGA` signature at ROM offset `0x7FF0
 
 ## Build toolchains and layout
 
-The CI runner is pinned to `ubuntu-26.04`; the checkout action is pinned to commit `11d5960a326750d5838078e36cf38b85af677262`. The C build installs the exact Ubuntu packages `sdcc=4.5.0+dfsg-4` and `sdcc-libraries=4.5.0+dfsg-4`.
+The workflow uses the supported `ubuntu-latest` runner label (the successful build used Ubuntu 26.04.1, image `20261111.196.1`). The checkout action is pinned to commit `11d5960a326750d5838078e36cf38b85af677262`. The C build installs the exact Ubuntu packages `sdcc=4.5.0+dfsg-4` and `sdcc-libraries=4.5.0+dfsg-4`.
 
 ### SmsVdpTest
 
