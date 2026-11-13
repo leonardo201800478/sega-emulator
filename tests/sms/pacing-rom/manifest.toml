@@ -8,6 +8,8 @@ source = "tests/sms/pacing-rom/src/main.c"
 license = "MIT"
 target = "sega_master_system"
 initial_region = "usa_ntsc"
+source_commit = "recorded per build in build-info"
+source_sha256 = "recorded per build in build-info"
 runtime_validation = "BLOCKED_UNTIL_FULL_MACHINE_ROM_RUNNER_IS_AVAILABLE_ON_TARGET_BRANCH"
 
 [toolchain]
@@ -15,6 +17,8 @@ sdcc_version = "4.6.0"
 devkitsms_revision = "561bc2cb9829cdf2e31ad8cd43835037c8c44a63"
 crt0 = "crt0/crt0_sms.rel"
 converter_source = "tools/makesms/src/makesms.c"
+host_cc_version = "recorded per build in build-info"
+compile_and_link_flags = "recorded per profile in build-info"
 
 [[profile]]
 id = "cpu_light"
