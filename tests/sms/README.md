@@ -40,7 +40,7 @@ The upstream ROM can be built without copying its source or binary into this rep
 
 The build helper is `tests/sms/scripts/build_smsmemtest.sh`. It requires `SMSMEMTEST_ROOT`, `DEVKIT_SMS_ROOT`, `OUT_DIR` and `SDCC_BIN`; it verifies both Git revisions and the compiler version, builds SMSlib from the pinned devkitSMS source, compiles/links the ROM and checks that the resulting image is 32 KiB. It records the ROM SHA-256 in `SMSmemtest.build-info.txt`.
 
-The CI workflow `.github/workflows/ci.yml` includes a Linux job that builds the pinned ROM and full-machine runner, then executes the ROM twice for up to 1800 frames per run. The job gates the seven supported system-RAM cases, the named `vram_all_tests` aggregate result, and byte-for-byte equality of deterministic JSONL records. The tilemap decoder also identifies the exact VRAM pattern on a failure. It does **not** gate or certify cartridge SRAM, which remains unsupported. The ROM, build metadata and both JSONL outputs are retained as a short-lived Actions artifact, never committed to Git.
+The CI workflow `.github/workflows/ci.yml` includes a Linux job that builds the pinned ROM and full-machine runner, then executes the ROM twice for up to 1800 frames per run. The job gates the seven supported system-RAM cases, the named `vram_all_tests` aggregate result, and byte-for-byte equality of deterministic JSONL records. The tilemap decoder also identifies the exact VRAM pattern on a failure. The driver stops after VRAM and reports cartridge SRAM as `NOT_EXERCISED_BY_DRIVER`; it does not gate SRAM. Product SRAM persistence was validated independently through PRs #802/#803. The ROM, build metadata and both JSONL outputs are retained as a short-lived Actions artifact, never committed to Git.
 
 ## Current execution boundary
 
@@ -54,7 +54,7 @@ See [manifest.toml](manifest.toml) for upstream URLs, immutable source revisions
 
 | Suite | Primary coverage | Current gate |
 |---|---|---|
-| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Two identical real-ROM runs: 7/7 RAM PASS and `vram_all_tests` PASS; exact VRAM failure labels decoded; SRAM BLOCKED_CAPABILITY |
+| SMSmemtest | Internal RAM, VRAM and cartridge RAM | Two identical real-ROM runs: 7/7 RAM PASS and `vram_all_tests` PASS; exact VRAM failure labels decoded; SRAM phase `NOT_EXERCISED_BY_DRIVER` (product SRAM validated separately in #802/#803) |
 | SMS Test Suite | Video patterns, PSG/FM audio, pads, paddle and system identification | Runner available; build dependencies and case oracles remain to be validated |
 | SmsVdpTest | VDP ports, VRAM/CRAM protocol, counters, IRQ, sprite collision/overflow | Runner available; timing assertions blocked by missing dot/fetch and sub-scanline model |
 | ZEXALL-SMS | Z80 documented and undocumented behavior/flags | E8 gate only; do not execute before formal E7 closure |
@@ -86,7 +86,7 @@ A valid result record must include:
 ## Next engineering steps
 
 1. CI validates the Rust runner and its synthetic in-memory fixture, and runs the pinned SMSmemtest ROM twice through the full SMS machine. The prompt and tilemap result decoder have been exercised against the real ROM.
-2. SMSmemtest has a deterministic frame-boundary input driver based on exact two-frame-stable prompts decoded from the VDP name table. Two real-ROM executions produced identical frame/input/result records: all seven RAM cases reported PASS and `vram_all_tests` reported aggregate PASS. This is not a physical-hardware certification and does not test cartridge SRAM. The cartridge SRAM phase remains blocked because SmsMemory has no cartridge SRAM backing store. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
+2. SMSmemtest has a deterministic frame-boundary input driver based on exact two-frame-stable prompts decoded from the VDP name table. Two real-ROM executions produced identical frame/input/result records: all seven RAM cases reported PASS and `vram_all_tests` reported aggregate PASS. This is not a physical-hardware certification and this driver does not enter the cartridge-SRAM phase (`NOT_EXERCISED_BY_DRIVER`). Product SRAM persistence was validated separately through PRs #802/#803, including Phantasy Star save/restore and ten SMSmemtest diagnostic checks. See [the dedicated audit](../../docs/validation/smsmemtest-oracle-audit-2026-11-13.md).
 3. Expose additional read-only diagnostic observations only where a test's expected behavior requires them; do not bypass Scheduler dispatch.
 4. Enable only SmsVdpTest cases whose required behavior is represented by the current VDP model; keep dot/fetch-dependent cases blocked.
 5. Open the ZEXALL-SMS E8 campaign only after the Z80 scorecard formally closes E7 and the shared CPU harness is audited.
