@@ -61,7 +61,7 @@ Do not classify CI compilation as proof of physical rendering. Do not claim rend
 
 - File picker, ROM library, launcher and full frontend consolidation: R5.
 - Audio device integration: R3.
-- SDL3 input and gamepads: R4.
+- SDL3 gamepads, hotplug and physical-device remapping: R4; SMS keyboard input is handled by Slint host events.
 - D3D12 legacy removal: only after repository-wide consumer and CI audit.
 - Zero-copy frame transport: only after profiling and ownership proof.
 - Renderer recovery/recreation in-process: explicit follow-up acceptance gate.
@@ -83,7 +83,7 @@ The Slint host now exposes the legacy menu groups (Sistema, Arquivo, Vídeo, Áu
 
 Intentionally deferred and visibly disabled:
 - physical audio output/device/backend/volume (R3 / CPAL);
-- keyboard/gamepad event collection and remapping (R4 / SDL3);
+- SDL3 gamepad event collection, hotplug and remapping (R4); keyboard gameplay controls are now active through Slint key events.
 - FPS overlay size/position; OS fullscreen and source-frame FPS visibility are now implemented but require physical validation;
 - full debugger viewport with breakpoints, memory inspection and trace rendering;
 - persistent recent-ROM history and settings.

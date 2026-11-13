@@ -16,16 +16,17 @@ A replataforma ocorre no repositório existente. Não criar outro repositório n
 | API gráfica | WGPU 30.x |
 | Backend inicial | Vulkan via WGPU, Windows x64 |
 | Saída física de áudio | CPAL 0.18.2 |
-| Entrada/gamepads | SDL3 após auditoria |
+| Teclado SMS | Eventos nativos Slint no host desktop |
+| Gamepads/hotplug | SDL3 após auditoria |
 | Runtime/hardware | Rust existente |
 
 WGPU é a única API gráfica do produto; Vulkan é backend WGPU, não API paralela. R1 deve selecionar e registrar Vulkan explicitamente, sem fallback silencioso. CPAL é a API de saída de áudio; WASAPI pode ser backend interno no Windows.
 
-O caminho Slint/WGPU é o frontend desktop-alvo. CPAL é a única API de saída física definida para a nova arquitetura; SDL3 é a entrada futura após auditoria. Não criar novos consumidores dos hosts anteriores. A remoção física dos módulos ainda usados pelo aplicativo antigo fica condicionada a R3/R5 e aos gates de regressão. O inventário transitório é mantido em docs/architecture/migrations/legacy-host-retirement.md.
+O caminho Slint/WGPU é o frontend desktop-alvo. CPAL é a única API de saída física definida para a nova arquitetura. O teclado de gameplay usa eventos nativos do Slint; SDL3 permanece reservado à integração de gamepads/hotplug e remapeamento após auditoria. Não criar novos consumidores dos hosts anteriores. A remoção física dos módulos ainda usados pelo aplicativo antigo fica condicionada a R3/R5 e aos gates de regressão. O inventário transitório é mantido em docs/architecture/migrations/legacy-host-retirement.md.
 
 ## 2. Fronteiras
 
-Slint cuida de janelas, menus, diálogos, biblioteca, configurações e interação. WGPU cuida de device/queue/surface, texturas, composição e apresentação. CPAL cuida do stream físico. SDL3 coleta input.
+Slint cuida de janelas, menus, diálogos, biblioteca, configurações e eventos de teclado do host. WGPU cuida de device/queue/surface, texturas, composição e apresentação. CPAL cuida do stream físico. SDL3 será o backend de gamepads após auditoria.
 
 Essas camadas não executam instruções, avançam clocks, implementam VDP/PSG, possuem estado mutável da máquina ou usam callbacks por instrução. O runtime permanece proprietário da máquina SMS, CPU, Scheduler, VDP, PSG e estado temporal. A UI usa comandos coarse-grained como load_rom, start, pause, stop, reset e step_frame.
 
@@ -70,7 +71,7 @@ A POC seleciona explicitamente o backend `winit` e o renderer `femtovg-wgpu` via
 
 - **R2 — vídeo real:** INTEGRADO pelas PRs #752 e #754. Frames SMS chegam ao desktop Slint/WGPU por contrato portátil/FrameMailbox; SmsTemporalWorker e Scheduler foram preservados. Validação física e frame pacing permanecem gates independentes.
 - **R3 — CPAL:** enumerar dispositivos/formatos; criar, executar e encerrar streams; reproduzir PCM real; tratar remoção/reconexão, erros e underruns. Callback eficiente; thread de áudio não controla Scheduler.
-- **R4 — SDL3:** auditar e integrar teclado/gamepads, hotplug e mapeamentos.
+- **R4 — SDL3:** auditar e integrar gamepads, hotplug e mapeamentos; o teclado SMS básico já é tratado pelo host Slint.
 - **R5 — frontend:** consolidar launcher, biblioteca, configurações, menus, HUD, logs e telemetria. Demonstrar paridade antes de remover egui/eframe e hosts antigos.
 
 Cada fase tem gates independentes. Não ampliar uma POC para antecipar fases posteriores. O corte completo dos hosts anteriores não é autorizado por mera integração R2; depende de CPAL R3 e consolidação R5.
