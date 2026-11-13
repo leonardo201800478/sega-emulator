@@ -493,6 +493,23 @@ mod tests {
     }
 
     #[test]
+    fn filesystem_failure_is_reported_without_mutating_the_blocking_path() {
+        let directory = temporary_directory();
+        let root = directory.join("not-a-directory");
+        fs::write(&root, b"preserve-this-file").unwrap();
+        let store = SaveRamStore::new(&root);
+        let identity = CartridgeIdentity::from_bytes(b"save-test-rom");
+
+        assert!(matches!(
+            store.save(&identity, &battery_profile(), &[0xA5; 0x2000]),
+            Err(SaveRamError::Io(_))
+        ));
+        assert_eq!(fs::read(&root).unwrap(), b"preserve-this-file");
+
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn blocked_profiles_cannot_load_or_write_saves() {
         let directory = temporary_directory();
         let store = SaveRamStore::new(&directory);
