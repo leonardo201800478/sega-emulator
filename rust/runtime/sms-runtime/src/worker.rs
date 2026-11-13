@@ -1752,7 +1752,8 @@ fn worker_loop(
     let mut video_mailbox: Option<FrameMailbox> = None;
     let mut video_sequence = 0_u64;
     let mut frame_deadline = FramePacingDeadline::default();
-    let phase_locked_pacing = std::env::var_os("SEGA_P0_PHASE_LOCKED_PACING").is_some();
+    let phase_locked_pacing = std::env::var("SEGA_P0_PHASE_LOCKED_PACING")
+        .is_ok_and(|value| value == "1");
     sega_observability::tracing::info!(
         target: "sega::audio::pacing",
         phase_locked_pacing,
