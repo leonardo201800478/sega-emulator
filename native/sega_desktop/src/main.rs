@@ -241,11 +241,10 @@ mod windows_host {
                         if root.active-menu == "audio": VerticalLayout {
                             Text { font-size: 14px; text: "Saída de áudio"; color: #f2f5f7; }
                             Text { font-size: 12px; text: "Backend: CPAL 0.18.2 | dispositivo padrão do Windows"; color: #b9c5ce; }
-                            Text { font-size: 12px; text: "Volume mestre: \\{round(root.audio-volume)}%"; color: #f2f5f7; }
+                            Text { font-size: 12px; text: "Volume mestre: \{round(root.audio-volume)}%"; color: #f2f5f7; }
                             Slider {
                                 minimum: 0; maximum: 100; step: 1;
                                 value <=> root.audio-volume;
-                                enabled: !root.audio-muted;
                                 released(value) => { root.audio-volume-changed(value); }
                             }
                             HorizontalLayout {
@@ -1767,6 +1766,8 @@ mod windows_host {
                     show_status_footer: app.get_show_status_footer(),
                     fps_size: app.get_fps_size().to_string(),
                     sprite_limit_enabled: app.get_sprite_limit_enabled(),
+                    audio_volume: app.get_audio_volume().round().clamp(0.0, 100.0) as u8,
+                    audio_muted: app.get_audio_muted(),
                 };
                 let _ = save_desktop_preferences(&prefs);
                 let _ = app.window().hide();
