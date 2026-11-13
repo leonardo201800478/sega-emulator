@@ -1,3 +1,11 @@
+## Audio DSP controls — 2026-11-12
+
+- Adds optional post-mixer analog output processing to the Slint audio menu.
+- Adds an experimental SMS1-style preset (20 Hz HPF, 18 kHz LPF), independent HPF/LPF controls and persistent cutoff settings.
+- Keeps the digital output unchanged when the optional stage is disabled.
+- Routes live DSP changes through the SMS worker command queue; no CPAL restart, PSG, Scheduler, CPU, VDP or clock changes.
+- Labels the preset experimental because the available service documentation does not provide a calibrated board transfer function.
+
 ## Menu de áudio Slint — 2026-11-12
 
 - Expõe volume mestre de 0 a 100% e mute no menu Áudio do desktop Slint.
