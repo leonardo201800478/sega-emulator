@@ -102,7 +102,7 @@ impl SmsmemtestInputDriver {
             }
             None => {
                 self.stage = Some(Stage::Complete);
-                events.push("vram_completion_prompt_observed");
+                events.push("vram_completion_row_activity_detected");
             }
         }
 
