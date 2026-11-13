@@ -38,6 +38,27 @@ second produces overlapping rolling windows; `window_sample_count` and
 window totals, not whole-run totals. These are not raw per-frame samples.
 Do not reconstruct exact individual frame intervals from overlapping percentiles.
 
+## Interpreting frame budget versus frame interval
+
+Use the worker-reported `frame_budget_p50/p95/p99_ns` as the reference for
+the measured frame interval. Do not compare every interval only with the ideal
+16.667 ms display period: the SMS worker's budget is derived from the emulated
+frame/audio-sample schedule, and the existing P0 evidence reports 801/802 PSG
+samples per frame at a 48 kHz source rate (about 16.688/16.708 ms).
+
+The rolling percentiles are independent distributions, not paired per-frame
+records. A difference between `frame_interval_p99_ns` and
+`frame_budget_p99_ns` is a screening signal, not an exact count of missed
+deadlines. Likewise, compare `step_frame_*` and `frame_processing_*` against
+the budget, then use `pacing_timeout_lateness_*` to inspect host wake delay.
+Do not attribute the deficit to one stage without per-frame correlation.
+
+**Historical-unit warning:** the current P0 root-cause report labels values such
+as `17.324` and `16.687` with the `µs` suffix, which is inconsistent with a
+60 Hz frame period. Verify the original capture/unit before using those values
+as a numeric baseline. This harness emits durations explicitly in nanoseconds
+(`*_ns`) to avoid that ambiguity.
+
 ## Instrumentation overhead A/B
 
 Run two captures with identical ROM SHA, emulator build, region, duration, warm-up,
