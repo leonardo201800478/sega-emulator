@@ -997,8 +997,9 @@ mod windows_host {
         last_wakeup: Option<Instant>,
         last_consumed: Option<Instant>,
         last_sequence: u64,
-        last_fps_consumed: u64,
+        last_fps_uploaded: u64,
         last_fps_sample: Instant,
+        uploaded: u64,
         wakeups: u64,
         empty_wakeups: u64,
         consumed: u64,
@@ -1039,8 +1040,9 @@ mod windows_host {
                 last_wakeup: None,
                 last_consumed: None,
                 last_sequence: 0,
-                last_fps_consumed: 0,
+                last_fps_uploaded: 0,
                 last_fps_sample: Instant::now(),
+                uploaded: 0,
                 wakeups: 0,
                 empty_wakeups: 0,
                 consumed: 0,
@@ -1099,7 +1101,7 @@ mod windows_host {
             now: Instant,
             sequence: u64,
             published_at: Instant,
-        ) -> Option<f64> {
+        ) {
             self.consumed = self.consumed.saturating_add(1);
             if let Some(previous) = self.last_consumed {
                 let elapsed = now
@@ -1129,16 +1131,20 @@ mod windows_host {
             self.mailbox_residence_distribution.push(residence);
             self.last_sequence = sequence;
             self.last_consumed = Some(now);
+        }
 
-            let fps_elapsed = now.saturating_duration_since(self.last_fps_sample);
-            if fps_elapsed >= Duration::from_millis(500) {
-                let consumed = self.consumed.saturating_sub(self.last_fps_consumed);
-                self.last_fps_consumed = self.consumed;
-                self.last_fps_sample = now;
-                Some(consumed as f64 / fps_elapsed.as_secs_f64())
-            } else {
-                None
+        /// Count a successful WGPU queue upload; this is not a physical present.
+        fn record_upload(&mut self, now: Instant) -> Option<f64> {
+            self.uploaded = self.uploaded.saturating_add(1);
+            let elapsed = now.saturating_duration_since(self.last_fps_sample);
+            if elapsed < Duration::from_millis(500) {
+                return None;
             }
+
+            let uploaded = self.uploaded.saturating_sub(self.last_fps_uploaded);
+            self.last_fps_uploaded = self.uploaded;
+            self.last_fps_sample = now;
+            Some(uploaded as f64 / elapsed.as_secs_f64())
         }
 
         fn record_conversion(&mut self, elapsed: Duration) {
@@ -1213,7 +1219,7 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} wakeups={} empty_wakeups={} consumed={} sequence_gaps={} wake_interval_avg_us={} wake_interval_max_us={} wake_interval_samples={} wake_interval_p50_us={} wake_interval_p95_us={} wake_interval_p99_us={} wake_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} wakeups={} empty_wakeups={} consumed={} uploaded_total={} sequence_gaps={} wake_interval_avg_us={} wake_interval_max_us={} wake_interval_samples={} wake_interval_p50_us={} wake_interval_p95_us={} wake_interval_p99_us={} wake_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
                 qpc_frequency,
@@ -1221,6 +1227,7 @@ mod windows_host {
                 self.wakeups,
                 self.empty_wakeups,
                 self.consumed,
+                self.uploaded,
                 self.sequence_gaps,
                 average_us(self.wake_interval_sum_ns, self.wakeups.saturating_sub(1)),
                 self.wake_interval_max_ns / 1_000,
@@ -1340,8 +1347,9 @@ mod windows_host {
             self.started = Instant::now();
             self.last_wakeup = None;
             self.last_consumed = None;
-            self.last_fps_consumed = 0;
+            self.last_fps_uploaded = 0;
             self.last_fps_sample = self.started;
+            self.uploaded = 0;
             self.wakeups = 0;
             self.empty_wakeups = 0;
             self.consumed = 0;
@@ -1450,13 +1458,10 @@ mod windows_host {
         }
 
         let now = Instant::now();
-        let fps = host_pacing
+        host_pacing
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .record_frame(now, frame.sequence(), published_at);
-        if let Some(fps) = fps {
-            app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
-        }
 
         let conversion_started = Instant::now();
         match convert_rgb888_to_rgba8(&frame) {
@@ -1476,6 +1481,13 @@ mod windows_host {
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .record_queue_write(queue_write_started.elapsed());
+                let upload_fps = host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_upload(Instant::now());
+                if let Some(fps) = upload_fps {
+                    app.set_fps_status(format!("FPS UI upload: {fps:.1}").into());
+                }
                 app.set_frame_status(
                     format!(
                         "VDP frame: {} | {}x{} RGB888 → RGBA8",
@@ -3056,44 +3068,43 @@ mod windows_host {
         }
 
         #[test]
-        fn host_frame_pacing_fps_counts_consumed_frames_not_skipped_sequences() {
+        fn host_frame_pacing_fps_counts_successful_uploads_not_skipped_sequences() {
             let mut window = HostFramePacingWindow::new();
             let start = Instant::now();
             window.last_fps_sample = start;
-            window.last_fps_consumed = 0;
+            window.last_fps_uploaded = 0;
 
-            assert_eq!(
-                window.record_frame(start + Duration::from_millis(150), 1, start),
-                None
-            );
-            assert_eq!(
-                window.record_frame(
-                    start + Duration::from_millis(300),
-                    3,
-                    start + Duration::from_millis(150),
-                ),
-                None
-            );
-            assert_eq!(
-                window.record_frame(
-                    start + Duration::from_millis(450),
-                    5,
-                    start + Duration::from_millis(300),
-                ),
-                None
-            );
-            let fps = window
-                .record_frame(
-                    start + Duration::from_millis(600),
-                    8,
-                    start + Duration::from_millis(450),
-                )
-                .unwrap();
+            for (elapsed_ms, sequence) in [(150, 1), (300, 3), (450, 5), (600, 8)] {
+                let now = start + Duration::from_millis(elapsed_ms);
+                window.record_frame(now, sequence, now);
+                let fps = window.record_upload(now);
+                if elapsed_ms < 600 {
+                    assert_eq!(fps, None);
+                } else {
+                    // Four successful queue uploads occurred in 600 ms.
+                    // Sequence gaps do not inflate this rate. This is not
+                    // a physical present/scanout measurement.
+                    assert!((fps.unwrap() - (4.0 / 0.6)).abs() < 0.001);
+                }
+            }
 
-            // Four frames were consumed in 600 ms; skipped sequence numbers
-            // must not inflate the displayed presentation rate.
-            assert!((fps - (4.0 / 0.6)).abs() < 0.001);
+            assert_eq!(window.consumed, 4);
+            assert_eq!(window.uploaded, 4);
             assert_eq!(window.sequence_gaps, 4);
+        }
+
+        #[test]
+        fn host_frame_pacing_does_not_count_consumed_frames_as_gpu_uploads() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            window.record_frame(start, 1, start);
+            window.record_frame(start + Duration::from_millis(100), 2, start);
+            assert_eq!(window.consumed, 2);
+            assert_eq!(window.uploaded, 0);
+            assert_eq!(
+                window.record_upload(start + Duration::from_millis(600)),
+                Some(1.0 / 0.6)
+            );
         }
 
         #[test]
