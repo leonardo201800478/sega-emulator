@@ -84,7 +84,7 @@ SG-1000 tests must ensure profile-specific LFSR behavior remains unchanged if/wh
 | Gate | State |
 |---|---|
 | Existing offline H2 study | historical tests and CI documented in continuity checkpoint |
-| Production event observer | NOT IMPLEMENTED |
+| Production event observer | IMPLEMENTED ON FEATURE BRANCH; targeted tests added, NOT RUN |
 | Production streaming kernel | NOT IMPLEMENTED |
 | Event-to-PCM runtime integration | NOT IMPLEMENTED |
 | Renderer selection command | NOT IMPLEMENTED |
@@ -96,3 +96,16 @@ SG-1000 tests must ensure profile-specific LFSR behavior remains unchanged if/wh
 | Windows listening test | NOT RUN |
 
 No production H2 acceptance claim is made by this document.
+
+
+## 8. Partial implementation evidence
+
+The feature branch now contains opt-in event capture in `Sn76489Core`, exposed through the SMS temporal bus and machine. Added tests cover:
+- volume-write delta at the current PSG clock;
+- tone transition timestamp at the /16 divider edge;
+- event stream invariance under different clock chunking;
+- bounded queue overflow signaling;
+- reset epoch clearing;
+- exact PCM equality between capture-enabled and capture-disabled core runs.
+
+The source changes have been committed, but no local Rust toolchain/test runner was available during this implementation step. Therefore these tests are **added, not passed**. They must be run on CI before the event observer is accepted. No production H2 renderer or UI integration exists yet.
