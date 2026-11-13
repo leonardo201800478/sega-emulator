@@ -1,6 +1,6 @@
 # H2 streaming renderer — architecture and integration contract
 
-Status: design specification; production implementation not yet present  
+Status: partial production implementation on feature branch; CI validation pending  
 Target: SMS profile first; PSG remains default  
 Branch: `feat/audio-h2-experimental-renderer`
 
@@ -149,7 +149,7 @@ The first production-facing prerequisite has now been added on the feature branc
 
 Targeted unit tests have been added for immediate volume transitions, internal tone transitions, chunk-invariant timestamps, explicit bounded overflow, reset epoch behavior and exact PCM equality with capture enabled versus disabled. These tests have **not yet been executed** in this environment.
 
-This is an event-observer prerequisite only. It does not implement the H2 streaming kernel, worker renderer selection, Slint selector, preference persistence or runtime fallback. Do not enable this observer in production UI until those components are complete and the tests pass.
+The event observer and streaming kernel are now connected to `SmsTemporalWorker` on this feature branch. The worker owns the H2 renderer, selects it only through a coarse-grained command, drains legacy PSG PCM to keep its FIFO bounded, consumes real event timestamps, fades into the selected renderer, and falls back to PSG on capture overflow or renderer errors. Reset, power-off and ROM replacement restart the H2 epoch. The Slint menu exposes mutually exclusive PSG/H2 choices and persists the preference; PSG remains the default. This integration is not yet CI-validated and must not be treated as production-accepted until the validation gates pass.
 
 
 ## 9. Implementation checkpoint — standalone streaming kernel
@@ -167,4 +167,4 @@ A production-facing renderer type now exists in `native/sn76489/src/psg_h2_strea
 
 Tests now compare the streaming output to the original offline H2 reference, verify block-boundary invariance, same-clock ordering and invalid/backdated event rejection. These tests are **added but not executed**.
 
-The streaming renderer is not yet connected to `SmsTemporalWorker`, `AudioSession`, Slint or preferences. The event observer and streaming kernel are independently available, but the game still uses the original PSG path only.
+The streaming renderer is now connected to the worker and Slint preference path on this feature branch. Runtime and UI tests are added or still pending; CI, real-time benchmarks, Windows listening and physical SMS comparison remain NOT RUN.
