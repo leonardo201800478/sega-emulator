@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 use crate::audio::AudioSession;
 use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BoundedHistory, BreakpointSet};
-use sega_media::{CartridgeHardwareProfile, CartridgeMapper, CartridgeSystem};
 use sega_sms_core::{
     ControllerButtons, PsgAmplitudeEvent, SmsTemporalMachine, SmsTemporalTraceEvent, SmsVdpProfile,
     SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
@@ -1009,32 +1008,24 @@ impl SmsTemporalWorker {
 
     /// Start the native worker with the default no-cartridge-SRAM hardware profile.
     pub fn new(rom: Vec<u8>, region: &str) -> Result<Self, String> {
-        Self::new_with_cartridge_hardware_profile(rom, region, None, None)
+        Self::new_with_cartridge_sram_size(rom, region, None, None)
     }
 
-    /// Start the worker with a verified SMS cartridge profile and optional persisted SRAM.
-    /// The profile supplies physical capacity; save-file length never configures hardware.
-    pub fn new_with_cartridge_hardware_profile(
+    /// Start the worker with an explicit cartridge SRAM capacity and optional persisted image.
+    /// Capacity must come from a verified cartridge profile; save-file length never configures hardware.
+    pub fn new_with_cartridge_sram_size(
         rom: Vec<u8>,
         region: &str,
-        profile: Option<CartridgeHardwareProfile>,
+        cartridge_sram_size: Option<usize>,
         initial_sram: Option<Vec<u8>>,
     ) -> Result<Self, String> {
-        let cartridge_sram_size = match profile.as_ref() {
-            Some(profile)
-                if profile.system == CartridgeSystem::MasterSystem
-                    && profile.mapper == CartridgeMapper::SmsSega
-                    && profile.is_runtime_usable() =>
-            {
-                profile.ram_capacity_bytes()
-            }
-            Some(_) => {
-                return Err("SMS cartridge profile is not verified for runtime mapping".to_owned());
-            }
-            None => None,
-        };
         if initial_sram.is_some() && cartridge_sram_size.is_none() {
             return Err("cannot restore SRAM without a verified cartridge RAM profile".to_owned());
+        }
+        if let Some(capacity) = cartridge_sram_size
+            && !matches!(capacity, 0x2000 | 0x4000 | 0x8000)
+        {
+            return Err(format!("unsupported SMS cartridge SRAM capacity: {capacity} bytes"));
         }
         if let (Some(contents), Some(capacity)) = (initial_sram.as_ref(), cartridge_sram_size)
             && contents.len() != capacity
@@ -2384,10 +2375,6 @@ mod tests {
     };
     use crate::SmsTemporalWorkerDebugHandle;
     use sega_audio_runtime::{AudioOutputMetrics, NativeAudioSession, PcmSink};
-    use sega_media::{
-        CartridgeHardwareProfile, CartridgeMapper, CartridgeRamKind, CartridgeRamMapping,
-        CartridgeRamProfile, CartridgeSystem, ProfileStatus,
-    };
     use sega_sms_core::ControllerButtons;
     use sega_video_runtime::{FrameMailbox, PixelFormat};
     use std::sync::{Arc, Mutex};
@@ -2664,31 +2651,13 @@ mod tests {
 
     const SYNTHETIC_ROM: [u8; 0x4000] = [0; 0x4000];
 
-    fn battery_sram_test_profile() -> CartridgeHardwareProfile {
-        CartridgeHardwareProfile {
-            system: CartridgeSystem::MasterSystem,
-            mapper: CartridgeMapper::SmsSega,
-            ram: Some(CartridgeRamProfile {
-                kind: CartridgeRamKind::BatteryBackedSram,
-                capacity_bytes: 0x2000,
-                mapping: CartridgeRamMapping::SegaMapperSlot2,
-                mapped_window_bytes: 0x4000,
-                bank_size_bytes: 0x4000,
-                mirrored: true,
-            }),
-            status: ProfileStatus::Verified,
-            board: Some("unit-test".to_owned()),
-            evidence: vec!["synthetic worker SRAM test".to_owned()],
-        }
-    }
-
     #[test]
     fn worker_exports_sram_and_preserves_it_across_reset_and_power_off() {
         let initial = vec![0x5A; 0x2000];
-        let worker = SmsTemporalWorker::new_with_cartridge_hardware_profile(
+        let worker = SmsTemporalWorker::new_with_cartridge_sram_size(
             SYNTHETIC_ROM.to_vec(),
             "usa",
-            Some(battery_sram_test_profile()),
+            Some(0x2000),
             Some(initial.clone()),
         )
         .unwrap();
@@ -2710,7 +2679,7 @@ mod tests {
 
     #[test]
     fn worker_rejects_persisted_sram_without_a_verified_hardware_profile() {
-        let error = match SmsTemporalWorker::new_with_cartridge_hardware_profile(
+        let error = match SmsTemporalWorker::new_with_cartridge_sram_size(
             SYNTHETIC_ROM.to_vec(),
             "usa",
             None,
