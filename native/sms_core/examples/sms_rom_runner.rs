@@ -12,10 +12,11 @@ use std::process;
 
 mod smsmemtest_driver;
 
-use smsmemtest_driver::SmsmemtestInputDriver;
 use sega_sms_core::{
     SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, Territory, VideoStandard,
 };
+
+use smsmemtest_driver::SmsmemtestInputDriver;
 
 const DEFAULT_FRAMES: u64 = 120;
 const DEFAULT_MAX_INSTRUCTIONS_PER_FRAME: usize = 100_000;
@@ -200,8 +201,7 @@ fn run(args: Args) -> Result<(), String> {
     let mut total_instructions = 0_u64;
     let mut total_audio_samples = 0_u64;
     let initial_frame = machine.frame_number();
-    let mut smsmemtest_driver = (args.suite_id == "smsmemtest")
-        .then(SmsmemtestInputDriver::new);
+    let mut smsmemtest_driver = (args.suite_id == "smsmemtest").then(SmsmemtestInputDriver::new);
     let mut smsmemtest_complete = false;
 
     for index in 0..args.frames {
