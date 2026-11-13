@@ -1231,9 +1231,12 @@ mod windows_host {
                 .as_ref()
                 .and_then(|worker| worker.runtime_error())
                 .filter(|error| error.starts_with("H2 renderer"));
-            if let Some(error) = renderer_fallback {
+            if let Some(error) = renderer_fallback
+                && app.get_audio_renderer_mode().as_str() != "psg"
+            {
                 app.set_audio_renderer_mode("psg".into());
                 app.set_audio_status(error.into());
+                app.invoke_preferences_changed();
             }
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
                 host_pacing.report_if_due(&worker_slot);
