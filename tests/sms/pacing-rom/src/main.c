@@ -192,7 +192,11 @@ static void update_psg(void)
 
 static void initialize_psg(void)
 {
-    PSG_DATA = 0x98u; /* Tone 0: fixed audible level for combined workload. */
+#if PACING_PROFILE == 3
+    PSG_DATA = 0x98u; /* Tone 0 audible only in the combined workload. */
+#else
+    PSG_DATA = 0x9Fu; /* Keep the PSG muted in isolated CPU/VDP profiles. */
+#endif
     PSG_DATA = 0xBFu; /* Tone 1 muted. */
     PSG_DATA = 0xDFu; /* Tone 2 muted. */
     PSG_DATA = 0xFFu; /* Noise muted. */
