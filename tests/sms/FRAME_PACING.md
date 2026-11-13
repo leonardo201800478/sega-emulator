@@ -36,6 +36,22 @@ second produces overlapping rolling windows; `window_sample_count` and
 `total_frame_samples` make that explicit. These are not raw per-frame samples.
 Do not reconstruct exact individual frame intervals from overlapping percentiles.
 
+## Instrumentation overhead A/B
+
+Run two captures with identical ROM SHA, emulator build, region, duration, warm-up,
+input pulse schedule and host configuration:
+
+```powershell
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 > .\artifacts\smsmemtest-diagnostics-on.jsonl
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0d3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 --diagnostics-disabled > .\artifacts\smsmemtest-diagnostics-off.jsonl
+```
+
+The diagnostics-off run retains observed FPS, completed frames, total instructions
+and virtual time, but stage percentiles are zero because the rolling telemetry is
+disabled. Use it only to estimate instrumentation overhead; it cannot identify
+wake lateness or step-cost distribution by itself. The `diagnostics_enabled`
+field in the start/summary records identifies each condition.
+
 ## Isolation boundary
 
 This harness uses the production worker and its real `recv_timeout` pacing, but
