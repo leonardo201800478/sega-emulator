@@ -56,3 +56,94 @@ jobs:
           print(f"SmsVdpTest ROM generated: {len(rom)} bytes ({len(rom)//16384} banks)")
           PY
           sha256sum output.sms
+
+  build-sms-test-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout SMS Test Suite source at pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: sverx/SMSTestSuite
+          ref: 985bc04fef6f3dc3c3450fbc84242676f241d316
+          path: .build/SMSTestSuite
+
+      - name: Checkout devkitSMS toolchain and libraries at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: sverx/devkitSMS
+          ref: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
+          path: .build/devkitSMS
+
+      - name: Checkout Banjo minimal sound driver at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: joffb/banjo
+          ref: 7aaf837ebbe67e567e019b5819b5467bf62253ad
+          path: .build/banjo
+
+      - name: Install SDCC toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes sdcc make python3
+          sdcc --version
+          sdar --version
+
+      - name: Prepare legacy project layout
+        run: |
+          set -euxo pipefail
+          cp -a .build/devkitSMS/SMSlib .build/SMSlib
+          cp -a .build/devkitSMS/PSGlib .build/PSGlib
+          cp -a .build/devkitSMS/crt0 .build/crt0
+          cp .build/devkitSMS/SMSlib/src/peep-rules.txt .build/SMSlib/peep-rules.txt
+          mkdir -p .build/banjo_lib_minimal
+          cp .build/banjo/music_driver_sdas/banjo.h .build/banjo_lib_minimal/banjo.h
+          cp .build/banjo/lib_experimental/devkitsms_MINIMAL/*.rel .build/banjo_lib_minimal/
+          test -f .build/SMSTestSuite/sn_opll_loop.rel
+          test -f .build/banjo_lib_minimal/banjo.rel
+          test -f .build/banjo_lib_minimal/banjo_opll.rel
+          test -f .build/banjo_lib_minimal/banjo_sn.rel
+
+      - name: Build SMSlib with the suite-required hardware features
+        run: |
+          set -euxo pipefail
+          make -C .build/SMSlib/src CONFIG="-DMD_PAD_SUPPORT -DVDPTYPE_DETECTION" SMSlib.lib
+          cp .build/SMSlib/src/SMSlib.lib .build/SMSlib/SMSlib_MD_VDP.lib
+          test -s .build/SMSlib/SMSlib_MD_VDP.lib
+
+      - name: Build PSGlib
+        run: |
+          set -euxo pipefail
+          make -C .build/PSGlib/src PSGlib.lib
+          cp .build/PSGlib/src/PSGlib.lib .build/PSGlib/PSGlib.lib
+          test -s .build/PSGlib/PSGlib.lib
+
+      - name: Generate asset bank and compile C sources
+        working-directory: .build/SMSTestSuite
+        run: |
+          set -euxo pipefail
+          python3 ../devkitSMS/tools/assets2banks/src/assets2banks.py assets --firstbank=1,32000
+          test -s bank1.c
+          sdcc -c -mz80 --peep-file ../SMSlib/peep-rules.txt -o main.rel main.c
+          sdcc -c -mz80 -o bank1.rel bank1.c
+          test -s main.rel
+          test -s bank1.rel
+
+      - name: Link and convert SMS Test Suite
+        working-directory: .build/SMSTestSuite
+        run: |
+          set -euxo pipefail
+          sdcc -o output.ihx -mz80 --data-loc 0xC000 --no-std-crt0 -L ../SMSlib ../crt0/crt0_sms.rel main.rel bank1.rel SMSlib_MD_VDP.lib ../PSGlib/PSGlib.lib ../banjo_lib_minimal/banjo.rel ../banjo_lib_minimal/banjo_opll.rel ../banjo_lib_minimal/banjo_sn.rel sn_opll_loop.rel
+          test -s output.ihx
+          chmod +x ../devkitSMS/tools/makesms/Linux/makesms
+          ../devkitSMS/tools/makesms/Linux/makesms output.ihx output.sms
+          test -s output.sms
+          python3 - <<'PY'
+          from pathlib import Path
+          rom = Path("output.sms").read_bytes()
+          assert len(rom) % 16384 == 0, f"ROM size is not a 16 KiB multiple: {len(rom)}"
+          print(f"SMS Test Suite ROM generated: {len(rom)} bytes ({len(rom)//16384} banks)")
+          PY
+          sha256sum output.sms
