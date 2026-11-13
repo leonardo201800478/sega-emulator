@@ -1226,6 +1226,15 @@ mod windows_host {
                 host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
+            let renderer_fallback = worker_slot
+                .borrow()
+                .as_ref()
+                .and_then(|worker| worker.runtime_error())
+                .filter(|error| error.starts_with("H2 renderer"));
+            if let Some(error) = renderer_fallback {
+                app.set_audio_renderer_mode("psg".into());
+                app.set_audio_status(error.into());
+            }
             let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
                 host_pacing.report_if_due(&worker_slot);
                 host_pacing.record_callback(callback_started.elapsed());
