@@ -85,7 +85,7 @@ SG-1000 tests must ensure profile-specific LFSR behavior remains unchanged if/wh
 |---|---|
 | Existing offline H2 study | historical tests and CI documented in continuity checkpoint |
 | Production event observer | IMPLEMENTED ON FEATURE BRANCH; targeted tests added, NOT RUN |
-| Production streaming kernel | NOT IMPLEMENTED |
+| Standalone streaming kernel | IMPLEMENTED ON FEATURE BRANCH; tests added, NOT RUN |
 | Event-to-PCM runtime integration | NOT IMPLEMENTED |
 | Renderer selection command | NOT IMPLEMENTED |
 | Slint PSG/H2 selector | NOT IMPLEMENTED |
@@ -109,3 +109,6 @@ The feature branch now contains opt-in event capture in `Sn76489Core`, exposed t
 - exact PCM equality between capture-enabled and capture-disabled core runs.
 
 The source changes have been committed, but no local Rust toolchain/test runner was available during this implementation step. Therefore these tests are **added, not passed**. They must be run on CI before the event observer is accepted. No production H2 renderer or UI integration exists yet.
+
+
+The standalone kernel's new tests include direct output comparison with `psg_h2_model.rs` using identical timestamped deltas, plus segmented/continuous output equivalence. They remain unexecuted and therefore are not PASS evidence.
