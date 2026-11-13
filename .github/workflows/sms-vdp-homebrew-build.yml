@@ -1,4 +1,4 @@
-name: SMS VDP homebrew build verification
+name: SMS homebrew ROM build verification
 
 on:
   push:
@@ -144,7 +144,7 @@ jobs:
           sdcc -o output.ihx -mz80 --data-loc 0xC000 --no-std-crt0 -Wl-b_BANK2=0x28000 -Wl-b_BANK3=0x38000 -L ../SMSlib ../crt0/crt0_sms.rel main.rel SMSlib_MD_VDP.lib ../PSGlib/PSGlib.lib ../banjo_lib_minimal/banjo.rel ../banjo_lib_minimal/banjo_opll.rel ../banjo_lib_minimal/banjo_sn.rel sn_opll_loop.rel bank2.rel bank3.rel
           test -s output.ihx
           chmod +x ../devkitSMS/tools/makesms/Linux/makesms
-          ../devkitSMS/tools/makesms/Linux/makesms output.ihx output.sms
+          SOURCE_DATE_EPOCH=1767225600 ../devkitSMS/tools/makesms/Linux/makesms output.ihx output.sms
           test -s output.sms
           python3 - <<'PY'
           from pathlib import Path
