@@ -287,7 +287,7 @@ fn run(args: Args) -> Result<(), String> {
         Some(_) => "INPUT_DRIVER_TIMEOUT_NO_ORACLE",
         None => "EXECUTED_NO_ORACLE",
     };
-    let sram_gate = if args.suite_id == "smsmemtest" {
+    let sram_phase_status = if args.suite_id == "smsmemtest" {
         // The driver deliberately stops after the VRAM oracle. Cartridge SRAM
         // product support is validated separately; this runner does not exercise it.
         "NOT_EXERCISED_BY_DRIVER"
@@ -306,7 +306,7 @@ fn run(args: Args) -> Result<(), String> {
         frames_completed,
         total_instructions,
         total_audio_samples,
-        sram_gate,
+        sram_phase_status,
         machine.selected_mapper_banks()[0],
         machine.selected_mapper_banks()[1],
         machine.selected_mapper_banks()[2],
