@@ -1,0 +1,126 @@
+name: SMSmemtest ROM build and diagnostic execution
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/smsmemtest-rom-build.yml"
+      - "tests/sms/**"
+      - "native/sms_core/examples/sms_rom_runner.rs"
+      - "native/sms_core/examples/sms_rom_runner/**"
+      - "native/sms_core/src/**"
+      - "native/video_core/src/sms/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-run:
+    name: Build pinned SMSmemtest and collect emulator diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SMSMEMTEST_REVISION: 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9
+      DEVKIT_SMS_REVISION: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
+      SMSMEMTEST_ROOT: ${{ runner.temp }}/SMSmemtest
+      DEVKIT_SMS_ROOT: ${{ runner.temp }}/devkitSMS
+      OUT_DIR: ${{ runner.temp }}/smsmemtest-output
+
+    steps:
+      - name: Checkout emulator
+        uses: actions/checkout@v4
+
+      - name: Install pinned SDCC 4.6.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/sdcc-4.6.0.tar.bz2"
+          curl --fail --location --retry 3 \
+            "https://downloads.sourceforge.net/project/sdcc/sdcc-linux-amd64/4.6.0/sdcc-4.6.0-amd64-unknown-linux2.5.tar.bz2" \
+            --output "$archive"
+          mkdir -p "$RUNNER_TEMP/sdcc"
+          tar -xjf "$archive" -C "$RUNNER_TEMP/sdcc"
+          sdcc_bin="$(find "$RUNNER_TEMP/sdcc" -type f -path '*/bin/sdcc' -print -quit)"
+          if [[ -z "$sdcc_bin" ]]; then
+            echo "SDCC binary was not found in the official 4.6.0 archive" >&2
+            exit 1
+          fi
+          echo "SDCC_BIN=$sdcc_bin" >> "$GITHUB_ENV"
+          echo "$(dirname "$sdcc_bin")" >> "$GITHUB_PATH"
+          "$sdcc_bin" --version
+
+      - name: Checkout immutable upstream sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/sverx/SMSmemtest.git "$SMSMEMTEST_ROOT"
+          git -C "$SMSMEMTEST_ROOT" fetch --depth 1 origin "$SMSMEMTEST_REVISION"
+          git -C "$SMSMEMTEST_ROOT" checkout --detach "$SMSMEMTEST_REVISION"
+
+          git clone --filter=blob:none --no-checkout https://github.com/sverx/devkitSMS.git "$DEVKIT_SMS_ROOT"
+          git -C "$DEVKIT_SMS_ROOT" fetch --depth 1 origin "$DEVKIT_SMS_REVISION"
+          git -C "$DEVKIT_SMS_ROOT" checkout --detach "$DEVKIT_SMS_REVISION"
+
+      - name: Build SMSmemtest ROM from pinned source
+        shell: bash
+        run: bash tests/sms/scripts/build_smsmemtest.sh
+
+      - name: Run bounded full-machine diagnostic (non-gating ROM result)
+        id: diagnostic
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          rom="$OUT_DIR/SMSmemtest.sms"
+          rom_sha256="$(awk -F= '$1 == "rom_sha256" { print $2 }' "$OUT_DIR/SMSmemtest.build-info.txt")"
+          set +e
+          cargo run --release --locked -p sega-sms-core --example sms_rom_runner -- \
+            --rom "$rom" \
+            --rom-sha256 "$rom_sha256" \
+            --emulator-sha "$GITHUB_SHA" \
+            --suite-id smsmemtest \
+            --suite-revision "$SMSMEMTEST_REVISION" \
+            --region usa \
+            --frames 1800 \
+            --max-instructions-per-frame 100000 \
+            > "$OUT_DIR/smsmemtest-run.jsonl" \
+            2> "$OUT_DIR/smsmemtest-run.stderr"
+          runner_exit_code=$?
+          set -e
+          printf '%s\n' "$runner_exit_code" > "$OUT_DIR/runner-exit-code.txt"
+          echo "Runner process exit code: $runner_exit_code"
+          python3 - "$OUT_DIR/smsmemtest-run.jsonl" "$OUT_DIR/runner-exit-code.txt" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          log_path = pathlib.Path(sys.argv[1])
+          exit_code = pathlib.Path(sys.argv[2]).read_text().strip()
+          records = []
+          for line in log_path.read_text(errors="replace").splitlines():
+              try:
+                  record = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              records.append(record)
+
+          for record in records:
+              if record.get("record") in {"smsmemtest_input", "smsmemtest_case", "summary"}:
+                  print(json.dumps(record, sort_keys=True))
+
+          summaries = [item for item in records if item.get("record") == "summary"]
+          print(f"runner_exit_code={exit_code}")
+          if not summaries:
+              print("diagnostic_status=NO_SUMMARY_RECORD")
+          else:
+              print(f"diagnostic_status={summaries[-1].get('status', 'UNKNOWN')}")
+          PY
+
+      - name: Publish ROM and diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sms-memtest-diagnostic-evidence
+          path: ${{ runner.temp }}/smsmemtest-output/
+          if-no-files-found: error
+          retention-days: 14
