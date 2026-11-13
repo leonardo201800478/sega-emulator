@@ -142,7 +142,7 @@ Unknown ROMs remain without cartridge SRAM by default. For a diagnostic ROM such
 
 ```powershell
 $env:SEGA_SMS_DIAGNOSTIC_SRAM_BYTES = '32768'
-& '.\\target\\release\\sega-desktop.exe'
+& '.\target\release\sega-desktop.exe'
 ```
 
 Supported capacities are `8192`, `16384`, and `32768` bytes. The override is considered only when the ROM has no verified runtime profile. It creates volatile SRAM for the running machine, does not create or load an `.srm` file, and does not modify the cartridge catalog. The desktop logs `SRAM_PROFILE status=diagnostic-override` when it is active.
