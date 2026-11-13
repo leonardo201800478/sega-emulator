@@ -5,7 +5,7 @@
 **Upstream:** https://github.com/sverx/SMSmemtest
 **Revisão fixada no manifesto:** `12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9`
 **Fonte auditada:** `src/main.c` (versão declarada 0.40)
-**Escopo:** determinar o que precisa ser observado para transformar execução em resultados por caso. A ROM SMSmemtest foi construída e executada no GitHub Actions run `43389594153`; a primeira execução completa alcançou os resultados de RAM e VRAM. A repetição determinística está sendo adicionada ao workflow.
+**Escopo:** determinar o que precisa ser observado para transformar execução em resultados por caso. A ROM SMSmemtest foi construída e executada duas vezes no GitHub Actions run `43390124748`, com registros determinísticos idênticos. Ambas as execuções alcançaram os resultados de RAM e VRAM.
 
 ## 1. Fluxo efetivo da ROM
 
@@ -101,7 +101,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 - VRAM: `PASS_ALL_REPORTED_BY_ROM` — a própria ROM entrou no ramo de sucesso agregado após executar os cinco padrões.
 - Instruções: 8.496.776; áudio drenado: 640.825 amostras; SRAM: `BLOCKED_CAPABILITY`.
 - Essa execução valida o fluxo ROM → entrada → framebuffer → classificador, mas não constitui comparação com hardware físico ou outro emulador de referência.
-- A execução inicial usou `GITHUB_SHA` (merge commit) como `emulator_sha`; o workflow foi corrigido para registrar `git rev-parse HEAD` e repetir duas execuções comparando todos os registros determinísticos.
+- As duas execuções usam `git rev-parse HEAD` como `emulator_sha`; o valor registrado foi `5df6d0f9295d66dd262ba899a153e153d4fbcdfe`. A comparação de `start`, todos os registros `frame`, eventos de entrada, resultados por caso e `summary` retornou `determinism=IDENTICAL`.
 
 ## 6. Estado
 
@@ -110,10 +110,10 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 | Runner full-machine via Scheduler | Implementado |
 | CI de workspace e SMS runtime no HEAD anterior | PASS |
 | Snapshot/hash do mesmo input ROM | Implementado no wrapper; CI do novo HEAD pendente |
-| Entrada automática por fase | IMPLEMENTADA e exercitada em ROM real; prompts detectados nos frames 26 e 441 |
-| Captura/oráculo visual | Exercitado em ROM real: sete linhas RAM e resultado agregado VRAM classificados por cor |
-| Testes RAM | PASS reportado pela ROM em 7/7 casos na primeira execução; repetição determinística pendente |
-| Testes VRAM | PASS_ALL_REPORTED_BY_ROM na primeira execução; falha individual ainda não identificada por padrão; repetição determinística pendente |
+| Entrada automática por fase | IMPLEMENTADA e repetível; prompts detectados nos frames 26 e 441 nas duas execuções |
+| Captura/oráculo visual | Exercitado duas vezes em ROM real: sete linhas RAM e resultado agregado VRAM classificados por cor; logs idênticos |
+| Testes RAM | PASS reportado pela ROM em 7/7 casos nas duas execuções idênticas |
+| Testes VRAM | PASS_ALL_REPORTED_BY_ROM nas duas execuções idênticas; falha individual ainda não identifica qual dos cinco padrões falhou |
 | Testes cart SRAM | BLOCKED_CAPABILITY — sem SRAM no mapper |
 | Execução real de ROM externa | EXECUTED — 800 frames; 8.496.776 instruções; runner exit code 0 |
 
