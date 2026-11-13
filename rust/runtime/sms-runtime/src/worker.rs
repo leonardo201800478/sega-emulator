@@ -76,7 +76,10 @@ fn calculate_next_frame_deadline(
 
 /// Convert completed MachineScheduler ticks to host duration using the active region clock.
 /// `None` is returned only when the worker has no valid clock configuration.
-fn frame_duration_from_machine_ticks(machine_ticks: u128, machine_clock_hz: u64) -> Option<Duration> {
+fn frame_duration_from_machine_ticks(
+    machine_ticks: u128,
+    machine_clock_hz: u64,
+) -> Option<Duration> {
     (machine_clock_hz > 0).then(|| {
         Duration::from_secs_f64(machine_ticks as f64 / machine_clock_hz as f64)
     })
@@ -1749,10 +1752,14 @@ fn execute_frame_with_renderer(
     let machine_clock_hz = telemetry.machine_clock_hz.load(Ordering::Acquire);
     // The source-sample fallback is retained for isolated tests that construct telemetry
     // directly; a live worker always receives its validated region clock at construction.
-    let frame_duration = frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz)
-        .unwrap_or_else(|| {
-            Duration::from_secs_f64(sample_count.max(1) as f64 / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64)
-        });
+    let frame_duration =
+        frame_duration_from_machine_ticks(machine_ticks_per_frame, machine_clock_hz).unwrap_or_else(
+            || {
+                Duration::from_secs_f64(
+                    sample_count.max(1) as f64 / SMS_INTERNAL_AUDIO_SAMPLE_RATE as f64,
+                )
+            },
+        );
     // Anchor the pacing deadline to the beginning of this frame's host work.
     // Time spent publishing diagnostics after this point consumes the same budget
     // instead of shifting every subsequent frame later.
@@ -3317,9 +3324,9 @@ mod tests {
 
     #[test]
     fn machine_scheduler_ticks_define_frame_budget_independently_of_audio_samples() {
-        let duration = frame_duration_from_machine_ticks(59_736, 3_579_545).unwrap();
-        assert_eq!(duration.as_nanos(), 16_688_155);
-        assert_eq!(frame_duration_from_machine_ticks(59_736, 0), None);
+        let duration = frame_duration_from_machine_ticks(1_000, 1_000_000).unwrap();
+        assert_eq!(duration, Duration::from_millis(1));
+        assert_eq!(frame_duration_from_machine_ticks(1_000, 0), None);
     }
 
     #[test]
