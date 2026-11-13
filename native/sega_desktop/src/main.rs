@@ -1738,7 +1738,6 @@ mod windows_host {
     /// Cria o worker já configurado com o perfil físico e o snapshot SRM restaurado.
     fn create_sms_worker(
         rom: Vec<u8>,
-        mailbox: &FrameMailbox,
         settings: &SmsWorkerSettings,
         save_store: Arc<SaveRamStore>,
     ) -> Result<(SmsTemporalWorker, Option<CartridgeSaveContext>), String> {
@@ -1755,7 +1754,6 @@ mod windows_host {
             settings.dsp_config.clone(),
             &settings.renderer_mode,
         );
-        worker.attach_video_mailbox(mailbox.clone())?;
         worker.set_diagnostics_enabled(true);
         Ok((worker, prepared.save_context))
     }
@@ -1804,7 +1802,7 @@ mod windows_host {
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let (next, next_save_context) =
-            create_sms_worker(rom, mailbox, settings, save_store)?;
+            create_sms_worker(rom, settings, save_store)?;
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -1927,11 +1925,11 @@ mod windows_host {
         let worker = if let Some(path) = rom_path.as_ref() {
             let (worker, context) = create_sms_worker(
                 read_rom_image(path)?,
-                &mailbox,
                 &worker_settings,
                 Arc::clone(&save_store),
             )?;
             initial_save_context = context;
+            worker.attach_video_mailbox(mailbox.clone())?;
             if !preferences.sprite_limit_enabled {
                 worker.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)?;
             }
