@@ -27,3 +27,6 @@ Desktop.ini
 
 # Local SDL3 runtime used by the native Rust input backend
 SDL3.dll
+
+# User-supplied SMS diagnostic ROMs; binaries remain local pending rights verification.
+tests/sms/roms/homebrew/*.sms

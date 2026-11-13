@@ -1,0 +1,156 @@
+# User-supplied SMS homebrew/diagnostic ROM catalog.
+# SHA-256 and byte lengths computed from tests_roms_sms.zip on 2026-11-13.
+# The archive contained no license files, source links, or provenance documents.
+# A (PD) filename suffix is a claim, not independent license evidence.
+# ROM binaries are intentionally excluded pending rights verification.
+
+[collection]
+id = "sms_homebrew_diagnostics"
+target = "sega_master_system"
+archive = "tests_roms_sms.zip"
+rom_count = 17
+license_status = "UNVERIFIED"
+redistribution = "NOT_INCLUDED"
+rom_directory = "tests/sms/roms/homebrew/"
+runtime_validation = "NOT_RUN"
+notes = "Catalog and hashes establish identity/integrity only, not correctness or hardware behavior."
+
+[[rom]]
+file = "Zoom Effect #1_3 by Charles MacDonald (PD).sms"
+size_bytes = 32768
+sha256 = "5fd36241463ce27c2be2404d24d14c0e257690e1eccd67b5a4782dfac2d7bd86"
+purpose = "Video/VDP visual effect test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "Interactive Sprite Test (PD).sms"
+size_bytes = 32768
+sha256 = "0d43f7491b372b9325dde9936fa907e2404f3553e7d1b61d4aed10f50b4e18fc"
+purpose = "Interactive sprite/VDP test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "Interrupt Test (PD).sms"
+size_bytes = 32768
+sha256 = "54f94e61f7690c4bfea36f70d3bf1e0b9f7583ef64c0c49deb571c9b0ffed408"
+purpose = "Interrupt behavior test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "Nine Pixels by Nicolas Warren (PD).sms"
+size_bytes = 131072
+sha256 = "284932798aa4c05b0c4ead3bac11cf3a2d06e4e9c2f97f85b81334904ea82c47"
+purpose = "Pixel-level video/VDP test or demo; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "PFR Detect V2.00 by Eric R. Quinn (PD).sms"
+size_bytes = 32768
+sha256 = "7c56d5d84c5f701711f2254458b3ce36be7e00aa1438d46d040f21a24b595515"
+purpose = "Hardware/platform detection utility; exact meaning of PFR not established"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "Scroll Test Program by Charles MacDonald (PD).sms"
+size_bytes = 32768
+sha256 = "c23791e2b6dcd224092dfefa8b480884a85b87fd5667439c0a97841ab06ff52e"
+purpose = "Scrolling/video behavior test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMS Chip-8 V1.11 by Maxim (PD).sms"
+size_bytes = 32768
+sha256 = "ac56d050333d0d4b97d3edd853fa546bffb0aa4a129b3291b1634ececc835e72"
+purpose = "CHIP-8 implementation running as an SMS software workload"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMS Palette by Omar Cornut (PD).sms"
+size_bytes = 32768
+sha256 = "7b01ec09b9a7ea2f1224ac36fb06c44dfd6d3d0f14d19b22006240e723272165"
+purpose = "Palette/color output test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMS Power Demo Build 31 by Zoop (PD).sms"
+size_bytes = 32768
+sha256 = "6b6d96edf7cc664e43e03fa76b86486ae95e68a9d3f4110b62e23003f249c30f"
+purpose = "General demo/workload; no narrower purpose established"
+header_tmr_sega_at_0x7ff0 = false
+license_status = "UNVERIFIED"
+header_check = "No TMR SEGA signature at 0x1FF0, 0x3FF0, 0x7FF0, or 0xFFF0"
+
+[[rom]]
+file = "SMS Power's 7th Anniversary Intro V1.03 by Nicolas Warren (PD).sms"
+size_bytes = 32768
+sha256 = "09f0862e6fe0887472f12ece8a76a519ec58fbe6cbb6867d0d0381fa6d564bfd"
+purpose = "Demo/intro visual workload; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMS Sprite Test (PD).sms"
+size_bytes = 32768
+sha256 = "d948fc4be6b54e88a2347ec3722ec1037d144c50cf5c37b0cb62fa6fccba966f"
+purpose = "Sprite rendering test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMS VGM player V0.45 by Maxim (PD).sms"
+size_bytes = 32768
+sha256 = "e7e7549582f29fe9a02222190de345d1bae2253173a969bc250ec3f5d352f65f"
+purpose = "VGM playback/audio workload"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "SMSTestSuite.sms"
+size_bytes = 32768
+sha256 = "4b4a81fb60732f9f3cc81fd029120e0bc2df0db39c6aabc08a5c65009e186b4e"
+purpose = "Broad SMS test suite; exact coverage requires upstream documentation"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "Sprite and Priority Test Program by Charles MacDonald (PD).sms"
+size_bytes = 32768
+sha256 = "3185fe92e0ba7a6c004b4f4d124635580fbf43944a4c9533fc69a3e8fa2db38d"
+purpose = "Sprite rendering and priority behavior test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "V Counter Test by Charles MacDonald (PD).sms"
+size_bytes = 32768
+sha256 = "70be2135231cc24ab624975c857df64366a42668d9793e25f210b720cd3db147"
+purpose = "VDP vertical counter behavior test; inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+
+[[rom]]
+file = "ZEXALL V0.12SDSC by Maxim & Eric Quinn (PD).sms"
+size_bytes = 32768
+sha256 = "b83412eb9115eda7ce97ff5e46d4b3273258980bbe6b9c83c7cae7433d1c319b"
+purpose = "Z80 instruction/flag conformance diagnostic"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+execution_gate = "DO_NOT_RUN_UNTIL_Z80_E7_IS_DEMONSTRABLY_CLOSED; E8_NOT_STARTED"
+
+[[rom]]
+file = "ZEXALL V0.12VDP by Maxim & Eric Quinn (PD).sms"
+size_bytes = 32768
+sha256 = "35193d879b8e17ee2793a67a54f9952c5564e81a7d5bdb6150f20de3045f9e59"
+purpose = "Z80 instruction/flag conformance diagnostic; VDP-oriented output inferred from filename"
+header_tmr_sega_at_0x7ff0 = true
+license_status = "UNVERIFIED"
+execution_gate = "DO_NOT_RUN_UNTIL_Z80_E7_IS_DEMONSTRABLY_CLOSED; E8_NOT_STARTED"
+
