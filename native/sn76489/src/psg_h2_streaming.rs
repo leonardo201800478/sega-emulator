@@ -208,6 +208,12 @@ impl H2StreamingRenderer {
                 index += 1;
             }
 
+            // Emit the closed prefix before scheduling this transition. A
+            // later event cannot affect samples before this event's safe
+            // horizon, keeping the pending ring bounded even for large blocks.
+            let event_safe_exclusive = self.sample_index_at_clock(clock)?.saturating_sub(1);
+            self.emit_until(event_safe_exclusive, output)?;
+
             // Same-clock events are summed in canonical order, independent of
             // the order in which bus writes were observed.
             deltas[..delta_count].sort_by(f64::total_cmp);
