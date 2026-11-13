@@ -53,6 +53,7 @@ jobs:
       slint_desktop_present: ${{ steps.slint_manifest.outputs.present }}
       scheduler: ${{ steps.filter.outputs.scheduler }}
       tooling: ${{ steps.filter.outputs.tooling }}
+      sms_pacing: ${{ steps.filter.outputs.sms_pacing }}
       full: ${{ steps.filter.outputs.full }}
     steps:
       - name: Checkout history for push path classification
@@ -182,6 +183,8 @@ jobs:
             tooling:
               - 'scripts/**/*.ps1'
               - 'atualizar_recompilar_sega_emulator.ps1'
+            sms_pacing:
+              - 'tests/sms/pacing-rom/**'
             full:
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -690,6 +693,171 @@ jobs:
 
 
 
+  sms-pacing-rom-build:
+    name: SMS frame pacing ROM build (four profiles)
+    needs: [changes]
+    if: github.event_name != 'workflow_dispatch' && needs.changes.outputs.sms_pacing == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEVKIT_SMS_REVISION: 561bc2cb9829cdf2e31ad8cd43835037c8c44a63
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install pinned SDCC 4.6.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/sdcc-4.6.0.tar.bz2"
+          curl --fail --location --connect-timeout 20 --max-time 180 \
+            --retry 2 --retry-all-errors --retry-max-time 240 \
+            "https://downloads.sourceforge.net/project/sdcc/sdcc-linux-amd64/4.6.0/sdcc-4.6.0-amd64-unknown-linux2.5.tar.bz2" \
+            --output "$archive"
+          mkdir -p "$RUNNER_TEMP/sdcc"
+          tar -xjf "$archive" -C "$RUNNER_TEMP/sdcc"
+          sdcc_bin="$(find "$RUNNER_TEMP/sdcc" -type f -path '*/bin/sdcc' -print -quit)"
+          if [[ -z "$sdcc_bin" ]]; then
+            echo "SDCC binary was not found in the official 4.6.0 archive" >&2
+            exit 1
+          fi
+          echo "SDCC_BIN=$sdcc_bin" >> "$GITHUB_ENV"
+          dirname "$sdcc_bin" >> "$GITHUB_PATH"
+          "$sdcc_bin" --version
+
+      - name: Checkout pinned devkitSMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/sverx/devkitSMS.git "$RUNNER_TEMP/devkitSMS"
+          git -C "$RUNNER_TEMP/devkitSMS" fetch --depth 1 origin "$DEVKIT_SMS_REVISION"
+          git -C "$RUNNER_TEMP/devkitSMS" checkout --detach "$DEVKIT_SMS_REVISION"
+          echo "DEVKIT_SMS_ROOT=$RUNNER_TEMP/devkitSMS" >> "$GITHUB_ENV"
+          echo "OUT_DIR=$RUNNER_TEMP/sms-pacing-rom-output" >> "$GITHUB_ENV"
+
+      - name: Build all four deterministic workload ROMs
+        shell: bash
+        run: bash tests/sms/pacing-rom/build.sh
+
+      - name: Validate build provenance and profile outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$OUT_DIR" "$DEVKIT_SMS_REVISION" <<'PY'
+          import hashlib
+          import os
+          import pathlib
+          import subprocess
+          import sys
+
+          output = pathlib.Path(sys.argv[1])
+          expected_revision = sys.argv[2]
+          expected_commit = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          expected_cc_version = subprocess.check_output(
+              ["cc", "--version"], text=True, stderr=subprocess.STDOUT
+          ).splitlines()[0]
+          sdcc_version_lines = subprocess.check_output(
+              ["sdcc", "--version"], text=True, stderr=subprocess.STDOUT
+          ).splitlines()
+          expected_sdcc_version_line = next(
+              (line for line in sdcc_version_lines if "TD- 4.6.0" in line),
+              "",
+          )
+          if not expected_sdcc_version_line:
+              raise SystemExit("SDCC 4.6.0 version line not found")
+          devkit = pathlib.Path(os.environ["DEVKIT_SMS_ROOT"])
+          source = pathlib.Path("tests/sms/pacing-rom/src/main.c")
+          profiles = {
+              "cpu-light": "0",
+              "cpu-fixed": "1",
+              "vdp-sprites": "2",
+              "combined": "3",
+          }
+          sha256 = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          expected_inputs = {
+              "source_sha256": sha256(source),
+              "makesms_source_sha256": sha256(
+                  devkit / "tools/makesms/src/makesms.c"
+              ),
+              "makesms_sha256": sha256(output / "makesms"),
+              "crt0_sha256": sha256(devkit / "crt0/crt0_sms.rel"),
+              "peep_rules_sha256": sha256(devkit / "SMSlib/src/peep-rules.txt"),
+          }
+          expected_flags = {
+              "converter_flags": "-std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra",
+              "smslib_compile_flags": (
+                  "-c -mz80 --max-allocs-per-node=100000 "
+                  "--peep-file=SMSlib/src/peep-rules.txt"
+              ),
+              "link_flags": "-mz80 --no-std-crt0 --data-loc=0xC000",
+          }
+          hashes = set()
+
+          for profile, profile_value in profiles.items():
+              rom = output / f"{profile}.sms"
+              ihx = output / f"{profile}.ihx"
+              info = output / f"{profile}.build-info.txt"
+              if not rom.is_file() or not ihx.is_file() or not info.is_file():
+                  raise SystemExit(f"missing ROM/IHX/build metadata for {profile}")
+              data = rom.read_bytes()
+              if len(data) != 16384:
+                  raise SystemExit(f"invalid ROM size for {profile}: {len(data)}")
+              metadata = dict(
+                  line.split("=", 1)
+                  for line in info.read_text().splitlines()
+                  if "=" in line
+              )
+              expected_source_flags = (
+                  "-c -mz80 --peep-file=SMSlib/src/peep-rules.txt "
+                  f"-DPACING_PROFILE={profile_value}"
+              )
+              expected = {
+                  "profile": profile,
+                  "profile_value": profile_value,
+                  "region": "USA_NTSC",
+                  "project_commit": expected_commit,
+                  "devkitsms_revision": expected_revision,
+                  "sdcc_version": "4.6.0",
+                  "sdcc_version_line": expected_sdcc_version_line,
+                  "host_cc_version": expected_cc_version,
+                  "source_compile_flags": expected_source_flags,
+                  **expected_flags,
+                  **expected_inputs,
+                  "rom_size": str(len(data)),
+                  "ihx_sha256": sha256(ihx),
+                  "rom_sha256": sha256(rom),
+              }
+              for field, value in expected.items():
+                  if metadata.get(field) != value:
+                      raise SystemExit(
+                          f"{profile}: {field} mismatch "
+                          f"(expected {value!r}, got {metadata.get(field)!r})"
+                      )
+              hashes.add(metadata["rom_sha256"])
+              print(
+                  f"PASS {profile}: {len(data)} bytes "
+                  f"sha256={metadata['rom_sha256']}"
+              )
+
+          if len(hashes) != len(profiles):
+              raise SystemExit("workload profiles unexpectedly produced identical ROMs")
+          PY
+
+      - name: Upload ROMs and provenance as CI artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sms-frame-pacing-roms-${{ github.run_id }}
+          path: |
+            ${{ env.OUT_DIR }}/*.sms
+            ${{ env.OUT_DIR }}/*.build-info.txt
+          if-no-files-found: error
+          retention-days: 7
+
   quality-gate:
     name: Rust quality and unit regression
     needs:
@@ -707,6 +875,7 @@ jobs:
       - scheduler-stress
       - refresh-lockfiles
       - windows-cpal-output
+      - sms-pacing-rom-build
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles) && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'refresh-cargo-lockfiles')
     runs-on: ubuntu-latest
     steps:
@@ -738,6 +907,8 @@ jobs:
           SCHEDULER: ${{ needs.scheduler-stress.result }}
           EXPECT_WINDOWS_CPAL_OUTPUT: ${{ needs.changes.outputs.audio == 'true' }}
           WINDOWS_CPAL_OUTPUT: ${{ needs.windows-cpal-output.result }}
+          EXPECT_SMS_PACING_ROM: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.sms_pacing == 'true' }}
+          SMS_PACING_ROM: ${{ needs.sms-pacing-rom-build.result }}
         run: |
           set -euo pipefail
           check_job() {
@@ -774,6 +945,7 @@ jobs:
           check_job "PowerShell tooling" "$EXPECT_WINDOWS_TOOLING" "$WINDOWS_TOOLING"
           check_job "Scheduler stress" "$EXPECT_SCHEDULER" "$SCHEDULER"
           check_job "Windows x64 CPAL audio output" "$EXPECT_WINDOWS_CPAL_OUTPUT" "$WINDOWS_CPAL_OUTPUT"
+          check_job "SMS frame pacing ROM build" "$EXPECT_SMS_PACING_ROM" "$SMS_PACING_ROM"
 
   windows-d3d12-retired:
     name: Windows x64 D3D12 compile
