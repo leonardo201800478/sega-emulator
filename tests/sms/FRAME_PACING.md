@@ -43,7 +43,7 @@ input pulse schedule and host configuration:
 
 ```powershell
 python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 > .\artifacts\smsmemtest-diagnostics-on.jsonl
-python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0d3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 --diagnostics-disabled > .\artifacts\smsmemtest-diagnostics-off.jsonl
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 --diagnostics-disabled > .\artifacts\smsmemtest-diagnostics-off.jsonl
 ```
 
 The diagnostics-off run retains observed FPS, completed frames, total instructions
