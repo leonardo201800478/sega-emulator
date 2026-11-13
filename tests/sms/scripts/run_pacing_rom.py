@@ -27,6 +27,11 @@ def parse_args() -> argparse.Namespace:
         help="comma-separated completed-frame numbers at which to pulse controller 1 button 1",
     )
     parser.add_argument(
+        "--input-pulses",
+        default="",
+        help="comma-separated frame:button pulses; buttons: up,down,left,right,button1,button2",
+    )
+    parser.add_argument(
         "--diagnostics-disabled",
         action="store_true",
         help="measure basic frame throughput without rolling diagnostic instrumentation",
@@ -117,6 +122,8 @@ def main() -> int:
                 args.button1_pulse_frames,
             ]
         )
+        if args.input_pulses:
+            command.extend(["--input-pulses", args.input_pulses])
         if args.diagnostics_disabled:
             command.append("--diagnostics-disabled")
         return subprocess.run(command, cwd=repository_root, check=False).returncode
