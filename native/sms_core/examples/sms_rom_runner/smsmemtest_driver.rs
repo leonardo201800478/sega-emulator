@@ -214,10 +214,13 @@ fn decode_smsmemtest_text_row(vram: &[u8], row: usize) -> Option<DecodedTextRow>
         colors.push(color);
     }
 
-    let leading_spaces = text.bytes().take_while(|byte| *byte == b' ').count();
-    let trimmed_end = text.trim_end_matches(' ').len();
-    let text = text[leading_spaces..trimmed_end].to_owned();
-    let colors = colors[leading_spaces..trimmed_end].to_vec();
+    let trimmed_start = text
+        .bytes()
+        .position(|byte| byte != b' ')
+        .unwrap_or(text.len());
+    let trimmed_end = text.trim_end_matches(' ').len().max(trimmed_start);
+    let text = text[trimmed_start..trimmed_end].to_owned();
+    let colors = colors[trimmed_start..trimmed_end].to_vec();
 
     Some(DecodedTextRow { text, colors })
 }
@@ -246,10 +249,7 @@ fn row_is_white(row: &DecodedTextRow, expected_text: &str) -> bool {
             .all(|color| *color == SmsmemtestTextColor::White)
 }
 
-fn classify_result_text(
-    row: &DecodedTextRow,
-    expected_label: &str,
-) -> SmsmemtestCaseResult {
+fn classify_result_text(row: &DecodedTextRow, expected_label: &str) -> SmsmemtestCaseResult {
     let pass_text = format!("{expected_label}OK!");
     if row.text == pass_text {
         let label_is_white = row.colors[..expected_label.len()]
@@ -357,7 +357,7 @@ pub fn classify_vram_result_row(vram: &[u8]) -> Option<SmsmemtestDecodedCase> {
 #[cfg(test)]
 mod tests {
     use super::{
-        GREEN_TILE_OFFSET, RED_TILE_OFFSET, RAM_RESULT_CASES, SMS_PNT_BASE, SMS_PNT_COLUMNS,
+        GREEN_TILE_OFFSET, RAM_RESULT_CASES, RED_TILE_OFFSET, SMS_PNT_BASE, SMS_PNT_COLUMNS,
         SMS_PNT_ROW_BYTES, SmsmemtestCaseResult, classify_ram_result_rows,
         classify_vram_result_row, decode_smsmemtest_text_row,
     };
@@ -403,6 +403,15 @@ mod tests {
 
         let row = decode_smsmemtest_text_row(&vram, 3).expect("valid SMS name table row");
         assert_eq!(row.text, "Press any button to start");
+    }
+
+    #[test]
+    fn name_table_decoder_accepts_a_fully_blank_row() {
+        let vram = vec![0; 0x4000];
+
+        let row = decode_smsmemtest_text_row(&vram, 3).expect("valid blank SMS name table row");
+        assert!(row.text.is_empty());
+        assert!(row.colors.is_empty());
     }
 
     #[test]
@@ -484,9 +493,6 @@ mod tests {
 
         let result = classify_vram_result_row(&vram).expect("VRAM aggregate result");
         assert_eq!(result.case_id, "vram_all_tests");
-        assert_eq!(
-            result.result,
-            SmsmemtestCaseResult::PassAllReportedByRom
-        );
+        assert_eq!(result.result, SmsmemtestCaseResult::PassAllReportedByRom);
     }
 }
