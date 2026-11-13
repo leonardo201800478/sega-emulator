@@ -1298,16 +1298,16 @@ mod windows_host {
                     )
                 })
             };
-            let audio_window = if let Some((audio, _)) = audio_output {
+            let audio_window = if let Some((audio, _)) = audio_output.as_ref() {
                 let now = Instant::now();
                 let previous = self.last_audio_snapshot.zip(self.last_audio_snapshot_at);
                 let window = previous.map(|(previous, previous_at)| {
                     (
-                        audio.delta_since(previous),
+                        (*audio).delta_since(previous),
                         now.saturating_duration_since(previous_at),
                     )
                 });
-                self.last_audio_snapshot = Some(audio);
+                self.last_audio_snapshot = Some(*audio);
                 self.last_audio_snapshot_at = Some(now);
                 window
             } else {
