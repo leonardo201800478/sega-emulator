@@ -156,6 +156,7 @@ Foram adicionados testes unitários do escape JSON e da seleção/rejeição de 
 ### Próxima validação
 
 1. CI deve compilar o exemplo e executar seus testes.
-2. Criar um fixture homebrew mínimo em teste, gerado em memória, para validar construção da máquina, stepping de frame e saída JSON sem adicionar ROM externa.
-3. Executar SMSmemtest em ambiente controlado e determinar seu oráculo de resultado a partir do código/documentação upstream.
-4. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
+2. Foi adicionado `native/sms_core/tests/sms_rom_runner_smoke.rs`: fixture homebrew sintético em memória, sem ROM externa, que exige dois frames completos via Scheduler.
+3. Ainda é necessário validar em CI a execução desse fixture e o exemplo.
+4. Executar SMSmemtest em ambiente controlado e determinar seu oráculo de resultado a partir do código/documentação upstream.
+5. Manter SMSTestSuite e SmsVdpTest sob a mesma regra de resultado por caso; não promover execução de frames a PASS.
