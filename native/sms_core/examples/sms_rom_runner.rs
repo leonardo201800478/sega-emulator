@@ -47,6 +47,10 @@ fn parse_args() -> Result<Args, String> {
     let mut max_instructions_per_frame = DEFAULT_MAX_INSTRUCTIONS_PER_FRAME;
 
     while let Some(flag) = args.next() {
+        if flag == "--help" || flag == "-h" {
+            println!("{}", usage());
+            process::exit(0);
+        }
         let value = args
             .next()
             .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
@@ -67,7 +71,6 @@ fn parse_args() -> Result<Args, String> {
                     .parse()
                     .map_err(|_| format!("invalid instruction limit: {value}"))?;
             }
-            "--help" | "-h" => return Err(usage().to_owned()),
             _ => return Err(format!("unknown argument {flag}\n{}", usage())),
         }
     }
