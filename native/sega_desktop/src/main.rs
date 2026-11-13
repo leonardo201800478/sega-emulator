@@ -3024,7 +3024,7 @@ mod windows_host {
         }
 
         #[test]
-        fn host_frame_pacing_records_poll_and_consumption_distributions() {
+        fn host_frame_pacing_records_wakeup_and_consumption_distributions() {
             let mut window = HostFramePacingWindow::new();
             let start = Instant::now();
             for (index, micros) in [10, 20, 30, 40, 50].into_iter().enumerate() {
@@ -3033,11 +3033,17 @@ mod windows_host {
             assert_eq!(window.wake_interval_distribution.len(), 4);
             assert!(window.wake_interval_distribution.percentile_ns(95) > 0);
 
-            window.record_frame(start + Duration::from_millis(1), 1, start);
-            window.record_frame(
-                start + Duration::from_millis(2),
-                2,
-                start + Duration::from_millis(1),
+            assert_eq!(
+                window.record_frame(start + Duration::from_millis(1), 1, start),
+                None
+            );
+            assert_eq!(
+                window.record_frame(
+                    start + Duration::from_millis(2),
+                    2,
+                    start + Duration::from_millis(1),
+                ),
+                None
             );
             assert_eq!(window.consumed_interval_distribution.len(), 1);
             assert_eq!(
