@@ -33,7 +33,7 @@ A função `print_test_result()` é um oráculo visual: escreve `OK!` em verde o
 
 ## 2. O que o runner atual ainda não faz
 
-O runner atual chama `step_frame()` repetidamente, drena PCM e emite contadores JSONL. Ele não chama `set_controller()`, não observa o framebuffer e não decodifica o texto/cores apresentados pela ROM.
+O runner chama `step_frame()` repetidamente, drena PCM e emite contadores JSONL. O driver SMSmemtest observa pixels brancos nas linhas de texto 3 e 14 para os prompts e usa a cor de resultado na linha 4 para reconhecer o fim da fase VRAM. Aplica pulsos de `button_1` somente em fronteiras de frame.
 
 A navegação continua sendo um heurístico de presença de texto branco, não OCR: não valida o conteúdo literal dos prompts. A classificação de resultado, porém, usa as cores explícitas de `print_test_result()`: a fonte carrega os tiles com paletas 1/2/3 e configura BG palette 1 como branco, 2 como verde e 3 como vermelho. O renderer SMS converte CRAM 6-bit para RGB24 com cada canal em passos de 85; portanto, verde e vermelho são observáveis como pixels RGB dominantes exatos. Os testes unitários exercitam cores sintéticas, mas a integração ainda precisa ser validada com ROM real. Se o prompt não for detectado, o runner retorna `INPUT_DRIVER_TIMEOUT_NO_ORACLE`. Quando uma cor de resultado estável é observada na linha 4 de VRAM, retorna `SMSMEMTEST_COLOR_RESULTS_UNVALIDATED_ON_ROM`; isso também captura o caminho de falha, no qual a ROM não exibe o prompt de continuação. O driver não aciona a última espera para SRAM.
 
@@ -62,7 +62,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 ### Fase M1 — Entrada determinística por fase
 
 - Implementado um driver específico que aplica pulsos de `button_1` somente depois de frames completos, mantendo o botão pressionado durante o frame seguinte e liberando-o na próxima fronteira.
-- A transição usa atividade de pixels nas linhas de texto documentadas (3, 14 e 12), estável por dois frames; não usa atrasos fixos como substituto de conclusão.
+- A transição usa atividade de pixels brancos nas linhas de texto documentadas (3 e 14), estável por dois frames; o término da fase VRAM é detectado pela presença estável de verde/vermelho na linha 4. Não usa atrasos fixos como substituto de conclusão.
 - O detector de prompts é heurístico e ainda precisa ser validado com uma ROM SMSmemtest construída a partir da revisão upstream fixada.
 - Eventos de pressionar/liberar são registrados em JSONL com índice de frame.
 - O classificador de RAM lê linhas 4–10 e reconhece verde como `PASS`, vermelho como `FAIL`, ausência como `NOT_OBSERVED` e mistura como `AMBIGUOUS`.
