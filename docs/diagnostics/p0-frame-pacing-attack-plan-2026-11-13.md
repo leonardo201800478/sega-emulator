@@ -1,9 +1,9 @@
 # P0 — Frame pacing: estado e plano de ataque
 
-**Data:** 2026-11-13  
-**Baseline:** `main` — `d093037bd5fbfef1278d4980f775efa2c549171c`  
-**Issue:** #755  
-**Status:** ABERTA — causa raiz não demonstrada; nenhuma correção definitiva aprovada.
+- **Data:** 2026-11-13
+- **Baseline:** `main` — `d093037bd5fbfef1278d4980f775efa2c549171c`
+- **Issue:** #755
+- **Status:** ABERTA — causa raiz não demonstrada; nenhuma correção definitiva aprovada.
 
 ## 1. Fechamento da frente SRAM
 
@@ -83,7 +83,7 @@ Rodar a ROM própria pelo Slint + WGPU 30 + Vulkan, CPAL desligado/ligado. Captu
 Para cada variante, executar Scheduler monotonicidade/causalidade/chunk-invariance; Z80/VDP/PSG com ticks e estados iguais; PSG samples iguais; execução contínua equivalente a blocos; Pause/Resume/Reset/Stop/LoadRom/shutdown; regressões SMS/SG-1000; fmt, Clippy, testes workspace e CI Windows.
 
 ### P0-G — Aceitação
-Só aceitar correção se três repetições demonstrarem melhora em cadência sustentada e jitter p50/p95/p99, sem deriva, sem alteração do tempo virtual/determinismo e com captura de apresentação física coerente. Caso contrário, manter P0 aberta e investigar a próxima fronteira instrumentada.
+Só aceitar correção se três repetições demonstrarem melhoria em cadência sustentada e jitter p50/p95/p99, sem deriva, sem alteração do tempo virtual/determinismo e com captura de apresentação física coerente. Caso contrário, manter P0 aberta e investigar a próxima fronteira instrumentada.
 
 ## 5. Critérios de encerramento
 - causa raiz demonstrada por trace correlacionado e reprodução;
