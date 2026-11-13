@@ -98,3 +98,16 @@ Executar com consumidor determinístico e sem consumidor, mantendo worker idênt
 Não há clone/worktree local disponível neste ambiente para certificar o estado da árvore de trabalho ou executar build local. A referência remota da main foi verificada. Nenhum arquivo de runtime foi alterado e nenhuma alteração foi publicada diretamente na main.
 
 A validação física depende de execução no Windows x64 alvo e de artefatos brutos correspondentes.
+
+
+## Evidência complementar da Library — 13/11
+
+Foi encontrado `Texto colado(10).txt`, criado em 13/11 às 04:22 UTC, com logs R2/R3 de uma captura anterior/mais curta após a PR #793. Ele confirma taxa PCM de 48 kHz, `psg_samples_p50=801`, ticks/frame p50 59.736, worker interval p50 17.332 µs e timeout lateness p50 525 µs. Também registra zero command wakeups e zero p95 de command handler nessa janela.
+
+O bloco R3_AUDIO_HEALTH correspondente registra 62.229 frames de underrun e 386 eventos, sem dropped frames, dropped blocks ou output_error. Isso deve ser correlacionado com a taxa de produção do worker; não deve ser confundido com a captura pareada final de cinco minutos. O arquivo permanece na Library e não foi alterado nem substituído. O CSV/trace PresentMon e os logs brutos da captura pareada final ainda precisam ser associados aos dados mais recentes.
+
+## Experimento de deadline phase-locked
+
+A PR draft #796 foi criada a partir do HEAD 2942abf. O modo experimental é opt-in por `SEGA_P0_PHASE_LOCKED_PACING=1`; o padrão permanece inalterado. Os testes Rust, Clippy e documentação passaram na execução atual. As validações Windows específicas foram puladas pela classificação de impacto; portanto, Windows x64 e captura física continuam pendentes.
+
+PR: https://github.com/leonardo201800478/sega-emulator/pull/796
