@@ -11,7 +11,10 @@ mod windows_host {
         path::PathBuf,
         process::Command,
         rc::Rc,
-        sync::Arc,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        },
         thread,
         time::{Duration, Instant},
     };
@@ -33,7 +36,7 @@ mod windows_host {
 
     const SMS_WIDTH: u32 = 256;
     const SMS_HEIGHT: u32 = 192;
-    const PRESENT_INTERVAL: Duration = Duration::from_millis(16);
+    const DIAGNOSTICS_INTERVAL: Duration = Duration::from_millis(250);
     const APP_DATA_DIRECTORY: &str = "Sega Emulator";
     const MAX_RECENT_ROMS: usize = 10;
     const MAX_ROM_ARCHIVE_BYTES: usize = 32 * 1024 * 1024;
@@ -820,7 +823,8 @@ mod windows_host {
     /// Registra o device/queue WGPU do Slint e publica a textura externa na mesma cena.
     fn attach_gpu_texture(
         app: &MainWindow,
-        queue_slot: Rc<RefCell<Option<wgpu::Queue>>>,
+        queue_slot: Arc<Mutex<Option<wgpu::Queue>>>,
+        mailbox: FrameMailbox,
         setup_counter: Rc<Cell<u64>>,
         teardown_counter: Rc<Cell<u64>>,
     ) -> Result<(), Box<dyn Error>> {
@@ -857,9 +861,10 @@ mod windows_host {
 
                     match create_imported_texture(device, queue) {
                         Ok(image) => {
-                            *queue_slot.borrow_mut() = Some(queue.clone());
+                            *queue_slot.lock().unwrap() = Some(queue.clone());
 
                             let app_weak = app_weak.clone();
+                            let mailbox = mailbox.clone();
                             let status = format!(
                                 "PASS API: Vulkan | adapter: {} | Slint/WGPU 30 compartilham device/queue",
                                 adapter_info.name
@@ -876,6 +881,11 @@ mod windows_host {
                                     app.set_gpu_texture(image);
                                     app.set_gpu_status(status.into());
                                     app.set_lifecycle_status(lifecycle_status.into());
+                                    if let Err(error) = mailbox.notify_if_pending() {
+                                        eprintln!(
+                                            "R2_FRAME_NOTIFY renderer_recovery_failed error={error}"
+                                        );
+                                    }
                                 }
                             });
                         }
@@ -898,7 +908,7 @@ mod windows_host {
                         "R2_LIFECYCLE event=RenderingTeardown count={teardown_count}"
                     );
 
-                    *queue_slot.borrow_mut() = None;
+                    *queue_slot.lock().unwrap() = None;
 
                     let app_weak = app_weak.clone();
                     let lifecycle_status = format!(
@@ -984,15 +994,18 @@ mod windows_host {
     struct HostFramePacingWindow {
         started: Instant,
         qpc_clock: Option<sega_video_runtime::diagnostics::QpcClock>,
-        last_poll: Option<Instant>,
+        last_wakeup: Option<Instant>,
         last_consumed: Option<Instant>,
         last_sequence: u64,
-        polls: u64,
-        empty_polls: u64,
+        last_fps_uploaded: u64,
+        last_fps_sample: Instant,
+        uploaded: u64,
+        wakeups: u64,
+        empty_wakeups: u64,
         consumed: u64,
         sequence_gaps: u64,
-        poll_interval_sum_ns: u128,
-        poll_interval_max_ns: u64,
+        wake_interval_sum_ns: u128,
+        wake_interval_max_ns: u64,
         consumed_interval_sum_ns: u128,
         consumed_interval_max_ns: u64,
         mailbox_residence_count: u64,
@@ -1010,7 +1023,7 @@ mod windows_host {
         mailbox_take_count: u64,
         mailbox_take_sum_ns: u128,
         mailbox_take_max_ns: u64,
-        poll_interval_distribution: HostDurationWindow,
+        wake_interval_distribution: HostDurationWindow,
         consumed_interval_distribution: HostDurationWindow,
         mailbox_residence_distribution: HostDurationWindow,
         conversion_distribution: HostDurationWindow,
@@ -1024,15 +1037,18 @@ mod windows_host {
             Self {
                 started: Instant::now(),
                 qpc_clock: sega_video_runtime::diagnostics::QpcClock::new(),
-                last_poll: None,
+                last_wakeup: None,
                 last_consumed: None,
                 last_sequence: 0,
-                polls: 0,
-                empty_polls: 0,
+                last_fps_uploaded: 0,
+                last_fps_sample: Instant::now(),
+                uploaded: 0,
+                wakeups: 0,
+                empty_wakeups: 0,
                 consumed: 0,
                 sequence_gaps: 0,
-                poll_interval_sum_ns: 0,
-                poll_interval_max_ns: 0,
+                wake_interval_sum_ns: 0,
+                wake_interval_max_ns: 0,
                 consumed_interval_sum_ns: 0,
                 consumed_interval_max_ns: 0,
                 mailbox_residence_count: 0,
@@ -1050,7 +1066,7 @@ mod windows_host {
                 mailbox_take_count: 0,
                 mailbox_take_sum_ns: 0,
                 mailbox_take_max_ns: 0,
-                poll_interval_distribution: HostDurationWindow::default(),
+                wake_interval_distribution: HostDurationWindow::default(),
                 consumed_interval_distribution: HostDurationWindow::default(),
                 mailbox_residence_distribution: HostDurationWindow::default(),
                 conversion_distribution: HostDurationWindow::default(),
@@ -1060,24 +1076,24 @@ mod windows_host {
             }
         }
 
-        fn record_poll(&mut self, now: Instant) {
-            self.polls = self.polls.saturating_add(1);
-            if let Some(previous) = self.last_poll {
+        fn record_wakeup(&mut self, now: Instant) {
+            self.wakeups = self.wakeups.saturating_add(1);
+            if let Some(previous) = self.last_wakeup {
                 let elapsed = now
                     .saturating_duration_since(previous)
                     .as_nanos()
                     .min(u128::from(u64::MAX)) as u64;
-                self.poll_interval_sum_ns = self
-                    .poll_interval_sum_ns
+                self.wake_interval_sum_ns = self
+                    .wake_interval_sum_ns
                     .saturating_add(u128::from(elapsed));
-                self.poll_interval_max_ns = self.poll_interval_max_ns.max(elapsed);
-                self.poll_interval_distribution.push(elapsed);
+                self.wake_interval_max_ns = self.wake_interval_max_ns.max(elapsed);
+                self.wake_interval_distribution.push(elapsed);
             }
-            self.last_poll = Some(now);
+            self.last_wakeup = Some(now);
         }
 
-        fn record_empty_poll(&mut self) {
-            self.empty_polls = self.empty_polls.saturating_add(1);
+        fn record_empty_wakeup(&mut self) {
+            self.empty_wakeups = self.empty_wakeups.saturating_add(1);
         }
 
         fn record_frame(&mut self, now: Instant, sequence: u64, published_at: Instant) {
@@ -1110,6 +1126,20 @@ mod windows_host {
             self.mailbox_residence_distribution.push(residence);
             self.last_sequence = sequence;
             self.last_consumed = Some(now);
+        }
+
+        /// Count a successful WGPU queue upload; this is not a physical present.
+        fn record_upload(&mut self, now: Instant) -> Option<f64> {
+            self.uploaded = self.uploaded.saturating_add(1);
+            let elapsed = now.saturating_duration_since(self.last_fps_sample);
+            if elapsed < Duration::from_millis(500) {
+                return None;
+            }
+
+            let uploaded = self.uploaded.saturating_sub(self.last_fps_uploaded);
+            self.last_fps_uploaded = self.uploaded;
+            self.last_fps_sample = now;
+            Some(uploaded as f64 / elapsed.as_secs_f64())
         }
 
         fn record_conversion(&mut self, elapsed: Duration) {
@@ -1184,24 +1214,25 @@ mod windows_host {
                 }
             };
             eprintln!(
-                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} polls={} empty_polls={} consumed={} sequence_gaps={} poll_interval_avg_us={} poll_interval_max_us={} poll_interval_samples={} poll_interval_p50_us={} poll_interval_p95_us={} poll_interval_p99_us={} poll_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
+                "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} wakeups={} empty_wakeups={} consumed={} uploaded={} sequence_gaps={} wake_interval_avg_us={} wake_interval_max_us={} wake_interval_samples={} wake_interval_p50_us={} wake_interval_p95_us={} wake_interval_p99_us={} wake_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
                 qpc_frequency,
                 elapsed.as_millis(),
-                self.polls,
-                self.empty_polls,
+                self.wakeups,
+                self.empty_wakeups,
                 self.consumed,
+                self.uploaded,
                 self.sequence_gaps,
-                average_us(self.poll_interval_sum_ns, self.polls.saturating_sub(1)),
-                self.poll_interval_max_ns / 1_000,
-                self.poll_interval_distribution.len(),
-                self.poll_interval_distribution.percentile_ns(50) / 1_000,
-                self.poll_interval_distribution.percentile_ns(95) / 1_000,
-                self.poll_interval_distribution.percentile_ns(99) / 1_000,
-                self.poll_interval_distribution
+                average_us(self.wake_interval_sum_ns, self.wakeups.saturating_sub(1)),
+                self.wake_interval_max_ns / 1_000,
+                self.wake_interval_distribution.len(),
+                self.wake_interval_distribution.percentile_ns(50) / 1_000,
+                self.wake_interval_distribution.percentile_ns(95) / 1_000,
+                self.wake_interval_distribution.percentile_ns(99) / 1_000,
+                self.wake_interval_distribution
                     .percentile_ns(95)
-                    .saturating_sub(self.poll_interval_distribution.percentile_ns(50))
+                    .saturating_sub(self.wake_interval_distribution.percentile_ns(50))
                     / 1_000,
                 average_us(
                     self.consumed_interval_sum_ns,
@@ -1309,14 +1340,17 @@ mod windows_host {
             }
 
             self.started = Instant::now();
-            self.last_poll = None;
+            self.last_wakeup = None;
             self.last_consumed = None;
-            self.polls = 0;
-            self.empty_polls = 0;
+            self.last_fps_uploaded = 0;
+            self.last_fps_sample = self.started;
+            self.uploaded = 0;
+            self.wakeups = 0;
+            self.empty_wakeups = 0;
             self.consumed = 0;
             self.sequence_gaps = 0;
-            self.poll_interval_sum_ns = 0;
-            self.poll_interval_max_ns = 0;
+            self.wake_interval_sum_ns = 0;
+            self.wake_interval_max_ns = 0;
             self.consumed_interval_sum_ns = 0;
             self.consumed_interval_max_ns = 0;
             self.mailbox_residence_count = 0;
@@ -1337,24 +1371,191 @@ mod windows_host {
         }
     }
 
-    /// Consome somente o frame mais recente e atualiza a textura sem bloquear o worker.
+    /// Records the complete UI-thread callback duration, including early-return paths.
+    struct HostFrameCallbackGuard {
+        host_pacing: Arc<Mutex<HostFramePacingWindow>>,
+        started: Instant,
+    }
+
+    impl Drop for HostFrameCallbackGuard {
+        fn drop(&mut self) {
+            self.host_pacing
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .record_callback(self.started.elapsed());
+        }
+    }
+
+    /// Consume and upload one latest frame after the mailbox signals publication.
+    fn present_latest_frame(
+        app_weak: &slint::Weak<MainWindow>,
+        queue_slot: &Arc<Mutex<Option<wgpu::Queue>>>,
+        mailbox: &FrameMailbox,
+        host_pacing: &Arc<Mutex<HostFramePacingWindow>>,
+    ) {
+        let callback_started = Instant::now();
+        let _callback_guard = HostFrameCallbackGuard {
+            host_pacing: Arc::clone(host_pacing),
+            started: callback_started,
+        };
+        host_pacing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .record_wakeup(callback_started);
+
+        let Some(app) = app_weak.upgrade() else {
+            return;
+        };
+        let queue = queue_slot
+            .lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().cloned());
+        let Some(queue) = queue else {
+            return;
+        };
+        let Some(texture) = app.get_gpu_texture().to_wgpu_30_texture() else {
+            return;
+        };
+
+        let mailbox_take_started = Instant::now();
+        let take_result = mailbox.take_latest_with_timestamp();
+        host_pacing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .record_mailbox_take(mailbox_take_started.elapsed());
+        let (frame, published_at) = match take_result {
+            Ok(Some(frame)) => frame,
+            Ok(None) => {
+                host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_empty_wakeup();
+                return;
+            }
+            Err(error) => {
+                app.set_frame_status(format!("Erro no mailbox: {error}").into());
+                return;
+            }
+        };
+
+        if frame.width() != SMS_WIDTH || frame.height() != SMS_HEIGHT {
+            app.set_frame_status(
+                format!(
+                    "Frame ignorado: {}x{}; esperado {}x{}",
+                    frame.width(),
+                    frame.height(),
+                    SMS_WIDTH,
+                    SMS_HEIGHT
+                )
+                .into(),
+            );
+            return;
+        }
+
+        let now = Instant::now();
+        host_pacing
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .record_frame(now, frame.sequence(), published_at);
+
+        let conversion_started = Instant::now();
+        match convert_rgb888_to_rgba8(&frame) {
+            Ok(pixels) => {
+                host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_conversion(conversion_started.elapsed());
+                let queue_write_started = Instant::now();
+                queue.write_texture(
+                    texture.as_image_copy(),
+                    &pixels,
+                    texture_data_layout(),
+                    texture_extent(),
+                );
+                host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_queue_write(queue_write_started.elapsed());
+                let upload_fps = host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_upload(Instant::now());
+                if let Some(fps) = upload_fps {
+                    app.set_fps_status(format!("FPS UI upload: {fps:.1}").into());
+                }
+                app.set_frame_status(
+                    format!(
+                        "VDP frame: {} | {}x{} RGB888 → RGBA8",
+                        frame.sequence(),
+                        frame.width(),
+                        frame.height()
+                    )
+                    .into(),
+                );
+                app.window().request_redraw();
+            }
+            Err(error) => {
+                host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record_conversion(conversion_started.elapsed());
+                app.set_frame_status(format!("Falha ao converter frame: {error}").into());
+            }
+        }
+    }
+
+    /// Wake Slint only when a new frame is published; the atomic gate bounds queued callbacks.
     fn start_frame_presentation(
         app: &MainWindow,
-        queue_slot: Rc<RefCell<Option<wgpu::Queue>>>,
+        queue_slot: Arc<Mutex<Option<wgpu::Queue>>>,
         mailbox: FrameMailbox,
+        host_pacing: Arc<Mutex<HostFramePacingWindow>>,
+    ) -> Result<(), sega_video_runtime::FrameMailboxError> {
+        let app_weak = app.as_weak();
+        let notification_pending = Arc::new(AtomicBool::new(false));
+        let notifier: Arc<dyn Fn(FrameMailbox) + Send + Sync> =
+            Arc::new(move |published_mailbox| {
+                if notification_pending.swap(true, Ordering::AcqRel) {
+                    return;
+                }
+
+                let callback_pending = Arc::clone(&notification_pending);
+                let callback_app = app_weak.clone();
+                let callback_queue = Arc::clone(&queue_slot);
+                let callback_mailbox = published_mailbox;
+                let callback_metrics = Arc::clone(&host_pacing);
+                let result = slint::invoke_from_event_loop(move || {
+                    // Clear before taking the frame. A concurrent publication either
+                    // becomes the frame consumed below or queues one harmless follow-up.
+                    callback_pending.store(false, Ordering::Release);
+                    present_latest_frame(
+                        &callback_app,
+                        &callback_queue,
+                        &callback_mailbox,
+                        &callback_metrics,
+                    );
+                });
+                if let Err(error) = result {
+                    notification_pending.store(false, Ordering::Release);
+                    eprintln!("R2_FRAME_NOTIFY enqueue_failed error={error}");
+                }
+            });
+
+        mailbox.set_frame_available_notifier(Some(Arc::clone(&notifier)))?;
+        mailbox.notify_if_pending()?;
+        Ok(())
+    }
+
+    /// Keeps runtime error handling and telemetry reporting off the frame delivery path.
+    fn start_frame_diagnostics(
+        app: &MainWindow,
+        host_pacing: Arc<Mutex<HostFramePacingWindow>>,
         worker_slot: Rc<RefCell<Option<SmsTemporalWorker>>>,
     ) -> Timer {
         let timer = Timer::default();
         let app_weak = app.as_weak();
-        let mut last_sequence = 0_u64;
-        let mut last_sample = Instant::now();
-        let mut host_pacing = HostFramePacingWindow::new();
-
-        timer.start(TimerMode::Repeated, PRESENT_INTERVAL, move || {
-            let callback_started = Instant::now();
-            host_pacing.record_poll(callback_started);
+        timer.start(TimerMode::Repeated, DIAGNOSTICS_INTERVAL, move || {
             let Some(app) = app_weak.upgrade() else {
-                host_pacing.record_callback(callback_started.elapsed());
                 return;
             };
             let renderer_fallback = worker_slot
@@ -1369,94 +1570,10 @@ mod windows_host {
                 app.set_audio_status(error.into());
                 app.invoke_preferences_changed();
             }
-            let Some(queue) = queue_slot.borrow().as_ref().cloned() else {
-                host_pacing.report_if_due(&worker_slot);
-                host_pacing.record_callback(callback_started.elapsed());
-                return;
-            };
-            let Some(texture) = app.get_gpu_texture().to_wgpu_30_texture() else {
-                host_pacing.report_if_due(&worker_slot);
-                host_pacing.record_callback(callback_started.elapsed());
-                return;
-            };
-
-            let mailbox_take_started = Instant::now();
-            let take_result = mailbox.take_latest_with_timestamp();
-            host_pacing.record_mailbox_take(mailbox_take_started.elapsed());
-            let (frame, published_at) = match take_result {
-                Ok(Some(frame)) => frame,
-                Ok(None) => {
-                    host_pacing.record_empty_poll();
-                    host_pacing.report_if_due(&worker_slot);
-                    host_pacing.record_callback(callback_started.elapsed());
-                    return;
-                }
-                Err(error) => {
-                    app.set_frame_status(format!("Erro no mailbox: {error}").into());
-                    host_pacing.report_if_due(&worker_slot);
-                    host_pacing.record_callback(callback_started.elapsed());
-                    return;
-                }
-            };
-
-            if frame.width() != SMS_WIDTH || frame.height() != SMS_HEIGHT {
-                app.set_frame_status(
-                    format!(
-                        "Frame ignorado: {}x{}; esperado {}x{}",
-                        frame.width(),
-                        frame.height(),
-                        SMS_WIDTH,
-                        SMS_HEIGHT
-                    )
-                    .into(),
-                );
-                host_pacing.report_if_due(&worker_slot);
-                host_pacing.record_callback(callback_started.elapsed());
-                return;
-            }
-
-            let now = Instant::now();
-            host_pacing.record_frame(now, frame.sequence(), published_at);
-            let elapsed = now.saturating_duration_since(last_sample);
-            if elapsed >= Duration::from_millis(500) {
-                let produced = u32::try_from(frame.sequence().saturating_sub(last_sequence))
-                    .unwrap_or(u32::MAX);
-                let fps = f64::from(produced) / elapsed.as_secs_f64();
-                app.set_fps_status(format!("FPS VDP: {fps:.1}").into());
-                last_sequence = frame.sequence();
-                last_sample = now;
-            }
-
-            let conversion_started = Instant::now();
-            match convert_rgb888_to_rgba8(&frame) {
-                Ok(pixels) => {
-                    host_pacing.record_conversion(conversion_started.elapsed());
-                    let queue_write_started = Instant::now();
-                    queue.write_texture(
-                        texture.as_image_copy(),
-                        &pixels,
-                        texture_data_layout(),
-                        texture_extent(),
-                    );
-                    host_pacing.record_queue_write(queue_write_started.elapsed());
-                    app.set_frame_status(
-                        format!(
-                            "VDP frame: {} | {}x{} RGB888 → RGBA8",
-                            frame.sequence(),
-                            frame.width(),
-                            frame.height()
-                        )
-                        .into(),
-                    );
-                    app.window().request_redraw();
-                }
-                Err(error) => {
-                    host_pacing.record_conversion(conversion_started.elapsed());
-                    app.set_frame_status(format!("Falha ao converter frame: {error}").into());
-                }
-            }
-            host_pacing.report_if_due(&worker_slot);
-            host_pacing.record_callback(callback_started.elapsed());
+            host_pacing
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .report_if_due(&worker_slot);
         });
         timer
     }
@@ -2706,17 +2823,20 @@ mod windows_host {
             }
         });
 
-        let queue_slot = Rc::new(RefCell::new(None));
+        let queue_slot = Arc::new(Mutex::new(None));
         let setup_counter = Rc::new(Cell::new(0_u64));
         let teardown_counter = Rc::new(Cell::new(0_u64));
         attach_gpu_texture(
             &app,
-            Rc::clone(&queue_slot),
+            Arc::clone(&queue_slot),
+            mailbox.clone(),
             setup_counter,
             teardown_counter,
         )?;
-        let _frame_timer =
-            start_frame_presentation(&app, queue_slot, mailbox.clone(), Rc::clone(&worker));
+        let host_pacing = Arc::new(Mutex::new(HostFramePacingWindow::new()));
+        let _frame_diagnostics_timer =
+            start_frame_diagnostics(&app, Arc::clone(&host_pacing), Rc::clone(&worker));
+        start_frame_presentation(&app, Arc::clone(&queue_slot), mailbox.clone(), host_pacing)?;
 
         let run_result = app.run();
         let final_preferences = DesktopPreferences {
@@ -2913,14 +3033,14 @@ mod windows_host {
         }
 
         #[test]
-        fn host_frame_pacing_records_poll_and_consumption_distributions() {
+        fn host_frame_pacing_records_wakeup_and_consumption_distributions() {
             let mut window = HostFramePacingWindow::new();
             let start = Instant::now();
             for (index, micros) in [10, 20, 30, 40, 50].into_iter().enumerate() {
-                window.record_poll(start + Duration::from_micros((index as u64) * micros));
+                window.record_wakeup(start + Duration::from_micros((index as u64) * micros));
             }
-            assert_eq!(window.poll_interval_distribution.len(), 4);
-            assert!(window.poll_interval_distribution.percentile_ns(95) > 0);
+            assert_eq!(window.wake_interval_distribution.len(), 4);
+            assert!(window.wake_interval_distribution.percentile_ns(95) > 0);
 
             window.record_frame(start + Duration::from_millis(1), 1, start);
             window.record_frame(
@@ -2934,6 +3054,46 @@ mod windows_host {
                 1_000_000
             );
             assert_eq!(window.mailbox_residence_distribution.len(), 2);
+        }
+
+        #[test]
+        fn host_frame_pacing_fps_counts_successful_uploads_not_skipped_sequences() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            window.last_fps_sample = start;
+            window.last_fps_uploaded = 0;
+
+            for (elapsed_ms, sequence) in [(150, 1), (300, 3), (450, 5), (600, 8)] {
+                let now = start + Duration::from_millis(elapsed_ms);
+                window.record_frame(now, sequence, now);
+                let fps = window.record_upload(now);
+                if elapsed_ms < 600 {
+                    assert_eq!(fps, None);
+                } else {
+                    // Four successful queue uploads occurred in 600 ms.
+                    // Sequence gaps do not inflate this rate. This is not
+                    // a physical present/scanout measurement.
+                    assert!((fps.unwrap() - (4.0 / 0.6)).abs() < 0.001);
+                }
+            }
+
+            assert_eq!(window.consumed, 4);
+            assert_eq!(window.uploaded, 4);
+            assert_eq!(window.sequence_gaps, 4);
+        }
+
+        #[test]
+        fn host_frame_pacing_does_not_count_consumed_frames_as_gpu_uploads() {
+            let mut window = HostFramePacingWindow::new();
+            let start = Instant::now();
+            window.record_frame(start, 1, start);
+            window.record_frame(start + Duration::from_millis(100), 2, start);
+            assert_eq!(window.consumed, 2);
+            assert_eq!(window.uploaded, 0);
+            let fps = window
+                .record_upload(start + Duration::from_millis(600))
+                .unwrap();
+            assert!((fps - (1.0 / 0.6)).abs() < 0.001);
         }
 
         #[test]

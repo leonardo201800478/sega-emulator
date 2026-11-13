@@ -21,7 +21,7 @@ Não confundir:
 2. **Tempo de parede:** execução do worker, orçamento, espera, wake-up, comandos e custos host.
 3. **Apresentação física:** renderização, present, DWM/VRR e scanout.
 
-O HUD `FPS VDP` acompanha sequências concluídas pelo worker; não mede frames fisicamente exibidos. `request_redraw`, retirada do mailbox e duração de `write_texture` não comprovam present/scanout.
+O HUD atual `FPS UI upload` conta chamadas bem-sucedidas de `queue.write_texture`, após conversão; não mede frames fisicamente exibidos nem conclusão de GPU/present/scanout. A telemetria separa frames retirados do mailbox (`consumed`) de escritas de textura (`queue_write_count`). `request_redraw`, retirada do mailbox e `write_texture` não comprovam present/scanout.
 
 Há capturas históricas próximas de 57–59 FPS e outra execução de 60,012 s com 1.932 frames (~32,194 FPS), diagnósticos desligados; com diagnósticos ligados ficou ~32,213 FPS. Esses cenários são incompatíveis e não podem ser misturados sem reconciliar build SHA, runner, ROM, região, configuração e caminho de apresentação. Alguns valores históricos têm sufixos de unidade inconsistentes; conferir artefatos brutos antes de usá-los como baseline.
 
@@ -136,7 +136,7 @@ Esta seção prevalece sobre instruções anteriores conflitantes em branches/PR
 - A branch experimental da PR #796 é evidência histórica de experimento; sua base é antiga/divergente. Não mesclar a branch inteira nem tratá-la como implementação aprovada.
 - Se algum experimento ainda for necessário, transplantar somente a alteração mínima relevante para uma branch baseada no `main` atual e repetir os testes de invariantes.
 - PR #800 está empilhada sobre a linha experimental antiga (#796). Antes de qualquer merge, reavaliar a base/dependências e reaplicar somente o código ainda necessário sobre a linha atual; não presumir que a branch esteja pronta por ter testes unitários.
-- PR #807 é a implementação atual em avaliação para phase-lock e notificação de frames. Continua draft até CI completo e validação física; não declarar sucesso de pacing apenas por compilação ou testes automatizados.
+- PR #807 implementa a candidata phase-locked e notificação de frames por evento. O CI automatizado foi concluído com sucesso; a PR foi marcada pronta para revisão. A validação física e a demonstração de ganho real continuam pendentes. Não declarar sucesso de pacing apenas por compilação ou testes automatizados.
 
 ### 6.4 Critérios que continuam pendentes para fechar P0
 
@@ -149,3 +149,26 @@ Esta seção prevalece sobre instruções anteriores conflitantes em branches/PR
 7. Manter P0 aberta até que a evidência física e os invariantes passem.
 
 **Regra de manutenção:** quando uma PR posterior concluir uma etapa, atualizar este plano e marcar o procedimento antigo como histórico. Não reabrir SRAM sem regressão reproduzível; não iniciar E8/ZEXDOC/ZEXALL antes do fechamento demonstrável de E7.
+
+
+## 7. Atualização de implementação host-side — PR #807
+
+A PR #807 implementa uma candidata de correção no pacing do host e na entrega de frames à GUI, sem alterar a temporização do hardware emulado:
+
+- O deadline do worker é derivado da diferença de ticks do MachineScheduler por frame e da frequência de clock da região. O deadline seguinte preserva a âncora absoluta anterior (phase-lock), em vez de reiniciar a fase pelo instante de início do frame atrasado.
+- Pause, Stop, Reset e LoadRom invalidam a âncora; StepFrame manual não recebe deadline de pacing. A GUI continua sem controlar ciclos.
+- A FrameMailbox recebe um notifier genérico, chamado fora do lock. O callback de Slint é agendado por evento; o polling periódico de 16 ms para apresentação foi removido. O mailbox continua latest-frame-wins e a telemetria de erro permanece separada.
+- O callback consome o frame, converte RGB888 para RGBA8 e mede separadamente a escrita da textura WGPU. O HUD passou a identificar o contador como `FPS UI upload`, não `FPS VDP`.
+- A medição termina em `queue.write_texture`: o código não tem timestamp de present/scanout porque a superfície e a operação de apresentação pertencem ao host Slint/Winit.
+
+**Validação automatizada:** CI e SMS Runtime Release concluídos com sucesso no commit `d3cd6b15cecce82e1b9f5f55302a85edc2d5532b` (CI run `43502220990`; SMS Runtime run `43502221009`). O Windows Slint/WGPU 30/Vulkan POC e a regressão do workspace passaram; a verificação de runtime SMS passou. Isso valida compilação/testes automatizados, não ganho físico.
+
+**Pendências P0 que permanecem abertas:**
+
+1. P0-A: integrar à `main` a ROM homebrew e o runner full-machine com proveniência completa; o build de ROM sozinho não comprova execução.
+2. P0-B: adicionar trace pareado por frame, com identidade e timestamps desde produção até consumo/upload; os percentis agregados não estabelecem causalidade.
+3. P0-C: executar comparação controlada entre deadline anterior e phase-lock com o mesmo workload e ambiente. A implementação atual é candidata, não causa-raiz demonstrada.
+4. P0-D: só avaliar timer Windows de alta resolução se o trace mostrar lateness de wake-up relevante.
+5. P0-E/P0-G: manter novas capturas físicas e aceitação PresentMon/ETW para a etapa final, depois de concluídos os pontos de instrumentação/correção. Não inferir apresentação física a partir do HUD ou de `queue.write_texture`.
+
+Nenhuma alteração foi feita no Z80, VDP, PSG, MachineScheduler, WAIT states, master clock ou estado de máquina. O P0 continua **ABERTO** até evidência correlacionada e aceitação final.
