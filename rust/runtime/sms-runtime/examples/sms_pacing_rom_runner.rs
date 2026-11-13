@@ -235,7 +235,7 @@ fn run(args: Args) -> Result<(), String> {
     }
 
     println!(
-        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-worker\",\"pacing_path\":\"production_worker_recv_timeout\",\"video_output\":\"disabled\",\"physical_audio_output\":\"disabled\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"duration_seconds\":{},\"warmup_seconds\":{},\"sample_interval_ms\":{},\"button1_pulse_frames\":\"{}\",\"machine_clock_hz\":{}}}",
+        "{{\"record\":\"start\",\"status\":\"RUNNING\",\"runner\":\"sms-temporal-worker\",\"pacing_path\":\"production_worker_recv_timeout\",\"video_output\":\"disabled\",\"physical_audio_output\":\"disabled\",\"suite_id\":\"{}\",\"suite_revision\":\"{}\",\"rom_sha256\":\"{}\",\"emulator_sha\":\"{}\",\"region\":\"{}\",\"duration_seconds\":{},\"warmup_seconds\":{},\"sample_interval_ms\":{},\"button1_pulse_frames\":\"{}\",\"diagnostics_enabled\":{},\"machine_clock_hz\":{}}}",
         json_escape(&args.suite_id),
         json_escape(&args.suite_revision),
         args.rom_sha256,
@@ -332,7 +332,7 @@ fn run(args: Args) -> Result<(), String> {
     };
 
     println!(
-        "{{\"record\":\"summary\",\"status\":\"{}\",\"elapsed_ns\":{},\"completed_frames\":{},\"observed_fps\":{:.3},\"frame_interval_p50_ns\":{},\"frame_interval_p95_ns\":{},\"frame_interval_p99_ns\":{},\"step_frame_p50_ns\":{},\"step_frame_p95_ns\":{},\"step_frame_p99_ns\":{},\"frame_processing_p50_ns\":{},\"frame_processing_p95_ns\":{},\"frame_processing_p99_ns\":{},\"pacing_wait_budget_p50_ns\":{},\"pacing_wait_elapsed_p50_ns\":{},\"pacing_timeout_lateness_p50_ns\":{},\"pacing_timeout_lateness_p95_ns\":{},\"pacing_timeout_lateness_p99_ns\":{},\"pacing_timeout_count_total\":{},\"machine_ticks_per_frame_min\":{},\"machine_ticks_per_frame_p50\":{},\"machine_ticks_per_frame_max\":{},\"audio_samples_p50\":{},\"audio_samples_p95\":{},\"audio_samples_p99\":{},\"window_sample_count\":{},\"total_frame_samples\":{},\"total_instructions\":{},\"machine_time_ticks\":{},\"machine_clock_hz\":{},\"input_pulses_sent\":{},\"runtime_error\":{}}}",
+        "{{\"record\":\"summary\",\"status\":\"{}\",\"diagnostics_enabled\":{},\"elapsed_ns\":{},\"completed_frames\":{},\"observed_fps\":{:.3},\"frame_interval_p50_ns\":{},\"frame_interval_p95_ns\":{},\"frame_interval_p99_ns\":{},\"step_frame_p50_ns\":{},\"step_frame_p95_ns\":{},\"step_frame_p99_ns\":{},\"frame_processing_p50_ns\":{},\"frame_processing_p95_ns\":{},\"frame_processing_p99_ns\":{},\"pacing_wait_budget_p50_ns\":{},\"pacing_wait_elapsed_p50_ns\":{},\"pacing_timeout_lateness_p50_ns\":{},\"pacing_timeout_lateness_p95_ns\":{},\"pacing_timeout_lateness_p99_ns\":{},\"pacing_timeout_count_total\":{},\"machine_ticks_per_frame_min\":{},\"machine_ticks_per_frame_p50\":{},\"machine_ticks_per_frame_max\":{},\"audio_samples_p50\":{},\"audio_samples_p95\":{},\"audio_samples_p99\":{},\"window_sample_count\":{},\"total_frame_samples\":{},\"total_instructions\":{},\"machine_time_ticks\":{},\"machine_clock_hz\":{},\"input_pulses_sent\":{},\"runtime_error\":{}}}",
         status,
         args.diagnostics_enabled,
         elapsed.as_nanos(),
