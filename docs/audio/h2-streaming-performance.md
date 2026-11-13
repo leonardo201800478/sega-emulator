@@ -60,3 +60,8 @@ No production renderer has been benchmarked. No CPU, memory, real-time factor, p
 | Commit | Platform / CPU | Profile | Block | Mean | p95 | p99 | Max | RTF p99 | Memory bound | Overflows | Underruns |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Not measured | — | — | — | — | — | — | — | — | — | — | — |
+
+
+## 7. Implementation footprint (not a benchmark)
+
+The standalone kernel currently retains a 65,537-entry f64 step-response table (approximately 512 KiB) and two fixed 128-entry f64 accumulation rings (2 KiB total), excluding struct metadata and allocator overhead. Kernel construction temporarily allocates the oversampled impulse-response table as well. These are code-derived capacities, not measured process RSS or a complete runtime memory figure. Event queue capacity is selected by the runtime caller and has not yet been integrated or measured.
