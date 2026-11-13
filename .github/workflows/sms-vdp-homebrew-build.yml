@@ -133,14 +133,14 @@ jobs:
           test -s main.rel
           test -s bank1.rel
 
-      - name: Link and convert SMS Test Suite
+      - name: Link and convert SMS Test Suite with the upstream-compatible IHX converter
         working-directory: .build/SMSTestSuite
         run: |
           set -euxo pipefail
           sdcc -o output.ihx -mz80 --data-loc 0xC000 --no-std-crt0 -L ../SMSlib ../crt0/crt0_sms.rel main.rel bank1.rel SMSlib_MD_VDP.lib ../PSGlib/PSGlib.lib ../banjo_lib_minimal/banjo.rel ../banjo_lib_minimal/banjo_opll.rel ../banjo_lib_minimal/banjo_sn.rel sn_opll_loop.rel
           test -s output.ihx
-          chmod +x ../devkitSMS/tools/makesms/Linux/makesms
-          ../devkitSMS/tools/makesms/Linux/makesms output.ihx output.sms
+          chmod +x ../devkitSMS/tools/legacy/ihx2sms/Linux/ihx2sms
+          SOURCE_DATE_EPOCH=1767225600 ../devkitSMS/tools/legacy/ihx2sms/Linux/ihx2sms output.ihx output.sms
           test -s output.sms
           python3 - <<'PY'
           from pathlib import Path
