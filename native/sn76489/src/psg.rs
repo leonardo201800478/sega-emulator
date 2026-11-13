@@ -738,6 +738,10 @@ impl Sn76489Core {
     }
 }
 
+#[path = "psg_h2_streaming.rs"]
+mod psg_h2_streaming;
+pub use psg_h2_streaming::{H2StreamingError, H2StreamingMetrics, H2StreamingRenderer};
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
