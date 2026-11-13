@@ -75,6 +75,47 @@ disabled. Use it only to estimate instrumentation overhead; it cannot identify
 wake lateness or step-cost distribution by itself. The `diagnostics_enabled`
 field in the start/summary records identifies each condition.
 
+## First CI baseline — SMSmemtest on hosted Linux
+
+The CI run [43424086432](https://github.com/leonardo201800478/sega-emulator/actions/runs/43424086432)
+captured 60 seconds through the production worker with the pinned ROM SHA
+`f7654d1dea07ce195e1d57da373a86b3f1ca9869af0d9d7dcb4de6039eb52c71`,
+USA/NTSC, diagnostics enabled, and pulses at frames 26 and 441.
+
+Whole-run throughput was 3,582 completed frames / 60.000457 s = **59.700 FPS**.
+The final rolling 512-frame window reported:
+
+| Metric | p50 | p95 | p99 |
+|---|---:|---:|---:|
+| Worker frame interval | 16.751 ms | 16.824 ms | 17.184 ms |
+| Worker frame budget | 16.688 ms | 16.708 ms | 16.708 ms |
+| Machine step | 8.943 ms | 9.022 ms | 9.340 ms |
+| Frame processing | 8.947 ms | 9.027 ms | 9.344 ms |
+| Timeout wake lateness | 62.9 µs | 65.3 µs | 67.9 µs |
+
+The run kept virtual ticks/frame within 59,720–59,749 (p50 59,737), and PSG
+samples/frame at 801–802. The two scheduled controller pulses were sent and the
+worker returned `CAPTURED` with no runtime error.
+
+The first ~14 one-second rolling windows include the RAM/VRAM test workload:
+the median of those windows showed step p50/p95/p99 of 10.880/11.079/11.531 ms,
+with the largest observed per-window step p99 at 12.481 ms. In the following 45
+windows, after the ROM had reached its result/wait screen, the median step
+p50/p95/p99 fell to 8.856/8.998/9.254 ms. This confirms that the ROM creates a
+measurable workload change, while the worker continued producing frames.
+
+**Interpretation:** this hosted-Linux worker-only capture did not reproduce the
+large wake-lateness values in the earlier Windows P0 evidence. Its final-window
+frame-interval p50 is about 63 µs above the reported frame-budget p50, close to
+the 62.9 µs median timeout wake lateness. The p99 frame interval still exceeds
+the p99 budget by about 0.476 ms. These are screening observations from separate
+rolling distributions, not per-frame causal correlation.
+
+This is a CI sanity baseline, not a Windows hardware result: video presentation
+and physical CPAL output were disabled, and the GitHub-hosted runner is not the
+target PC. The artifact contains the JSONL capture and build metadata, but not a
+new ROM binary distribution.
+
 ## Isolation boundary
 
 This harness uses the production worker and its real `recv_timeout` pacing, but
