@@ -150,6 +150,21 @@ jobs:
           from pathlib import Path
           rom = Path("output.sms").read_bytes()
           assert len(rom) % 16384 == 0, f"ROM size is not a 16 KiB multiple: {len(rom)}"
+          signature = rom[0x7FF0:0x7FF8]
           print(f"SMS Test Suite ROM generated: {len(rom)} bytes ({len(rom)//16384} banks)")
+          print(f"SEGA header at ROM offset 0x7FF0: {signature!r}")
+          if signature != b"TMR SEGA":
+              print("IHX records near the expected header address:")
+              for line in Path("output.ihx").read_text().splitlines():
+                  if line.startswith(":") and len(line) >= 9:
+                      address = int(line[3:7], 16)
+                      count = int(line[1:3], 16)
+                      if address < 0x8000 and address + count >= 0x7FE0:
+                          print(line)
+              print("Linker map entries:")
+              for line in Path("output.map").read_text(errors="replace").splitlines():
+                  if any(token in line for token in ("BANK2", "BANK3", "SEGA_signature", "_CODE")):
+                      print(line)
+              raise SystemExit("ROM has no SEGA signature; build is not accepted as bootable")
           PY
           sha256sum output.sms
