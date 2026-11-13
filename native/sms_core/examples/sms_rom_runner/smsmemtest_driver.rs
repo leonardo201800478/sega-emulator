@@ -13,7 +13,37 @@ const RAM_COMPLETE_PROMPT_TEXT_ROW: usize = 14;
 const VRAM_COMPLETE_PROMPT_TEXT_ROW: usize = 12;
 const REQUIRED_STABLE_FRAMES: u8 = 2;
 const MIN_VISIBLE_PIXELS: usize = 8;
-const CHANNEL_THRESHOLD: u8 = 16;
+const WHITE_CHANNEL_MIN: u8 = 128;
+const COLOR_CHANNEL_MAX: u8 = 32;
+
+pub const RAM_RESULT_CASES: [&str; 7] = [
+    "ram_all_zero",
+    "ram_all_one",
+    "ram_pattern_55",
+    "ram_pattern_aa",
+    "ram_variable_1",
+    "ram_variable_19",
+    "ram_variable_71",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmsmemtestCaseResult {
+    Pass,
+    Fail,
+    NotObserved,
+    Ambiguous,
+}
+
+impl SmsmemtestCaseResult {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Fail => "FAIL",
+            Self::NotObserved => "NOT_OBSERVED",
+            Self::Ambiguous => "AMBIGUOUS",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -96,6 +126,9 @@ impl SmsmemtestInputDriver {
                     )
                     .map_err(|error| format!("cannot press SMSmemtest controller: {error}"))?;
                 self.release_button_after_frame = true;
+                if stage == Stage::AwaitRamCompletePrompt {
+                    events.push("ram_results_ready");
+                }
                 self.stage = Some(next);
                 events.push("button_pressed");
             }
@@ -113,7 +146,45 @@ impl SmsmemtestInputDriver {
     }
 }
 
-/// Return true when a text-cell row contains enough non-black RGB24 pixels.
+/// Classify one SMSmemtest result row using its documented green/red text palette.
+pub fn classify_result_row(framebuffer: &[u8], text_row: usize) -> SmsmemtestCaseResult {
+    let stride = FRAME_WIDTH * RGB_BYTES_PER_PIXEL;
+    let height = framebuffer.len() / stride;
+    let start_y = text_row.saturating_mul(TEXT_CELL_HEIGHT);
+    let end_y = start_y.saturating_add(TEXT_CELL_HEIGHT);
+    if !framebuffer.len().is_multiple_of(stride) || end_y > height {
+        return SmsmemtestCaseResult::NotObserved;
+    }
+
+    let mut green = false;
+    let mut red = false;
+    for y in start_y..end_y {
+        let row_start = y * stride;
+        let row_end = row_start + stride;
+        for pixel in framebuffer[row_start..row_end].chunks_exact(RGB_BYTES_PER_PIXEL) {
+            green |= pixel[1] >= WHITE_CHANNEL_MIN
+                && pixel[0] <= COLOR_CHANNEL_MAX
+                && pixel[2] <= COLOR_CHANNEL_MAX;
+            red |= pixel[0] >= WHITE_CHANNEL_MIN
+                && pixel[1] <= COLOR_CHANNEL_MAX
+                && pixel[2] <= COLOR_CHANNEL_MAX;
+        }
+    }
+
+    match (green, red) {
+        (true, false) => SmsmemtestCaseResult::Pass,
+        (false, true) => SmsmemtestCaseResult::Fail,
+        (false, false) => SmsmemtestCaseResult::NotObserved,
+        (true, true) => SmsmemtestCaseResult::Ambiguous,
+    }
+}
+
+/// Classify the seven independent system-RAM result rows (text rows 4 through 10).
+pub fn classify_ram_result_rows(framebuffer: &[u8]) -> [SmsmemtestCaseResult; 7] {
+    std::array::from_fn(|index| classify_result_row(framebuffer, index + 4))
+}
+
+/// Return true when a text-cell row contains enough white RGB24 text pixels.
 ///
 /// SMSmemtest uses an 8x8 text grid. This is deliberately a prompt-presence
 /// detector, not OCR and not a per-case result classifier.
@@ -123,7 +194,7 @@ pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool 
     let start_y = text_row.saturating_mul(TEXT_CELL_HEIGHT);
     let end_y = start_y.saturating_add(TEXT_CELL_HEIGHT);
 
-    if framebuffer.len() % stride != 0 || end_y > height {
+    if !framebuffer.len().is_multiple_of(stride) || end_y > height {
         return false;
     }
 
@@ -132,7 +203,7 @@ pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool 
         let row_start = y * stride;
         let row_end = row_start + stride;
         for pixel in framebuffer[row_start..row_end].chunks_exact(RGB_BYTES_PER_PIXEL) {
-            if pixel.iter().any(|channel| *channel > CHANNEL_THRESHOLD) {
+            if pixel.iter().all(|channel| *channel >= WHITE_CHANNEL_MIN) {
                 visible_pixels += 1;
                 if visible_pixels >= MIN_VISIBLE_PIXELS {
                     return true;
@@ -146,7 +217,10 @@ pub fn text_row_has_visible_pixels(framebuffer: &[u8], text_row: usize) -> bool 
 
 #[cfg(test)]
 mod tests {
-    use super::{FRAME_WIDTH, text_row_has_visible_pixels};
+    use super::{
+        FRAME_WIDTH, SmsmemtestCaseResult, classify_ram_result_rows, classify_result_row,
+        text_row_has_visible_pixels,
+    };
 
     #[test]
     fn prompt_row_detector_accepts_visible_rgb24_text() {
@@ -154,7 +228,7 @@ mod tests {
         let row_start = 3 * 8 * FRAME_WIDTH * 3;
         for pixel in 0..12 {
             let offset = row_start + pixel * 3;
-            frame[offset..offset + 3].copy_from_slice(&[220, 220, 220]);
+            frame[offset..offset + 3].copy_from_slice(&[255, 255, 255]);
         }
 
         assert!(text_row_has_visible_pixels(&frame, 3));
@@ -171,5 +245,46 @@ mod tests {
     fn prompt_row_detector_rejects_incomplete_rgb24_frames() {
         let frame = vec![255; FRAME_WIDTH * 192 * 3 - 1];
         assert!(!text_row_has_visible_pixels(&frame, 3));
+    }
+
+    #[test]
+    fn prompt_detector_rejects_solid_red_fatal_screen() {
+        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
+        let row_start = 14 * 8 * FRAME_WIDTH * 3;
+        for pixel in 0..FRAME_WIDTH * 8 {
+            let offset = row_start + pixel * 3;
+            frame[offset..offset + 3].copy_from_slice(&[255, 0, 0]);
+        }
+
+        assert!(!text_row_has_visible_pixels(&frame, 14));
+    }
+
+    #[test]
+    fn ram_result_rows_classify_green_and_red_independently() {
+        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
+        let green_row_start = 4 * 8 * FRAME_WIDTH * 3;
+        let red_row_start = 5 * 8 * FRAME_WIDTH * 3;
+        for pixel in 0..12 {
+            let green_offset = green_row_start + pixel * 3;
+            frame[green_offset..green_offset + 3].copy_from_slice(&[0, 255, 0]);
+            let red_offset = red_row_start + pixel * 3;
+            frame[red_offset..red_offset + 3].copy_from_slice(&[255, 0, 0]);
+        }
+
+        let results = classify_ram_result_rows(&frame);
+        assert_eq!(results[0], SmsmemtestCaseResult::Pass);
+        assert_eq!(results[1], SmsmemtestCaseResult::Fail);
+        assert!(results[2..].iter().all(|result| *result == SmsmemtestCaseResult::NotObserved));
+        assert_eq!(classify_result_row(&frame, 23), SmsmemtestCaseResult::NotObserved);
+    }
+
+    #[test]
+    fn result_row_reports_ambiguous_when_both_status_colors_are_present() {
+        let mut frame = vec![0; FRAME_WIDTH * 192 * 3];
+        let row_start = 4 * 8 * FRAME_WIDTH * 3;
+        frame[row_start..row_start + 3].copy_from_slice(&[0, 255, 0]);
+        frame[row_start + 3..row_start + 6].copy_from_slice(&[255, 0, 0]);
+
+        assert_eq!(classify_result_row(&frame, 4), SmsmemtestCaseResult::Ambiguous);
     }
 }
