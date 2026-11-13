@@ -62,7 +62,7 @@ Não modificar o mapper como parte desta tarefa de harness. A ausência de SRAM 
 ### Fase M1 — Entrada determinística por fase
 
 - Implementado um driver específico que aplica pulsos de `button_1` somente depois de frames completos, mantendo o botão pressionado durante o frame seguinte e liberando-o na próxima fronteira.
-- A transição usa atividade de pixels brancos nas linhas de texto documentadas (3 e 14), estável por dois frames; o término da fase VRAM é detectado pela presença estável de verde/vermelho na linha 4. Não usa atrasos fixos como substituto de conclusão.
+- A transição usa atividade de pixels brancos nas linhas de texto documentadas (3 e 14), estável por dois frames; o término da fase VRAM é detectado pela presença estável de verde/vermelho na linha 4, mas somente depois de observar ao menos um frame sem cor de resultado, evitando reutilizar o resultado RAM anterior. Não usa atrasos fixos como substituto de conclusão.
 - O detector de prompts é heurístico e ainda precisa ser validado com uma ROM SMSmemtest construída a partir da revisão upstream fixada.
 - Eventos de pressionar/liberar são registrados em JSONL com índice de frame.
 - A revisão fixada do devkitSMS (`561bc2cb9829cdf2e31ad8cd43835037c8c44a63`) define `SMS_getKeysPressed()` como `KeysStatus & ~PreviousKeysStatus`; por isso o driver aplica uma transição press/release, mantendo o botão durante um frame completo para que o handler de frame a amostre.
