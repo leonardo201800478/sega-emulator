@@ -55,7 +55,7 @@ O scorecard consultado mantém E7.7 em `IN_PROGRESS` e E8 em `BLOCKED`. Permanec
 | ZEXALL-SMS | Repositório maxim-zhao; licença GPL-2.0 | Gate formal E8, depois do fechamento E7 | BLOCKED — E7 |
 | NotOnlyWords | Identidade exata do projeto não confirmada | Não integrar até receber URL ou origem verificável | BLOCKED — origem |
 
-O detalhe de cada revisão imutável e os limites de redistribuição estão em `tests/sms/manifest.toml`.
+O detalhe de cada revisão imutável e os limites de redistribuição estão em `tests/sms/manifest.toml`. A auditoria específica do fluxo de entrada, oráculo visual e bloqueio de cart SRAM do SMSmemtest está em `docs/validation/smsmemtest-oracle-audit-2026-11-13.md`.
 
 ## 4. Interpretação correta do SmsVdpTest
 
