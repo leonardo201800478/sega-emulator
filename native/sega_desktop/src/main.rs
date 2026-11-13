@@ -2667,7 +2667,8 @@ mod windows_host {
             if let Err(error) = active_worker.pause() {
                 eprintln!("SRAM_SAVE pause_before_exit_failed error={error}");
             }
-            if let Err(error) = persist_worker_sram(&active_worker, save_context.borrow().as_ref()) {
+            if let Err(error) = persist_worker_sram(&active_worker, save_context.borrow().as_ref())
+            {
                 final_save_error = Some(error);
             }
             let _ = active_worker.stop();
