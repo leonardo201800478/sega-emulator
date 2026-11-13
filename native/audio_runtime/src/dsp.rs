@@ -20,7 +20,7 @@ impl std::fmt::Display for DspError {
             }
             Self::InvalidFilterConfiguration => write!(
                 f,
-                "low-pass filter requires 0 < cutoff < Nyquist and a positive sample rate"
+                "audio filter requires 0 < cutoff < Nyquist and a positive sample rate"
             ),
         }
     }
@@ -137,22 +137,13 @@ impl OnePoleLowPass {
 
 /// User-selectable analog output approximation. Values are host-independent and
 /// intentionally separate from the emulated PSG and machine timing.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AnalogOutputConfig {
     pub enabled: bool,
     pub high_pass_hz: Option<f64>,
     pub low_pass_hz: Option<f64>,
 }
 
-impl Default for AnalogOutputConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            high_pass_hz: None,
-            low_pass_hz: None,
-        }
-    }
-}
 
 impl AnalogOutputConfig {
     /// Experimental broad-band approximation for an SMS1-style analog output.
