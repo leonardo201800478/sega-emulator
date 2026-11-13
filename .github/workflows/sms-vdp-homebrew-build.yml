@@ -42,7 +42,7 @@ jobs:
         working-directory: .build/SmsVdpTest
         run: |
           set -euxo pipefail
-          "$RUNNER_TEMP/wla-dx/bin/wla-z80" -o testmain.asm object.o
+          "$RUNNER_TEMP/wla-dx/bin/wla-z80" -o object.o testmain.asm
           printf '[objects]\nobject.o\n' > linkfile
           "$RUNNER_TEMP/wla-dx/bin/wlalink" -drvs linkfile output.sms
           test -s output.sms
