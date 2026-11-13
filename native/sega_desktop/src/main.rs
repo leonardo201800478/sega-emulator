@@ -1371,7 +1371,7 @@ mod windows_host {
         const BUFFER_FRAMES: u32 = 512;
         const QUEUE_BLOCKS: usize = 8;
         let result = worker.configure_audio_output(
-            || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
+            move || -> Result<Box<dyn sega_sms_runtime::AudioSession>, String> {
                 let sink = sega_audio_output::NativeCpalOutput::new(BUFFER_FRAMES, QUEUE_BLOCKS)?;
                 eprintln!(
                     "R3_AUDIO CPAL output opened: sample_rate={} Hz, channels={}, format={:?}, default_config_fallback={}, queue_capacity={} frames",
