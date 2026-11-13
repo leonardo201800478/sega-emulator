@@ -9,9 +9,9 @@ This is an original deterministic Sega Master System homebrew program used as an
 | CPU-light | 0 | VBlank synchronization and deterministic name-table marker update |
 | CPU-fixed | 1 | CPU-light plus a fixed 256-iteration arithmetic workload |
 | VDP/sprites | 2 | CPU-light plus eight deterministic sprite attribute updates |
-| Combined | 3 | CPU-fixed + VDP/sprites + deterministic PSG tone-period update |
+| Combined | 3 | CPU-fixed + VDP/sprites + audible deterministic PSG tone-period update |
 
-All profiles use the same video mode, palette, tile set, initial name table, frame boundary and frame counter. The visual marker is a workload signature, not a physical presentation oracle.
+All profiles use the same video mode, palette, tile set, initial name table, frame boundary and frame counter. The PSG is muted in CPU-light, CPU-fixed and VDP/sprites profiles; only the combined profile enables the audible tone and updates its period each frame. The visual marker is a workload signature, not a physical presentation oracle.
 
 ## Reproducible build
 
