@@ -50,7 +50,7 @@ impl SmsmemtestCaseResult {
 enum Stage {
     AwaitInitialPrompt,
     AwaitRamCompletePrompt,
-    AwaitVramCompletePrompt,
+    AwaitVramResultColor,
     Complete,
 }
 
@@ -59,6 +59,7 @@ pub struct SmsmemtestInputDriver {
     stage: Option<Stage>,
     stable_frames: u8,
     release_button_after_frame: bool,
+    vram_blank_frame_seen: bool,
 }
 
 impl SmsmemtestInputDriver {
@@ -67,6 +68,7 @@ impl SmsmemtestInputDriver {
             stage: Some(Stage::AwaitInitialPrompt),
             stable_frames: 0,
             release_button_after_frame: false,
+            vram_blank_frame_seen: false,
         }
     }
 
@@ -98,15 +100,20 @@ impl SmsmemtestInputDriver {
             }
             Stage::AwaitRamCompletePrompt => (
                 RAM_COMPLETE_PROMPT_TEXT_ROW,
-                Some(Stage::AwaitVramCompletePrompt),
+                Some(Stage::AwaitVramResultColor),
             ),
-            Stage::AwaitVramCompletePrompt => (VRAM_RESULT_TEXT_ROW, None),
+            Stage::AwaitVramResultColor => (VRAM_RESULT_TEXT_ROW, None),
             Stage::Complete => return Ok(events),
         };
 
-        let marker_observed = if stage == Stage::AwaitVramCompletePrompt {
-            classify_result_row(machine.framebuffer(), VRAM_RESULT_TEXT_ROW)
-                != SmsmemtestCaseResult::NotObserved
+        let marker_observed = if stage == Stage::AwaitVramResultColor {
+            let result = classify_result_row(machine.framebuffer(), VRAM_RESULT_TEXT_ROW);
+            if result == SmsmemtestCaseResult::NotObserved {
+                self.vram_blank_frame_seen = true;
+                false
+            } else {
+                self.vram_blank_frame_seen
+            }
         } else {
             text_row_has_visible_pixels(machine.framebuffer(), row)
         };
