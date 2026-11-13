@@ -1,7 +1,7 @@
 # SMS analog audio circuit research
 
-Status: research baseline, not a calibrated electrical reconstruction  
-Date: 2026-11-12  
+Status: research baseline, not a calibrated electrical reconstruction
+Date: 2026-11-12
 Scope: Master System PSG output path, with explicit separation between documented facts and unresolved schematic-level details.
 
 ## Executive findings
