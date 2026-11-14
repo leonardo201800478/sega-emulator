@@ -621,11 +621,13 @@ fn evaluate_mode4_sprites(
     y: usize,
     revision: SmsVdpRevision,
     height: usize,
+    sprite_limit: usize,
 ) -> Mode4SpriteEvaluation {
     let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
     let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    let mut selected = Vec::with_capacity(8);
+    let sprite_limit = sprite_limit.min(64);
+    let mut selected = Vec::with_capacity(sprite_limit);
     let mut overflow_index = None;
     for index in 0..64 {
         let y_address = if revision == SmsVdpRevision::Sega3155124 {
@@ -645,7 +647,7 @@ fn evaluate_mode4_sprites(
         if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height * zoom) {
             continue;
         }
-        if selected.len() == 8 {
+        if selected.len() == sprite_limit {
             overflow_index = Some(index);
             break;
         }
@@ -980,14 +982,21 @@ fn render_scanline_for_revision(
     // SAT evaluation is bounded to the VDP's eight-entry line capacity.
     // This is still evaluated for the rendered line; the next change adds
     // the explicit temporal handoff between adjacent scanlines.
-    let evaluation = evaluate_mode4_sprites(vram, regs, y, revision, height);
+    let evaluation = evaluate_mode4_sprites(
+        vram,
+        regs,
+        y,
+        revision,
+        height,
+        if hardware_sprite_limit { 8 } else { 64 },
+    );
     if let Some(index) = evaluation.overflow_index
         && *status & OVERFLOW == 0
     {
         *status = (*status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
     }
     let active = evaluation.selected;
-    let count = if hardware_sprite_limit { active.len() } else { active.len() };
+    let count = active.len();
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
     // Lower sprite index wins visually; all drawn opaque sprite pixels affect collision.
@@ -1089,7 +1098,7 @@ mod tests {
         }
         vram[0x3F00 + 10] = 0xD0;
 
-        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
+        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
 
         assert_eq!(evaluation.selected.len(), 8);
         assert_eq!(
