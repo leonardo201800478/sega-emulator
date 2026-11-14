@@ -549,21 +549,9 @@ impl SmsVdp {
         let tstate = u64::from(self.tstates_into_line);
         let height = self.visible_height();
         match tstate {
-            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
-                let overflow_index = if self.registers[0] & 0x04 != 0 {
-                    self.sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                } else {
-                    self.legacy_sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                };
-                self.latch_sms1_sprite_overflow_index(overflow_index);
+            SMS_VINT_IRQ_TSTATE if self.scanline == height => {
+                self.vint_pending = true;
             }
-            SMS_VBLANK_FLAG_TSTATE if self.scanline == height => self.enter_vblank(),
             SMS_HINT_TSTATE if self.scanline < height => {
                 if self.line_counter == 0 {
                     self.line_irq_pending = true;
@@ -579,12 +567,26 @@ impl SmsVdp {
                     self.line_counter = self.line_counter.wrapping_sub(1);
                 }
             }
+            SMS_VCOUNTER_LATCH_TSTATE => {
+                self.v_counter_latch = self.scanline;
+            }
+            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
+                let overflow_index = if self.registers[0] & 0x04 != 0 {
+                    self.sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                } else {
+                    self.legacy_sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                };
+                self.latch_sms1_sprite_overflow_index(overflow_index);
+            }
+            SMS_VBLANK_FLAG_TSTATE if self.scanline == height => self.enter_vblank(),
             SMS_HBLANK_TSTATE if self.scanline < height => {
                 self.commit_raster_span_to_beam();
-                if self.line_collision_seen {
-                    self.status |= COLLISION;
-                    self.line_collision_seen = false;
-                }
                 if self.line_overflow_status != 0 {
                     self.status = (self.status & !0x1F) | self.line_overflow_status;
                     self.line_overflow_status = 0;
