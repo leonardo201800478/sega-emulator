@@ -34,9 +34,12 @@ A composição continua scanline-level, mas o caminho temporal agora modela dois
 
 A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
+No perfil SMS1/315-5124, a seleção Y/elegibilidade da SAT é armazenada em `Mode4SpriteLineBuffer` para a scanline seguinte, preparada no fechamento da scanline anterior. X/tile/pattern continuam sendo consultados durante a composição. Essa fronteira é uma aproximação scanline-level baseada no contrato funcional de seleção para a linha seguinte; não representa um timestamp sublinha medido. O caminho SMS2 permanece inalterado nesta etapa.
+
 ## Limites conhecidos
 
 - R8 agora usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições) e o H-counter usa latch persistente por TH ascendente. O modelo é confrontado com MAME 315-5124 e a ROM de diagnóstico SmsVdpTest, mas ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
+- No SMS1, a seleção de sprites é persistida entre scanlines, mas o boundary exato de avaliação não foi medido; X/tile/pattern ainda não têm fetch temporal próprio, e overflow/collision continuam ligados à composição da linha.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.

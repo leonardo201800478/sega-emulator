@@ -22,7 +22,7 @@ use sega_temporal_core::MachineTime;
 use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 12;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 13;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
 const DEFAULT_AUDIO_SAMPLE_RATE: u64 = DEFAULT_PCM_SOURCE_RATE_HZ as u64;
@@ -868,7 +868,9 @@ mod tests {
         DEFAULT_SMS_PSG_CLOCK_HZ, PsgProfile, SmsTemporalBus, SmsTemporalBusError,
         SmsTemporalDispatch,
     };
+    use crate::Territory;
     use sega_temporal_core::MachineTime;
+    use sega_video::sms::{SmsVdp, SmsVdpProfile};
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
     fn request(id: u64, operation: Z80BusOperation, address: u16, tstates: u8) -> Z80BusRequest {
@@ -887,6 +889,77 @@ mod tests {
             rom[start..start + 0x4000].fill(bank as u8);
         }
         rom
+    }
+
+    fn vdp_write_register(vdp: &mut SmsVdp, index: u8, value: u8) {
+        vdp.write_port(0xBF, value);
+        vdp.write_port(0xBF, 0x80 | index);
+    }
+
+    fn vdp_write_memory(vdp: &mut SmsVdp, address: u16, value: u8) {
+        vdp.write_port(0xBF, address as u8);
+        vdp.write_port(0xBF, ((address >> 8) as u8 & 0x3F) | 0x40);
+        vdp.write_port(0xBE, value);
+    }
+
+    fn vdp_write_cram(vdp: &mut SmsVdp, address: u16, value: u8) {
+        vdp.write_port(0xBF, address as u8);
+        vdp.write_port(0xBF, ((address >> 8) as u8 & 0x3F) | 0xC0);
+        vdp.write_port(0xBE, value);
+    }
+
+    #[test]
+    fn sms1_sprite_line_buffer_survives_temporal_bus_snapshot_restore() {
+        let mut bus = SmsTemporalBus::new_with_hardware_profile(
+            vec![0; 0x4000],
+            3,
+            DEFAULT_SMS_PSG_CLOCK_HZ,
+            44_100,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+        .unwrap();
+
+        {
+            let vdp = bus.vdp_mut();
+            vdp_write_register(vdp, 0, 0x04);
+            vdp_write_register(vdp, 1, 0x40);
+            vdp_write_register(vdp, 5, 0x7F);
+            vdp_write_cram(vdp, 0x11, 0x03);
+            vdp_write_memory(vdp, 0x0020, 0xFF);
+            vdp_write_memory(vdp, 0x3F00, 0);
+            vdp_write_memory(vdp, 0x3F01, 0xD0);
+            vdp_write_memory(vdp, 0x3F80, 10);
+            vdp_write_memory(vdp, 0x3F81, 1);
+        }
+
+        let first_line = request(1, Z80BusOperation::MemoryRead, 0, 228);
+        bus.begin_request(first_line, 0).unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(first_line.id).unwrap();
+
+        // The VDP has prepared the line-1 SAT selection. Snapshot it as part
+        // of the bus continuation before changing the live SAT Y byte.
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        for candidate in [&mut bus, &mut restored] {
+            vdp_write_memory(candidate.vdp_mut(), 0x3F00, 20);
+            let second_line = request(2, Z80BusOperation::MemoryRead, 0, 228);
+            candidate.begin_request(second_line, 0).unwrap();
+            assert!(matches!(
+                candidate.dispatch_next().unwrap(),
+                Some(SmsTemporalDispatch::BusCompletion(_))
+            ));
+            candidate.acknowledge_completion(second_line.id).unwrap();
+        }
+
+        assert_eq!(
+            bus.vdp(),
+            restored.vdp(),
+            "the pending sprite selection must be part of SmsTemporalBusState"
+        );
     }
 
     #[test]
@@ -1521,7 +1594,7 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 12);
+        assert_eq!(snapshot.format_version, 13);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
