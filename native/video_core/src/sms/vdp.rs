@@ -1117,7 +1117,7 @@ mod tests {
         regs[5] = 0x7E;
         vram[0x3F00] = 0xD0;
         vram[0x3F01] = 9;
-        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
+        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
         assert!(evaluation.selected.is_empty());
         assert_eq!(evaluation.overflow_index, None);
     }
