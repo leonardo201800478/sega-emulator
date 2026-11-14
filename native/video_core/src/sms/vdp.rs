@@ -79,6 +79,7 @@ pub struct SmsVdp {
     tstates_into_line: u16,
     raster_span_cursor_x: u16,
     line_collision_seen: bool,
+    line_overflow_status: u8,
     frame_number: u64,
     framebuffer: Vec<u8>,
     working_framebuffer: Vec<u8>,
@@ -133,6 +134,7 @@ impl SmsVdp {
             tstates_into_line: 0,
             raster_span_cursor_x: 0,
             line_collision_seen: false,
+            line_overflow_status: 0,
             frame_number: 0,
             framebuffer: vec![0; FRAME_SIZE],
             working_framebuffer: vec![0; FRAME_SIZE],
@@ -317,6 +319,7 @@ impl SmsVdp {
         self.tstates_into_line = 0;
         self.raster_span_cursor_x = 0;
         self.line_collision_seen = false;
+        self.line_overflow_status = 0;
         self.frame_number = 0;
         self.frame_ready = false;
         self.line_counter = 0;
@@ -344,8 +347,18 @@ impl SmsVdp {
                 value
             }
             0x81 => {
-                let value = self.status;
+                let value = self.status
+                    | if self.line_collision_seen {
+                        COLLISION
+                    } else {
+                        0
+                    }
+                    | self.line_overflow_status;
                 self.status = 0;
+                // A status read returns and acknowledges flags already detected
+                // in this line. Do not let deferred span latches resurrect them.
+                self.line_collision_seen = false;
+                self.line_overflow_status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
                 value
@@ -413,7 +426,6 @@ impl SmsVdp {
     /// is not a free-running dot pipeline.
     fn commit_raster_span_to_beam(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
-            || self.registers[0] & 0x04 == 0
             || self.scanline >= self.visible_height()
         {
             return;
@@ -438,6 +450,7 @@ impl SmsVdp {
             .sprite_line_buffer
             .as_ref()
             .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
+        let overflow_was_sticky = self.status & OVERFLOW != 0;
         let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
             &self.vram,
@@ -455,6 +468,10 @@ impl SmsVdp {
         );
         if partial_status & COLLISION != 0 {
             self.line_collision_seen = true;
+        }
+        if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0
+        {
+            self.line_overflow_status = partial_status & (OVERFLOW | 0x1F);
         }
         self.raster_span_cursor_x = end_x as u16;
     }
@@ -576,6 +593,9 @@ impl SmsVdp {
             if self.line_collision_seen {
                 self.status |= COLLISION;
             }
+            if self.line_overflow_status != 0 {
+                self.status = (self.status & !0x1F) | self.line_overflow_status;
+            }
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
                 self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
@@ -597,6 +617,7 @@ impl SmsVdp {
         }
         self.raster_span_cursor_x = 0;
         self.line_collision_seen = false;
+        self.line_overflow_status = 0;
         self.sprite_line_buffer = None;
         self.prepare_next_sms1_sprite_line(line, height);
         self.scanline += 1;
@@ -655,8 +676,7 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 let previous = self.registers[register];
-                let mode4_unchanged = register == 0 && (previous ^ first) & 0x04 == 0;
-                if mode4_unchanged || (1..=7).contains(&register) {
+                if (0..=7).contains(&register) {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
@@ -756,19 +776,40 @@ fn tms_pixel(frame: &mut [u8], x: usize, y: usize, color: u8) {
         frame[i..i + 3].copy_from_slice(&tms_rgb(color));
     }
 }
-fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, width: usize) {
+#[allow(clippy::too_many_arguments)]
+fn tms_span_range(
+    frame: &mut [u8],
+    x: usize,
+    y: usize,
+    bits: u8,
+    fg: u8,
+    bg: u8,
+    width: usize,
+    start_x: usize,
+    end_x: usize,
+) {
     for bit in 0..width {
-        tms_pixel(
-            frame,
-            x + bit,
-            y,
-            if bits & (0x80 >> bit) != 0 { fg } else { bg },
-        );
+        let pixel_x = x + bit;
+        if (start_x..end_x).contains(&pixel_x) {
+            let color = if bits & (0x80 >> bit) != 0 { fg } else { bg };
+            tms_pixel(frame, pixel_x, y, color);
+        }
     }
 }
-fn tms_quarter(frame: &mut [u8], x: usize, y: usize, color: u8) {
-    for dx in 0..4 {
-        tms_pixel(frame, x + dx, y, color);
+
+fn tms_quarter_range(
+    frame: &mut [u8],
+    x: usize,
+    y: usize,
+    color: u8,
+    start_x: usize,
+    end_x: usize,
+) {
+    for bit in 0..4 {
+        let pixel_x = x + bit;
+        if (start_x..end_x).contains(&pixel_x) {
+            tms_pixel(frame, pixel_x, y, color);
+        }
     }
 }
 
@@ -878,6 +919,7 @@ fn evaluate_mode4_sprites(
     }
 }
 
+#[cfg(test)]
 fn render_legacy_scanline(
     vram: &[u8],
     regs: &[u8; 16],
@@ -886,8 +928,24 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
+    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_legacy_scanline_span(
+    vram: &[u8],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    unlocked: bool,
+    start_x: usize,
+    end_x: usize,
+) {
+    let start_x = start_x.min(SMS_VDP_WIDTH);
+    let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     let backdrop = regs[7] & 0x0F;
-    for x in 0..SMS_VDP_WIDTH {
+    for x in start_x..end_x {
         tms_pixel(frame, x, y, backdrop);
     }
     if regs[1] & 0x40 == 0 {
@@ -906,7 +964,7 @@ fn render_legacy_scanline(
         for col in 0..40 {
             let ch = vram[(names + (y / 8) * 40 + col) & 0x3FFF];
             let bits = vram[(patterns + usize::from(ch) * 8 + (y & 7)) & 0x3FFF];
-            tms_span(frame, 8 + col * 6, y, bits, fg, backdrop, 6);
+            tms_span_range(frame, 8 + col * 6, y, bits, fg, backdrop, 6, start_x, end_x);
         }
         return;
     }
@@ -914,13 +972,15 @@ fn render_legacy_scanline(
         for col in 0..32 {
             let ch = vram[(names + (y / 8) * 32 + col) & 0x3FFF];
             let bits = vram[(patterns + usize::from(ch) * 8 + ((y & 0x1C) >> 2)) & 0x3FFF];
-            tms_quarter(
+            tms_quarter_range(
                 frame,
                 col * 8,
                 y,
                 if bits >> 4 != 0 { bits >> 4 } else { backdrop },
+                start_x,
+                end_x,
             );
-            tms_quarter(
+            tms_quarter_range(
                 frame,
                 col * 8 + 4,
                 y,
@@ -929,6 +989,8 @@ fn render_legacy_scanline(
                 } else {
                     backdrop
                 },
+                start_x,
+                end_x,
             );
         }
     } else if mode == 4 {
@@ -949,7 +1011,7 @@ fn render_legacy_scanline(
             } else {
                 backdrop
             };
-            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+            tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     } else {
         let color_base = (usize::from(regs[3]) << 6) & 0x3FC0;
@@ -967,12 +1029,13 @@ fn render_legacy_scanline(
             } else {
                 backdrop
             };
-            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+            tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     }
-    render_legacy_sprites(vram, regs, status, frame, y, unlocked);
+    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
 }
 
+#[cfg(test)]
 fn render_legacy_sprites(
     vram: &[u8],
     regs: &[u8; 16],
@@ -981,6 +1044,22 @@ fn render_legacy_sprites(
     y: usize,
     unlocked: bool,
 ) {
+    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_legacy_sprites_span(
+    vram: &[u8],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    unlocked: bool,
+    start_x: usize,
+    end_x: usize,
+) {
+    let start_x = start_x.min(SMS_VDP_WIDTH);
+    let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
     let pattern_base = usize::from(regs[6] & 0x07) << 11;
     let size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
@@ -999,7 +1078,9 @@ fn render_legacy_sprites(
         if (y as i32) < sy || (y as i32) >= sy + (size * zoom) as i32 {
             continue;
         }
-        if active.len() == 4 && *status & OVERFLOW == 0 {
+        // Overflow is a line-evaluation result. Re-composing later spans must
+        // not reassert a flag that software acknowledged after the first span.
+        if start_x == 0 && active.len() == 4 && *status & OVERFLOW == 0 {
             *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
         }
         if active.len() >= 4 && !unlocked {
@@ -1033,7 +1114,7 @@ fn render_legacy_sprites(
             }
             for dx in 0..zoom {
                 let x = sx + (source_x * zoom + dx) as i32;
-                if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
+                if !(start_x as i32..end_x as i32).contains(&x) {
                     continue;
                 }
                 let x = x as usize;
@@ -1131,7 +1212,16 @@ fn render_scanline_for_revision_with_evaluation(
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     if regs[0] & 0x04 == 0 {
-        render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
+        render_legacy_scanline_span(
+            vram,
+            regs,
+            status,
+            frame,
+            y,
+            !hardware_sprite_limit,
+            start_x,
+            end_x,
+        );
         return;
     }
     let backdrop = palette_rgb_for_revision(cram, 16 + (regs[7] & 0x0F), revision);
@@ -1355,7 +1445,8 @@ mod tests {
     use super::{
         COLLISION, CRAM_SIZE, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp,
         StereoPresentation, TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline,
-        render_legacy_sprites, render_scanline, render_scanline_for_revision,
+        render_legacy_scanline_span, render_legacy_sprites, render_legacy_sprites_span,
+        render_scanline, render_scanline_for_revision,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
@@ -1696,6 +1787,221 @@ mod tests {
         render_legacy_scanline(&v.vram, &v.registers, &mut status, &mut frame, 0, false);
         assert_eq!(&frame[0..3], &TMS_PALETTE[4]);
         assert_eq!(&frame[3..6], &TMS_PALETTE[2]);
+    }
+
+    #[test]
+    fn legacy_scanline_spans_match_full_line_for_each_tms_mode() {
+        let mut v = SmsVdp::default();
+        v.registers[2] = 0x01;
+        v.registers[3] = 0x01;
+        v.registers[4] = 0x01;
+        v.registers[5] = 0x7F;
+        v.registers[6] = 0x01;
+        v.registers[7] = 0x21;
+        for (index, byte) in v.vram.iter_mut().enumerate() {
+            *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
+        }
+        v.vram[0x3F80] = 0xD0;
+
+        let modes = [
+            (0x00, 0x40),
+            (0x00, 0x50),
+            (0x00, 0x48),
+            (0x00, 0x58),
+            (0x02, 0x40),
+        ];
+        for (r0, r1) in modes {
+            v.registers[0] = r0;
+            v.registers[1] = r1;
+            let mut full_status = 0;
+            let mut full = vec![0; FRAME_SIZE];
+            render_legacy_scanline(&v.vram, &v.registers, &mut full_status, &mut full, 0, false);
+
+            let mut split_status = 0;
+            let mut split = vec![0; FRAME_SIZE];
+            for (start_x, end_x) in [(0, 63), (63, 108), (108, 171), (171, SMS_VDP_WIDTH)] {
+                render_legacy_scanline_span(
+                    &v.vram,
+                    &v.registers,
+                    &mut split_status,
+                    &mut split,
+                    0,
+                    false,
+                    start_x,
+                    end_x,
+                );
+            }
+            assert_eq!(
+                &split[..SMS_VDP_WIDTH * 3],
+                &full[..SMS_VDP_WIDTH * 3],
+                "legacy mode r0={r0:#04x} r1={r1:#04x} must compose identically across spans"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_sprite_spans_match_full_line_for_a_sprite_crossing_the_boundary() {
+        let mut v = SmsVdp::default();
+        v.registers[1] = 0x40;
+        v.registers[5] = 0x7F;
+        v.vram[0x3F80] = 0;
+        v.vram[0x3F81] = 104;
+        v.vram[0x3F82] = 1;
+        v.vram[0x3F83] = 4;
+        v.vram[0x3F84] = 0xD0;
+        v.vram[8..16].fill(0xFF);
+
+        let mut full_status = 0;
+        let mut full = vec![0; FRAME_SIZE];
+        render_legacy_sprites(&v.vram, &v.registers, &mut full_status, &mut full, 1, false);
+
+        let mut split_status = 0;
+        let mut split = vec![0; FRAME_SIZE];
+        render_legacy_sprites_span(
+            &v.vram,
+            &v.registers,
+            &mut split_status,
+            &mut split,
+            1,
+            false,
+            0,
+            108,
+        );
+        render_legacy_sprites_span(
+            &v.vram,
+            &v.registers,
+            &mut split_status,
+            &mut split,
+            1,
+            false,
+            108,
+            SMS_VDP_WIDTH,
+        );
+
+        assert_eq!(
+            &split[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6],
+            &full[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6]
+        );
+    }
+
+    #[test]
+    fn sms1_mode4_to_legacy_transition_preserves_the_mode4_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+
+        v.advance(114);
+        reg(&mut v, 0, 0x00);
+        reg(&mut v, 1, 0x00);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 8, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn sms1_legacy_to_mode4_transition_preserves_the_legacy_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+        v.registers[0] = 0;
+        v.registers[1] = 0;
+        v.vram[0] = 0xFF;
+
+        v.advance(114);
+        reg(&mut v, 0, 0x04);
+        reg(&mut v, 1, 0x40);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [238, 0, 0]);
+    }
+
+    #[test]
+    fn legacy_overflow_from_a_committed_prefix_survives_sat_base_change() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 10 + (index as u8 * 8);
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        v.advance(114);
+        reg(&mut v, 5, 0x00);
+        let mut restored = v.clone();
+        v.vram[0] = 0xD0;
+        restored.vram[0] = 0xD0;
+        v.advance(114);
+        restored.advance(114);
+
+        assert_ne!(v.status & OVERFLOW, 0);
+        assert_eq!(v.status & 0x1F, 4);
+        assert_eq!(restored.status, v.status);
+    }
+
+    #[test]
+    fn status_read_clears_deferred_legacy_span_flags_for_the_current_line() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[5] = 0x7F;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 20;
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[8..16].fill(0xFF);
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        // The first partial composition detects both overflow and collision.
+        v.advance(114);
+        // A register write is the externally observable boundary that commits
+        // the already-scanned prefix in this selective-raster model.
+        reg(&mut v, 7, 0);
+        assert_ne!(v.line_overflow_status & OVERFLOW, 0);
+        assert!(v.line_collision_seen);
+
+        // Reading the status port acknowledges flags already detected this line.
+        let status = v.read_port(0xBF);
+        assert_ne!(status & OVERFLOW, 0);
+        assert_ne!(status & COLLISION, 0);
+        assert_eq!(v.line_overflow_status, 0);
+        assert!(!v.line_collision_seen);
+
+        // The suffix must not resurrect the acknowledged prefix flags.
+        v.advance(114);
+        assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
+    }
+
+    #[test]
+    fn legacy_partial_overflow_does_not_replace_an_existing_sticky_index() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        v.status = OVERFLOW | 3;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 10 + (index as u8 * 8);
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        v.advance(114);
+        reg(&mut v, 5, 0x00);
+        v.vram[0] = 0xD0;
+        v.advance(114);
+
+        assert_ne!(v.status & OVERFLOW, 0);
+        assert_eq!(v.status & 0x1F, 3);
     }
 
     #[test]
