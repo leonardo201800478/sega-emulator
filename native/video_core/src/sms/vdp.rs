@@ -10,6 +10,9 @@ const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
+// HCounter 00 begins at HPos 48 (T-state 32 in the 3:2 HPos/T-state model).
+// SMS1 palette caching is modeled at this HBlank-to-active-display boundary.
+const SMS_CRAM_LATCH_TSTATE: u64 = 32;
 const SMS_R8_LATCH_HPOS: u16 = 21;
 const STRIDE: usize = SMS_VDP_WIDTH * 3;
 const FRAME_SIZE: usize = STRIDE * SMS_VDP_MAX_HEIGHT;
@@ -62,6 +65,8 @@ pub struct SmsRasterPosition {
 pub struct SmsVdp {
     vram: Vec<u8>,
     cram: [u8; CRAM_SIZE],
+    latched_cram: [u8; CRAM_SIZE],
+    cram_latched_for_line: bool,
     registers: [u8; 16],
     latched_scroll_x: u8,
     latched_scroll_y: u8,
@@ -114,6 +119,8 @@ impl SmsVdp {
         Self {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
+            latched_cram: [0; CRAM_SIZE],
+            cram_latched_for_line: false,
             registers: [0; 16],
             latched_scroll_x: 0,
             latched_scroll_y: 0,
@@ -296,6 +303,8 @@ impl SmsVdp {
             "SMS VDP reset"
         );
         self.cram.fill(0);
+        self.latched_cram.fill(0);
+        self.cram_latched_for_line = false;
         self.registers.fill(0);
         self.latched_scroll_x = 0;
         self.latched_scroll_y = 0;
@@ -402,12 +411,35 @@ impl SmsVdp {
         }
         let mut remaining = tstates;
         while remaining > 0 {
-            let step = remaining.min(LINE_TSTATES - u64::from(self.tstates_into_line));
+            if self.profile.revision == SmsVdpRevision::Sega3155124
+                && !self.cram_latched_for_line
+                && u64::from(self.tstates_into_line) >= SMS_CRAM_LATCH_TSTATE
+            {
+                self.latched_cram = self.cram;
+                self.cram_latched_for_line = true;
+            }
+            let until_line_end = LINE_TSTATES - u64::from(self.tstates_into_line);
+            let until_cram_latch = if self.profile.revision == SmsVdpRevision::Sega3155124
+                && !self.cram_latched_for_line
+            {
+                SMS_CRAM_LATCH_TSTATE - u64::from(self.tstates_into_line)
+            } else {
+                u64::MAX
+            };
+            let step = remaining.min(until_line_end).min(until_cram_latch);
             self.tstates_into_line += step as u16;
             remaining -= step;
+            if self.profile.revision == SmsVdpRevision::Sega3155124
+                && !self.cram_latched_for_line
+                && u64::from(self.tstates_into_line) == SMS_CRAM_LATCH_TSTATE
+            {
+                self.latched_cram = self.cram;
+                self.cram_latched_for_line = true;
+            }
             if u64::from(self.tstates_into_line) == LINE_TSTATES {
                 self.tstates_into_line = 0;
                 self.complete_scanline();
+                self.cram_latched_for_line = false;
             }
         }
     }
@@ -496,9 +528,14 @@ impl SmsVdp {
             } else {
                 None
             };
+            let render_cram = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+                &self.latched_cram
+            } else {
+                &self.cram
+            };
             render_scanline_for_revision_with_evaluation(
                 &self.vram,
-                &self.cram,
+                render_cram,
                 &render_registers,
                 &mut self.status,
                 &mut self.working_framebuffer,
