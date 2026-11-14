@@ -2037,6 +2037,7 @@ mod tests {
                     &mut split,
                     0,
                     false,
+                    None,
                     start_x,
                     end_x,
                 );
@@ -2074,6 +2075,7 @@ mod tests {
             &mut split,
             1,
             false,
+            None,
             0,
             108,
         );
@@ -2084,6 +2086,7 @@ mod tests {
             &mut split,
             1,
             false,
+            None,
             108,
             SMS_VDP_WIDTH,
         );
