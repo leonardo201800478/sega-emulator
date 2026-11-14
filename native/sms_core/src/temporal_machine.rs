@@ -3363,6 +3363,28 @@ mod temporal_interrupt_wiring_tests {
     }
 
     #[test]
+    fn sms1_hint_r10_boundary_reaches_the_z80_int_line_after_t14() {
+        let mut rom = vec![0x00; 0x4000];
+        rom[0] = 0xFB; // EI; following bytes are NOPs.
+        let mut machine = SmsTemporalMachine::new(rom, 1).unwrap();
+        machine.bus.vdp_mut().write_port(0xBF, 0x10); // R0: HINT enable.
+        machine.bus.vdp_mut().write_port(0xBF, 0x80);
+        machine.bus.vdp_mut().write_port(0xBF, 0x00); // R10: first-line HINT at T14.
+        machine.bus.vdp_mut().write_port(0xBF, 0x8A);
+
+        machine.step_instruction(0).unwrap(); // EI: T0..T4.
+        machine.step_instruction(0).unwrap(); // NOP: T4..T8.
+        machine.step_instruction(0).unwrap(); // NOP: T8..T12.
+        assert_eq!(machine.cpu().export_state().int_pending, None);
+
+        machine.step_instruction(0).unwrap(); // NOP crosses HINT at T14.
+        let cpu_state = machine.cpu().export_state();
+        assert!(cpu_state.iff1);
+        assert_eq!(cpu_state.int_pending, Some(0xFF));
+        assert!(machine.vdp().interrupt_pending());
+    }
+
+    #[test]
     fn step_frame_wires_vdp_vblank_irq_to_z80_and_services_halt_loop() {
         let mut rom = vec![0; 0x8000];
         let main: [u8; 26] = [
