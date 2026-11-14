@@ -79,10 +79,11 @@ The current mainline audit in PR #813 documented the present gap: the legacy SMS
 ### 4.3 SG-1000 — third target
 
 - TMS9918A-compatible engine; do not route native SG-1000 through Mode 4.
-- Migrate the existing `native/sg1000_core/src/vdp.rs` implementation into `sega-video` without changing its semantics.
+- Integrate the existing native Rust implementation from `native/sg1000_core/src/vdp.rs` into `sega-video`, adapting it to the project's current universal VDP device/profile interface.
+- The SG-1000 machine must consume the shared Rust device through that universal interface; do not create a parallel SG-1000 VDP API or preserve a separate active implementation indefinitely.
 - Preserve Text, Graphics I, Graphics II and Multicolor modes, 16 KiB VRAM, 32-entry SAT, four-sprites-per-line behavior, TMS status/interrupt and read-ahead/control-latch behavior.
-- Make `sg1000_core` consume/re-export the shared TMS device only after dependency and machine integration are staged.
-- Remove the old source only after behavioral, frame-hash, timing/chunking and machine-level equivalence gates pass.
+- Python is not part of the SG-1000 runtime, integration, dependencies, or implementation path. Historical Python material, if consulted at all, is documentation/reference material only; it is not code to port or embed.
+- Remove the old Rust source only after behavioral, frame-hash, timing/chunking and machine-level equivalence gates pass.
 
 ### 4.4 Game Gear — final target
 
@@ -97,7 +98,8 @@ The current mainline audit in PR #813 documented the present gap: the legacy SMS
 
 ### VDP-M0 — characterize current implementations
 
-- Inventory the active SMS1/SMS2 Mode 4 engine, SG-1000 TMS implementation, public APIs, machine call sites, tests and timing assumptions.
+- Inventory the active SMS1/SMS2 Mode 4 engine, native Rust SG-1000 TMS implementation, universal VDP interface, public APIs, machine call sites, tests and timing assumptions.
+- Do not introduce Python into the SG-1000 runtime or dependency graph.
 - Preserve existing behavior as profile-specific regression fixtures.
 - Record which current SMS legacy paths are genuinely equivalent to TMS behavior; share only proven-equivalent routines.
 - Identify all existing scanline/dot timing work in recent PRs and carry it forward rather than restarting it.
@@ -167,8 +169,9 @@ The current mainline audit in PR #813 documented the present gap: the legacy SMS
 
 ### SG-1000
 
-- All existing TMS tests remain green.
-- All four legacy modes, table masks, sprite evaluation/overflow/collision, read buffer, status and VBlank/IRQ timing preserved.
+- All existing native Rust TMS tests remain green through the universal VDP interface.
+- No Python runtime, dependency, adapter or implementation is introduced.
+- All four TMS modes, table masks, sprite evaluation/overflow/collision, read buffer, status and VBlank/IRQ timing preserved.
 - Frame hashes and chunking tests match the pre-migration baseline.
 
 ### Game Gear
