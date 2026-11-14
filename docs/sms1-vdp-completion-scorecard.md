@@ -3,8 +3,9 @@
 **Sistema-alvo:** Sega Master System 1
 **ASIC prioritário:** Sega 315-5124
 **Backend:** Rust / `sega-video`
-**Baseline da auditoria:** `main` em `202cdfc695d0c2346c86da4144b6e8a3316e0c4d`
-**Candidato validado:** PR #839, `c7afd54c22d68dc3a7e9d94e26bbd780bd1564f0` (aguardando merge)
+**Baseline integrada:** `main` após PR #839 (`e2fdc8774b959b41419bb8b477f1743992548eab`)
+**Baseline de comparação:** `202cdfc695d0c2346c86da4144b6e8a3316e0c4d`
+**HEAD de validação da PR #839:** `e04eb8f69c9dd331780532e8b8df4bf082f18811`
 **Estado:** EM DESENVOLVIMENTO — NÃO LIBERADO PARA TESTE IN-GAME
 
 Este scorecard registra somente capacidades presentes na `main` e evidências executadas no SHA correspondente. PR aberta, branch de trabalho ou teste ainda em execução não contam como implementação integrada.
