@@ -1254,10 +1254,17 @@ fn render_legacy_sprites_span(
 ) {
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
-    let evaluation = sprite_evaluation
-        .cloned()
-        .unwrap_or_else(|| evaluate_legacy_sprites(vram, regs, y, unlocked));
-    if start_x == 0
+    let fallback_evaluation;
+    let evaluation = if let Some(evaluation) = sprite_evaluation {
+        evaluation
+    } else {
+        fallback_evaluation = evaluate_legacy_sprites(vram, regs, y, unlocked);
+        &fallback_evaluation
+    };
+    // SMS1 overflow was already latched when the line buffer was prepared.
+    // Only the unbuffered fallback path derives it during composition.
+    if sprite_evaluation.is_none()
+        && start_x == 0
         && let Some(index) = evaluation.overflow_index
         && *status & OVERFLOW == 0
     {
