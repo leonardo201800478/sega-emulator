@@ -357,17 +357,20 @@ impl SmsVdp {
                 value
             }
             0x81 => {
-                let value = self.status
-                    | if self.line_collision_seen {
-                        COLLISION
-                    } else {
-                        0
-                    }
-                    | self.line_overflow_status;
+                let pending_collision = if self.profile.revision != SmsVdpRevision::Sega3155124
+                    && self.line_collision_seen
+                {
+                    COLLISION
+                } else {
+                    0
+                };
+                let value = self.status | pending_collision | self.line_overflow_status;
                 self.status = 0;
-                // A status read returns and acknowledges flags already detected
-                // in this line. Do not let deferred span latches resurrect them.
-                self.line_collision_seen = false;
+                // SMS1 collision is not visible until HBlank. A status read
+                // before that edge must not acknowledge the pending line latch.
+                if self.profile.revision != SmsVdpRevision::Sega3155124 {
+                    self.line_collision_seen = false;
+                }
                 self.line_overflow_status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
@@ -711,11 +714,13 @@ impl SmsVdp {
                 usize::from(self.raster_span_cursor_x),
                 SMS_VDP_WIDTH,
             );
-            if self.line_collision_seen {
-                self.status |= COLLISION;
-            }
-            if self.line_overflow_status != 0 {
-                self.status = (self.status & !0x1F) | self.line_overflow_status;
+            if self.profile.revision != SmsVdpRevision::Sega3155124 {
+                if self.line_collision_seen {
+                    self.status |= COLLISION;
+                }
+                if self.line_overflow_status != 0 {
+                    self.status = (self.status & !0x1F) | self.line_overflow_status;
+                }
             }
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
@@ -723,44 +728,31 @@ impl SmsVdp {
             }
             self.sprite_line_buffer = None;
             self.legacy_sprite_line_buffer = None;
-            if self.line_counter == 0 {
-                self.line_irq_pending = true;
-                sega_observability::tracing::trace!(
-                    target: "sega::vdp",
-                    scanline = line,
-                    reload_value = self.registers[10],
-                    frame_number = self.frame_number,
-                    "SMS VDP line interrupt asserted"
-                );
-                self.line_counter = self.registers[10];
-            } else {
-                self.line_counter = self.line_counter.wrapping_sub(1);
+            if self.profile.revision != SmsVdpRevision::Sega3155124 {
+                if self.line_counter == 0 {
+                    self.line_irq_pending = true;
+                    sega_observability::tracing::trace!(
+                        target: "sega::vdp",
+                        scanline = line,
+                        reload_value = self.registers[10],
+                        frame_number = self.frame_number,
+                        "SMS VDP line interrupt asserted"
+                    );
+                    self.line_counter = self.registers[10];
+                } else {
+                    self.line_counter = self.line_counter.wrapping_sub(1);
+                }
             }
         }
         self.raster_span_cursor_x = 0;
         self.line_collision_seen = false;
         self.line_overflow_status = 0;
         self.sprite_line_buffer = None;
+        self.legacy_sprite_line_buffer = None;
         self.prepare_next_sms1_sprite_line(line, height);
         self.scanline += 1;
-        if self.scanline == height {
-            if let Some(scroll_y) = self.pending_scroll_y.take() {
-                self.latched_scroll_y = scroll_y;
-            }
-            self.status |= VBLANK;
-            self.frame_ready = true;
-            sega_observability::tracing::debug!(
-                target: "sega::vdp",
-                frame_number = self.frame_number,
-                visible_height = height,
-                video_standard = ?self.profile.video_standard,
-                "SMS VDP entered VBlank"
-            );
-            self.framebuffer.clone_from(&self.working_framebuffer);
-            match self.stereo_eye {
-                SmsVdpEye::Left => self.left_frame.clone_from(&self.working_framebuffer),
-                SmsVdpEye::Right => self.right_frame.clone_from(&self.working_framebuffer),
-            }
+        if self.scanline == height && self.profile.revision != SmsVdpRevision::Sega3155124 {
+            self.enter_vblank();
         }
         if self.scanline >= self.total_lines() {
             self.scanline = 0;
