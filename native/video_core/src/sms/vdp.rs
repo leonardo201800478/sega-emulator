@@ -1955,6 +1955,9 @@ mod tests {
 
         // The first partial composition detects both overflow and collision.
         v.advance(114);
+        // A register write is the externally observable boundary that commits
+        // the already-scanned prefix in this selective-raster model.
+        reg(&mut v, 7, 0);
         assert_ne!(v.line_overflow_status & OVERFLOW, 0);
         assert!(v.line_collision_seen);
 
