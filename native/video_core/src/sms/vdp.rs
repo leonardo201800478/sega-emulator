@@ -655,7 +655,8 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 let previous = self.registers[register];
-                if (1..=7).contains(&register) {
+                let mode4_unchanged = register == 0 && (previous ^ first) & 0x04 == 0;
+                if mode4_unchanged || (1..=7).contains(&register) {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
@@ -3243,6 +3244,32 @@ mod tests {
         assert_eq!(framebuffer_pixel(&v, 152, 0), [238, 0, 0]);
         assert_eq!(framebuffer_pixel(&v, 153, 0), [0, 0, 0]);
         assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn midline_r0_sprite_shift_preserves_the_unshifted_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+        v.registers[5] = 0x7F;
+        set_sprite(&mut v, 0, 0xFF, 100, 1);
+        v.vram[0x3F01] = 0xD0;
+        solid_sprite_tile(&mut v, 1, 1);
+        v.cram[17] = 0x03;
+
+        v.advance(114);
+        // The prefix is committed by the R0 write at the current beam position.
+        reg(&mut v, 0, 0x0C);
+        v.advance(114);
+
+        assert_eq!(
+            framebuffer_pixel(&v, 100, 0),
+            [238, 0, 0],
+            "pixels already committed retain the old sprite X position"
+        );
+        assert_eq!(
+            framebuffer_pixel(&v, 92, 0),
+            [0, 0, 0],
+            "the new left shift must not redraw pixels behind the beam"
+        );
     }
 
     #[test]

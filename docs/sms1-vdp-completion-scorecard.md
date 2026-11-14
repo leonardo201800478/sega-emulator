@@ -19,8 +19,8 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 | Escritas CRAM intralinha | SELECTIVE_SPANS | PR #827; prefixo/sufixo por boundary de escrita. CRAM dot e latch físico da paleta não modelados |
 | Escritas R7 intralinha | SELECTIVE_SPANS | PR #827; commit anterior à alteração do backdrop |
 | Escritas VRAM intralinha | SELECTIVE_SPANS | PR #828; commit antes da escrita. Fetch-ahead de tiles/bitplanes/sprites não modelado |
-| Registradores R1-R7 intralinha | IN_PROGRESS | Branch/PR #829; não considerar integrado até merge e CI aprovados |
-| R0 e transição Mode 4/legacy | NOT_CLOSED | Caminho legacy ainda não possui composição parcial por span |
+| Registradores R1-R7 intralinha | SELECTIVE_SPANS_APPROXIMATE | PR #829 integrada; boundary de escrita é modelo coarse, não latch físico medido por registrador |
+| R0 e transição Mode 4/legacy | PARTIAL_MODE4_ONLY | Escritas R0 que preservam o bit Mode 4 fazem commit; troca Mode 4/legacy ainda não possui composição parcial por span |
 | R8 horizontal scroll | IMPLEMENTED_APPROXIMATE | Latch em HPos 21; fase absoluta ainda sem validação física |
 | R9 vertical scroll | IMPLEMENTED_APPROXIMATE | Valor pendente aplicado na fronteira de scanline conforme modelo atual |
 | R10 / HINT counter | IMPLEMENTED_SCANLINE | Contador e flag funcional; instante de HBlank ainda coarse |
@@ -44,7 +44,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 
 ## 3. Limitações que bloqueiam teste in-game
 
-1. Fechar a temporalidade dos registradores R0-R10, incluindo a transição Mode 4/legacy e latches específicos.
+1. Fechar a temporalidade dos registradores R0-R10, incluindo a transição Mode 4/legacy e latches específicos; R0 em Mode 4 já possui commit seletivo, mas o modo legacy ainda não.
 2. Validar o comportamento de CRAM dot e o instante de latch da paleta.
 3. Modelar ou justificar por evidência o fetch-ahead de tiles, bitplanes e padrões de sprites.
 4. Refinar a avaliação SAT e os fetches X/tile/pattern sem destruir a separação avaliação/composição.
@@ -59,6 +59,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 - PR #826 — colisão de sprites: pixels opacos, limpeza por leitura de status e máscaras/deslocamentos.
 - PR #827 — spans CRAM/R7: 79 testes `sega-video`, 14 testes SMS de integração, runtime Release e build Windows x64 Release aprovados no HEAD validado.
 - PR #828 — spans VRAM: 81 testes `sega-video`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, runtime Release e build Windows x64 Release aprovados no HEAD validado.
+- PR #829 — spans R1-R7: 83 testes `sega-video`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, runtime Release e build Windows x64 Release aprovados no HEAD validado.
 
 Os resultados acima pertencem aos respectivos commits e workflows; não são automaticamente atribuídos a commits futuros.
 
