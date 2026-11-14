@@ -685,11 +685,7 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
 }
 
 /// SMS1 R3/R4 gate background pattern address bits according to bitplane.
-fn sms1_background_pattern_address(
-    address: usize,
-    plane: usize,
-    registers: &[u8; 16],
-) -> usize {
+fn sms1_background_pattern_address(address: usize, plane: usize, registers: &[u8; 16]) -> usize {
     let mask = if plane < 2 {
         0x003F | (usize::from(registers[3]) << 6)
     } else {
