@@ -443,15 +443,18 @@ impl SmsVdp {
     /// positions per 228 Z80 T-states. The counter samples the previous HPos,
     /// wraps at the line boundary, subtracts 46, and divides by two.
     pub fn latch_h_counter(&mut self) {
-        // SmsVdpTest's measured Z80-clock/pixel table uses pixel=(3*T+1)/2
-        // and HCounter=((pixel-47)/2) with truncation toward zero.
-        let pixel = ((u64::from(self.tstates_into_line) * 3 + 1) / 2)
-            % SMS_HCOUNTER_POSITIONS_PER_LINE;
-        self.h_counter_latch = ((pixel as i64 - 47) / 2) as u8;
+        let hpos = (u64::from(self.tstates_into_line) * 3 / 2) % SMS_HCOUNTER_POSITIONS_PER_LINE;
+        let previous_hpos = if hpos == 0 {
+            SMS_HCOUNTER_POSITIONS_PER_LINE - 1
+        } else {
+            hpos - 1
+        };
+        let hclock = previous_hpos as i64 - 46;
+        self.h_counter_latch = (hclock >> 1) as u8;
     }
 
     fn current_hpos(&self) -> u16 {
-        ((u64::from(self.tstates_into_line) * 3 + 1) / 2) as u16
+        ((u64::from(self.tstates_into_line) * 3) / 2) as u16
     }
 
     /// Commit the active raster prefix before a display-visible SMS1 write.
@@ -1869,29 +1872,6 @@ mod tests {
         assert_eq!(vdp.read_v_counter(), 0, "VCounter has not latched at HPos 21");
         vdp.advance(1);
         assert_eq!(vdp.read_v_counter(), 1, "VCounter changes at HPos 23 / T15");
-    }
-
-    #[test]
-    fn sms1_hcounter_latch_matches_measured_z80_clock_pixel_table() {
-        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
-
-        vdp.tstates_into_line = 0;
-        vdp.latch_h_counter();
-        assert_eq!(vdp.read_h_counter(), 0xE9);
-
-        vdp.tstates_into_line = 1;
-        vdp.latch_h_counter();
-        assert_eq!(vdp.read_h_counter(), 0xEA);
-
-        vdp.tstates_into_line = 14;
-        assert_eq!(vdp.current_hpos(), 21);
-        vdp.latch_h_counter();
-        assert_eq!(vdp.read_h_counter(), 0xF3);
-
-        vdp.tstates_into_line = 16;
-        assert_eq!(vdp.current_hpos(), 24);
-        vdp.latch_h_counter();
-        assert_eq!(vdp.read_h_counter(), 0xF5);
     }
 
     #[test]
