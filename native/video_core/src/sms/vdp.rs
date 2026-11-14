@@ -3262,7 +3262,9 @@ mod tests {
     #[test]
     fn midline_r2_name_table_base_write_preserves_the_old_prefix() {
         let mut v = setup_midline_sms1_write_fixture();
-        v.vram[0x3000] = 1;
+        for column in 0..32 {
+            v.vram[0x3000 + column] = 1;
+        }
         v.vram[32] = 0xFF;
 
         v.advance(114);
