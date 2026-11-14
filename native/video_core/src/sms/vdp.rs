@@ -11,6 +11,9 @@ const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
 const SMS_R8_LATCH_HPOS: u16 = 21;
+// MAME's SMS 315-5124 timing model places active pixels at HPos 63..319.
+// This is a comparative model boundary, not a measured board-specific latch.
+const SMS_ACTIVE_DISPLAY_START_HPOS: u16 = 63;
 const STRIDE: usize = SMS_VDP_WIDTH * 3;
 const FRAME_SIZE: usize = STRIDE * SMS_VDP_MAX_HEIGHT;
 const VBLANK: u8 = 0x80;
@@ -74,6 +77,8 @@ pub struct SmsVdp {
     cram_write: bool,
     scanline: u16,
     tstates_into_line: u16,
+    raster_span_cursor_x: u16,
+    line_collision_seen: bool,
     frame_number: u64,
     framebuffer: Vec<u8>,
     working_framebuffer: Vec<u8>,
@@ -126,6 +131,8 @@ impl SmsVdp {
             cram_write: false,
             scanline: 0,
             tstates_into_line: 0,
+            raster_span_cursor_x: 0,
+            line_collision_seen: false,
             frame_number: 0,
             framebuffer: vec![0; FRAME_SIZE],
             working_framebuffer: vec![0; FRAME_SIZE],
@@ -308,6 +315,8 @@ impl SmsVdp {
         self.cram_write = false;
         self.scanline = 0;
         self.tstates_into_line = 0;
+        self.raster_span_cursor_x = 0;
+        self.line_collision_seen = false;
         self.frame_number = 0;
         self.frame_ready = false;
         self.line_counter = 0;
@@ -394,6 +403,60 @@ impl SmsVdp {
 
     fn current_hpos(&self) -> u16 {
         ((u64::from(self.tstates_into_line) * 3) / 2) as u16
+    }
+
+    /// Commit the active raster prefix before a display-visible SMS1 write.
+    ///
+    /// The 342-position line / 228-T-state conversion and HPos 63 active-area
+    /// start are the current comparative timing model. This intentionally
+    /// commits spans only at externally observable VDP write boundaries; it
+    /// is not a free-running dot pipeline.
+    fn commit_raster_span_to_beam(&mut self) {
+        if self.profile.revision != SmsVdpRevision::Sega3155124
+            || self.registers[0] & 0x04 == 0
+            || self.scanline >= self.visible_height()
+        {
+            return;
+        }
+
+        let end_x = usize::from(
+            self.current_hpos()
+                .saturating_sub(SMS_ACTIVE_DISPLAY_START_HPOS)
+                .min(SMS_VDP_WIDTH as u16),
+        );
+        let start_x = usize::from(self.raster_span_cursor_x);
+        if end_x <= start_x {
+            return;
+        }
+
+        let line = usize::from(self.scanline);
+        let mut render_registers = self.registers;
+        render_registers[8] = self.latched_scroll_x;
+        render_registers[9] = self.latched_scroll_y;
+        let active_height = usize::from(self.visible_height());
+        let sprite_evaluation = self
+            .sprite_line_buffer
+            .as_ref()
+            .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
+        let mut partial_status = self.status & !COLLISION;
+        render_scanline_for_revision_with_evaluation(
+            &self.vram,
+            &self.cram,
+            &render_registers,
+            &mut partial_status,
+            &mut self.working_framebuffer,
+            line,
+            self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
+            self.profile.revision,
+            active_height,
+            sprite_evaluation,
+            start_x,
+            end_x,
+        );
+        if partial_status & COLLISION != 0 {
+            self.line_collision_seen = true;
+        }
+        self.raster_span_cursor_x = end_x as u16;
     }
 
     pub fn advance(&mut self, tstates: u64) {
@@ -491,8 +554,8 @@ impl SmsVdp {
                 && self.registers[0] & 0x04 != 0
             {
                 self.sprite_line_buffer
-                    .take()
-                    .and_then(|buffer| (buffer.target_line == line).then_some(buffer.evaluation))
+                    .as_ref()
+                    .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation))
             } else {
                 None
             };
@@ -506,12 +569,18 @@ impl SmsVdp {
                 self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
                 self.profile.revision,
                 usize::from(height),
-                sprite_evaluation.as_ref(),
+                sprite_evaluation,
+                usize::from(self.raster_span_cursor_x),
+                SMS_VDP_WIDTH,
             );
+            if self.line_collision_seen {
+                self.status |= COLLISION;
+            }
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
                 self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
             }
+            self.sprite_line_buffer = None;
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
                 sega_observability::tracing::trace!(
@@ -526,6 +595,9 @@ impl SmsVdp {
                 self.line_counter = self.line_counter.wrapping_sub(1);
             }
         }
+        self.raster_span_cursor_x = 0;
+        self.line_collision_seen = false;
+        self.sprite_line_buffer = None;
         self.prepare_next_sms1_sprite_line(line, height);
         self.scanline += 1;
         if self.scanline == height {
@@ -561,6 +633,7 @@ impl SmsVdp {
     fn write_data(&mut self, value: u8) {
         self.control_first = None;
         if self.cram_write {
+            self.commit_raster_span_to_beam();
             self.cram[usize::from(self.address & 0x1F)] = value & 0x3F;
             self.read_buffer = value;
             self.address = self.address.wrapping_add(1) & 0x3FFF;
@@ -581,6 +654,9 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 let previous = self.registers[register];
+                if register == 7 {
+                    self.commit_raster_span_to_beam();
+                }
                 self.registers[register] = first;
                 if previous != first && register <= 1 {
                     sega_observability::tracing::debug!(
@@ -1027,6 +1103,8 @@ fn render_scanline_for_revision(
         revision,
         active_height,
         None,
+        0,
+        SMS_VDP_WIDTH,
     );
 }
 
@@ -1045,13 +1123,17 @@ fn render_scanline_for_revision_with_evaluation(
     revision: SmsVdpRevision,
     active_height: usize,
     sprite_evaluation: Option<&Mode4SpriteEvaluation>,
+    start_x: usize,
+    end_x: usize,
 ) {
+    let start_x = start_x.min(SMS_VDP_WIDTH);
+    let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     if regs[0] & 0x04 == 0 {
         render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
         return;
     }
     let backdrop = palette_rgb_for_revision(cram, 16 + (regs[7] & 0x0F), revision);
-    for x in 0..SMS_VDP_WIDTH {
+    for x in start_x..end_x {
         put_pixel(frame, x, y, backdrop);
     }
     if regs[1] & 0x40 == 0 {
@@ -1068,7 +1150,7 @@ fn render_scanline_for_revision_with_evaluation(
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
     let backdrop = 16_u8 + (regs[7] & 0x0F);
-    for x in 0..SMS_VDP_WIDTH {
+    for x in start_x..end_x {
         if regs[0] & 0x20 != 0 && x < 8 {
             bg_color[x] = backdrop;
             put_pixel(
@@ -1240,6 +1322,9 @@ fn render_scanline_for_revision_with_evaluation(
                     continue;
                 }
                 let x = x as usize;
+                if x < start_x || x >= end_x {
+                    continue;
+                }
                 if regs[0] & 0x20 != 0 && x < 8 {
                     continue;
                 }
@@ -1253,7 +1338,7 @@ fn render_scanline_for_revision_with_evaluation(
             }
         }
     }
-    for x in 0..SMS_VDP_WIDTH {
+    for x in start_x..end_x {
         if let Some(rgb) = sprite_rgb[x]
             && (!bg_priority[x] || bg_color[x] & 0x0F == 0)
         {
@@ -1931,6 +2016,42 @@ mod tests {
             v.status & COLLISION,
             0,
             "the next transparent sprite row must not reassert collision"
+        );
+    }
+
+    #[test]
+    fn prior_sticky_collision_is_not_relatched_by_a_collision_free_partial_span() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        set_sprite(&mut v, 0, 0xFF, 20, 1);
+        set_sprite(&mut v, 1, 0xFF, 20, 2);
+        v.vram[0x3F02] = 0xD0;
+        v.vram[32] = 0xFF;
+        v.vram[2 * 32 + 1] = 0xFF;
+
+        v.advance(LINE_TSTATES);
+        assert_ne!(
+            v.status & COLLISION,
+            0,
+            "line zero establishes a sticky collision"
+        );
+
+        // Line one has no selected sprites. A partial CRAM commit must not
+        // mistake the previous line's sticky status bit for a new collision.
+        v.advance(114);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        let _ = v.read_port(0xBF);
+        assert_eq!(v.status & COLLISION, 0);
+
+        v.advance(114);
+        assert_eq!(
+            v.status & COLLISION,
+            0,
+            "a collision-free line must not reassert a previously cleared sticky flag"
         );
     }
 
@@ -3023,18 +3144,82 @@ mod tests {
         assert_eq!(vdp.read_h_counter(), 0x4E);
     }
 
+    fn setup_midline_sms1_write_fixture() -> SmsVdp {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.vram[0] = 0x80;
+        v.vram[0x3800] = 0;
+        v.vram[0x3F00] = 0xD0;
+        v
+    }
+
+    fn setup_midline_cram_write_fixture() -> SmsVdp {
+        let mut v = setup_midline_sms1_write_fixture();
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+        }
+        v
+    }
+
+    fn framebuffer_pixel(vdp: &SmsVdp, x: usize, y: usize) -> [u8; 3] {
+        let offset = (y * SMS_VDP_WIDTH + x) * 3;
+        vdp.working_framebuffer[offset..offset + 3]
+            .try_into()
+            .expect("RGB24 pixel has three channels")
+    }
+
     #[test]
-    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
-        let mut v = setup_midline_write_fixture();
+    fn midline_cram_write_commits_old_and_new_color_spans() {
+        let mut v = setup_midline_cram_write_fixture();
 
         v.advance(114);
         addr(&mut v, 1, 0xC0);
         v.write_port(0xBE, 0x0C);
         v.advance(114);
 
-        // CRAM is mutated immediately and the line is rendered at its end;
-        // therefore even pixels left of the write phase use the new color.
-        // This is a model-characterization assertion, not a hardware oracle.
-        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+        // HPos 171 minus the comparative active-area start HPos 63 gives
+        // the current coarse commit boundary at active pixel 108.
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 238, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 238, 0]);
+    }
+
+    #[test]
+    fn midline_r7_write_commits_old_and_new_backdrop_spans() {
+        let mut v = setup_midline_sms1_write_fixture();
+        v.registers[1] = 0;
+        v.cram[16] = 0x03;
+        v.cram[17] = 0x0C;
+
+        v.advance(114);
+        reg(&mut v, 7, 1);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 238, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 238, 0]);
+    }
+
+    #[test]
+    fn midline_cram_raster_spans_are_chunking_invariant_and_clone_restorable() {
+        let mut whole = setup_midline_cram_write_fixture();
+        whole.advance(114);
+        addr(&mut whole, 1, 0xC0);
+        whole.write_port(0xBE, 0x0C);
+
+        let mut restored = whole.clone();
+        whole.advance(114);
+        restored.advance(57);
+        restored.advance(57);
+
+        assert_eq!(whole.raster_position(), restored.raster_position());
+        assert_eq!(whole.working_framebuffer, restored.working_framebuffer);
+        assert_eq!(whole.status(), restored.status());
     }
 }
