@@ -684,6 +684,16 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
     (address & !0x1800) | (address & mask)
 }
 
+/// SMS1 R3/R4 gate background pattern address bits according to bitplane.
+fn sms1_background_pattern_address(address: usize, plane: usize, registers: &[u8; 16]) -> usize {
+    let mask = if plane < 2 {
+        0x003F | (usize::from(registers[3]) << 6)
+    } else {
+        0x07FF | (usize::from(registers[4] & 0x07) << 11)
+    };
+    address & mask & 0x3FFF
+}
+
 /// Result of one Mode 4 SAT evaluation pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mode4SpriteEvaluation {
@@ -1027,10 +1037,8 @@ fn render_scanline_for_revision_with_evaluation(
     } else {
         (usize::from(regs[2] & 0x0C) << 10) | 0x0700
     };
-    // In SMS Mode 4, background tile indices address the 512-tile pattern
-    // space directly. Register 4's base bits apply to legacy TMS9918 modes,
-    // not this renderer.
-    let pattern_base = 0;
+    // SMS1 retains the legacy R2/R3/R4 address gates in Mode 4. SMS2/GG
+    // feed ones into those gates, so their pattern/name addresses are unmasked.
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
     let backdrop = 16_u8 + (regs[7] & 0x0F);
@@ -1054,7 +1062,13 @@ fn render_scanline_for_revision_with_evaluation(
             // This behavior is documented in the SMS Power scroll-test
             // discussion and modeled by MAME's 315-5124 renderer.
             let parse_row = ((y as i32 - 1) & 7) as usize;
-            let selector = vram[0x2000 + parse_row * 4 + 1] & 0x08 != 0;
+            let raw_address = 0x2000 + parse_row * 4 + 1;
+            let address = if revision == SmsVdpRevision::Sega3155124 {
+                sms1_background_pattern_address(raw_address, 1, regs)
+            } else {
+                raw_address
+            };
+            let selector = vram[address] & 0x08 != 0;
             let color = if selector { 16 } else { 0 };
             bg_color[x] = color;
             put_pixel(frame, x, y, palette_rgb(cram, color));
@@ -1074,7 +1088,13 @@ fn render_scanline_for_revision_with_evaluation(
         } else {
             raw_sy & 0xFF
         };
-        let entry = (name_base + (sy / 8) * 64 + (sx / 8) * 2) & 0x3FFF;
+        let name_row = if revision == SmsVdpRevision::Sega3155124 && height == 192 {
+            let row_mask = 0x0F | (usize::from(regs[2] & 0x01) << 4);
+            (sy / 8) & row_mask
+        } else {
+            sy / 8
+        };
+        let entry = (name_base + name_row * 64 + (sx / 8) * 2) & 0x3FFF;
         let name = u16::from(vram[entry]) | (u16::from(vram[(entry + 1) & 0x3FFF]) << 8);
         let tile = usize::from(name & 0x01FF);
         let mut px = sx & 7;
@@ -1085,10 +1105,16 @@ fn render_scanline_for_revision_with_evaluation(
         if name & (1 << 10) != 0 {
             py = 7 - py;
         }
-        let p = (pattern_base + tile * 32 + py * 4) & 0x3FFF;
+        let pattern_row = (tile * 32 + py * 4) & 0x3FFF;
         let mut color = 0_u8;
         for plane in 0..4 {
-            color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane;
+            let raw_address = (pattern_row + plane) & 0x3FFF;
+            let address = if revision == SmsVdpRevision::Sega3155124 {
+                sms1_background_pattern_address(raw_address, plane, regs)
+            } else {
+                raw_address
+            };
+            color |= ((vram[address] >> (7 - px)) & 1) << plane;
         }
         let palette = if name & (1 << 11) != 0 { 16 } else { 0 };
         bg_color[x] = palette + color;
