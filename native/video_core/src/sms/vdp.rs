@@ -453,6 +453,10 @@ impl SmsVdp {
             .sprite_line_buffer
             .as_ref()
             .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
+        let legacy_sprite_evaluation = self
+            .legacy_sprite_line_buffer
+            .as_ref()
+            .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
         let overflow_was_sticky = self.status & OVERFLOW != 0;
         let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
@@ -466,6 +470,7 @@ impl SmsVdp {
             self.profile.revision,
             active_height,
             sprite_evaluation,
+            legacy_sprite_evaluation,
             start_x,
             end_x,
         );
@@ -605,15 +610,14 @@ impl SmsVdp {
             let mut render_registers = self.registers;
             render_registers[8] = self.latched_scroll_x;
             render_registers[9] = self.latched_scroll_y;
-            let sprite_evaluation = if self.profile.revision == SmsVdpRevision::Sega3155124
-                && self.registers[0] & 0x04 != 0
-            {
-                self.sprite_line_buffer
-                    .as_ref()
-                    .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation))
-            } else {
-                None
-            };
+            let sprite_evaluation = self
+                .sprite_line_buffer
+                .as_ref()
+                .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation));
+            let legacy_sprite_evaluation = self
+                .legacy_sprite_line_buffer
+                .as_ref()
+                .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation));
             render_scanline_for_revision_with_evaluation(
                 &self.vram,
                 &self.cram,
@@ -625,6 +629,7 @@ impl SmsVdp {
                 self.profile.revision,
                 usize::from(height),
                 sprite_evaluation,
+                legacy_sprite_evaluation,
                 usize::from(self.raster_span_cursor_x),
                 SMS_VDP_WIDTH,
             );
@@ -639,6 +644,7 @@ impl SmsVdp {
                 self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
             }
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
                 sega_observability::tracing::trace!(
@@ -718,6 +724,23 @@ impl SmsVdp {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
+                if register == 0
+                    && self.profile.revision == SmsVdpRevision::Sega3155124
+                    && (previous ^ first) & 0x04 != 0
+                {
+                    let overflow_index = if first & 0x04 != 0 {
+                        self.sprite_line_buffer
+                            .as_ref()
+                            .filter(|buffer| buffer.target_line == self.scanline)
+                            .and_then(|buffer| buffer.evaluation.overflow_index)
+                    } else {
+                        self.legacy_sprite_line_buffer
+                            .as_ref()
+                            .filter(|buffer| buffer.target_line == self.scanline)
+                            .and_then(|buffer| buffer.evaluation.overflow_index)
+                    };
+                    self.latch_sms1_sprite_overflow_index(overflow_index);
+                }
                 if previous != first && register <= 1 {
                     sega_observability::tracing::debug!(
                         target: "sega::vdp",
