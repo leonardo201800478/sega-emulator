@@ -66,6 +66,18 @@ Essas limitações devem ser priorizadas por compatibilidade observada e testes 
 - ROM de diagnóstico e tabela temporal independente: https://github.com/FluBBaOfWard/SmsVdpTest
 - Evidências, derivação de HPos/T-state, vetores e limitações físicas: [auditoria R8/H-counter de 2026-11-06](../audits/sms-vdp-r8-hcounter-temporal-latches-2026-11-06.md).
 
+### Entradas externas TH1/TH2
+
+As entradas externas TH são eventos do backend, não mutações imediatas da GUI:
+
+- `SmsTemporalMachine::schedule_external_th_transition` agenda uma transição em `MachineTime` absoluto, futuro e alinhado ao T-state configurado.
+- O `MachineScheduler` avança os domínios até o evento; `SmsIo` atualiza TH1/TH2 independentemente.
+- Com pino configurado como entrada, a leitura de `$DD` apresenta TH active-low. A saída configurada por `$3F` prevalece sobre o nível externo.
+- Eventos externos usam `HardwarePhase(1)`; eventos CPU/barramento usam phase 0. Em empate de timestamp, a leitura CPU/barramento observa o nível anterior e a entrada externa é aplicada depois. Essa é uma regra ordinal determinística do modelo, não uma fase elétrica medida.
+- Snapshots temporais preservam níveis e eventos pendentes; o trace registra timestamp, jogador e nível.
+
+**Limite:** eventos externos TH ainda não provocam o latch físico do H-counter. A documentação SMS Power descreve o latch quando TH está ativo-low. O modelo MAME arma em TH low e agenda `hcount_latch` no retorno a high, com offset de HPos configurável (default 19). A divergência não está resolvida por medição independente; portanto, nenhum atraso foi importado como regra universal.
+
 ## Referências
 
 - SMS Power — VDP Registers: https://www.smspower.org/Development/VDPRegisters
