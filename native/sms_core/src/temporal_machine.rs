@@ -1387,13 +1387,15 @@ mod tests {
                 tstates: 4,
             }
         );
-        assert!(machine
-            .take_trace()
-            .contains(&SmsTemporalTraceEvent::ExternalThTransition {
-                timestamp,
-                player: 2,
-                high: false,
-            }));
+        assert!(
+            machine
+                .take_trace()
+                .contains(&SmsTemporalTraceEvent::ExternalThTransition {
+                    timestamp,
+                    player: 2,
+                    high: false,
+                })
+        );
         assert_eq!(machine.bus.io().external_th_level(2), Ok(false));
     }
 
