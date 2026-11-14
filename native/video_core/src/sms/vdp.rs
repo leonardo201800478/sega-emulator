@@ -9,6 +9,13 @@ pub const SMS_VDP_MAX_HEIGHT: usize = 240;
 const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
+// SMS1 line events are quantized to the VDP's current T-state input. HPos 24
+// maps exactly to T-state 16; HPos 26 maps to the first representable edge
+// (T-state 18 / HPos 27); active display ends at HPos 319 (T-state 213).
+const SMS_SPRITE_OVERFLOW_TSTATE: u64 = 16;
+const SMS_HINT_TSTATE: u64 = 18;
+const SMS_HBLANK_TSTATE: u64 = 213;
+const SMS_VBLANK_FLAG_TSTATE: u64 = 16;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
 const SMS_R8_LATCH_HPOS: u16 = 21;
 // Comparative SMS timing uses HPos 63 as the active-window start and 319 as its exclusive end.
@@ -490,13 +497,102 @@ impl SmsVdp {
         }
         let mut remaining = tstates;
         while remaining > 0 {
-            let step = remaining.min(LINE_TSTATES - u64::from(self.tstates_into_line));
+            let current = u64::from(self.tstates_into_line);
+            let next_boundary = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+                [
+                    SMS_SPRITE_OVERFLOW_TSTATE,
+                    SMS_HINT_TSTATE,
+                    SMS_HBLANK_TSTATE,
+                    LINE_TSTATES,
+                ]
+                .into_iter()
+                .filter(|boundary| *boundary > current)
+                .min()
+                .unwrap_or(LINE_TSTATES)
+            } else {
+                LINE_TSTATES
+            };
+            let step = remaining.min(next_boundary - current);
             self.tstates_into_line += step as u16;
             remaining -= step;
+
+            if self.profile.revision == SmsVdpRevision::Sega3155124 {
+                self.process_sms1_tstate_events();
+            }
             if u64::from(self.tstates_into_line) == LINE_TSTATES {
                 self.tstates_into_line = 0;
                 self.complete_scanline();
             }
+        }
+    }
+
+    fn process_sms1_tstate_events(&mut self) {
+        let tstate = u64::from(self.tstates_into_line);
+        let height = self.visible_height();
+        match tstate {
+            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
+                let overflow_index = if self.registers[0] & 0x04 != 0 {
+                    self.sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                } else {
+                    self.legacy_sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                };
+                self.latch_sms1_sprite_overflow_index(overflow_index);
+            }
+            SMS_VBLANK_FLAG_TSTATE if self.scanline == height => self.enter_vblank(),
+            SMS_HINT_TSTATE if self.scanline < height => {
+                if self.line_counter == 0 {
+                    self.line_irq_pending = true;
+                    sega_observability::tracing::trace!(
+                        target: "sega::vdp",
+                        scanline = self.scanline,
+                        reload_value = self.registers[10],
+                        frame_number = self.frame_number,
+                        "SMS VDP line interrupt asserted"
+                    );
+                    self.line_counter = self.registers[10];
+                } else {
+                    self.line_counter = self.line_counter.wrapping_sub(1);
+                }
+            }
+            SMS_HBLANK_TSTATE if self.scanline < height => {
+                self.commit_raster_span_to_beam();
+                if self.line_collision_seen {
+                    self.status |= COLLISION;
+                    self.line_collision_seen = false;
+                }
+                if self.line_overflow_status != 0 {
+                    self.status = (self.status & !0x1F) | self.line_overflow_status;
+                    self.line_overflow_status = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn enter_vblank(&mut self) {
+        let height = self.visible_height();
+        if let Some(scroll_y) = self.pending_scroll_y.take() {
+            self.latched_scroll_y = scroll_y;
+        }
+        self.status |= VBLANK;
+        self.frame_ready = true;
+        sega_observability::tracing::debug!(
+            target: "sega::vdp",
+            frame_number = self.frame_number,
+            visible_height = height,
+            video_standard = ?self.profile.video_standard,
+            "SMS VDP entered VBlank"
+        );
+        self.framebuffer.clone_from(&self.working_framebuffer);
+        match self.stereo_eye {
+            SmsVdpEye::Left => self.left_frame.clone_from(&self.working_framebuffer),
+            SmsVdpEye::Right => self.right_frame.clone_from(&self.working_framebuffer),
         }
     }
 
