@@ -1787,6 +1787,37 @@ mod tests {
     }
 
     #[test]
+    fn sms1_hinterrupt_is_asserted_at_the_hpos26_tstate_boundary() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x14; // Mode 4 plus HINT enable.
+        vdp.registers[10] = 0;
+
+        vdp.advance(17);
+        assert!(!vdp.interrupt_pending(), "HINT must remain clear before T-state 18");
+        vdp.advance(1);
+        assert!(vdp.interrupt_pending(), "HINT asserts at the quantized HPos 26 edge");
+    }
+
+    #[test]
+    fn sms1_vblank_flag_and_frame_ready_latch_at_hpos24_of_vblank_line() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        let height = u64::from(vdp.visible_height());
+
+        vdp.advance(LINE_TSTATES * height);
+        assert_eq!(vdp.scanline, height as u16);
+        assert_eq!(vdp.status & VBLANK, 0);
+        assert!(!vdp.frame_ready);
+
+        vdp.advance(15);
+        assert_eq!(vdp.status & VBLANK, 0);
+        assert!(!vdp.frame_ready);
+
+        vdp.advance(1);
+        assert_ne!(vdp.status & VBLANK, 0);
+        assert!(vdp.frame_ready);
+    }
+
+    #[test]
     fn sms1_sprite_y_selection_is_latched_for_the_following_scanline() {
         let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         vdp.registers[0] = 0x04;
