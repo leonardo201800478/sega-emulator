@@ -117,7 +117,7 @@ A documentação independente consultada descreve uma linha de 342 dots, com 256
 A auditoria comparativa inicial encontrou:
 
 - **MAME** mantém dispositivos separados para 315-5124 e 315-5246, descreve segmentos horizontais/verticais de raster e tabelas de timing por standard/altura. A implementação declara explicitamente que *mid-scanline changes* e restrições de acesso VRAM/CRAM ainda são TODO; portanto, não será tratada como referência completa para esses fenômenos.
-- O MAME usa tabelas RGB diferentes por revisão: no 315-5124, níveis `{0,78,160,238}` e canal azul `{0,98,160,238}`; no 315-5246, níveis `{0,89,174,255}`. O renderer legado do projeto usa escala linear `0,85,170,255`, logo não é uma referência de saída RGB por revisão. Os valores MAME são evidência comparativa a confirmar por medições/fonte primária.
+- O MAME usa tabelas RGB diferentes por revisão: no 315-5124, níveis `{0,78,160,238}` e canal azul `{0,98,160,238}`; no 315-5246, níveis `{0,89,174,255}`. O perfil SMS1/315-5124 agora aplica a tabela MAME comparativa, incluindo o nível azul não linear; isso é uma referência digital de emulação, ainda pendente de captura física calibrada. SMS2 mantém o mapeamento anterior até sua etapa própria. A antiga escala linear `0,85,170,255` não é referência de saída RGB por revisão.
 - **Gearsystem** separa overscan de *Hide Left Bar* e oferece comportamento `Auto` condicionado ao left-column masking. Isso é uma boa referência de UX: o novo Qt adotará `Não/Auto/Sempre`, com `Auto` como padrão, sem modificar o raster bruto.
 - A documentação de Charles MacDonald descreve a coluna 0 mascarada com R7 e o deslocamento de sprites por R0 bit 3 como controles distintos. O teste precisa cobrir cada bit isolado e ambos juntos.
 
