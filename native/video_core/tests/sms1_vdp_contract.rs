@@ -161,9 +161,9 @@ fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
         vdp.write_port(0xBF, 0x80 | register);
     }
 
-    // 228 T-states/line is the current deterministic integration model.
-    // This assertion validates frame composition, not physical raster timing.
-    vdp.advance(228 * 192);
+    // The frame is published at HPos 24 of the first VBlank line (T16).
+    // 228 T-states/line remains the current deterministic integration model.
+    vdp.advance(228 * 192 + 16);
 
     let frame = vdp.framebuffer();
     assert_eq!(frame.len(), 256 * 192 * 3);
@@ -181,7 +181,7 @@ fn sms1_r2_mask_bit_controls_the_high_name_table_y_address_bit() {
     write_vram(&mut masked, 0x3C01, 0);
     write_vram(&mut masked, 0x0040, 0x80);
     write_cram(&mut masked, 1, 0x03);
-    masked.advance(228 * 192);
+    masked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(masked.framebuffer(), 0, 128), [0, 0, 0]);
 
     let mut unmasked = new_sms1();
@@ -192,7 +192,7 @@ fn sms1_r2_mask_bit_controls_the_high_name_table_y_address_bit() {
     write_vram(&mut unmasked, 0x3C01, 0);
     write_vram(&mut unmasked, 0x0040, 0x80);
     write_cram(&mut unmasked, 1, 0x03);
-    unmasked.advance(228 * 192);
+    unmasked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 128), [238, 0, 0]);
 }
 
@@ -204,7 +204,7 @@ fn sms1_r3_mask_gates_background_plane_zero_and_one_pattern_addresses() {
     write_vram(&mut masked, 0x3801, 0);
     write_vram(&mut masked, 0x0040, 0x80);
     write_cram(&mut masked, 1, 0x03);
-    masked.advance(228 * 192);
+    masked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(masked.framebuffer(), 0, 0), [0, 0, 0]);
 
     let mut unmasked = new_sms1();
@@ -213,7 +213,7 @@ fn sms1_r3_mask_gates_background_plane_zero_and_one_pattern_addresses() {
     write_vram(&mut unmasked, 0x3801, 0);
     write_vram(&mut unmasked, 0x0040, 0x80);
     write_cram(&mut unmasked, 1, 0x03);
-    unmasked.advance(228 * 192);
+    unmasked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [238, 0, 0]);
 }
 
@@ -225,7 +225,7 @@ fn sms1_r4_mask_gates_background_plane_two_and_three_pattern_addresses() {
     write_vram(&mut masked, 0x3801, 0);
     write_vram(&mut masked, 0x0802, 0x80);
     write_cram(&mut masked, 4, 0x03);
-    masked.advance(228 * 192);
+    masked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(masked.framebuffer(), 0, 0), [0, 0, 0]);
 
     let mut unmasked = new_sms1();
@@ -234,7 +234,7 @@ fn sms1_r4_mask_gates_background_plane_two_and_three_pattern_addresses() {
     write_vram(&mut unmasked, 0x3801, 0);
     write_vram(&mut unmasked, 0x0802, 0x80);
     write_cram(&mut unmasked, 4, 0x03);
-    unmasked.advance(228 * 192);
+    unmasked.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [238, 0, 0]);
 }
 
@@ -266,7 +266,7 @@ fn sms2_ignores_sms1_r2_r3_r4_background_address_masks() {
     write_cram(&mut vdp, 1, 0x03);
     write_cram(&mut vdp, 4, 0x03);
 
-    vdp.advance(228 * 192);
+    vdp.advance(228 * 192 + 16);
     assert_eq!(frame_pixel(vdp.framebuffer(), 0, 128), [255, 0, 0]);
     assert_eq!(frame_pixel(vdp.framebuffer(), 8, 128), [255, 0, 0]);
 }
@@ -299,9 +299,8 @@ fn mirrored_data_and_control_ports_share_the_same_protocol() {
 fn status_read_returns_vblank_once_and_clears_it() {
     let mut vdp = new_sms1();
 
-    // The current baseline uses 228 T-states/line. This test verifies only the
-    // public status/acknowledge contract, not that line duration as hardware truth.
-    vdp.advance(228 * 192);
+    // VBlank status is asserted at HPos 24 of the first VBlank line (T16).
+    vdp.advance(228 * 192 + 16);
     assert_ne!(vdp.status() & 0x80, 0);
 
     assert_ne!(vdp.read_port(0x00BF) & 0x80, 0);
