@@ -3,9 +3,9 @@
 **Sistema-alvo:** Sega Master System 1
 **ASIC prioritário:** Sega 315-5124
 **Backend:** Rust / `sega-video`
-**Baseline integrada:** `main` após PR #839 (`e2fdc8774b959b41419bb8b477f1743992548eab`)
+**Baseline integrada:** `main` após PR #841 (`c16e5133aab1aa668954737500383dfde44af6fe`)
 **Baseline de comparação:** `202cdfc695d0c2346c86da4144b6e8a3316e0c4d`
-**HEAD de validação da PR #839:** `e04eb8f69c9dd331780532e8b8df4bf082f18811`
+**HEAD de validação da PR #841:** `82742d3c1b5fef3a45d0185529d5b9330f0d4180`
 **Estado:** EM DESENVOLVIMENTO — NÃO LIBERADO PARA TESTE IN-GAME
 
 Este scorecard registra somente capacidades presentes na `main` e evidências executadas no SHA correspondente. PR aberta, branch de trabalho ou teste ainda em execução não contam como implementação integrada.
@@ -29,11 +29,12 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 | SAT / avaliação de sprites | IMPLEMENTED_SCANLINE | PR #832/#833: Mode 4 e legacy/TMS capturam metadados X/tile/pattern/color e controles R0/R6 durante avaliação por scanline; bytes de padrão continuam lidos na composição; timestamp físico não medido |
 | Sprite overflow | IMPLEMENTED_TSTATE_QUANTIZED | Mode 4 e legacy/TMS: índice associado latched em HPos 24 / T16, usando o buffer do modo ativo |
 | Sprite collision | IMPLEMENTED_PIXEL_COMMIT_APPROXIMATE | Sobreposição de pixels opacos publicada quando um commit de span cruza o pixel; leitura de status comita o prefixo até o feixe; não há pipeline de colisão por dot |
-| HCounter / porta $7F | IMPLEMENTED_APPROXIMATE | Conversão 342 HPos / 228 T-states; latch persistente por TH software; leituras espelhadas preservam o valor capturado. Borda TH externa ainda não dispara latch; sem validação física |
+| HCounter / porta $7F | IMPLEMENTED_APPROXIMATE | Conversão 342 HPos / 228 T-states; latch por transição TH via software; leituras espelhadas preservam o valor capturado. Eventos TH externos atualizam $DD, mas ainda não capturam HCounter; sem validação física |
+| Entradas externas TH1/TH2 | IMPLEMENTED_SCHEDULED_INPUT | Transições timestamped no Scheduler; níveis active-low independentes em $DD, precedência de saída $3F, snapshot/restore e trace. Phase 1 é desempate determinístico, não fase elétrica medida |
 | HBlank | IMPLEMENTED_TSTATE_QUANTIZED | T213/HPos319 fecha os 256 pixels ativos; T212/HPos318 não fecha o último pixel. Teste de colisão no pixel 255 valida o boundary lógico, não a fase elétrica física |
 | VBlank / IRQ | IMPLEMENTED_TSTATE_QUANTIZED | VINT IRQ pendente em HPos 20/T13; VBlank flag e frame-ready em HPos 24/T16 da primeira linha VBlank; acknowledge pelo status read |
-| Scheduler / determinismo | IMPLEMENTED_INTEGRATED | VDP avança pelo Scheduler; snapshots incluem o estado de rasterização parcial |
-| Save State | IMPLEMENTED_WITH_VERSIONING | PR #836 atualiza snapshots temporais (bus v19, machine v32) para VINT pendente e VCounter latch; rejeição de versões anteriores |
+| Scheduler / determinismo | IMPLEMENTED_INTEGRATED | VDP e entradas TH externas avançam pelo Scheduler; eventos TH têm timestamp absoluto, ordem de empate explícita, snapshot/restore e trace |
+| Save State | IMPLEMENTED_WITH_VERSIONING | PR #841: coordinator v5, bus v20 e machine v33 preservam linhas TH externas e eventos pendentes; rejeição de versões anteriores |
 | SMS2 / outros perfis | REGRESSION_GATED | Renderer e perfis não SMS1 preservados pelos testes direcionados; não generalizar spans SMS1 |
 
 ## 2. Política de granularidade
@@ -55,7 +56,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 6. Confirmar o instante de colisão pixel a pixel: o modelo publica a colisão no commit do pixel, mas não possui pipeline dot-level do ASIC.
 7. Expandir a demonstração de equivalência contínua/em blocos/save-load para eventos subline, interrupções e transições de frame. A captura TH por software já possui teste de invariância para avanço contínuo versus blocos 3+5 T-states.
 8. Executar regressões SMS1/SMS2 e build Windows x64 Release no candidato final.
-9. Integrar bordas TH externas no Scheduler e fechar a captura H-counter do Light Phaser com política de atraso/perfil sustentada por evidência; não assumir o offset MAME de 19 HPos como universal.
+9. Fechar a captura H-counter provocada por TH externo/Light Phaser. A linha externa já é agendada e lida em $DD, mas o latch físico e o atraso permanecem pendentes: SMS Power descreve latch quando TH está ativo-low; MAME arma em TH low e agenda captura no retorno a high com offset configurável. Não assumir o offset MAME de 19 HPos como universal. A integração host/SDL3 também permanece pendente.
 10. Registrar os comportamentos ainda aproximados antes da primeira campanha in-game.
 
 ## 4. Evidências integradas
@@ -73,7 +74,8 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 - PR #836 — correção temporal baseada na SmsVdpTest: evidência histórica do HEAD `6449b7085c019a95d2cd4f0ca1c364a0bf929962`.
 - PR #837 — atualização do scorecard temporal.
 - PR #838 — leitura estável do H-counter por `$7F` e portas espelhadas; o primeiro workflow classificou incorretamente o caminho temporal e não executou os testes do SMS core.
-- PR #839 — corrige a classificação de impacto temporal; adiciona invariância de captura TH para avanço contínuo versus blocos e boundary HBlank T212/T213 com colisão no último pixel. No HEAD `c7afd54c22d68dc3a7e9d94e26bbd780bd1564f0`: 98 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes de integração SMS; Rustfmt, Clippy, Z80 focused, input focused, Scheduler stress, workspace regression, workflow lint, runtime Release (45 + 1 testes) e build Windows x64 Release aprovados.
+- PR #839 — corrige a classificação de impacto temporal; adiciona invariância de captura TH para avanço contínuo versus blocos e boundary HBlank T212/T213 com colisão no último pixel. No HEAD `c7afd54c22d68dc3a7e9d94e26bbd780bd1564f0`: 98 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes de integração SMS; Rustfmt, Clippy, Z80 focused, input focused, Scheduler stress, workspace regression, runtime Release (45 + 1 testes) e build Windows x64 Release aprovados.
+- PR #841 — integra transições externas TH1/TH2 no Scheduler, níveis active-low em $DD, snapshot/restore, desempate phase 0/phase 1 e registro no trace. No HEAD `82742d3c1b5fef3a45d0185529d5b9330f0d4180`: 98 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes de integração SMS; input/console, Z80, Scheduler stress, workspace regression, Clippy, Rustfmt, runtime Release (45 + 1 testes) e build Windows x64 Release aprovados.
 
 Referência de timing independente: [SmsVdpTest](https://github.com/FluBBaOfWard/SmsVdpTest). A ROM ainda não foi executada pelo runtime deste projeto.
 
