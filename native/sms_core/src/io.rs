@@ -332,6 +332,10 @@ mod tests {
 
         io.set_external_th_level(1, false).unwrap();
         assert_eq!(io.read_port(0xDD) & (1 << 6), 0);
+
+        io.write_port(0x3F, 0xFD); // Port A TH output high.
+        io.set_external_th_level(1, false).unwrap();
+        assert_ne!(io.read_port(0xDD) & (1 << 6), 0);
     }
 
     #[test]
