@@ -842,7 +842,6 @@ fn sms1_background_pattern_address(address: usize, plane: usize, registers: &[u8
 /// One sprite whose SAT metadata was sampled during line evaluation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Mode4SpriteEntry {
-    index: usize,
     row: usize,
     /// X position after the R0 horizontal shift has been applied.
     x: i32,
@@ -949,7 +948,6 @@ fn evaluate_mode4_sprites(
         }
         let row = ((y as i32 - sprite_y) / zoom_i32) as usize;
         selected.push(Mode4SpriteEntry {
-            index,
             row,
             x,
             tile,
@@ -1519,9 +1517,9 @@ mod tests {
             evaluation
                 .selected
                 .iter()
-                .map(|sprite| sprite.index)
+                .map(|sprite| sprite.x)
                 .collect::<Vec<_>>(),
-            (0..8).collect::<Vec<_>>(),
+            (0..8).map(|index| (index * 8) as i32).collect::<Vec<_>>(),
             "the eight retained entries must preserve SAT order"
         );
         assert_eq!(evaluation.overflow_index, Some(8));
