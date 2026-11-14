@@ -17,12 +17,14 @@ References:
 ## Changes
 
 - Extracted `evaluate_mode4_sprites()` as a pure SAT candidate-selection function.
-- Kept the existing renderer consuming its ordered candidate list, preserving current rendering behavior in this phase.
+- Bounded hardware-mode selection to eight retained entries and captured the first additional matching SAT index as the overflow candidate.
+- Preserved the diagnostic/unlocked renderer mode by allowing its explicit 64-entry capacity.
+- Kept the renderer evaluating the current output line; this remains a structural bound, not the temporal next-line buffer.
 - Added tests for SAT order, Y-coordinate +1 rule, candidate row, and the 192-line `$D0` terminator.
 
 ## Deliberate non-goals
 
-This phase does **not** yet implement the hardware's persistent eight-sprite-number line buffer or prove its exact evaluation boundary. The active candidate list is still produced for the line being rendered. Sprite X/tile/pattern data are still read in the same rendering pass. No change to overflow/collision visibility timing is claimed.
+This phase does **not** yet implement the hardware's persistent eight-sprite-number line buffer or prove its exact evaluation boundary. The selected candidate list is still produced for the line being rendered. The hardware-limited path retains at most eight candidates and records the first additional match for overflow; the diagnostic/unlocked path remains explicitly separate. Sprite X/tile/pattern data are still read in the same rendering pass. No change to overflow/collision visibility timing is claimed.
 
 The next phase must add an explicit per-line selected-sprite-number buffer, determine the evaluation boundary against diagnostic ROMs and independent implementations, and keep X/tile/pattern fetch semantics distinct from the buffered sprite numbers.
 
