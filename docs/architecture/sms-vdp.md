@@ -33,7 +33,11 @@ A lista é um resumo funcional, não uma certificação de todas as revisões de
 
 ## Granularidade temporal
 
-A composição continua scanline-level, mas o caminho temporal agora modela dois boundaries subline observáveis: o latch de R8 em HPos 21 e o latch de H-counter em transições TH ascendentes. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística para esses efeitos, mas não é dot-accurate, não arbitra fetches por dot e não reproduz todos os efeitos mid-scanline.
+A composição continua scanline-level, com granularidade subline seletiva para efeitos observáveis: latch de R8 em HPos 21, latch de H-counter em transições TH ascendentes e commit de spans antes de escritas visíveis no perfil SMS1. Na máquina temporal, o domínio VDP avança em paralelo ao Z80/PSG e as portas são aplicadas no boundary de conclusão do barramento. Isso fornece uma sequência determinística para esses efeitos, mas não é dot-accurate, não arbitra fetches por dot e não reproduz todos os efeitos mid-scanline.
+
+No SMS1/315-5124, o cursor de rasterização usa o modelo comparativo de 228 T-states / 342 HPos por linha e início ativo em HPos 63. Antes de uma escrita CRAM, R7 ou VRAM, o renderer compõe apenas o trecho anterior ao feixe com o estado antigo; o restante é composto no próximo boundary ou no fechamento da scanline com o estado atualizado. O cursor horizontal e o estado de colisão pendente são preservados entre spans e no snapshot do barramento. O mecanismo não cria um relógio independente: sua posição deriva do avanço do VDP comandado pelo Scheduler.
+
+Essa estratégia é deliberadamente coarse e seletiva. Ela ainda não modela o CRAM dot relatado em escritas durante active display, o instante físico de latch da paleta, fetch-ahead de tiles/bitplanes/padrões de sprites ou os timestamps individuais dos fetches SAT/X/tile/pattern. A avaliação SAT permanece armazenada em `Mode4SpriteLineBuffer`; alterações de SAT não reavaliam retroativamente a linha já selecionada. Colisão continua consolidada no fechamento da scanline, não no dot de colisão.
 
 A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
@@ -42,6 +46,8 @@ No perfil SMS1/315-5124, a seleção Y/elegibilidade da SAT é armazenada em `Mo
 ## Limites conhecidos
 
 - R8 agora usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições) e o H-counter usa latch persistente por TH ascendente. O modelo é confrontado com MAME 315-5124 e a ROM de diagnóstico SmsVdpTest, mas ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
+- A rasterização seletiva SMS1 cobre boundaries de escrita CRAM, R7 e VRAM no modelo comparativo HPos 63..319. Escritas R0-R6 (exceto R7), fetch-ahead e transições entre Mode 4 e modos legacy ainda não têm commit temporal completo. A escrita VRAM atual afeta a composição do sufixo, mas não representa o pipeline interno de fetch do ASIC.
+- CRAM dots durante active display são documentados em relatos técnicos do SMS Power; o artefato de pixel transitório e o latch efetivo da paleta não são simulados nem considerados resolvidos.
 - No SMS1, a seleção de sprites é persistida entre scanlines e overflow é latched durante a avaliação SAT. Collision é detectada pela sobreposição de pixels opacos durante a composição e é commitada no fechamento da scanline pelo modelo atual; isso é apenas uma aproximação coarse do latch de status documentado em HBlank, não o instante medido de início de HBlank. A leitura de status limpa as flags. O dot exato da colisão não é modelado, e X/tile/pattern ainda não têm fetch temporal próprio.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
@@ -65,5 +71,6 @@ Essas limitações devem ser priorizadas por compatibilidade observada e testes 
 - SMS Power — Modes: https://www.smspower.org/Development/Modes
 - SMS Power — Sprites: https://www.smspower.org/Development/Sprites
 - SMS Power — VDP index: https://www.smspower.org/Development/VDP-Index
+- SMS Power Forums — Writing to VDP and VRAM outside VBLANK (relato de CRAM dots): https://www.smspower.org/forums/18738-WritingToVDPAndVRAMOutsideVBLANK
 - Sega Master System VDP documentation: https://github.com/franckverrot/EmulationResources/blob/master/consoles/sms-gg/Sega%20Master%20System%20VDP%20documentation.txt
 - MAME 315_5124: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
