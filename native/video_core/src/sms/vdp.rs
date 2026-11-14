@@ -1874,11 +1874,9 @@ mod tests {
 
     #[test]
     fn sms1_sprite_collision_respects_left_column_mask_and_sprite_shift() {
-        for (register_zero, sprite_x, expected_collision) in [
-            (0x24, 0, false),
-            (0x2C, 8, false),
-            (0x2C, 16, true),
-        ] {
+        for (register_zero, sprite_x, expected_collision) in
+            [(0x24, 0, false), (0x2C, 8, false), (0x2C, 16, true)]
+        {
             let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
             v.registers[0] = register_zero;
             v.registers[1] = 0x40;
