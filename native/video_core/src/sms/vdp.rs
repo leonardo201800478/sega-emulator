@@ -1842,7 +1842,7 @@ mod tests {
 
         // Both sprites have opaque pixels only on row zero. The following
         // scanline therefore cannot reassert the collision flag.
-        v.vram[1 * 32] = 0xFF;
+        v.vram[32] = 0xFF;
         v.vram[2 * 32 + 1] = 0xFF;
 
         assert_eq!(v.status & COLLISION, 0);
