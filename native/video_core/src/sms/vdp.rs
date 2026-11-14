@@ -724,9 +724,7 @@ fn evaluate_mode4_sprites(
         } else {
             i32::from(raw_y) + 1
         };
-        if (y as i32) < sprite_y
-            || (y as i32) >= sprite_y + (sprite_height_i32 * zoom_i32)
-        {
+        if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height_i32 * zoom_i32) {
             continue;
         }
         if selected.len() == 8 {
