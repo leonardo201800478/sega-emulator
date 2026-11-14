@@ -839,15 +839,28 @@ fn sms1_background_pattern_address(address: usize, plane: usize, registers: &[u8
     address & mask & 0x3FFF
 }
 
+/// One sprite whose SAT metadata was sampled during line evaluation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Mode4SpriteEntry {
+    index: usize,
+    row: usize,
+    /// X position after the R0 horizontal shift has been applied.
+    x: i32,
+    /// Tile number after 8x16 alignment and the R6 pattern-table select.
+    tile: usize,
+}
+
 /// Result of one Mode 4 SAT evaluation pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mode4SpriteEvaluation {
-    /// SAT index and source row selected for this scanline.
-    selected: Vec<(usize, usize)>,
+    /// SAT metadata selected for this scanline, in hardware priority order.
+    selected: Vec<Mode4SpriteEntry>,
     /// SAT index of the first additional sprite that also intersects the line.
     overflow_index: Option<usize>,
     sprite_height: usize,
     zoom: usize,
+    /// R6 address gates sampled with the SAT metadata.
+    sprite_pattern_register: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -908,14 +921,46 @@ fn evaluate_mode4_sprites(
         if selected.len() == sprite_limit {
             break;
         }
+
+        // The VDP samples SAT X/tile metadata during line evaluation. Pattern
+        // bytes remain fetched by the renderer, so later pattern RAM writes
+        // can still affect pixels that have not been composed yet.
+        let sprite_offset = 0x80 + index * 2;
+        let x_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, sprite_offset, regs[5])
+        } else {
+            (sat + sprite_offset) & 0x3FFF
+        };
+        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, sprite_offset + 1, regs[5])
+        } else {
+            (sat + sprite_offset + 1) & 0x3FFF
+        };
+        let mut x = i32::from(vram[x_address]);
+        if regs[0] & 0x08 != 0 {
+            x -= 8;
+        }
+        let mut tile = usize::from(vram[tile_address]);
+        if sprite_height == 16 {
+            tile &= !1;
+        }
+        if regs[6] & 0x04 != 0 {
+            tile += 256;
+        }
         let row = ((y as i32 - sprite_y) / zoom_i32) as usize;
-        selected.push((index, row));
+        selected.push(Mode4SpriteEntry {
+            index,
+            row,
+            x,
+            tile,
+        });
     }
     Mode4SpriteEvaluation {
         selected,
         overflow_index,
         sprite_height,
         zoom,
+        sprite_pattern_register: regs[6],
     }
 }
 
@@ -1354,44 +1399,26 @@ fn render_scanline_for_revision_with_evaluation(
     {
         *status = (*status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
     }
-    let sprite_pattern = usize::from(regs[6] & 0x04) << 11;
     let sprite_height = evaluation.sprite_height;
     let zoom = evaluation.zoom;
     let active = &evaluation.selected;
     let count = active.len();
-    let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
     // Lower sprite index wins visually; all drawn opaque sprite pixels affect collision.
-    for (rank, &(index, row)) in active.iter().enumerate() {
-        let x_offset = 0x80 + index * 2;
-        let x_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset, regs[5])
-        } else {
-            (sat + x_offset) & 0x3FFF
-        };
-        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
-        } else {
-            (sat + x_offset + 1) & 0x3FFF
-        };
-        let mut sx = i32::from(vram[x_address]);
-        if regs[0] & 0x08 != 0 {
-            sx -= 8;
-        }
-        let mut tile = usize::from(vram[tile_address]);
-        if sprite_height == 16 {
-            tile &= !1;
-        }
+    for (rank, sprite) in active.iter().enumerate() {
+        let sx = sprite.x;
+        let tile = sprite.tile;
+        let row = sprite.row;
         let tile_row = if sprite_height == 16 && row >= 8 {
             tile + 1
         } else {
             tile
         };
         let py = if sprite_height == 16 { row & 7 } else { row };
-        let raw_pattern = (sprite_pattern + tile_row * 32 + py * 4) & 0x3FFF;
+        let raw_pattern = (tile_row * 32 + py * 4) & 0x3FFF;
         let p = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_pattern_address(raw_pattern, regs[6])
+            sms1_sprite_pattern_address(raw_pattern, evaluation.sprite_pattern_register)
         } else {
             raw_pattern
         };
@@ -1492,13 +1519,15 @@ mod tests {
             evaluation
                 .selected
                 .iter()
-                .map(|sprite| sprite.0)
+                .map(|sprite| sprite.index)
                 .collect::<Vec<_>>(),
             (0..8).collect::<Vec<_>>(),
             "the eight retained entries must preserve SAT order"
         );
         assert_eq!(evaluation.overflow_index, Some(8));
-        assert!(evaluation.selected.iter().all(|sprite| sprite.1 == 0));
+        assert!(evaluation.selected.iter().all(|sprite| sprite.row == 0));
+        assert_eq!(evaluation.selected[0].x, 0);
+        assert_eq!(evaluation.selected[0].tile, 0);
     }
 
     #[test]
@@ -1577,6 +1606,58 @@ mod tests {
             &vdp.working_framebuffer[next_line_pixel..next_line_pixel + 3],
             &[0, 0, 0],
             "the new Y coordinate must be observed by the subsequent evaluation"
+        );
+    }
+
+    #[test]
+    fn sms1_sprite_x_tile_shift_and_pattern_select_are_latched_with_sat_metadata() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x0C; // Mode 4 plus the -8 sprite X shift.
+        vdp.registers[1] = 0x40;
+        vdp.registers[5] = 0x7F;
+        vdp.registers[6] = 0x04;
+        vdp.cram[17] = 0x03; // red
+        vdp.cram[18] = 0x0C; // green
+
+        // Tile 1 is red in the R6-selected upper pattern table.
+        for row in 0..8 {
+            vdp.vram[0x2020 + row * 4] = 0xFF;
+            // Tile 2 is green in the lower pattern table used by the next line.
+            vdp.vram[0x0040 + row * 4 + 1] = 0xFF;
+        }
+        set_sprite(&mut vdp, 0, 0, 18, 1);
+        vdp.vram[0x3F01] = 0xD0;
+
+        // Completing line 0 selects the SAT metadata for line 1.
+        vdp.advance(LINE_TSTATES);
+        // Later SAT/register writes must not move or retarget the selected sprite.
+        vdp.vram[0x3F80] = 80;
+        vdp.vram[0x3F81] = 2;
+        vdp.registers[0] = 0x04;
+        vdp.registers[6] = 0;
+
+        vdp.advance(LINE_TSTATES);
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        let latched_pixel = line_bytes + 10 * 3;
+        let new_x_pixel = line_bytes + 80 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[latched_pixel..latched_pixel + 3],
+            &[238, 0, 0],
+            "the selected X, tile and R0/R6 metadata must remain latched for line 1"
+        );
+        assert_eq!(
+            &vdp.working_framebuffer[new_x_pixel..new_x_pixel + 3],
+            &[0, 0, 0],
+            "later SAT writes must not retarget the already-selected line"
+        );
+
+        // The next evaluation observes the updated SAT and register values.
+        vdp.advance(LINE_TSTATES);
+        let next_line_pixel = line_bytes * 2 + 80 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_pixel..next_line_pixel + 3],
+            &[0, 238, 0],
+            "the next line must use the updated X/tile and pattern-table selection"
         );
     }
 
