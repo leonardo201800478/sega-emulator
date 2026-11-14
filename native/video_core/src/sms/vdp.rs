@@ -459,10 +459,7 @@ impl SmsVdp {
         if partial_status & COLLISION != 0 {
             self.line_collision_seen = true;
         }
-        if !overflow_was_sticky
-            && partial_status & OVERFLOW != 0
-            && self.line_overflow_status == 0
-        {
+        if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0 {
             self.line_overflow_status = partial_status & (OVERFLOW | 0x1F);
         }
         self.raster_span_cursor_x = end_x as u16;
@@ -586,8 +583,7 @@ impl SmsVdp {
                 self.status |= COLLISION;
             }
             if self.line_overflow_status != 0 {
-                self.status =
-                    (self.status & !0x1F) | self.line_overflow_status;
+                self.status = (self.status & !0x1F) | self.line_overflow_status;
             }
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
@@ -935,16 +931,7 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_scanline_span(
-        vram,
-        regs,
-        status,
-        frame,
-        y,
-        unlocked,
-        0,
-        SMS_VDP_WIDTH,
-    );
+    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
 }
 
 fn render_legacy_scanline_span(
@@ -979,17 +966,7 @@ fn render_legacy_scanline_span(
         for col in 0..40 {
             let ch = vram[(names + (y / 8) * 40 + col) & 0x3FFF];
             let bits = vram[(patterns + usize::from(ch) * 8 + (y & 7)) & 0x3FFF];
-            tms_span_range(
-                frame,
-                8 + col * 6,
-                y,
-                bits,
-                fg,
-                backdrop,
-                6,
-                start_x,
-                end_x,
-            );
+            tms_span_range(frame, 8 + col * 6, y, bits, fg, backdrop, 6, start_x, end_x);
         }
         return;
     }
@@ -1036,17 +1013,7 @@ fn render_legacy_scanline_span(
             } else {
                 backdrop
             };
-            tms_span_range(
-                frame,
-                col * 8,
-                y,
-                bits,
-                fg,
-                bg,
-                8,
-                start_x,
-                end_x,
-            );
+            tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     } else {
         let color_base = (usize::from(regs[3]) << 6) & 0x3FC0;
@@ -1253,7 +1220,16 @@ fn render_scanline_for_revision_with_evaluation(
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     if regs[0] & 0x04 == 0 {
-        render_legacy_scanline_span(vram, regs, status, frame, y, !hardware_sprite_limit, start_x, end_x);
+        render_legacy_scanline_span(
+            vram,
+            regs,
+            status,
+            frame,
+            y,
+            !hardware_sprite_limit,
+            start_x,
+            end_x,
+        );
         return;
     }
     let backdrop = palette_rgb_for_revision(cram, 16 + (regs[7] & 0x0F), revision);
@@ -1834,7 +1810,13 @@ mod tests {
         }
         v.vram[0x3F80] = 0xD0;
 
-        let modes = [(0x00, 0x40), (0x00, 0x50), (0x00, 0x48), (0x00, 0x58), (0x02, 0x40)];
+        let modes = [
+            (0x00, 0x40),
+            (0x00, 0x50),
+            (0x00, 0x48),
+            (0x00, 0x58),
+            (0x02, 0x40),
+        ];
         for (r0, r1) in modes {
             v.registers[0] = r0;
             v.registers[1] = r1;
