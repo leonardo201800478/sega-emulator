@@ -29,6 +29,17 @@ Example options:
 
 Generated JSONL reports and ROM binaries should be stored outside Git unless a separate policy explicitly allows the artifact. Do not put ROM bytes, BIOS images, memory dumps or copyrighted traces in logs.
 
+## Production worker frame-pacing measurements
+
+The full-machine `sms_rom_runner` above advances the temporal machine offline
+and is used for deterministic functional ROM oracles. It does not measure host
+frame pacing. To exercise the production `SmsTemporalWorker` and its real
+`recv_timeout` wait path with the same pinned ROM, use
+[`FRAME_PACING.md`](FRAME_PACING.md) and
+`tests/sms/scripts/run_pacing_rom.py`. The pacing harness intentionally runs
+without video presentation or physical CPAL output so worker cost and host wake
+behavior can be isolated before the Windows GUI/PresentMon/CPAL experiments.
+
 ## Reproducible SMSmemtest ROM build
 
 The upstream ROM can be built without copying its source or binary into this repository:

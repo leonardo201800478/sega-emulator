@@ -1,0 +1,192 @@
+# SMS ROM frame-pacing harness
+
+This harness runs an external SMS ROM through the production `SmsTemporalWorker`
+and its real host pacing loop (`recv_timeout`). It is deliberately distinct from
+`sms_rom_runner.rs`, which steps `SmsTemporalMachine` offline without host pacing.
+
+## Run
+
+From the repository root:
+
+```powershell
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 > .\artifacts\smsmemtest-pacing-ntsc.jsonl
+```
+
+For an interactive ROM that waits for controller input, provide frame-boundary
+button pulses. Frame numbers are relative to the post-warm-up reset:
+
+```powershell
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 > .\artifacts\smsmemtest-pacing-ntsc.jsonl
+```
+
+The pinned SMSmemtest build already executed by CI provides a reproducible starting schedule: pulse at frames 26 and 441. In the prior full-machine run, the first prompt was accepted at frame 26, all seven RAM cases were reported at frame 441, the second prompt was accepted at frame 441, and the VRAM result was observed at frame 800. That evidence used ROM SHA-256 `f7654d1dea07ce195e1d57da373a86b3f1ca9869af0d9d7dcb4de6039eb52c71`; verify the SHA emitted by the local build before reusing the schedule. A pulse is asserted at a worker frame boundary and released after the next completed frame. Do not assume that a pulse means the ROM passed a test.
+
+## What this measures
+
+- Actual worker frame interval percentiles (p50/p95/p99).
+- Machine step, frame-processing, and frame-budget percentiles (p50/p95/p99).
+- Requested pacing wait and measured wait percentiles (p50/p95/p99), plus timeout wake lateness (p50/p95/p99).
+- Command wakeups, remaining deadline at command wake, and command-handler p95.
+- Virtual machine ticks per frame, PSG samples per frame, instruction count,
+  frame count, region clock, and run/ROM/emulator provenance.
+- One JSONL `sample` record per sampling interval, containing rolling-window
+  metrics, plus a final `summary`.
+
+The worker diagnostics window holds at most 512 per-frame samples. Sampling every
+second produces overlapping rolling windows; `window_sample_count` and
+`total_frame_samples` make that explicit. Timeout and command wake counts are
+window totals, not whole-run totals. These are not raw per-frame samples.
+Do not reconstruct exact individual frame intervals from overlapping percentiles.
+
+## Interpreting frame budget versus frame interval
+
+Use the worker-reported `frame_budget_p50/p95/p99_ns` as the reference for
+the measured frame interval. Do not compare every interval only with the ideal
+16.667 ms display period: the SMS worker's budget is derived from the emulated
+frame/audio-sample schedule, and the existing P0 evidence reports 801/802 PSG
+samples per frame at a 48 kHz source rate (about 16.688/16.708 ms).
+
+The rolling percentiles are independent distributions, not paired per-frame
+records. A difference between `frame_interval_p99_ns` and
+`frame_budget_p99_ns` is a screening signal, not an exact count of missed
+deadlines. Likewise, compare `step_frame_*` and `frame_processing_*` against
+the budget, then use `pacing_timeout_lateness_*` to inspect host wake delay.
+Do not attribute the deficit to one stage without per-frame correlation.
+
+**Historical-unit warning:** the current P0 root-cause report labels values such
+as `17.324` and `16.687` with the `µs` suffix, which is inconsistent with a
+60 Hz frame period. Verify the original capture/unit before using those values
+as a numeric baseline. This harness emits durations explicitly in nanoseconds
+(`*_ns`) to avoid that ambiguity.
+
+## Instrumentation overhead A/B
+
+Run two captures with identical ROM SHA, emulator build, region, duration, warm-up,
+input pulse schedule and host configuration:
+
+```powershell
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 > .\artifacts\smsmemtest-diagnostics-on.jsonl
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSmemtest.sms --suite-id smsmemtest --suite-revision 12771ed247b93d3a83d0c3cbe7d2d39e3ccb47d9 --region usa --duration-seconds 300 --warmup-seconds 10 --button1-pulse-frames 26,441 --diagnostics-disabled > .\artifacts\smsmemtest-diagnostics-off.jsonl
+```
+
+The diagnostics-off run retains observed FPS, completed frames, total instructions
+and virtual time, but stage percentiles are zero because the rolling telemetry is
+disabled. Use it only to estimate instrumentation overhead; it cannot identify
+wake lateness or step-cost distribution by itself. The `diagnostics_enabled`
+field in the start/summary records identifies each condition.
+
+## First CI baseline — SMSmemtest on hosted Linux
+
+The CI run [43424086432](https://github.com/leonardo201800478/sega-emulator/actions/runs/43424086432)
+captured 60 seconds through the production worker with the pinned ROM SHA
+`f7654d1dea07ce195e1d57da373a86b3f1ca9869af0d9d7dcb4de6039eb52c71`,
+USA/NTSC, diagnostics enabled, and pulses at frames 26 and 441.
+
+Whole-run throughput was 3,582 completed frames / 60.000457 s = **59.700 FPS**.
+The final rolling 512-frame window reported:
+
+| Metric | p50 | p95 | p99 |
+|---|---:|---:|---:|
+| Worker frame interval | 16.751 ms | 16.824 ms | 17.184 ms |
+| Worker frame budget | 16.688 ms | 16.708 ms | 16.708 ms |
+| Machine step | 8.943 ms | 9.022 ms | 9.340 ms |
+| Frame processing | 8.947 ms | 9.027 ms | 9.344 ms |
+| Timeout wake lateness | 62.9 µs | 65.3 µs | 67.9 µs |
+
+The run kept virtual ticks/frame within 59,720–59,749 (p50 59,737), and PSG
+samples/frame at 801–802. The two scheduled controller pulses were sent and the
+worker returned `CAPTURED` with no runtime error.
+
+The first ~14 one-second rolling windows include the RAM/VRAM test workload:
+the median of those windows showed step p50/p95/p99 of 10.880/11.079/11.531 ms,
+with the largest observed per-window step p99 at 12.481 ms. In the following 45
+windows, after the ROM had reached its result/wait screen, the median step
+p50/p95/p99 fell to 8.856/8.998/9.254 ms. This confirms that the ROM creates a
+measurable workload change, while the worker continued producing frames.
+
+**Interpretation:** this hosted-Linux worker-only capture did not reproduce the
+large wake-lateness values in the earlier Windows P0 evidence. Its final-window
+frame-interval p50 is about 63 µs above the reported frame-budget p50, close to
+the 62.9 µs median timeout wake lateness. The p99 frame interval still exceeds
+the p99 budget by about 0.476 ms. These are screening observations from separate
+rolling distributions, not per-frame causal correlation.
+
+This is a CI sanity baseline, not a Windows hardware result: video presentation
+and physical CPAL output were disabled, and the GitHub-hosted runner is not the
+target PC. The artifact contains the JSONL capture and build metadata, but not a
+new ROM binary distribution.
+
+## Isolation boundary
+
+This harness uses the production worker and its real `recv_timeout` pacing, but
+intentionally disables video presentation and physical audio output. PSG still
+runs inside the temporal machine and samples are drained by the worker. Therefore
+it isolates ROM-dependent machine/worker cost and host wake behavior from Slint,
+WGPU, Vulkan, the physical display, and CPAL. It does **not** replace the
+Windows GUI + PresentMon + CPAL A/B matrix required to close P0.
+
+The Rust `Instant` clock is monotonic. On Windows it is backed by QPC, but this
+harness currently emits elapsed nanoseconds rather than raw QPC counter values
+or QPC frequency. Use ETW/WPA and PresentMon for physical presentation analysis.
+
+## Sustained VDP/sprite workload: SMS Test Suite v0.38
+
+The upstream [SMS Test Suite v0.38 release](https://github.com/sverx/SMSTestSuite/releases/tag/v0.38)
+contains a continuously animated **Drop Shadow** test. In the pinned source
+revision `985bc04fef6f3dc3c3450fbc84242676f241d316`, the Video Tests menu has
+Drop Shadow at zero-based item 7. Its routine updates twelve pairs of adjoining sprites (24 sprites),
+moves them every frame, waits for VBlank, and copies the SAT continuously until
+button 1 or 2 is pressed. This is a stronger sustained VDP/CPU workload than the
+SMSmemtest prompt/result screen.
+
+The source/release has no explicit license located in the audited repository.
+Use a copy obtained from the official release locally only pending license
+clarification. Do not commit it, upload it as an Actions artifact, or mirror it.
+
+After downloading `SMSTestSuite.sms` to a local `artifacts` directory, the
+following frame-relative pulse schedule is derived from its menu order:
+
+```powershell
+python tests/sms/scripts/run_pacing_rom.py --rom .\artifacts\SMSTestSuite.sms --suite-id smstest-suite-drop-shadow --suite-revision 985bc04fef6f3dc3c3450fbc84242676f241d316 --region usa --duration-seconds 300 --warmup-seconds 10 --input-pulses "120:button1,180:down,210:down,240:down,270:down,300:down,330:down,360:down,390:button1" > .\artifacts\smstest-suite-drop-shadow-pacing.jsonl
+```
+
+The sequence enters Video Tests, moves the cursor down seven items to Drop
+Shadow, and selects it. The harness does not read the ROM's framebuffer/menu
+state, so this schedule is **source-derived but not yet visually confirmed**.
+Confirm the Drop Shadow animation on-screen before treating the run as a valid
+sprite-stress sample. Once selected, the ROM keeps animating until another
+button pulse; omit further pulses for a sustained capture.
+
+## ROM selection and limits
+
+- SMSmemtest is useful for RAM/VRAM functional checks, but it is interactive.
+  Use the evidenced frame pulse schedule `26,441` with the pinned ROM hash above;
+  without input it remains at its prompt and is not a meaningful sustained workload.
+- SMSTestSuite can cover video, PSG/FM and input behavior after its pinned build
+  dependencies and case oracles are established. Its audited revision has no
+  explicit license located; use locally only pending clarification.
+- SmsVdpTest can provide VDP protocol/counter/sprite workloads. Run only cases
+  compatible with the current scanline-granular VDP. Dot/fetch and sub-scanline
+  timing cases remain `BLOCKED_CAPABILITY`. Its audited revision has no explicit
+  license located; use locally only pending clarification.
+- ZEXALL-SMS remains blocked until formal Z80 E7 closure. Do not run it as a
+  pacing ROM before that gate.
+- Record exact upstream revision, build toolchain, ROM SHA-256, region, emulator
+  SHA, duration, warm-up and pulse schedule. Do not commit ROM binaries or logs
+  containing copyrighted data.
+
+## Interpretation
+
+Compare one variable at a time with identical ROM SHA, emulator SHA, region,
+duration, warm-up, pulse schedule, build profile and host configuration. Use
+separate runs for each ROM. For each run inspect:
+
+- `observed_fps` and `frame_interval_p50/p95/p99_ns`;
+- `step_frame_*` and `frame_processing_*`;
+- `pacing_wait_elapsed_*` and `pacing_timeout_lateness_*`;
+- `machine_ticks_per_frame_*` and `audio_samples_*`.
+
+A completed run or `CAPTURED` summary is not a ROM PASS and does not prove
+physical presentation cadence. A stable virtual tick count with irregular
+worker intervals points away from virtual-clock drift, but does not identify
+which host wait/pipeline stage caused it. Preserve JSONL output outside Git.
