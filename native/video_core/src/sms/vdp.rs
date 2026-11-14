@@ -507,7 +507,9 @@ impl SmsVdp {
             end_x,
         );
         if partial_status & COLLISION != 0 {
-            self.line_collision_seen = true;
+            // SMS1 exposes collision as soon as the beam has crossed an
+            // overlapping opaque pixel; status reads commit up to that beam.
+            self.status |= COLLISION;
         }
         if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0
         {
