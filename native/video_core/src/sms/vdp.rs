@@ -647,8 +647,13 @@ fn evaluate_mode4_sprites(
         if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height * zoom) {
             continue;
         }
+        if selected.len() == 8 {
+            overflow_index.get_or_insert(index);
+            if sprite_limit <= 8 {
+                break;
+            }
+        }
         if selected.len() == sprite_limit {
-            overflow_index = Some(index);
             break;
         }
         let x_offset = 0x80 + index * 2;
