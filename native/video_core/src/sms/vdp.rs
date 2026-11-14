@@ -11,7 +11,7 @@ const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
 const SMS_R8_LATCH_HPOS: u16 = 21;
-// MAME's SMS 315-5124 timing model places active pixels at HPos 63..319.
+// Comparative SMS timing uses HPos 63 as the active-window start and 319 as its exclusive end.
 // This is a comparative model boundary, not a measured board-specific latch.
 const SMS_ACTIVE_DISPLAY_START_HPOS: u16 = 63;
 const STRIDE: usize = SMS_VDP_WIDTH * 3;
