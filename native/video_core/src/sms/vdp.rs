@@ -1892,6 +1892,86 @@ mod tests {
     }
 
     #[test]
+    fn sms1_sprite_collision_is_committed_at_scanline_close_and_cleared_by_status_read() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        set_sprite(&mut v, 0, 0xFF, 20, 1);
+        set_sprite(&mut v, 1, 0xFF, 20, 2);
+        v.vram[0x3F02] = 0xD0;
+
+        // Both sprites have opaque pixels only on row zero. The following
+        // scanline therefore cannot reassert the collision flag.
+        v.vram[32] = 0xFF;
+        v.vram[2 * 32 + 1] = 0xFF;
+
+        assert_eq!(v.status & COLLISION, 0);
+        v.advance(LINE_TSTATES - 1);
+        assert_eq!(
+            v.status & COLLISION,
+            0,
+            "scanline-level model must not commit collision before the line closes"
+        );
+
+        v.advance(1);
+        assert_ne!(
+            v.status & COLLISION,
+            0,
+            "opaque sprite overlap must be committed when the scanline renderer closes the line"
+        );
+
+        let status = v.read_port(0xBF);
+        assert_ne!(status & COLLISION, 0);
+        assert_eq!(v.status & COLLISION, 0);
+
+        v.advance(LINE_TSTATES);
+        assert_eq!(
+            v.status & COLLISION,
+            0,
+            "the next transparent sprite row must not reassert collision"
+        );
+    }
+
+    #[test]
+    fn sms1_sprite_collision_respects_left_column_mask_and_sprite_shift() {
+        for (register_zero, sprite_x, expected_collision) in
+            [(0x24, 0, false), (0x2C, 8, false), (0x2C, 16, true)]
+        {
+            let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+            v.registers[0] = register_zero;
+            v.registers[1] = 0x40;
+            v.registers[2] = 0x0E;
+            v.registers[5] = 0x7F;
+            set_sprite(&mut v, 0, 0xFF, sprite_x, 1);
+            set_sprite(&mut v, 1, 0xFF, sprite_x, 2);
+            v.vram[0x3F02] = 0xD0;
+            solid_sprite_tile(&mut v, 1, 1);
+            solid_sprite_tile(&mut v, 2, 2);
+
+            let mut status = 0;
+            let mut frame = vec![0; FRAME_SIZE];
+            render_scanline_for_revision(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut frame,
+                0,
+                true,
+                SmsVdpRevision::Sega3155124,
+            );
+
+            assert_eq!(
+                status & COLLISION != 0,
+                expected_collision,
+                "R0={register_zero:#04x}, sprite X={sprite_x}"
+            );
+        }
+    }
+
+    #[test]
     fn sms1_transparent_sprite_overlap_does_not_set_collision() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
