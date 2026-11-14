@@ -1515,7 +1515,7 @@ mod tests {
                 .iter()
                 .map(|sprite| sprite.x)
                 .collect::<Vec<_>>(),
-            (0..8).map(|index| (index * 8) as i32).collect::<Vec<_>>(),
+            (0..8).map(|index| index * 8).collect::<Vec<_>>(),
             "the eight retained entries must preserve SAT order"
         );
         assert_eq!(evaluation.overflow_index, Some(8));
