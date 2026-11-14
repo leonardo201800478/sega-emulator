@@ -1,7 +1,7 @@
 # SMS VDP — sprite evaluation, phase 1
 
-**Branch:** `fix/sms-vdp-sprite-evaluation-20261114`  
-**Base:** `76795360896bfc8651ecf86f0a85ce7c18597875`  
+**Branch:** `fix/sms-vdp-sprite-evaluation-20261114`
+**Base:** `76795360896bfc8651ecf86f0a85ce7c18597875`
 **Status:** refactor and focused unit coverage; no temporal-latch claim.
 
 ## Motivation
