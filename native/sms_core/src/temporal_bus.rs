@@ -22,7 +22,7 @@ use sega_temporal_core::MachineTime;
 use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 16;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 17;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
 const DEFAULT_AUDIO_SAMPLE_RATE: u64 = DEFAULT_PCM_SOURCE_RATE_HZ as u64;
@@ -1649,12 +1649,12 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 16);
+        assert_eq!(snapshot.format_version, 17);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
 
-        snapshot.format_version = 15;
+        snapshot.format_version = 16;
         assert!(matches!(
             SmsTemporalBus::restore_state(snapshot),
             Err(super::SmsTemporalBusError::InvalidState)
