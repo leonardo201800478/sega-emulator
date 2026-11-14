@@ -1,9 +1,9 @@
 # SMS1 Mode 4 — sprite line buffer, phase 2
 
-**ASIC alvo:** Sega 315-5124  
-**Escopo:** seleção de sprites SAT entre scanlines  
-**Classe:** implementação funcional scanline-level  
-**Estado:** código implementado; validação CI pendente no HEAD desta PR  
+**ASIC alvo:** Sega 315-5124
+**Escopo:** seleção de sprites SAT entre scanlines
+**Classe:** implementação funcional scanline-level
+**Estado:** código implementado; validação CI pendente no HEAD desta PR
 **Oráculo físico:** não disponível nesta etapa
 
 ## 1. Mudança
