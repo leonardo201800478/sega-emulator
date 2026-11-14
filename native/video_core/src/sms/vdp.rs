@@ -602,7 +602,8 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
 /// Result of one Mode 4 SAT evaluation pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mode4SpriteEvaluation {
-    /// At most the eight sprite entries retained by the VDP for this line.
+    /// Sprite candidates retained for drawing (8 in hardware mode, up to 64
+    /// in the explicit unlocked-compatibility mode).
     selected: Vec<(usize, i32, usize, usize)>,
     /// SAT index of the first additional sprite that also intersects the line.
     overflow_index: Option<usize>,
@@ -610,11 +611,12 @@ struct Mode4SpriteEvaluation {
 
 /// Evaluate Mode 4 SAT candidates in table order.
 ///
-/// The evaluator retains no more than the hardware's eight entries. It keeps
-/// scanning only until the first additional matching sprite is found, so the
-/// overflow index is deterministic and later SAT entries cannot replace it.
-/// This remains a scanline-level evaluator; its temporal handoff to the next
-/// line is deliberately implemented by a separate state-machine change.
+/// The evaluator always records the first matching candidate after the
+/// hardware's eight-entry capacity, even when the caller requests additional
+/// candidates for unlocked compatibility rendering. The selected vector is
+/// bounded by sprite_limit (8 for hardware, up to 64 for compatibility).
+/// This remains scanline-level; its temporal handoff to the next line is a
+/// separate state-machine change.
 fn evaluate_mode4_sprites(
     vram: &[u8],
     regs: &[u8; 16],
