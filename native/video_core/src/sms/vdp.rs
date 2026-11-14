@@ -9,11 +9,13 @@ pub const SMS_VDP_MAX_HEIGHT: usize = 240;
 const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
-// SMS1 line events are quantized to the VDP's current T-state input. HPos 24
-// maps exactly to T-state 16; HPos 26 maps to the first representable edge
-// (T-state 18 / HPos 27); active display ends at HPos 319 (T-state 213).
+// SMS1 boundaries follow the SmsVdpTest Z80-clock/pixel mapping:
+// VINT HPos 20/T13, HINT HPos 21/T14, VCounter HPos 23/T15,
+// overflow and VBlank flag HPos 24/T16. HBlank closes active pixels at T213.
+const SMS_VINT_IRQ_TSTATE: u64 = 13;
+const SMS_HINT_TSTATE: u64 = 14;
+const SMS_VCOUNTER_LATCH_TSTATE: u64 = 15;
 const SMS_SPRITE_OVERFLOW_TSTATE: u64 = 16;
-const SMS_HINT_TSTATE: u64 = 18;
 const SMS_HBLANK_TSTATE: u64 = 213;
 const SMS_VBLANK_FLAG_TSTATE: u64 = 16;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
@@ -95,6 +97,8 @@ pub struct SmsVdp {
     profile: SmsVdpProfile,
     line_counter: u8,
     line_irq_pending: bool,
+    vint_pending: bool,
+    v_counter_latch: u16,
     light_x: u16,
     light_y: u16,
     light_trigger: bool,
@@ -151,6 +155,8 @@ impl SmsVdp {
             profile,
             line_counter: 0,
             line_irq_pending: false,
+            vint_pending: false,
+            v_counter_latch: 0,
             light_x: 0,
             light_y: 0,
             light_trigger: false,
@@ -263,7 +269,12 @@ impl SmsVdp {
     }
 
     pub fn interrupt_pending(&self) -> bool {
-        (self.status & VBLANK != 0 && self.registers[1] & 0x20 != 0)
+        let vertical_pending = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+            self.vint_pending
+        } else {
+            self.status & VBLANK != 0
+        };
+        (vertical_pending && self.registers[1] & 0x20 != 0)
             || (self.line_irq_pending && self.registers[0] & 0x10 != 0)
     }
     pub fn framebuffer(&self) -> &[u8] {
@@ -334,6 +345,8 @@ impl SmsVdp {
         self.frame_ready = false;
         self.line_counter = 0;
         self.line_irq_pending = false;
+        self.vint_pending = false;
+        self.v_counter_latch = 0;
         self.light_pulse = false;
         self.h_counter_latch = 0;
         self.framebuffer.fill(0);
@@ -347,6 +360,14 @@ impl SmsVdp {
 
     /// SMS VDP data ($BE) and control/status ($BF) ports.
     pub fn read_port(&mut self, port: u16) -> u8 {
+        if self.profile.revision == SmsVdpRevision::Sega3155124
+            && self.scanline < self.visible_height()
+            && (port as u8) & 0xC1 == 0x81
+        {
+            // Status reads are observable beam boundaries: compose the pixels
+            // reached so far before returning the collision/overflow flags.
+            self.commit_raster_span_to_beam();
+        }
         match (port as u8) & 0xC1 {
             0x80 => {
                 let value = self.read_buffer;
@@ -373,6 +394,7 @@ impl SmsVdp {
                 }
                 self.line_overflow_status = 0;
                 self.line_irq_pending = false;
+                self.vint_pending = false;
                 self.control_first = None;
                 value
             }
@@ -388,7 +410,11 @@ impl SmsVdp {
     }
 
     pub fn read_v_counter(&self) -> u8 {
-        let line = self.scanline;
+        let line = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+            self.v_counter_latch
+        } else {
+            self.scanline
+        };
         match (self.profile.video_standard, self.visible_height()) {
             (VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown, 192)
                 if line >= 219 =>
@@ -485,7 +511,9 @@ impl SmsVdp {
             end_x,
         );
         if partial_status & COLLISION != 0 {
-            self.line_collision_seen = true;
+            // SMS1 exposes collision as soon as the beam has crossed an
+            // overlapping opaque pixel; status reads commit up to that beam.
+            self.status |= COLLISION;
         }
         if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0
         {
@@ -503,8 +531,10 @@ impl SmsVdp {
             let current = u64::from(self.tstates_into_line);
             let next_boundary = if self.profile.revision == SmsVdpRevision::Sega3155124 {
                 [
-                    SMS_SPRITE_OVERFLOW_TSTATE,
+                    SMS_VINT_IRQ_TSTATE,
                     SMS_HINT_TSTATE,
+                    SMS_VCOUNTER_LATCH_TSTATE,
+                    SMS_SPRITE_OVERFLOW_TSTATE,
                     SMS_HBLANK_TSTATE,
                     LINE_TSTATES,
                 ]
@@ -533,21 +563,9 @@ impl SmsVdp {
         let tstate = u64::from(self.tstates_into_line);
         let height = self.visible_height();
         match tstate {
-            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
-                let overflow_index = if self.registers[0] & 0x04 != 0 {
-                    self.sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                } else {
-                    self.legacy_sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                };
-                self.latch_sms1_sprite_overflow_index(overflow_index);
+            SMS_VINT_IRQ_TSTATE if self.scanline == height => {
+                self.vint_pending = true;
             }
-            SMS_VBLANK_FLAG_TSTATE if self.scanline == height => self.enter_vblank(),
             SMS_HINT_TSTATE if self.scanline < height => {
                 if self.line_counter == 0 {
                     self.line_irq_pending = true;
@@ -563,12 +581,26 @@ impl SmsVdp {
                     self.line_counter = self.line_counter.wrapping_sub(1);
                 }
             }
+            SMS_VCOUNTER_LATCH_TSTATE => {
+                self.v_counter_latch = self.scanline;
+            }
+            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
+                let overflow_index = if self.registers[0] & 0x04 != 0 {
+                    self.sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                } else {
+                    self.legacy_sprite_line_buffer
+                        .as_ref()
+                        .filter(|buffer| buffer.target_line == self.scanline)
+                        .and_then(|buffer| buffer.evaluation.overflow_index)
+                };
+                self.latch_sms1_sprite_overflow_index(overflow_index);
+            }
+            SMS_VBLANK_FLAG_TSTATE if self.scanline == height => self.enter_vblank(),
             SMS_HBLANK_TSTATE if self.scanline < height => {
                 self.commit_raster_span_to_beam();
-                if self.line_collision_seen {
-                    self.status |= COLLISION;
-                    self.line_collision_seen = false;
-                }
                 if self.line_overflow_status != 0 {
                     self.status = (self.status & !0x1F) | self.line_overflow_status;
                     self.line_overflow_status = 0;
@@ -1787,21 +1819,74 @@ mod tests {
     }
 
     #[test]
-    fn sms1_hinterrupt_is_asserted_at_the_hpos26_tstate_boundary() {
+    fn sms1_hinterrupt_is_asserted_at_the_hpos21_tstate_boundary() {
         let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         vdp.registers[0] = 0x14; // Mode 4 plus HINT enable.
         vdp.registers[10] = 0;
 
-        vdp.advance(17);
+        vdp.advance(13);
         assert!(
             !vdp.interrupt_pending(),
-            "HINT must remain clear before T-state 18"
+            "HINT must remain clear before the HPos 21 boundary"
         );
         vdp.advance(1);
         assert!(
             vdp.interrupt_pending(),
-            "HINT asserts at the quantized HPos 26 edge"
+            "HINT asserts at the HPos 21 / T-state 14 boundary"
         );
+    }
+
+    #[test]
+    fn sms1_vint_irq_precedes_the_vblank_status_flag() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[1] = 0x20; // VINT enable.
+        let height = u64::from(vdp.visible_height());
+
+        vdp.advance(LINE_TSTATES * height);
+        vdp.advance(12);
+        assert!(!vdp.interrupt_pending());
+        assert_eq!(vdp.status & VBLANK, 0);
+
+        vdp.advance(1);
+        assert!(vdp.interrupt_pending(), "VINT IRQ asserts at HPos 20 / T13");
+        assert_eq!(vdp.status & VBLANK, 0, "the status flag is still pending");
+
+        vdp.advance(3);
+        assert_ne!(
+            vdp.status & VBLANK,
+            0,
+            "VBlank status latches at HPos 24 / T16"
+        );
+        assert!(
+            vdp.interrupt_pending(),
+            "the VINT request remains pending until status read"
+        );
+
+        let status = vdp.read_port(0xBF);
+        assert_ne!(status & VBLANK, 0);
+        assert!(!vdp.interrupt_pending());
+    }
+
+    #[test]
+    fn sms1_vcounter_changes_at_hpos23_of_each_scanline() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+
+        vdp.advance(LINE_TSTATES);
+        assert_eq!(vdp.scanline, 1);
+        assert_eq!(
+            vdp.read_v_counter(),
+            0,
+            "VCounter retains the prior line at HPos 0"
+        );
+
+        vdp.advance(14);
+        assert_eq!(
+            vdp.read_v_counter(),
+            0,
+            "VCounter has not latched at HPos 21"
+        );
+        vdp.advance(1);
+        assert_eq!(vdp.read_v_counter(), 1, "VCounter changes at HPos 23 / T15");
     }
 
     #[test]
@@ -2348,28 +2433,25 @@ mod tests {
         v.vram[8..16].fill(0xFF);
         v.vram[0x3F80 + 5 * 4] = 0xD0;
 
-        // Overflow is latched by the line evaluation; the first partial
-        // composition detects the overlapping opaque sprite pixels.
+        // Overflow is latched at HPos 24; a partial commit reaches the
+        // overlapping opaque sprite pixels before the status read.
         v.advance(114);
         assert_ne!(v.status & OVERFLOW, 0);
-        // A register write is the externally observable boundary that commits
-        // the already-scanned prefix in this selective-raster model.
         reg(&mut v, 7, 0);
-        assert!(v.line_collision_seen);
+        assert_ne!(v.status & COLLISION, 0);
+        assert!(!v.line_collision_seen);
 
-        // Before HBlank, overflow is visible but collision remains pending.
         let status = v.read_port(0xBF);
         assert_ne!(status & OVERFLOW, 0);
-        assert_eq!(status & COLLISION, 0);
+        assert_ne!(status & COLLISION, 0);
         assert_eq!(v.line_overflow_status, 0);
-        assert!(v.line_collision_seen);
+        assert!(!v.line_collision_seen);
 
-        // Remove the SAT entries for the next line. The current suffix still
-        // uses its latched entries; HBlank must publish the pending collision.
+        // Remove SAT entries for the next line. The current suffix retains
+        // its latched entries but contains no additional overlapping pixels.
         v.vram[0x3F80] = 0xD0;
         v.advance(114);
-        assert_eq!(v.status & OVERFLOW, 0);
-        assert_ne!(v.status & COLLISION, 0);
+        assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
     }
 
     #[test]
@@ -2678,7 +2760,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_sprite_collision_is_latched_at_hblank_and_cleared_by_status_read() {
+    fn sms1_sprite_collision_becomes_visible_when_beam_crosses_overlap_pixel() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -2688,35 +2770,30 @@ mod tests {
         set_sprite(&mut v, 1, 0xFF, 20, 2);
         v.vram[0x3F02] = 0xD0;
 
-        // Both sprites have opaque pixels only on row zero. The following
-        // scanline therefore cannot reassert the collision flag.
-        v.vram[32] = 0xFF;
-        v.vram[2 * 32 + 1] = 0xFF;
+        // Only sprite pixel X=20 is opaque in both patterns. The next
+        // span must not rediscover that already-committed pixel.
+        v.vram[32] = 0x80;
+        v.vram[2 * 32 + 1] = 0x80;
 
+        v.advance(55);
         assert_eq!(v.status & COLLISION, 0);
-        v.advance(212);
-        assert_eq!(
-            v.status & COLLISION,
-            0,
-            "collision remains pending before the HBlank boundary at HPos 319"
-        );
+        let before_pixel = v.read_port(0xBF);
+        assert_eq!(before_pixel & COLLISION, 0);
 
         v.advance(1);
+        let at_pixel = v.read_port(0xBF);
         assert_ne!(
-            v.status & COLLISION,
+            at_pixel & COLLISION,
             0,
-            "HBlank must latch collision after the active display has been composed"
+            "status read after the overlapping pixel must observe collision"
         );
-
-        let status = v.read_port(0xBF);
-        assert_ne!(status & COLLISION, 0);
         assert_eq!(v.status & COLLISION, 0);
 
-        v.advance(LINE_TSTATES);
+        v.advance(LINE_TSTATES - 56);
         assert_eq!(
             v.status & COLLISION,
             0,
-            "the next transparent sprite row must not reassert collision"
+            "the suffix must not reassert a collision already acknowledged"
         );
     }
 
