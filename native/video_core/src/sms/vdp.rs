@@ -79,6 +79,7 @@ pub struct SmsVdp {
     tstates_into_line: u16,
     raster_span_cursor_x: u16,
     line_collision_seen: bool,
+    line_overflow_status: u8,
     frame_number: u64,
     framebuffer: Vec<u8>,
     working_framebuffer: Vec<u8>,
@@ -133,6 +134,7 @@ impl SmsVdp {
             tstates_into_line: 0,
             raster_span_cursor_x: 0,
             line_collision_seen: false,
+            line_overflow_status: 0,
             frame_number: 0,
             framebuffer: vec![0; FRAME_SIZE],
             working_framebuffer: vec![0; FRAME_SIZE],
@@ -317,6 +319,7 @@ impl SmsVdp {
         self.tstates_into_line = 0;
         self.raster_span_cursor_x = 0;
         self.line_collision_seen = false;
+        self.line_overflow_status = 0;
         self.frame_number = 0;
         self.frame_ready = false;
         self.line_counter = 0;
@@ -413,7 +416,6 @@ impl SmsVdp {
     /// is not a free-running dot pipeline.
     fn commit_raster_span_to_beam(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
-            || self.registers[0] & 0x04 == 0
             || self.scanline >= self.visible_height()
         {
             return;
@@ -438,7 +440,7 @@ impl SmsVdp {
             .sprite_line_buffer
             .as_ref()
             .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
-        let mut partial_status = self.status & !COLLISION;
+        let mut partial_status = self.status & !(COLLISION | OVERFLOW | 0x1F);
         render_scanline_for_revision_with_evaluation(
             &self.vram,
             &self.cram,
@@ -455,6 +457,9 @@ impl SmsVdp {
         );
         if partial_status & COLLISION != 0 {
             self.line_collision_seen = true;
+        }
+        if partial_status & OVERFLOW != 0 && self.line_overflow_status == 0 {
+            self.line_overflow_status = partial_status & (OVERFLOW | 0x1F);
         }
         self.raster_span_cursor_x = end_x as u16;
     }
@@ -576,6 +581,10 @@ impl SmsVdp {
             if self.line_collision_seen {
                 self.status |= COLLISION;
             }
+            if self.line_overflow_status != 0 {
+                self.status =
+                    (self.status & !0x1F) | self.line_overflow_status;
+            }
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
                 self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
@@ -597,6 +606,7 @@ impl SmsVdp {
         }
         self.raster_span_cursor_x = 0;
         self.line_collision_seen = false;
+        self.line_overflow_status = 0;
         self.sprite_line_buffer = None;
         self.prepare_next_sms1_sprite_line(line, height);
         self.scanline += 1;
@@ -756,6 +766,47 @@ fn tms_pixel(frame: &mut [u8], x: usize, y: usize, color: u8) {
         frame[i..i + 3].copy_from_slice(&tms_rgb(color));
     }
 }
+fn tms_span_range(
+    frame: &mut [u8],
+    x: usize,
+    y: usize,
+    bits: u8,
+    fg: u8,
+    bg: u8,
+    width: usize,
+    start_x: usize,
+    end_x: usize,
+) {
+    for bit in 0..width {
+        let pixel_x = x + bit;
+        if (start_x..end_x).contains(&pixel_x) {
+            let color = if bits & (0x80 >> bit) != 0 { fg } else { bg };
+            tms_pixel(frame, pixel_x, y, color);
+        }
+    }
+}
+
+fn tms_quarter_range(
+    frame: &mut [u8],
+    x: usize,
+    y: usize,
+    color: u8,
+    start_x: usize,
+    end_x: usize,
+) {
+    for bit in 0..4 {
+        let pixel_x = x + bit;
+        if (start_x..end_x).contains(&pixel_x) {
+            let pixel_color = if color & (0x08 >> bit) != 0 {
+                color >> 4
+            } else {
+                color & 0x0F
+            };
+            tms_pixel(frame, pixel_x, y, pixel_color);
+        }
+    }
+}
+
 fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, width: usize) {
     for bit in 0..width {
         tms_pixel(
@@ -886,8 +937,32 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
+    render_legacy_scanline_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        0,
+        SMS_VDP_WIDTH,
+    );
+}
+
+fn render_legacy_scanline_span(
+    vram: &[u8],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    unlocked: bool,
+    start_x: usize,
+    end_x: usize,
+) {
+    let start_x = start_x.min(SMS_VDP_WIDTH);
+    let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     let backdrop = regs[7] & 0x0F;
-    for x in 0..SMS_VDP_WIDTH {
+    for x in start_x..end_x {
         tms_pixel(frame, x, y, backdrop);
     }
     if regs[1] & 0x40 == 0 {
@@ -906,7 +981,17 @@ fn render_legacy_scanline(
         for col in 0..40 {
             let ch = vram[(names + (y / 8) * 40 + col) & 0x3FFF];
             let bits = vram[(patterns + usize::from(ch) * 8 + (y & 7)) & 0x3FFF];
-            tms_span(frame, 8 + col * 6, y, bits, fg, backdrop, 6);
+            tms_span_range(
+                frame,
+                8 + col * 6,
+                y,
+                bits,
+                fg,
+                backdrop,
+                6,
+                start_x,
+                end_x,
+            );
         }
         return;
     }
@@ -914,13 +999,15 @@ fn render_legacy_scanline(
         for col in 0..32 {
             let ch = vram[(names + (y / 8) * 32 + col) & 0x3FFF];
             let bits = vram[(patterns + usize::from(ch) * 8 + ((y & 0x1C) >> 2)) & 0x3FFF];
-            tms_quarter(
+            tms_quarter_range(
                 frame,
                 col * 8,
                 y,
                 if bits >> 4 != 0 { bits >> 4 } else { backdrop },
+                start_x,
+                end_x,
             );
-            tms_quarter(
+            tms_quarter_range(
                 frame,
                 col * 8 + 4,
                 y,
@@ -929,6 +1016,8 @@ fn render_legacy_scanline(
                 } else {
                     backdrop
                 },
+                start_x,
+                end_x,
             );
         }
     } else if mode == 4 {
@@ -949,7 +1038,17 @@ fn render_legacy_scanline(
             } else {
                 backdrop
             };
-            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+            tms_span_range(
+                frame,
+                col * 8,
+                y,
+                bits,
+                fg,
+                bg,
+                8,
+                start_x,
+                end_x,
+            );
         }
     } else {
         let color_base = (usize::from(regs[3]) << 6) & 0x3FC0;
@@ -967,10 +1066,20 @@ fn render_legacy_scanline(
             } else {
                 backdrop
             };
-            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+            tms_span_range(
+                frame,
+                col * 8,
+                y,
+                bits,
+                fg,
+                bg,
+                8,
+                start_x,
+                end_x,
+            );
         }
     }
-    render_legacy_sprites(vram, regs, status, frame, y, unlocked);
+    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
 }
 
 fn render_legacy_sprites(
@@ -981,6 +1090,21 @@ fn render_legacy_sprites(
     y: usize,
     unlocked: bool,
 ) {
+    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+}
+
+fn render_legacy_sprites_span(
+    vram: &[u8],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    unlocked: bool,
+    start_x: usize,
+    end_x: usize,
+) {
+    let start_x = start_x.min(SMS_VDP_WIDTH);
+    let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
     let pattern_base = usize::from(regs[6] & 0x07) << 11;
     let size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
@@ -1033,7 +1157,7 @@ fn render_legacy_sprites(
             }
             for dx in 0..zoom {
                 let x = sx + (source_x * zoom + dx) as i32;
-                if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
+                if !(start_x as i32..end_x as i32).contains(&x) {
                     continue;
                 }
                 let x = x as usize;
@@ -1131,7 +1255,7 @@ fn render_scanline_for_revision_with_evaluation(
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
     if regs[0] & 0x04 == 0 {
-        render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
+        render_legacy_scanline_span(vram, regs, status, frame, y, !hardware_sprite_limit, start_x, end_x);
         return;
     }
     let backdrop = palette_rgb_for_revision(cram, 16 + (regs[7] & 0x0F), revision);
