@@ -633,9 +633,7 @@ fn evaluate_mode4_sprites(
         } else {
             i32::from(raw_y) + 1
         };
-        if (y as i32) < sprite_y
-            || (y as i32) >= sprite_y + (sprite_height * zoom)
-        {
+        if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height * zoom) {
             continue;
         }
         let x_offset = 0x80 + index * 2;
@@ -1039,8 +1037,8 @@ mod tests {
     use super::super::profile::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
     use super::{
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
-        TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline, render_legacy_sprites, render_scanline,
-        render_scanline_for_revision,
+        TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline, render_legacy_sprites,
+        render_scanline, render_scanline_for_revision,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
@@ -1078,13 +1076,7 @@ mod tests {
         }
         vram[0x3F00 + 10] = 0xD0;
 
-        let selected = evaluate_mode4_sprites(
-            &vram,
-            &regs,
-            10,
-            SmsVdpRevision::Sega3155246,
-            192,
-        );
+        let selected = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
 
         assert_eq!(selected.len(), 10);
         assert_eq!(
@@ -1102,13 +1094,7 @@ mod tests {
         regs[5] = 0x7E;
         vram[0x3F00] = 0xD0;
         vram[0x3F01] = 9;
-        let selected = evaluate_mode4_sprites(
-            &vram,
-            &regs,
-            10,
-            SmsVdpRevision::Sega3155246,
-            192,
-        );
+        let selected = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
         assert!(selected.is_empty());
     }
 
