@@ -12,8 +12,10 @@ const LINE_TSTATES: u64 = 228;
 // SMS1 line events are quantized to the VDP's current T-state input. HPos 24
 // maps exactly to T-state 16; HPos 26 maps to the first representable edge
 // (T-state 18 / HPos 27); active display ends at HPos 319 (T-state 213).
+const SMS_VINT_IRQ_TSTATE: u64 = 13;
+const SMS_HINT_TSTATE: u64 = 14;
+const SMS_VCOUNTER_LATCH_TSTATE: u64 = 15;
 const SMS_SPRITE_OVERFLOW_TSTATE: u64 = 16;
-const SMS_HINT_TSTATE: u64 = 18;
 const SMS_HBLANK_TSTATE: u64 = 213;
 const SMS_VBLANK_FLAG_TSTATE: u64 = 16;
 const SMS_HCOUNTER_POSITIONS_PER_LINE: u64 = 342;
@@ -95,6 +97,8 @@ pub struct SmsVdp {
     profile: SmsVdpProfile,
     line_counter: u8,
     line_irq_pending: bool,
+    vint_pending: bool,
+    v_counter_latch: u16,
     light_x: u16,
     light_y: u16,
     light_trigger: bool,
@@ -151,6 +155,8 @@ impl SmsVdp {
             profile,
             line_counter: 0,
             line_irq_pending: false,
+            vint_pending: false,
+            v_counter_latch: 0,
             light_x: 0,
             light_y: 0,
             light_trigger: false,
@@ -263,7 +269,12 @@ impl SmsVdp {
     }
 
     pub fn interrupt_pending(&self) -> bool {
-        (self.status & VBLANK != 0 && self.registers[1] & 0x20 != 0)
+        let vertical_pending = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+            self.vint_pending
+        } else {
+            self.status & VBLANK != 0
+        };
+        (vertical_pending && self.registers[1] & 0x20 != 0)
             || (self.line_irq_pending && self.registers[0] & 0x10 != 0)
     }
     pub fn framebuffer(&self) -> &[u8] {
@@ -334,6 +345,8 @@ impl SmsVdp {
         self.frame_ready = false;
         self.line_counter = 0;
         self.line_irq_pending = false;
+        self.vint_pending = false;
+        self.v_counter_latch = 0;
         self.light_pulse = false;
         self.h_counter_latch = 0;
         self.framebuffer.fill(0);
@@ -388,7 +401,11 @@ impl SmsVdp {
     }
 
     pub fn read_v_counter(&self) -> u8 {
-        let line = self.scanline;
+        let line = if self.profile.revision == SmsVdpRevision::Sega3155124 {
+            self.v_counter_latch
+        } else {
+            self.scanline
+        };
         match (self.profile.video_standard, self.visible_height()) {
             (VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown, 192)
                 if line >= 219 =>
@@ -417,18 +434,15 @@ impl SmsVdp {
     /// positions per 228 Z80 T-states. The counter samples the previous HPos,
     /// wraps at the line boundary, subtracts 46, and divides by two.
     pub fn latch_h_counter(&mut self) {
-        let hpos = (u64::from(self.tstates_into_line) * 3 / 2) % SMS_HCOUNTER_POSITIONS_PER_LINE;
-        let previous_hpos = if hpos == 0 {
-            SMS_HCOUNTER_POSITIONS_PER_LINE - 1
-        } else {
-            hpos - 1
-        };
-        let hclock = previous_hpos as i64 - 46;
-        self.h_counter_latch = (hclock >> 1) as u8;
+        // SmsVdpTest's measured Z80-clock/pixel table uses pixel=(3*T+1)/2
+        // and HCounter=((pixel-47)/2) with truncation toward zero.
+        let pixel = ((u64::from(self.tstates_into_line) * 3 + 1) / 2)
+            % SMS_HCOUNTER_POSITIONS_PER_LINE;
+        self.h_counter_latch = ((pixel as i64 - 47) / 2) as u8;
     }
 
     fn current_hpos(&self) -> u16 {
-        ((u64::from(self.tstates_into_line) * 3) / 2) as u16
+        ((u64::from(self.tstates_into_line) * 3 + 1) / 2) as u16
     }
 
     /// Commit the active raster prefix before a display-visible SMS1 write.
@@ -503,8 +517,10 @@ impl SmsVdp {
             let current = u64::from(self.tstates_into_line);
             let next_boundary = if self.profile.revision == SmsVdpRevision::Sega3155124 {
                 [
-                    SMS_SPRITE_OVERFLOW_TSTATE,
+                    SMS_VINT_IRQ_TSTATE,
                     SMS_HINT_TSTATE,
+                    SMS_VCOUNTER_LATCH_TSTATE,
+                    SMS_SPRITE_OVERFLOW_TSTATE,
                     SMS_HBLANK_TSTATE,
                     LINE_TSTATES,
                 ]
