@@ -12,6 +12,8 @@ const LINE_TSTATES: u64 = 228;
 // SMS1 boundaries follow the SmsVdpTest Z80-clock/pixel mapping:
 // VINT HPos 20/T13, HINT HPos 21/T14, VCounter HPos 23/T15,
 // overflow and VBlank flag HPos 24/T16. HBlank closes active pixels at T213.
+// These are CPU-visible T-state boundaries, not sub-T-state arbitration or
+// dot-accurate rendering timestamps.
 const SMS_VINT_IRQ_TSTATE: u64 = 13;
 const SMS_HINT_TSTATE: u64 = 14;
 const SMS_VCOUNTER_LATCH_TSTATE: u64 = 15;
