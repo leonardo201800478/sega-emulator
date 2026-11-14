@@ -1849,12 +1849,12 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 19);
+        assert_eq!(snapshot.format_version, 20);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
 
-        snapshot.format_version = 18;
+        snapshot.format_version = 19;
         assert!(matches!(
             SmsTemporalBus::restore_state(snapshot),
             Err(super::SmsTemporalBusError::InvalidState)
