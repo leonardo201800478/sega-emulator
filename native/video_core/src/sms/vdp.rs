@@ -807,24 +807,6 @@ fn tms_quarter_range(
     }
 }
 
-#[cfg(test)]
-fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, width: usize) {
-    for bit in 0..width {
-        tms_pixel(
-            frame,
-            x + bit,
-            y,
-            if bits & (0x80 >> bit) != 0 { fg } else { bg },
-        );
-    }
-}
-#[cfg(test)]
-fn tms_quarter(frame: &mut [u8], x: usize, y: usize, color: u8) {
-    for dx in 0..4 {
-        tms_pixel(frame, x + dx, y, color);
-    }
-}
-
 /// SMS1 R5 bit 0 gates address bit 7 across the sprite attribute table.
 fn sms1_sprite_attribute_address(sat_base: usize, offset: usize, register5: u8) -> usize {
     let address = (sat_base + offset) & 0x3FFF;
