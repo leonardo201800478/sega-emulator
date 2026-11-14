@@ -360,6 +360,13 @@ impl SmsVdp {
 
     /// SMS VDP data ($BE) and control/status ($BF) ports.
     pub fn read_port(&mut self, port: u16) -> u8 {
+        if self.profile.revision == SmsVdpRevision::Sega3155124
+            && (port as u8) & 0xC1 == 0x81
+        {
+            // Status reads are observable beam boundaries: compose the pixels
+            // reached so far before returning the collision/overflow flags.
+            self.commit_raster_span_to_beam();
+        }
         match (port as u8) & 0xC1 {
             0x80 => {
                 let value = self.read_buffer;
@@ -386,6 +393,7 @@ impl SmsVdp {
                 }
                 self.line_overflow_status = 0;
                 self.line_irq_pending = false;
+                self.vint_pending = false;
                 self.control_first = None;
                 value
             }
