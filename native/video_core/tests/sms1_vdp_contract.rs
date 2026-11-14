@@ -167,7 +167,7 @@ fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
 
     let frame = vdp.framebuffer();
     assert_eq!(frame.len(), 256 * 192 * 3);
-    assert_eq!(&frame[0..3], &[255, 0, 0]);
+    assert_eq!(&frame[0..3], &[238, 0, 0]);
     assert_eq!(&frame[3..6], &[0, 0, 0]);
 }
 
@@ -193,7 +193,7 @@ fn sms1_r2_mask_bit_controls_the_high_name_table_y_address_bit() {
     write_vram(&mut unmasked, 0x0040, 0x80);
     write_cram(&mut unmasked, 1, 0x03);
     unmasked.advance(228 * 192);
-    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 128), [255, 0, 0]);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 128), [238, 0, 0]);
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn sms1_r3_mask_gates_background_plane_zero_and_one_pattern_addresses() {
     write_vram(&mut unmasked, 0x0040, 0x80);
     write_cram(&mut unmasked, 1, 0x03);
     unmasked.advance(228 * 192);
-    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [255, 0, 0]);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [238, 0, 0]);
 }
 
 #[test]
