@@ -655,7 +655,7 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 let previous = self.registers[register];
-                if register == 7 {
+                if (1..=7).contains(&register) {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
@@ -3243,6 +3243,39 @@ mod tests {
         assert_eq!(framebuffer_pixel(&v, 152, 0), [238, 0, 0]);
         assert_eq!(framebuffer_pixel(&v, 153, 0), [0, 0, 0]);
         assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn midline_r1_display_disable_preserves_the_rendered_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+
+        v.advance(114);
+        reg(&mut v, 1, 0x00);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 8, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn midline_r2_name_table_base_write_preserves_the_old_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+        for column in 0..32 {
+            v.vram[0x3000 + column * 2] = 1;
+        }
+        v.vram[32] = 0xFF;
+
+        v.advance(114);
+        reg(&mut v, 2, 0x0C);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 1, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [238, 0, 0]);
     }
 
     #[test]
