@@ -22,6 +22,7 @@ Estado desta migração: os tipos de perfil e o renderer funcional foram movidos
 - Portas de dados/controle, command latch, read-ahead, wrap de endereço e decodificação espelhada.
 - Mode 4: tiles 4bpp, flips, paletas, prioridade, scroll, máscara da coluna esquerda, tabela de sprites, limites, overflow e colisão.
 - Quirk de zoom SMS1/315-5124: com N sprites selecionados, os primeiros N−4 recebem zoom horizontal 2x; os últimos quatro recebem apenas zoom vertical. Para N≤4, nenhum recebe zoom horizontal. SMS2/GG aplicam zoom horizontal a todos os sprites permitidos.
+- Conversão RGB CRAM por revisão: SMS1/315-5124 usa níveis comparativos R/G `{0,78,160,238}` e B `{0,98,160,238}`; SMS2 permanece no mapeamento anterior até sua auditoria dedicada. Os níveis SMS1 não equivalem a uma calibração física completa do caminho analógico.
 - Modos legados compatíveis com TMS: Graphics I, Text, Multicolor e Graphics II.
 - Perfis de raster NTSC/PAL e modos de altura suportados pelo runtime.
 - VBlank, contador de linha/IRQ, portas H/V counter e integração atual com a CPU.
