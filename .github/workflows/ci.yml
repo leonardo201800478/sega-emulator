@@ -217,8 +217,7 @@ jobs:
       ((github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) ||
        (github.event_name != 'workflow_dispatch' &&
         (needs.changes.outputs.other_rust == 'true' ||
-         needs.changes.outputs.full == 'true' ||
-         needs.changes.outputs.ci == 'true')))
+         needs.changes.outputs.full == 'true')))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -883,7 +882,7 @@ jobs:
         shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
-          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true' || needs.changes.outputs.ci == 'true')) }}
+          EXPECT_RUST_WORKSPACE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.refresh_cargo_lockfiles) || (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.other_rust == 'true' || needs.changes.outputs.full == 'true')) }}
           RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
           EXPECT_Z80: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.z80 == 'true' }}
           Z80: ${{ needs.z80-focused.result }}
