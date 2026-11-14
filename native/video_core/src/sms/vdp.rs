@@ -1122,7 +1122,6 @@ fn render_scanline_for_revision_with_evaluation(
     let sprite_height = evaluation.sprite_height;
     let zoom = evaluation.zoom;
     let active = &evaluation.selected;
-    let count = active.len();
     let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
