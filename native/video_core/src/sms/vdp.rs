@@ -680,7 +680,10 @@ fn evaluate_mode4_sprites(
         let row = ((y as i32 - sprite_y) / zoom) as usize;
         selected.push((index, sprite_x, tile, row));
     }
-    Mode4SpriteEvaluation { selected, overflow_index }
+    Mode4SpriteEvaluation {
+        selected,
+        overflow_index,
+    }
 }
 
 fn render_legacy_scanline(
@@ -1105,18 +1108,16 @@ mod tests {
         }
         vram[0x3F00 + 10] = 0xD0;
 
-        let evaluation = evaluate_mode4_sprites(
-            &vram,
-            &regs,
-            10,
-            SmsVdpRevision::Sega3155246,
-            192,
-            8,
-        );
+        let evaluation =
+            evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
 
         assert_eq!(evaluation.selected.len(), 8);
         assert_eq!(
-            evaluation.selected.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            evaluation
+                .selected
+                .iter()
+                .map(|sprite| sprite.0)
+                .collect::<Vec<_>>(),
             (0..8).collect::<Vec<_>>(),
             "the eight retained entries must preserve SAT order"
         );
@@ -1131,7 +1132,8 @@ mod tests {
         regs[5] = 0x7E;
         vram[0x3F00] = 0xD0;
         vram[0x3F01] = 9;
-        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
+        let evaluation =
+            evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
         assert!(evaluation.selected.is_empty());
         assert_eq!(evaluation.overflow_index, None);
     }
