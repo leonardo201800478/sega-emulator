@@ -14,6 +14,7 @@ The SMS Official Documentation's I/O appendix describes VDP status as latched at
 References:
 - [SMS Power — Sprites](https://www.smspower.org/Development/Sprites)
 - [SMS Power — Control Port](https://www.smspower.org/Development/ControlPort)
+- [MAME — 315_5124.cpp, sprite_collision()](https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp) (comparative implementation evidence only)
 - [SMS Official Documentation — Appendix B, Input/Output System](https://www.smspower.org/Development/SMSOfficialDocs)
 
 ## Existing implementation behavior
