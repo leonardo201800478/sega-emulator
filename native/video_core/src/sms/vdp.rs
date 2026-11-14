@@ -412,6 +412,14 @@ impl SmsVdp {
         }
     }
 
+    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
+        if let Some(index) = evaluation.overflow_index
+            && self.status & OVERFLOW == 0
+        {
+            self.status = (self.status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
+        }
+    }
+
     fn prime_sms1_sprite_line_buffer(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
             || self.registers[0] & 0x04 == 0
@@ -422,6 +430,7 @@ impl SmsVdp {
             return;
         }
         let evaluation = self.evaluate_sms1_sprite_line(0);
+        self.latch_sms1_sprite_overflow(&evaluation);
         self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
             target_line: 0,
             evaluation,
@@ -456,10 +465,18 @@ impl SmsVdp {
         } else {
             None
         };
-        self.sprite_line_buffer = next_line.map(|target_line| Mode4SpriteLineBuffer {
-            target_line,
-            evaluation: self.evaluate_sms1_sprite_line(target_line),
-        });
+        if let Some(target_line) = next_line {
+            let evaluation = self.evaluate_sms1_sprite_line(target_line);
+            // Hardware documentation places overflow in the SAT parsing phase,
+            // before the selected line is drawn.
+            self.latch_sms1_sprite_overflow(&evaluation);
+            self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
+                target_line,
+                evaluation,
+            });
+        } else {
+            self.sprite_line_buffer = None;
+        }
     }
 
     fn complete_scanline(&mut self) {
@@ -1093,7 +1110,10 @@ fn render_scanline_for_revision_with_evaluation(
         );
         &computed_evaluation
     };
-    if let Some(index) = evaluation.overflow_index
+    let overflow_was_latched = revision == SmsVdpRevision::Sega3155124
+        && sprite_evaluation.is_some();
+    if !overflow_was_latched
+        && let Some(index) = evaluation.overflow_index
         && *status & OVERFLOW == 0
     {
         *status = (*status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
@@ -1252,6 +1272,39 @@ mod tests {
             evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
         assert!(evaluation.selected.is_empty());
         assert_eq!(evaluation.overflow_index, None);
+    }
+
+    #[test]
+    fn sms1_sprite_overflow_is_set_during_sat_evaluation_and_clears_on_status_read() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x04;
+        vdp.registers[1] = 0x40;
+        vdp.registers[5] = 0x7F;
+        vdp.vram[0x3F00..0x3F09].fill(0);
+        vdp.vram[0x3F09] = 0xD0;
+
+        vdp.advance(LINE_TSTATES);
+
+        assert_ne!(
+            vdp.status & OVERFLOW,
+            0,
+            "overflow is detected while preparing the following scanline"
+        );
+        assert_eq!(vdp.status & 0x1F, 8);
+
+        let status = vdp.read_port(0xBF);
+        assert_ne!(status & OVERFLOW, 0);
+        assert_eq!(vdp.status & OVERFLOW, 0);
+
+        // The already-prepared line keeps its sprite membership, but a later
+        // SAT update must prevent the next line's evaluation from overflowing.
+        vdp.vram[0x3F00..0x3F09].fill(20);
+        vdp.advance(LINE_TSTATES);
+        assert_eq!(
+            vdp.status & OVERFLOW,
+            0,
+            "drawing the prepared line must not reassert the cleared overflow flag"
+        );
     }
 
     #[test]
