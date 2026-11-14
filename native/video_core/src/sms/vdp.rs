@@ -440,7 +440,8 @@ impl SmsVdp {
             .sprite_line_buffer
             .as_ref()
             .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
-        let mut partial_status = self.status & !(COLLISION | OVERFLOW | 0x1F);
+        let overflow_was_sticky = self.status & OVERFLOW != 0;
+        let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
             &self.vram,
             &self.cram,
@@ -458,7 +459,10 @@ impl SmsVdp {
         if partial_status & COLLISION != 0 {
             self.line_collision_seen = true;
         }
-        if partial_status & OVERFLOW != 0 && self.line_overflow_status == 0 {
+        if !overflow_was_sticky
+            && partial_status & OVERFLOW != 0
+            && self.line_overflow_status == 0
+        {
             self.line_overflow_status = partial_status & (OVERFLOW | 0x1F);
         }
         self.raster_span_cursor_x = end_x as u16;
