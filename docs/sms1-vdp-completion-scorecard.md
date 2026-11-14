@@ -30,7 +30,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 | HBlank / contador horizontal | NOT_CLOSED | HPos modelado parcialmente; todos os eventos e limites físicos não validados |
 | VBlank / IRQ | IMPLEMENTED_SCANLINE | Flags e integração funcional; instante sublinha e arbitragem completa ainda pendentes |
 | Scheduler / determinismo | IMPLEMENTED_INTEGRATED | VDP avança pelo Scheduler; snapshots incluem o estado de rasterização parcial |
-| Save State | IMPLEMENTED_WITH_VERSIONING | PR #831 atualiza snapshots temporais (bus v15, machine v28); teste de clone/restore do estado parcial |
+| Save State | IMPLEMENTED_WITH_VERSIONING | PR #831 atualiza snapshots temporais (bus v16, machine v29); teste de clone/restore do estado parcial |
 | SMS2 / outros perfis | REGRESSION_GATED | Renderer e perfis não SMS1 preservados pelos testes direcionados; não generalizar spans SMS1 |
 
 ## 2. Política de granularidade
