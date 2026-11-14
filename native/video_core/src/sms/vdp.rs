@@ -2243,7 +2243,7 @@ mod tests {
     }
 
     #[test]
-    fn status_read_clears_deferred_legacy_span_flags_for_the_current_line() {
+    fn status_read_acknowledges_legacy_overflow_and_collision_without_reactivation() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[1] = 0x40;
         v.registers[5] = 0x7F;
@@ -2273,7 +2273,9 @@ mod tests {
         assert_eq!(v.line_overflow_status, 0);
         assert!(!v.line_collision_seen);
 
-        // The suffix must not resurrect the acknowledged prefix flags.
+        // Remove the SAT entries for the next line. The current suffix must
+        // still use its latched entries, but the next line must not relatch overflow.
+        v.vram[0x3F80] = 0xD0;
         v.advance(114);
         assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
     }
