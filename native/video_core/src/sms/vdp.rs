@@ -1762,12 +1762,13 @@ mod tests {
         vdp.vram[0x3F09] = 0xD0;
 
         vdp.advance(LINE_TSTATES);
-
-        assert_ne!(
+        assert_eq!(
             vdp.status & OVERFLOW,
             0,
-            "overflow is detected while preparing the following scanline"
+            "overflow must remain clear before the selected line reaches HPos 24"
         );
+        vdp.advance(16);
+        assert_ne!(vdp.status & OVERFLOW, 0);
         assert_eq!(vdp.status & 0x1F, 8);
 
         let status = vdp.read_port(0xBF);
@@ -1781,7 +1782,7 @@ mod tests {
         assert_eq!(
             vdp.status & OVERFLOW,
             0,
-            "drawing the prepared line must not reassert the cleared overflow flag"
+            "the next line's HPos 24 evaluation must not reassert the cleared flag"
         );
     }
 
@@ -2319,18 +2320,19 @@ mod tests {
         reg(&mut v, 7, 0);
         assert!(v.line_collision_seen);
 
-        // Reading the status port acknowledges flags already detected this line.
+        // Before HBlank, overflow is visible but collision remains pending.
         let status = v.read_port(0xBF);
         assert_ne!(status & OVERFLOW, 0);
-        assert_ne!(status & COLLISION, 0);
+        assert_eq!(status & COLLISION, 0);
         assert_eq!(v.line_overflow_status, 0);
-        assert!(!v.line_collision_seen);
+        assert!(v.line_collision_seen);
 
-        // Remove the SAT entries for the next line. The current suffix must
-        // still use its latched entries, but the next line must not relatch overflow.
+        // Remove the SAT entries for the next line. The current suffix still
+        // uses its latched entries; HBlank must publish the pending collision.
         v.vram[0x3F80] = 0xD0;
         v.advance(114);
-        assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
+        assert_eq!(v.status & OVERFLOW, 0);
+        assert_ne!(v.status & COLLISION, 0);
     }
 
     #[test]
@@ -2639,7 +2641,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_sprite_collision_is_committed_at_scanline_close_and_cleared_by_status_read() {
+    fn sms1_sprite_collision_is_latched_at_hblank_and_cleared_by_status_read() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -2655,18 +2657,18 @@ mod tests {
         v.vram[2 * 32 + 1] = 0xFF;
 
         assert_eq!(v.status & COLLISION, 0);
-        v.advance(LINE_TSTATES - 1);
+        v.advance(212);
         assert_eq!(
             v.status & COLLISION,
             0,
-            "scanline-level model must not commit collision before the line closes"
+            "collision remains pending before the HBlank boundary at HPos 319"
         );
 
         v.advance(1);
         assert_ne!(
             v.status & COLLISION,
             0,
-            "opaque sprite overlap must be committed when the scanline renderer closes the line"
+            "HBlank must latch collision after the active display has been composed"
         );
 
         let status = v.read_port(0xBF);
