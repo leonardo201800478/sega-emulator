@@ -2249,11 +2249,7 @@ mod tests {
         ] {
             cram[0] = value;
             assert_eq!(
-                super::palette_rgb_for_revision(
-                    &cram,
-                    0,
-                    SmsVdpRevision::Sega3155124
-                ),
+                super::palette_rgb_for_revision(&cram, 0, SmsVdpRevision::Sega3155124),
                 expected,
                 "CRAM value {value:#04x}"
             );
@@ -2265,11 +2261,7 @@ mod tests {
         let mut cram = [0; CRAM_SIZE];
         cram[0] = 0x3F;
         assert_eq!(
-            super::palette_rgb_for_revision(
-                &cram,
-                0,
-                SmsVdpRevision::Sega3155246
-            ),
+            super::palette_rgb_for_revision(&cram, 0, SmsVdpRevision::Sega3155246),
             [255, 255, 255]
         );
     }
