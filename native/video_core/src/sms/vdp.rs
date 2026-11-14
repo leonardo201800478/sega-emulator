@@ -947,11 +947,7 @@ fn evaluate_mode4_sprites(
             tile += 256;
         }
         let row = ((y as i32 - sprite_y) / zoom_i32) as usize;
-        selected.push(Mode4SpriteEntry {
-            row,
-            x,
-            tile,
-        });
+        selected.push(Mode4SpriteEntry { row, x, tile });
     }
     Mode4SpriteEvaluation {
         selected,
