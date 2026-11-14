@@ -1,8 +1,8 @@
 # SMS1 Mode 4 — first-four horizontal sprite zoom, phase 4
 
-**ASIC:** Sega 315-5124  
-**Scope:** sprite zoom quirk  
-**Class:** functional renderer behavior  
+**ASIC:** Sega 315-5124
+**Scope:** sprite zoom quirk
+**Class:** functional renderer behavior
 **Status:** implementation and CI validation pending
 
 ## Evidence
