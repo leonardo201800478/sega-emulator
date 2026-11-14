@@ -75,9 +75,9 @@ impl fmt::Display for SmsTemporalCoordinatorError {
             Self::InvalidExternalThPlayer(player) => {
                 write!(f, "SMS external TH player must be 1 or 2, got {player}")
             }
-            Self::InvalidExternalThTimestamp => f.write_str(
-                "SMS external TH timestamp must be future and aligned to a Z80 T-state",
-            ),
+            Self::InvalidExternalThTimestamp => {
+                f.write_str("SMS external TH timestamp must be future and aligned to a Z80 T-state")
+            }
             Self::InvalidState => f.write_str("SMS temporal coordinator state is inconsistent"),
             Self::Scheduler(error) => write!(f, "SMS machine scheduler failed: {error}"),
         }
