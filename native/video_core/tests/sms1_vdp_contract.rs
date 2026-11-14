@@ -14,6 +14,40 @@ fn select(vdp: &mut SmsVdp, address: u16, code: u8) {
     vdp.write_port(0xBF, ((code & 0x03) << 6) | ((address >> 8) as u8 & 0x3F));
 }
 
+fn write_vram(vdp: &mut SmsVdp, address: u16, value: u8) {
+    select(vdp, address, 1);
+    vdp.write_port(0xBE, value);
+}
+
+fn write_cram(vdp: &mut SmsVdp, address: u16, value: u8) {
+    select(vdp, address, 3);
+    vdp.write_port(0xBE, value);
+}
+
+fn write_register(vdp: &mut SmsVdp, register: u8, value: u8) {
+    vdp.write_port(0xBF, value);
+    vdp.write_port(0xBF, 0x80 | register);
+}
+
+fn frame_pixel(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
+    let offset = (y * 256 + x) * 3;
+    [frame[offset], frame[offset + 1], frame[offset + 2]]
+}
+
+fn configure_sms1_background(vdp: &mut SmsVdp, r2: u8, r3: u8, r4: u8) {
+    for (register, value) in [
+        (0, 0x04),
+        (1, 0x40),
+        (2, r2),
+        (3, r3),
+        (4, r4),
+        (5, 0x7F),
+    ] {
+        write_register(vdp, register, value);
+    }
+    write_vram(vdp, 0x3F00, 0xD0);
+}
+
 #[test]
 fn control_port_requires_two_bytes_and_status_read_cancels_partial_word() {
     let mut vdp = new_sms1();
@@ -122,7 +156,14 @@ fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
     select(&mut vdp, 0x0001, 3);
     vdp.write_port(0xBE, 0x03);
 
-    for (register, value) in [(0, 0x04), (1, 0x40), (2, 0x0E), (5, 0x7E)] {
+    for (register, value) in [
+        (0, 0x04),
+        (1, 0x40),
+        (2, 0x0E),
+        (3, 0xFF),
+        (4, 0x07),
+        (5, 0x7F),
+    ] {
         vdp.write_port(0xBF, value);
         vdp.write_port(0xBF, 0x80 | register);
     }
@@ -135,6 +176,73 @@ fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
     assert_eq!(frame.len(), 256 * 192 * 3);
     assert_eq!(&frame[0..3], &[255, 0, 0]);
     assert_eq!(&frame[3..6], &[0, 0, 0]);
+}
+
+#[test]
+fn sms1_r2_mask_bit_controls_the_high_name_table_y_address_bit() {
+    let mut masked = new_sms1();
+    configure_sms1_background(&mut masked, 0x0E, 0xFF, 0x07);
+    write_vram(&mut masked, 0x3800, 0);
+    write_vram(&mut masked, 0x3801, 0);
+    write_vram(&mut masked, 0x3C00, 2);
+    write_vram(&mut masked, 0x3C01, 0);
+    write_vram(&mut masked, 0x0040, 0x80);
+    write_cram(&mut masked, 1, 0x03);
+    masked.advance(228 * 192);
+    assert_eq!(frame_pixel(masked.framebuffer(), 0, 128), [0, 0, 0]);
+
+    let mut unmasked = new_sms1();
+    configure_sms1_background(&mut unmasked, 0x0F, 0xFF, 0x07);
+    write_vram(&mut unmasked, 0x3800, 0);
+    write_vram(&mut unmasked, 0x3801, 0);
+    write_vram(&mut unmasked, 0x3C00, 2);
+    write_vram(&mut unmasked, 0x3C01, 0);
+    write_vram(&mut unmasked, 0x0040, 0x80);
+    write_cram(&mut unmasked, 1, 0x03);
+    unmasked.advance(228 * 192);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 128), [255, 0, 0]);
+}
+
+#[test]
+fn sms1_r3_mask_gates_background_plane_zero_and_one_pattern_addresses() {
+    let mut masked = new_sms1();
+    configure_sms1_background(&mut masked, 0x0F, 0x00, 0x07);
+    write_vram(&mut masked, 0x3800, 2);
+    write_vram(&mut masked, 0x3801, 0);
+    write_vram(&mut masked, 0x0040, 0x80);
+    write_cram(&mut masked, 1, 0x03);
+    masked.advance(228 * 192);
+    assert_eq!(frame_pixel(masked.framebuffer(), 0, 0), [0, 0, 0]);
+
+    let mut unmasked = new_sms1();
+    configure_sms1_background(&mut unmasked, 0x0F, 0x01, 0x07);
+    write_vram(&mut unmasked, 0x3800, 2);
+    write_vram(&mut unmasked, 0x3801, 0);
+    write_vram(&mut unmasked, 0x0040, 0x80);
+    write_cram(&mut unmasked, 1, 0x03);
+    unmasked.advance(228 * 192);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [255, 0, 0]);
+}
+
+#[test]
+fn sms1_r4_mask_gates_background_plane_two_and_three_pattern_addresses() {
+    let mut masked = new_sms1();
+    configure_sms1_background(&mut masked, 0x0F, 0xFF, 0x00);
+    write_vram(&mut masked, 0x3800, 64);
+    write_vram(&mut masked, 0x3801, 0);
+    write_vram(&mut masked, 0x0802, 0x80);
+    write_cram(&mut masked, 4, 0x03);
+    masked.advance(228 * 192);
+    assert_eq!(frame_pixel(masked.framebuffer(), 0, 0), [0, 0, 0]);
+
+    let mut unmasked = new_sms1();
+    configure_sms1_background(&mut unmasked, 0x0F, 0xFF, 0x01);
+    write_vram(&mut unmasked, 0x3800, 64);
+    write_vram(&mut unmasked, 0x3801, 0);
+    write_vram(&mut unmasked, 0x0802, 0x80);
+    write_cram(&mut unmasked, 4, 0x03);
+    unmasked.advance(228 * 192);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [255, 0, 0]);
 }
 
 #[test]
