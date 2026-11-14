@@ -1071,7 +1071,12 @@ fn render_scanline_for_revision_with_evaluation(
     for x in 0..SMS_VDP_WIDTH {
         if regs[0] & 0x20 != 0 && x < 8 {
             bg_color[x] = backdrop;
-            put_pixel(frame, x, y, palette_rgb_for_revision(cram, backdrop, revision));
+            put_pixel(
+                frame,
+                x,
+                y,
+                palette_rgb_for_revision(cram, backdrop, revision),
+            );
             continue;
         }
         let hs = if regs[0] & 0x40 != 0 && y < 16 {
@@ -1145,7 +1150,12 @@ fn render_scanline_for_revision_with_evaluation(
         let palette = if name & (1 << 11) != 0 { 16 } else { 0 };
         bg_color[x] = palette + color;
         bg_priority[x] = name & (1 << 12) != 0 && color != 0;
-        put_pixel(frame, x, y, palette_rgb_for_revision(cram, bg_color[x], revision));
+        put_pixel(
+            frame,
+            x,
+            y,
+            palette_rgb_for_revision(cram, bg_color[x], revision),
+        );
     }
 
     let computed_evaluation;
@@ -1257,9 +1267,8 @@ mod tests {
     use super::super::profile::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
     use super::{
         COLLISION, CRAM_SIZE, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp,
-        StereoPresentation,
-        TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline, render_legacy_sprites,
-        render_scanline, render_scanline_for_revision,
+        StereoPresentation, TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline,
+        render_legacy_sprites, render_scanline, render_scanline_for_revision,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
