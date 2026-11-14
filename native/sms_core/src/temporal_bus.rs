@@ -994,7 +994,11 @@ mod tests {
             let mut vdp = restored.vdp().clone();
             vdp.read_port(0xBF)
         };
-        assert_eq!(status_at_t13 & 0x80, 0, "VBlank status flag is later at T16");
+        assert_eq!(
+            status_at_t13 & 0x80,
+            0,
+            "VBlank status flag is later at T16"
+        );
 
         advance_internal(&mut restored, 3, 3);
         let status_at_t16 = {
