@@ -636,6 +636,32 @@ fn palette_rgb(cram: &[u8; CRAM_SIZE], index: u8) -> [u8; 3] {
     let v = cram[usize::from(index & 0x1F)] & 0x3F;
     [(v & 3) * 85, ((v >> 2) & 3) * 85, ((v >> 4) & 3) * 85]
 }
+
+fn palette_rgb_for_revision(
+    cram: &[u8; CRAM_SIZE],
+    index: u8,
+    revision: SmsVdpRevision,
+) -> [u8; 3] {
+    let value = cram[usize::from(index & 0x1F)] & 0x3F;
+    let red = value & 0x03;
+    let green = (value >> 2) & 0x03;
+    let blue = (value >> 4) & 0x03;
+
+    match revision {
+        SmsVdpRevision::Sega3155124 => {
+            const LEVEL: [u8; 4] = [0, 78, 160, 238];
+            const BLUE_LEVEL: [u8; 4] = [0, 98, 160, 238];
+            [
+                LEVEL[usize::from(red)],
+                LEVEL[usize::from(green)],
+                BLUE_LEVEL[usize::from(blue)],
+            ]
+        }
+        // Keep the existing SMS2 output unchanged until its dedicated
+        // profile/palette validation phase.
+        SmsVdpRevision::Sega3155246 => palette_rgb(cram, index),
+    }
+}
 fn put_pixel(frame: &mut [u8], x: usize, y: usize, rgb: [u8; 3]) {
     if x < SMS_VDP_WIDTH && y < SMS_VDP_MAX_HEIGHT {
         let i = (y * SMS_VDP_WIDTH + x) * 3;
@@ -1014,7 +1040,7 @@ fn render_scanline_for_revision_with_evaluation(
         render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
         return;
     }
-    let backdrop = palette_rgb(cram, 16 + (regs[7] & 0x0F));
+    let backdrop = palette_rgb_for_revision(cram, 16 + (regs[7] & 0x0F), revision);
     for x in 0..SMS_VDP_WIDTH {
         put_pixel(frame, x, y, backdrop);
     }
@@ -1037,7 +1063,7 @@ fn render_scanline_for_revision_with_evaluation(
     for x in 0..SMS_VDP_WIDTH {
         if regs[0] & 0x20 != 0 && x < 8 {
             bg_color[x] = backdrop;
-            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
+            put_pixel(frame, x, y, palette_rgb_for_revision(cram, backdrop, revision));
             continue;
         }
         let hs = if regs[0] & 0x40 != 0 && y < 16 {
@@ -1057,7 +1083,7 @@ fn render_scanline_for_revision_with_evaluation(
             let selector = vram[0x2000 + parse_row * 4 + 1] & 0x08 != 0;
             let color = if selector { 16 } else { 0 };
             bg_color[x] = color;
-            put_pixel(frame, x, y, palette_rgb(cram, color));
+            put_pixel(frame, x, y, palette_rgb_for_revision(cram, color, revision));
             continue;
         }
         let vs = if regs[0] & 0x80 != 0 && x >= 192 {
@@ -1093,7 +1119,7 @@ fn render_scanline_for_revision_with_evaluation(
         let palette = if name & (1 << 11) != 0 { 16 } else { 0 };
         bg_color[x] = palette + color;
         bg_priority[x] = name & (1 << 12) != 0 && color != 0;
-        put_pixel(frame, x, y, palette_rgb(cram, bg_color[x]));
+        put_pixel(frame, x, y, palette_rgb_for_revision(cram, bg_color[x], revision));
     }
 
     let computed_evaluation;
@@ -1186,7 +1212,7 @@ fn render_scanline_for_revision_with_evaluation(
                 }
                 occupied[x] = true;
                 if sprite_rgb[x].is_none() {
-                    sprite_rgb[x] = Some(palette_rgb(cram, 16 + color));
+                    sprite_rgb[x] = Some(palette_rgb_for_revision(cram, 16 + color, revision));
                 }
             }
         }
@@ -1327,7 +1353,7 @@ mod tests {
         let sprite_pixel = line_bytes + 10 * 3;
         assert_eq!(
             &vdp.working_framebuffer[sprite_pixel..sprite_pixel + 3],
-            &[255, 0, 0],
+            &[238, 0, 0],
             "a late SAT Y mutation must not revoke the already-selected line-1 sprite"
         );
 
@@ -1363,7 +1389,7 @@ mod tests {
         let sprite_pixel = line_bytes + 10 * 3;
         assert_eq!(
             &restored.working_framebuffer[sprite_pixel..sprite_pixel + 3],
-            &[255, 0, 0]
+            &[238, 0, 0]
         );
     }
 
@@ -1577,7 +1603,7 @@ mod tests {
             true,
             SmsVdpRevision::Sega3155124,
         );
-        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[238, 0, 0]);
 
         v.registers[5] = 0x7F;
         frame.fill(0);
@@ -1621,7 +1647,7 @@ mod tests {
             SmsVdpRevision::Sega3155124,
         );
 
-        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[238, 0, 0]);
     }
 
     #[test]
@@ -1650,7 +1676,7 @@ mod tests {
             SmsVdpRevision::Sega3155124,
         );
 
-        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[238, 0, 0]);
     }
 
     #[test]
@@ -1678,7 +1704,7 @@ mod tests {
             SmsVdpRevision::Sega3155124,
         );
 
-        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[10 * 3..10 * 3 + 3], &[238, 0, 0]);
     }
 
     #[test]
@@ -1711,7 +1737,7 @@ mod tests {
 
         assert_ne!(status & OVERFLOW, 0);
         assert_eq!(status & 0x1F, 8);
-        assert_eq!(&frame[196 * 3..196 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[196 * 3..196 * 3 + 3], &[238, 0, 0]);
         assert_eq!(&frame[224 * 3..224 * 3 + 3], &[0, 0, 0]);
     }
 
@@ -1743,7 +1769,7 @@ mod tests {
             );
             assert_eq!(
                 &frame[(y * SMS_VDP_WIDTH + 10) * 3..(y * SMS_VDP_WIDTH + 10) * 3 + 3],
-                &[255, 0, 0],
+                &[238, 0, 0],
                 "sprite row {y} must use the even tile pair and duplicate vertically"
             );
         }
@@ -1785,7 +1811,7 @@ mod tests {
                 let width = if doubled { 16 } else { 8 };
                 assert_eq!(
                     &frame[(x + width - 1) * 3..(x + width) * 3],
-                    &[255, 0, 0],
+                    &[238, 0, 0],
                     "last pixel of sprite {index} at count {sprite_count}"
                 );
                 assert_eq!(
@@ -1826,7 +1852,7 @@ mod tests {
         );
 
         assert_ne!(status & COLLISION, 0);
-        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[238, 0, 0]);
     }
 
     #[test]
@@ -1887,7 +1913,7 @@ mod tests {
             SmsVdpRevision::Sega3155124,
         );
 
-        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[20 * 3..20 * 3 + 3], &[238, 0, 0]);
     }
 
     #[test]
@@ -2183,6 +2209,45 @@ mod tests {
     }
 
     #[test]
+    fn sms1_cram_palette_uses_315_5124_output_levels_and_nonlinear_blue() {
+        let mut cram = [0; CRAM_SIZE];
+        for (value, expected) in [
+            (0x01, [78, 0, 0]),
+            (0x03, [238, 0, 0]),
+            (0x04, [0, 78, 0]),
+            (0x0C, [0, 238, 0]),
+            (0x10, [0, 0, 98]),
+            (0x30, [0, 0, 238]),
+            (0x3F, [238, 238, 238]),
+        ] {
+            cram[0] = value;
+            assert_eq!(
+                super::palette_rgb_for_revision(
+                    &cram,
+                    0,
+                    SmsVdpRevision::Sega3155124
+                ),
+                expected,
+                "CRAM value {value:#04x}"
+            );
+        }
+    }
+
+    #[test]
+    fn sms2_palette_output_remains_unchanged_during_sms1_calibration() {
+        let mut cram = [0; CRAM_SIZE];
+        cram[0] = 0x3F;
+        assert_eq!(
+            super::palette_rgb_for_revision(
+                &cram,
+                0,
+                SmsVdpRevision::Sega3155246
+            ),
+            [255, 255, 255]
+        );
+    }
+
+    #[test]
     fn sms_mode4_horizontal_scroll_is_fixed_for_the_first_sixteen_lines() {
         let mut v = SmsVdp::default();
         v.registers[0] = 0x44;
@@ -2388,12 +2453,17 @@ mod tests {
                 let sprite_shift_pixels: i16 = if sprite_shift { 8 } else { 0 };
                 let sprite_start = i16::from(sprite_x) - sprite_shift_pixels;
                 for x in 0..SMS_VDP_WIDTH {
+                    let max_level = if revision == SmsVdpRevision::Sega3155124 {
+                        238
+                    } else {
+                        255
+                    };
                     let expected = if left_mask && x < 8 {
                         [0, 0, 0]
                     } else if (sprite_start..sprite_start + 8).contains(&(x as i16)) {
-                        [255, 0, 0]
+                        [max_level, 0, 0]
                     } else {
-                        [0, 255, 0]
+                        [0, max_level, 0]
                     };
                     let offset = (SMS_VDP_WIDTH + x) * 3;
                     assert_eq!(
