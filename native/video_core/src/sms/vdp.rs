@@ -70,6 +70,7 @@ pub struct SmsVdp {
     latched_scroll_y: u8,
     pending_scroll_y: Option<u8>,
     sprite_line_buffer: Option<Mode4SpriteLineBuffer>,
+    legacy_sprite_line_buffer: Option<LegacySpriteLineBuffer>,
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -125,6 +126,7 @@ impl SmsVdp {
             latched_scroll_y: 0,
             pending_scroll_y: None,
             sprite_line_buffer: None,
+            legacy_sprite_line_buffer: None,
             status: 0,
             address: 0,
             read_buffer: 0,
@@ -310,6 +312,7 @@ impl SmsVdp {
         self.latched_scroll_y = 0;
         self.pending_scroll_y = None;
         self.sprite_line_buffer = None;
+        self.legacy_sprite_line_buffer = None;
         self.status = 0;
         self.address = 0;
         self.read_buffer = 0;
@@ -492,28 +495,45 @@ impl SmsVdp {
         }
     }
 
-    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
-        if let Some(index) = evaluation.overflow_index
+    fn latch_sms1_sprite_overflow_index(&mut self, index: Option<usize>) {
+        if let Some(index) = index
             && self.status & OVERFLOW == 0
         {
             self.status = (self.status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
         }
     }
 
+    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
+        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
+    }
+
+    fn latch_sms1_legacy_sprite_overflow(&mut self, evaluation: &LegacySpriteEvaluation) {
+        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
+    }
+
     fn prime_sms1_sprite_line_buffer(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
-            || self.registers[0] & 0x04 == 0
             || self.sprite_line_buffer.is_some()
+            || self.legacy_sprite_line_buffer.is_some()
             || self.scanline != 0
             || self.tstates_into_line != 0
         {
             return;
         }
         let evaluation = self.evaluate_sms1_sprite_line(0);
-        self.latch_sms1_sprite_overflow(&evaluation);
+        let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(0);
+        if self.registers[0] & 0x04 != 0 {
+            self.latch_sms1_sprite_overflow(&evaluation);
+        } else {
+            self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
+        }
         self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
             target_line: 0,
             evaluation,
+        });
+        self.legacy_sprite_line_buffer = Some(LegacySpriteLineBuffer {
+            target_line: 0,
+            evaluation: legacy_evaluation,
         });
     }
 
@@ -533,9 +553,19 @@ impl SmsVdp {
         )
     }
 
+    fn evaluate_sms1_legacy_sprite_line(&self, target_line: u16) -> LegacySpriteEvaluation {
+        evaluate_legacy_sprites(
+            &self.vram,
+            &self.registers,
+            usize::from(target_line),
+            self.profile.sprite_limit != SpriteLimitMode::HardwareLimit,
+        )
+    }
+
     fn prepare_next_sms1_sprite_line(&mut self, completed_line: u16, height: u16) {
-        if self.profile.revision != SmsVdpRevision::Sega3155124 || self.registers[0] & 0x04 == 0 {
+        if self.profile.revision != SmsVdpRevision::Sega3155124 {
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
             return;
         }
         let next_line = if completed_line + 1 < height {
@@ -547,15 +577,23 @@ impl SmsVdp {
         };
         if let Some(target_line) = next_line {
             let evaluation = self.evaluate_sms1_sprite_line(target_line);
-            // Hardware documentation places overflow in the SAT parsing phase,
-            // before the selected line is drawn.
-            self.latch_sms1_sprite_overflow(&evaluation);
+            let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(target_line);
+            if self.registers[0] & 0x04 != 0 {
+                self.latch_sms1_sprite_overflow(&evaluation);
+            } else {
+                self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
+            }
             self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
                 target_line,
                 evaluation,
             });
+            self.legacy_sprite_line_buffer = Some(LegacySpriteLineBuffer {
+                target_line,
+                evaluation: legacy_evaluation,
+            });
         } else {
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
         }
     }
 
@@ -824,6 +862,65 @@ fn sms1_sprite_attribute_address(sat_base: usize, offset: usize, register5: u8) 
 }
 
 /// SMS1 R6 bits 1-0 gate sprite pattern address bits 12-11.
+fn evaluate_legacy_sprites(
+    vram: &[u8],
+    regs: &[u8; 16],
+    y: usize,
+    unlocked: bool,
+) -> LegacySpriteEvaluation {
+    let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
+    let sprite_size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
+    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
+    let sprite_limit = if unlocked { 32 } else { 4 };
+    let mut selected = Vec::with_capacity(sprite_limit);
+    let mut overflow_index = None;
+
+    for index in 0..32 {
+        let at = (table + index * 4) & 0x3FFF;
+        let raw_y = vram[at];
+        if raw_y == 0xD0 {
+            break;
+        }
+        let mut sprite_y = i32::from(raw_y.wrapping_add(1));
+        if sprite_y >= 0xE0 {
+            sprite_y -= 0x100;
+        }
+        if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_size * zoom) as i32 {
+            continue;
+        }
+        if selected.len() == 4 {
+            overflow_index.get_or_insert(index);
+            if !unlocked {
+                break;
+            }
+        }
+        if selected.len() == sprite_limit {
+            break;
+        }
+
+        let attributes = vram[at + 3];
+        let mut x = i32::from(vram[at + 1]);
+        if attributes & 0x80 != 0 {
+            x -= 32;
+        }
+        let row = ((y as i32 - sprite_y) / zoom as i32) as usize;
+        selected.push(LegacySpriteEntry {
+            x,
+            pattern: vram[at + 2],
+            color: attributes & 0x0F,
+            row,
+        });
+    }
+
+    LegacySpriteEvaluation {
+        selected,
+        overflow_index,
+        sprite_size,
+        zoom,
+        pattern_register: regs[6],
+    }
+}
+
 fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
     let mask = usize::from(register6 & 0x03) << 11;
     (address & !0x1800) | (address & mask)
@@ -866,6 +963,29 @@ struct Mode4SpriteEvaluation {
 struct Mode4SpriteLineBuffer {
     target_line: u16,
     evaluation: Mode4SpriteEvaluation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LegacySpriteEntry {
+    x: i32,
+    pattern: u8,
+    color: u8,
+    row: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacySpriteEvaluation {
+    selected: Vec<LegacySpriteEntry>,
+    overflow_index: Option<usize>,
+    sprite_size: usize,
+    zoom: usize,
+    pattern_register: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacySpriteLineBuffer {
+    target_line: u16,
+    evaluation: LegacySpriteEvaluation,
 }
 
 /// Evaluate Mode 4 SAT candidates in table order.
