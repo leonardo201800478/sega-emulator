@@ -3,7 +3,7 @@
 **ASIC:** Sega 315-5124
 **Scope:** sprite overflow status timing relative to the SAT line buffer
 **Implementation class:** scanline-level functional model
-**Status:** code and focused CI validation pending
+**Status:** merged to main and focused CI validation passed (PR #818)
 **Physical subline oracle:** unavailable
 
 ## 1. Hardware evidence
