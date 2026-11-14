@@ -1873,6 +1873,45 @@ mod tests {
     }
 
     #[test]
+    fn sms1_sprite_collision_respects_left_column_mask_and_sprite_shift() {
+        for (register_zero, sprite_x, expected_collision) in [
+            (0x24, 0, false),
+            (0x2C, 8, false),
+            (0x2C, 16, true),
+        ] {
+            let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+            v.registers[0] = register_zero;
+            v.registers[1] = 0x40;
+            v.registers[2] = 0x0E;
+            v.registers[5] = 0x7F;
+            set_sprite(&mut v, 0, 0xFF, sprite_x, 1);
+            set_sprite(&mut v, 1, 0xFF, sprite_x, 2);
+            v.vram[0x3F02] = 0xD0;
+            solid_sprite_tile(&mut v, 1, 1);
+            solid_sprite_tile(&mut v, 2, 2);
+
+            let mut status = 0;
+            let mut frame = vec![0; FRAME_SIZE];
+            render_scanline_for_revision(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut frame,
+                0,
+                true,
+                SmsVdpRevision::Sega3155124,
+            );
+
+            assert_eq!(
+                status & COLLISION != 0,
+                expected_collision,
+                "R0={register_zero:#04x}, sprite X={sprite_x}"
+            );
+        }
+    }
+
+    #[test]
     fn sms1_transparent_sprite_overlap_does_not_set_collision() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
