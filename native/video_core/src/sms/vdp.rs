@@ -638,6 +638,7 @@ impl SmsVdp {
             self.read_buffer = value;
             self.address = self.address.wrapping_add(1) & 0x3FFF;
         } else {
+            self.commit_raster_span_to_beam();
             let address = usize::from(self.address) & 0x3FFF;
             self.vram[address] = value;
             self.read_buffer = value;
@@ -3204,6 +3205,44 @@ mod tests {
         assert_eq!(framebuffer_pixel(&v, 107, 0), [238, 0, 0]);
         assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 238, 0]);
         assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 238, 0]);
+    }
+
+    #[test]
+    fn midline_vram_pattern_write_preserves_prefix_and_updates_suffix() {
+        let mut v = setup_midline_sms1_write_fixture();
+
+        v.advance(114);
+        addr(&mut v, 0, 0x40);
+        v.write_port(0xBE, 0xFF);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 1, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 115, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [238, 0, 0]);
+    }
+
+    #[test]
+    fn multiple_midline_vram_writes_preserve_each_committed_span() {
+        let mut v = setup_midline_sms1_write_fixture();
+
+        v.advance(114);
+        addr(&mut v, 0, 0x40);
+        v.write_port(0xBE, 0xFF);
+
+        v.advance(30);
+        addr(&mut v, 0, 0x40);
+        v.write_port(0xBE, 0x00);
+        v.advance(84);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 152, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 153, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
     }
 
     #[test]
