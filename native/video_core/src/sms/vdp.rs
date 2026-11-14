@@ -2800,6 +2800,38 @@ mod tests {
     }
 
     #[test]
+    fn sms1_hblank_boundary_commits_the_last_active_pixel_and_status() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        set_sprite(&mut v, 0, 0xFF, 255, 1);
+        set_sprite(&mut v, 1, 0xFF, 255, 2);
+        v.vram[0x3F02] = 0xD0;
+        v.vram[32] = 0x80;
+        v.vram[2 * 32 + 1] = 0x80;
+
+        // T212 maps to HPos318: the last active pixel has not crossed yet.
+        v.advance(212);
+        assert_eq!(v.status & COLLISION, 0);
+        assert_eq!(v.raster_span_cursor_x, 0);
+
+        // T213 maps to HPos319 and closes the 256-pixel active span.
+        v.advance(1);
+        assert_eq!(v.raster_span_cursor_x, 256);
+        assert_ne!(
+            v.status & COLLISION,
+            0,
+            "HBlank must commit the final active pixel before status is sampled"
+        );
+
+        let status = v.read_port(0xBF);
+        assert_ne!(status & COLLISION, 0);
+        assert_eq!(v.status & COLLISION, 0);
+    }
+
+    #[test]
     fn prior_sticky_collision_is_not_relatched_by_a_collision_free_partial_span() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
