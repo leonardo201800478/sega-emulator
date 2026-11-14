@@ -3,7 +3,8 @@
 **Sistema-alvo:** Sega Master System 1
 **ASIC prioritário:** Sega 315-5124
 **Backend:** Rust / `sega-video`
-**Baseline integrada:** `main` após PR #836 (`b50f4ceb02ca54b362c5e18c054b28496af058db`)
+**Baseline da auditoria:** `main` em `202cdfc695d0c2346c86da4144b6e8a3316e0c4d`
+**Candidato validado:** PR #839, `c7afd54c22d68dc3a7e9d94e26bbd780bd1564f0` (aguardando merge)
 **Estado:** EM DESENVOLVIMENTO — NÃO LIBERADO PARA TESTE IN-GAME
 
 Este scorecard registra somente capacidades presentes na `main` e evidências executadas no SHA correspondente. PR aberta, branch de trabalho ou teste ainda em execução não contam como implementação integrada.
@@ -27,7 +28,8 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 | SAT / avaliação de sprites | IMPLEMENTED_SCANLINE | PR #832/#833: Mode 4 e legacy/TMS capturam metadados X/tile/pattern/color e controles R0/R6 durante avaliação por scanline; bytes de padrão continuam lidos na composição; timestamp físico não medido |
 | Sprite overflow | IMPLEMENTED_TSTATE_QUANTIZED | Mode 4 e legacy/TMS: índice associado latched em HPos 24 / T16, usando o buffer do modo ativo |
 | Sprite collision | IMPLEMENTED_PIXEL_COMMIT_APPROXIMATE | Sobreposição de pixels opacos publicada quando um commit de span cruza o pixel; leitura de status comita o prefixo até o feixe; não há pipeline de colisão por dot |
-| HBlank / contador horizontal | IMPLEMENTED_TSTATE_QUANTIZED | T213 finaliza a composição da área ativa; não é latch de colisão. H-counter/TH mantém conversão previamente auditada |
+| HCounter / porta $7F | IMPLEMENTED_APPROXIMATE | Conversão 342 HPos / 228 T-states; latch persistente por TH software; leituras espelhadas preservam o valor capturado. Borda TH externa ainda não dispara latch; sem validação física |
+| HBlank | IMPLEMENTED_TSTATE_QUANTIZED | T213/HPos319 fecha os 256 pixels ativos; T212/HPos318 não fecha o último pixel. Teste de colisão no pixel 255 valida o boundary lógico, não a fase elétrica física |
 | VBlank / IRQ | IMPLEMENTED_TSTATE_QUANTIZED | VINT IRQ pendente em HPos 20/T13; VBlank flag e frame-ready em HPos 24/T16 da primeira linha VBlank; acknowledge pelo status read |
 | Scheduler / determinismo | IMPLEMENTED_INTEGRATED | VDP avança pelo Scheduler; snapshots incluem o estado de rasterização parcial |
 | Save State | IMPLEMENTED_WITH_VERSIONING | PR #836 atualiza snapshots temporais (bus v19, machine v32) para VINT pendente e VCounter latch; rejeição de versões anteriores |
@@ -50,9 +52,10 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 4. Modelar fetches de padrão por sprite/dot e separar seleção SAT de fetch real; Mode 4 e legacy/TMS já capturam metadados por scanline, mas bitplanes continuam consultados durante a composição.
 5. Executar a ROM SmsVdpTest e validar os eventos HPos 20/T13 (VINT IRQ), HPos 21/T14 (HINT), HPos 23/T15 (VCounter) e HPos 24/T16 (VBlank flag/overflow) contra a implementação; os eventos seguem T-state boundaries, sem fase dot-clock.
 6. Confirmar o instante de colisão pixel a pixel: o modelo publica a colisão no commit do pixel, mas não possui pipeline dot-level do ASIC.
-7. Expandir a demonstração de equivalência contínua/em blocos/save-load para eventos subline, interrupções e transições de frame.
+7. Expandir a demonstração de equivalência contínua/em blocos/save-load para eventos subline, interrupções e transições de frame. A captura TH por software já possui teste de invariância para avanço contínuo versus blocos 3+5 T-states.
 8. Executar regressões SMS1/SMS2 e build Windows x64 Release no candidato final.
-9. Registrar os comportamentos ainda aproximados antes da primeira campanha in-game.
+9. Integrar bordas TH externas no Scheduler e fechar a captura H-counter do Light Phaser com política de atraso/perfil sustentada por evidência; não assumir o offset MAME de 19 HPos como universal.
+10. Registrar os comportamentos ainda aproximados antes da primeira campanha in-game.
 
 ## 4. Evidências integradas
 
@@ -66,7 +69,10 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 - PR #832 — metadados SAT Mode 4: 92 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release e build Windows x64 Release aprovados no HEAD `1e0a1191f7bdc37c57520a3cc6b78e142206b1c6`.
 - PR #833 — buffer SAT legacy/TMS: 93 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release e build Windows x64 Release aprovados no HEAD `ab37d5ae69a7e754fb46a0b7d98883ccf8089719`.
 - PR #834 — boundaries HBlank/HINT/VBlank/overflow (primeira aproximação): 95 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release e build Windows x64 Release aprovados no HEAD `c5e59b6a40e2158546c1d0a5bd857add34b42d08`.
-- PR #836 — correção temporal baseada na SmsVdpTest: 99 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release e build Windows x64 Release aprovados no HEAD `6449b7085c019a95d2cd4f0ca1c364a0bf929962`.
+- PR #836 — correção temporal baseada na SmsVdpTest: evidência histórica do HEAD `6449b7085c019a95d2cd4f0ca1c364a0bf929962`.
+- PR #837 — atualização do scorecard temporal.
+- PR #838 — leitura estável do H-counter por `$7F` e portas espelhadas; o primeiro workflow classificou incorretamente o caminho temporal e não executou os testes do SMS core.
+- PR #839 — corrige a classificação de impacto temporal; adiciona invariância de captura TH para avanço contínuo versus blocos e boundary HBlank T212/T213 com colisão no último pixel. No HEAD `c7afd54c22d68dc3a7e9d94e26bbd780bd1564f0`: 98 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes de integração SMS; Rustfmt, Clippy, Z80 focused, input focused, Scheduler stress, workspace regression, workflow lint, runtime Release (45 + 1 testes) e build Windows x64 Release aprovados.
 
 Referência de timing independente: [SmsVdpTest](https://github.com/FluBBaOfWard/SmsVdpTest). A ROM ainda não foi executada pelo runtime deste projeto.
 
