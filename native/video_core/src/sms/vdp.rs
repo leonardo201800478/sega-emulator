@@ -2233,12 +2233,13 @@ mod tests {
         v.vram[8..16].fill(0xFF);
         v.vram[0x3F80 + 5 * 4] = 0xD0;
 
-        // The first partial composition detects both overflow and collision.
+        // Overflow is latched by the line evaluation; the first partial
+        // composition detects the overlapping opaque sprite pixels.
         v.advance(114);
+        assert_ne!(v.status & OVERFLOW, 0);
         // A register write is the externally observable boundary that commits
         // the already-scanned prefix in this selective-raster model.
         reg(&mut v, 7, 0);
-        assert_ne!(v.line_overflow_status & OVERFLOW, 0);
         assert!(v.line_collision_seen);
 
         // Reading the status port acknowledges flags already detected this line.
