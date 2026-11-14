@@ -599,25 +599,34 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
     (address & !0x1800) | (address & mask)
 }
 
-/// Select Mode 4 sprites intersecting the requested output line.
+/// Result of one Mode 4 SAT evaluation pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Mode4SpriteEvaluation {
+    /// At most the eight sprite entries retained by the VDP for this line.
+    selected: Vec<(usize, i32, usize, usize)>,
+    /// SAT index of the first additional sprite that also intersects the line.
+    overflow_index: Option<usize>,
+}
+
+/// Evaluate Mode 4 SAT candidates in table order.
 ///
-/// The SMS VDP parses the SAT in table order and retains at most eight sprite
-/// numbers for the following line. This pure evaluator deliberately returns
-/// the full ordered candidate list so overflow/status policy and composition
-/// remain separate. Temporal latching of this list is handled by the VDP
-/// state machine in a subsequent change; this function alone does not claim
-/// to model the SAT evaluation boundary.
+/// The evaluator retains no more than the hardware's eight entries. It keeps
+/// scanning only until the first additional matching sprite is found, so the
+/// overflow index is deterministic and later SAT entries cannot replace it.
+/// This remains a scanline-level evaluator; its temporal handoff to the next
+/// line is deliberately implemented by a separate state-machine change.
 fn evaluate_mode4_sprites(
     vram: &[u8],
     regs: &[u8; 16],
     y: usize,
     revision: SmsVdpRevision,
     height: usize,
-) -> Vec<(usize, i32, usize, usize)> {
+) -> Mode4SpriteEvaluation {
     let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
     let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    let mut active = Vec::with_capacity(8);
+    let mut selected = Vec::with_capacity(8);
+    let mut overflow_index = None;
     for index in 0..64 {
         let y_address = if revision == SmsVdpRevision::Sega3155124 {
             sms1_sprite_attribute_address(sat, index, regs[5])
@@ -635,6 +644,10 @@ fn evaluate_mode4_sprites(
         };
         if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height * zoom) {
             continue;
+        }
+        if selected.len() == 8 {
+            overflow_index = Some(index);
+            break;
         }
         let x_offset = 0x80 + index * 2;
         let x_address = if revision == SmsVdpRevision::Sega3155124 {
@@ -656,9 +669,9 @@ fn evaluate_mode4_sprites(
             tile &= !1;
         }
         let row = ((y as i32 - sprite_y) / zoom) as usize;
-        active.push((index, sprite_x, tile, row));
+        selected.push((index, sprite_x, tile, row));
     }
-    active
+    Mode4SpriteEvaluation { selected, overflow_index }
 }
 
 fn render_legacy_scanline(
@@ -964,17 +977,17 @@ fn render_scanline_for_revision(
     let sprite_pattern = usize::from(regs[6] & 0x04) << 11;
     let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
     let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    // SAT evaluation is kept separate from pixel composition. This is the
-    // first step toward the SMS hardware's per-line sprite-number buffer.
-    let active = evaluate_mode4_sprites(vram, regs, y, revision, height);
-    if active.len() > 8 && *status & OVERFLOW == 0 {
-        *status = (*status & !0x1F) | OVERFLOW | ((active[8].0 as u8) & 0x1F);
+    // SAT evaluation is bounded to the VDP's eight-entry line capacity.
+    // This is still evaluated for the rendered line; the next change adds
+    // the explicit temporal handoff between adjacent scanlines.
+    let evaluation = evaluate_mode4_sprites(vram, regs, y, revision, height);
+    if let Some(index) = evaluation.overflow_index
+        && *status & OVERFLOW == 0
+    {
+        *status = (*status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
     }
-    let count = if hardware_sprite_limit {
-        active.len().min(8)
-    } else {
-        active.len()
-    };
+    let active = evaluation.selected;
+    let count = if hardware_sprite_limit { active.len() } else { active.len() };
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
     // Lower sprite index wins visually; all drawn opaque sprite pixels affect collision.
@@ -1076,15 +1089,16 @@ mod tests {
         }
         vram[0x3F00 + 10] = 0xD0;
 
-        let selected = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
+        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
 
-        assert_eq!(selected.len(), 10);
+        assert_eq!(evaluation.selected.len(), 8);
         assert_eq!(
-            selected.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
-            (0..10).collect::<Vec<_>>(),
-            "SAT evaluation must preserve table order"
+            evaluation.selected.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            (0..8).collect::<Vec<_>>(),
+            "the eight retained entries must preserve SAT order"
         );
-        assert!(selected.iter().all(|sprite| sprite.3 == 0));
+        assert_eq!(evaluation.overflow_index, Some(8));
+        assert!(evaluation.selected.iter().all(|sprite| sprite.3 == 0));
     }
 
     #[test]
@@ -1094,8 +1108,9 @@ mod tests {
         regs[5] = 0x7E;
         vram[0x3F00] = 0xD0;
         vram[0x3F01] = 9;
-        let selected = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
-        assert!(selected.is_empty());
+        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192);
+        assert!(evaluation.selected.is_empty());
+        assert_eq!(evaluation.overflow_index, None);
     }
 
     #[test]
