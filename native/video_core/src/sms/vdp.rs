@@ -797,12 +797,7 @@ fn tms_quarter_range(
     for bit in 0..4 {
         let pixel_x = x + bit;
         if (start_x..end_x).contains(&pixel_x) {
-            let pixel_color = if color & (0x08 >> bit) != 0 {
-                color >> 4
-            } else {
-                color & 0x0F
-            };
-            tms_pixel(frame, pixel_x, y, pixel_color);
+            tms_pixel(frame, pixel_x, y, color);
         }
     }
 }
