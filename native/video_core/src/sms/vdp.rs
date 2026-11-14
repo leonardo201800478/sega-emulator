@@ -2018,6 +2018,38 @@ mod tests {
     }
 
     #[test]
+    fn prior_sticky_collision_is_not_relatched_by_a_collision_free_partial_span() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        set_sprite(&mut v, 0, 0xFF, 20, 1);
+        set_sprite(&mut v, 1, 0xFF, 20, 2);
+        v.vram[0x3F02] = 0xD0;
+        v.vram[32] = 0xFF;
+        v.vram[2 * 32 + 1] = 0xFF;
+
+        v.advance(LINE_TSTATES);
+        assert_ne!(v.status & COLLISION, 0, "line zero establishes a sticky collision");
+
+        // Line one has no selected sprites. A partial CRAM commit must not
+        // mistake the previous line's sticky status bit for a new collision.
+        v.advance(114);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        let _ = v.read_port(0xBF);
+        assert_eq!(v.status & COLLISION, 0);
+
+        v.advance(114);
+        assert_eq!(
+            v.status & COLLISION,
+            0,
+            "a collision-free line must not reassert a previously cleared sticky flag"
+        );
+    }
+
+    #[test]
     fn sms1_sprite_collision_respects_left_column_mask_and_sprite_shift() {
         for (register_zero, sprite_x, expected_collision) in
             [(0x24, 0, false), (0x2C, 8, false), (0x2C, 16, true)]
