@@ -347,10 +347,12 @@ impl SmsVdp {
                 value
             }
             0x81 => {
-                let value = self.status;
+                let value = self.status
+                    | if self.line_collision_seen { COLLISION } else { 0 }
+                    | self.line_overflow_status;
                 self.status = 0;
-                // A status read acknowledges flags already detected in this line.
-                // Do not let deferred span latches resurrect them at line close.
+                // A status read returns and acknowledges flags already detected
+                // in this line. Do not let deferred span latches resurrect them.
                 self.line_collision_seen = false;
                 self.line_overflow_status = 0;
                 self.line_irq_pending = false;
@@ -1962,7 +1964,9 @@ mod tests {
         assert!(v.line_collision_seen);
 
         // Reading the status port acknowledges flags already detected this line.
-        let _ = v.read_port(0xBF);
+        let status = v.read_port(0xBF);
+        assert_ne!(status & OVERFLOW, 0);
+        assert_ne!(status & COLLISION, 0);
         assert_eq!(v.line_overflow_status, 0);
         assert!(!v.line_collision_seen);
 
