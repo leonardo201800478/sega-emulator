@@ -1110,8 +1110,8 @@ fn render_scanline_for_revision_with_evaluation(
         );
         &computed_evaluation
     };
-    let overflow_was_latched = revision == SmsVdpRevision::Sega3155124
-        && sprite_evaluation.is_some();
+    let overflow_was_latched =
+        revision == SmsVdpRevision::Sega3155124 && sprite_evaluation.is_some();
     if !overflow_was_latched
         && let Some(index) = evaluation.overflow_index
         && *status & OVERFLOW == 0
