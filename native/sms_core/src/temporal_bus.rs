@@ -1629,6 +1629,58 @@ mod temporal_vdp_tests {
     }
 
     #[test]
+    fn h_counter_th_capture_is_invariant_to_scheduler_chunking() {
+        fn advance_internal(bus: &mut SmsTemporalBus, id: u64, tstates: u32) {
+            bus.schedule_internal_cycle(id, tstates).unwrap();
+            assert!(matches!(
+                bus.dispatch_next().unwrap(),
+                Some(SmsTemporalDispatch::InternalCycleComplete(_))
+            ));
+            bus.acknowledge_internal_completion(id).unwrap();
+        }
+
+        fn capture_th(bus: &mut SmsTemporalBus) {
+            transact(
+                bus,
+                10,
+                Z80BusOperation::PortWrite { value: 0xDD },
+                0x003F,
+            );
+            transact(
+                bus,
+                11,
+                Z80BusOperation::PortWrite { value: 0xDF },
+                0x003F,
+            );
+        }
+
+        let mut continuous = SmsTemporalBus::new_with_hardware_profile(
+            vec![0; 0x4000],
+            3,
+            super::DEFAULT_SMS_PSG_CLOCK_HZ,
+            super::DEFAULT_AUDIO_SAMPLE_RATE,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            super::Territory::Export,
+        )
+        .unwrap();
+        let mut chunked = continuous.clone();
+
+        advance_internal(&mut continuous, 1, 8);
+        advance_internal(&mut chunked, 1, 3);
+        advance_internal(&mut chunked, 2, 5);
+
+        capture_th(&mut continuous);
+        capture_th(&mut chunked);
+
+        assert_eq!(continuous.vdp().read_h_counter(), 0xF4);
+        assert_eq!(
+            continuous.vdp().read_h_counter(),
+            chunked.vdp().read_h_counter(),
+            "TH must capture the same H-counter after equal elapsed Scheduler time"
+        );
+    }
+
+    #[test]
     fn vdp_raster_progress_is_chunk_invariant_and_survives_bus_restore() {
         const FRAME_TSTATES: u32 = 228 * 262;
         let mut whole = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
