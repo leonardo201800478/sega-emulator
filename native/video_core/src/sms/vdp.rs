@@ -66,6 +66,7 @@ pub struct SmsVdp {
     latched_scroll_x: u8,
     latched_scroll_y: u8,
     pending_scroll_y: Option<u8>,
+    sprite_line_buffer: Option<Mode4SpriteLineBuffer>,
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -117,6 +118,7 @@ impl SmsVdp {
             latched_scroll_x: 0,
             latched_scroll_y: 0,
             pending_scroll_y: None,
+            sprite_line_buffer: None,
             status: 0,
             address: 0,
             read_buffer: 0,
@@ -298,6 +300,7 @@ impl SmsVdp {
         self.latched_scroll_x = 0;
         self.latched_scroll_y = 0;
         self.pending_scroll_y = None;
+        self.sprite_line_buffer = None;
         self.status = 0;
         self.address = 0;
         self.read_buffer = 0;
@@ -394,6 +397,9 @@ impl SmsVdp {
     }
 
     pub fn advance(&mut self, tstates: u64) {
+        if tstates > 0 {
+            self.prime_sms1_sprite_line_buffer();
+        }
         let mut remaining = tstates;
         while remaining > 0 {
             let step = remaining.min(LINE_TSTATES - u64::from(self.tstates_into_line));
@@ -406,6 +412,58 @@ impl SmsVdp {
         }
     }
 
+    fn prime_sms1_sprite_line_buffer(&mut self) {
+        if self.profile.revision != SmsVdpRevision::Sega3155124
+            || self.registers[0] & 0x04 == 0
+            || self.sprite_line_buffer.is_some()
+            || self.scanline != 0
+            || self.tstates_into_line != 0
+        {
+            return;
+        }
+        let evaluation = self.evaluate_sms1_sprite_line(0);
+        self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
+            target_line: 0,
+            evaluation,
+        });
+    }
+
+    fn evaluate_sms1_sprite_line(&self, target_line: u16) -> Mode4SpriteEvaluation {
+        let sprite_limit = if self.profile.sprite_limit == SpriteLimitMode::HardwareLimit {
+            8
+        } else {
+            64
+        };
+        evaluate_mode4_sprites(
+            &self.vram,
+            &self.registers,
+            usize::from(target_line),
+            self.profile.revision,
+            usize::from(self.visible_height()),
+            sprite_limit,
+        )
+    }
+
+    fn prepare_next_sms1_sprite_line(&mut self, completed_line: u16, height: u16) {
+        if self.profile.revision != SmsVdpRevision::Sega3155124
+            || self.registers[0] & 0x04 == 0
+        {
+            self.sprite_line_buffer = None;
+            return;
+        }
+        let next_line = if completed_line + 1 < height {
+            Some(completed_line + 1)
+        } else if completed_line + 1 == self.total_lines() {
+            Some(0)
+        } else {
+            None
+        };
+        self.sprite_line_buffer = next_line.map(|target_line| Mode4SpriteLineBuffer {
+            target_line,
+            evaluation: self.evaluate_sms1_sprite_line(target_line),
+        });
+    }
+
     fn complete_scanline(&mut self) {
         let line = self.scanline;
         self.light_pulse = false;
@@ -414,7 +472,16 @@ impl SmsVdp {
             let mut render_registers = self.registers;
             render_registers[8] = self.latched_scroll_x;
             render_registers[9] = self.latched_scroll_y;
-            render_scanline_for_revision(
+            let sprite_evaluation = if self.profile.revision == SmsVdpRevision::Sega3155124
+                && self.registers[0] & 0x04 != 0
+            {
+                self.sprite_line_buffer.take().and_then(|buffer| {
+                    (buffer.target_line == line).then_some(buffer.evaluation)
+                })
+            } else {
+                None
+            };
+            render_scanline_for_revision_with_evaluation(
                 &self.vram,
                 &self.cram,
                 &render_registers,
@@ -423,6 +490,8 @@ impl SmsVdp {
                 usize::from(line),
                 self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
                 self.profile.revision,
+                usize::from(height),
+                sprite_evaluation.as_ref(),
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
@@ -442,6 +511,7 @@ impl SmsVdp {
                 self.line_counter = self.line_counter.wrapping_sub(1);
             }
         }
+        self.prepare_next_sms1_sprite_line(line, height);
         self.scanline += 1;
         if self.scanline == height {
             if let Some(scroll_y) = self.pending_scroll_y.take() {
@@ -602,11 +672,18 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
 /// Result of one Mode 4 SAT evaluation pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mode4SpriteEvaluation {
-    /// Sprite candidates retained for drawing (8 in hardware mode, up to 64
-    /// in the explicit unlocked-compatibility mode).
-    selected: Vec<(usize, i32, usize, usize)>,
+    /// SAT index and source row selected for this scanline.
+    selected: Vec<(usize, usize)>,
     /// SAT index of the first additional sprite that also intersects the line.
     overflow_index: Option<usize>,
+    sprite_height: usize,
+    zoom: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Mode4SpriteLineBuffer {
+    target_line: u16,
+    evaluation: Mode4SpriteEvaluation,
 }
 
 /// Evaluate Mode 4 SAT candidates in table order.
@@ -658,31 +735,14 @@ fn evaluate_mode4_sprites(
         if selected.len() == sprite_limit {
             break;
         }
-        let x_offset = 0x80 + index * 2;
-        let x_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset, regs[5])
-        } else {
-            (sat + x_offset) & 0x3FFF
-        };
-        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
-        } else {
-            (sat + x_offset + 1) & 0x3FFF
-        };
-        let mut sprite_x = i32::from(vram[x_address]);
-        if regs[0] & 0x08 != 0 {
-            sprite_x -= 8;
-        }
-        let mut tile = usize::from(vram[tile_address]);
-        if sprite_height == 16 {
-            tile &= !1;
-        }
         let row = ((y as i32 - sprite_y) / zoom) as usize;
-        selected.push((index, sprite_x, tile, row));
+        selected.push((index, row));
     }
     Mode4SpriteEvaluation {
         selected,
         overflow_index,
+        sprite_height,
+        zoom,
     }
 }
 
@@ -894,6 +954,43 @@ fn render_scanline_for_revision(
     hardware_sprite_limit: bool,
     revision: SmsVdpRevision,
 ) {
+    let active_height = if regs[1] & 0x08 != 0 {
+        240
+    } else if regs[1] & 0x10 != 0 {
+        224
+    } else {
+        192
+    };
+    render_scanline_for_revision_with_evaluation(
+        vram,
+        cram,
+        regs,
+        status,
+        frame,
+        y,
+        hardware_sprite_limit,
+        revision,
+        active_height,
+        None,
+    );
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit render inputs keep hardware state ownership at the VDP boundary"
+)]
+fn render_scanline_for_revision_with_evaluation(
+    vram: &[u8],
+    cram: &[u8; CRAM_SIZE],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    hardware_sprite_limit: bool,
+    revision: SmsVdpRevision,
+    active_height: usize,
+    sprite_evaluation: Option<&Mode4SpriteEvaluation>,
+) {
     if regs[0] & 0x04 == 0 {
         render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
         return;
@@ -905,13 +1002,7 @@ fn render_scanline_for_revision(
     if regs[1] & 0x40 == 0 {
         return;
     }
-    let height = if regs[1] & 0x08 != 0 {
-        240
-    } else if regs[1] & 0x10 != 0 {
-        224
-    } else {
-        192
-    };
+    let height = active_height;
     let name_base = if height == 192 {
         usize::from(regs[2] & 0x0E) << 10
     } else {
@@ -986,31 +1077,54 @@ fn render_scanline_for_revision(
         put_pixel(frame, x, y, palette_rgb(cram, bg_color[x]));
     }
 
-    let sprite_pattern = usize::from(regs[6] & 0x04) << 11;
-    let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
-    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    // SAT evaluation is bounded to the VDP's eight-entry line capacity.
-    // This is still evaluated for the rendered line; the next change adds
-    // the explicit temporal handoff between adjacent scanlines.
-    let evaluation = evaluate_mode4_sprites(
-        vram,
-        regs,
-        y,
-        revision,
-        height,
-        if hardware_sprite_limit { 8 } else { 64 },
-    );
+    let computed_evaluation;
+    let evaluation = if let Some(evaluation) = sprite_evaluation {
+        evaluation
+    } else {
+        computed_evaluation = evaluate_mode4_sprites(
+            vram,
+            regs,
+            y,
+            revision,
+            height,
+            if hardware_sprite_limit { 8 } else { 64 },
+        );
+        &computed_evaluation
+    };
     if let Some(index) = evaluation.overflow_index
         && *status & OVERFLOW == 0
     {
         *status = (*status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
     }
-    let active = evaluation.selected;
+    let sprite_pattern = usize::from(regs[6] & 0x04) << 11;
+    let sprite_height = evaluation.sprite_height;
+    let zoom = evaluation.zoom;
+    let active = &evaluation.selected;
     let count = active.len();
+    let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
     // Lower sprite index wins visually; all drawn opaque sprite pixels affect collision.
-    for (rank, &(_index, sx, tile, row)) in active.iter().take(count).enumerate() {
+    for (rank, &(index, row)) in active.iter().enumerate() {
+        let x_offset = 0x80 + index * 2;
+        let x_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset, regs[5])
+        } else {
+            (sat + x_offset) & 0x3FFF
+        };
+        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
+        } else {
+            (sat + x_offset + 1) & 0x3FFF
+        };
+        let mut sx = i32::from(vram[x_address]);
+        if regs[0] & 0x08 != 0 {
+            sx -= 8;
+        }
+        let mut tile = usize::from(vram[tile_address]);
+        if sprite_height == 16 {
+            tile &= !1;
+        }
         let tile_row = if sprite_height == 16 && row >= 8 {
             tile + 1
         } else {
@@ -1122,7 +1236,7 @@ mod tests {
             "the eight retained entries must preserve SAT order"
         );
         assert_eq!(evaluation.overflow_index, Some(8));
-        assert!(evaluation.selected.iter().all(|sprite| sprite.3 == 0));
+        assert!(evaluation.selected.iter().all(|sprite| sprite.1 == 0));
     }
 
     #[test]
@@ -1136,6 +1250,66 @@ mod tests {
             evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
         assert!(evaluation.selected.is_empty());
         assert_eq!(evaluation.overflow_index, None);
+    }
+
+    #[test]
+    fn sms1_sprite_y_selection_is_latched_for_the_following_scanline() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x04;
+        vdp.registers[1] = 0x40;
+        vdp.registers[5] = 0x7F;
+        vdp.cram[17] = 0x03;
+        vdp.vram[0x20] = 0xFF;
+        set_sprite(&mut vdp, 0, 0, 10, 1);
+        vdp.vram[0x3F01] = 0xD0;
+
+        vdp.advance(LINE_TSTATES);
+        // Line 0 completion has selected this sprite for line 1.
+        vdp.vram[0x3F00] = 20;
+        vdp.advance(LINE_TSTATES);
+
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        let sprite_pixel = line_bytes + 10 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[sprite_pixel..sprite_pixel + 3],
+            &[255, 0, 0],
+            "a late SAT Y mutation must not revoke the already-selected line-1 sprite"
+        );
+
+        vdp.advance(LINE_TSTATES);
+        let next_line_pixel = line_bytes * 2 + 10 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_pixel..next_line_pixel + 3],
+            &[0, 0, 0],
+            "the new Y coordinate must be observed by the subsequent evaluation"
+        );
+    }
+
+    #[test]
+    fn sms1_sprite_line_buffer_is_preserved_by_vdp_clone_restore() {
+        let mut original = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        original.registers[0] = 0x04;
+        original.registers[1] = 0x40;
+        original.registers[5] = 0x7F;
+        original.cram[17] = 0x03;
+        original.vram[0x20] = 0xFF;
+        set_sprite(&mut original, 0, 0, 10, 1);
+        original.vram[0x3F01] = 0xD0;
+
+        original.advance(LINE_TSTATES);
+        let mut restored = original.clone();
+        original.vram[0x3F00] = 20;
+        restored.vram[0x3F00] = 20;
+
+        original.advance(LINE_TSTATES);
+        restored.advance(LINE_TSTATES);
+        assert_eq!(original, restored);
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        let sprite_pixel = line_bytes + 10 * 3;
+        assert_eq!(
+            &restored.working_framebuffer[sprite_pixel..sprite_pixel + 3],
+            &[255, 0, 0]
+        );
     }
 
     #[test]
