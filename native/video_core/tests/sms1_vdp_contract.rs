@@ -109,6 +109,35 @@ fn sms1_profile_rejects_sms2_extended_height_modes_through_public_api() {
 }
 
 #[test]
+fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
+    let mut vdp = new_sms1();
+
+    select(&mut vdp, 0x0000, 1);
+    vdp.write_port(0xBE, 0x80);
+    select(&mut vdp, 0x3800, 1);
+    vdp.write_port(0xBE, 0x00);
+    vdp.write_port(0xBE, 0x00);
+    select(&mut vdp, 0x3F00, 1);
+    vdp.write_port(0xBE, 0xD0);
+    select(&mut vdp, 0x0001, 3);
+    vdp.write_port(0xBE, 0x03);
+
+    for (register, value) in [(0, 0x04), (1, 0x40), (2, 0x0E), (5, 0x7E)] {
+        vdp.write_port(0xBF, value);
+        vdp.write_port(0xBF, 0x80 | register);
+    }
+
+    // 228 T-states/line is the current deterministic integration model.
+    // This assertion validates frame composition, not physical raster timing.
+    vdp.advance(228 * 192);
+
+    let frame = vdp.framebuffer();
+    assert_eq!(frame.len(), 256 * 192 * 3);
+    assert_eq!(&frame[0..3], &[255, 0, 0]);
+    assert_eq!(&frame[3..6], &[0, 0, 0]);
+}
+
+#[test]
 fn register_write_accepts_r0_through_r10_and_ignores_r11() {
     let mut vdp = new_sms1();
 
