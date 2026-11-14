@@ -1110,7 +1110,7 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, None, 0, SMS_VDP_WIDTH);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1121,6 +1121,7 @@ fn render_legacy_scanline_span(
     frame: &mut [u8],
     y: usize,
     unlocked: bool,
+    sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
@@ -1214,7 +1215,17 @@ fn render_legacy_scanline_span(
             tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     }
-    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
+    render_legacy_sprites_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        sprite_evaluation,
+        start_x,
+        end_x,
+    );
 }
 
 #[cfg(test)]
@@ -1226,7 +1237,7 @@ fn render_legacy_sprites(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, None, 0, SMS_VDP_WIDTH);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1237,65 +1248,43 @@ fn render_legacy_sprites_span(
     frame: &mut [u8],
     y: usize,
     unlocked: bool,
+    sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
-    let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
-    let pattern_base = usize::from(regs[6] & 0x07) << 11;
-    let size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
-    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    let mut active: Vec<(usize, i32, usize, u8, usize)> = Vec::with_capacity(32);
-    for index in 0..32 {
-        let at = (table + index * 4) & 0x3FFF;
-        let raw_y = vram[at];
-        if raw_y == 0xD0 {
-            break;
-        }
-        let mut sy = i32::from(raw_y.wrapping_add(1));
-        if sy >= 0xE0 {
-            sy -= 0x100;
-        }
-        if (y as i32) < sy || (y as i32) >= sy + (size * zoom) as i32 {
-            continue;
-        }
-        // Overflow is a line-evaluation result. Re-composing later spans must
-        // not reassert a flag that software acknowledged after the first span.
-        if start_x == 0 && active.len() == 4 && *status & OVERFLOW == 0 {
-            *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
-        }
-        if active.len() >= 4 && !unlocked {
-            break;
-        }
-        let mut sx = i32::from(vram[at + 1]);
-        let attr = vram[at + 3];
-        if attr & 0x80 != 0 {
-            sx -= 32;
-        }
-        let pattern = usize::from(vram[at + 2]);
-        let row = ((y as i32 - sy) / zoom as i32) as usize;
-        active.push((index, sx, pattern, attr & 0x0F, row));
+    let evaluation = sprite_evaluation
+        .cloned()
+        .unwrap_or_else(|| evaluate_legacy_sprites(vram, regs, y, unlocked));
+    if start_x == 0
+        && let Some(index) = evaluation.overflow_index
+        && *status & OVERFLOW == 0
+    {
+        *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
     }
 
+    let pattern_base = usize::from(evaluation.pattern_register & 0x07) << 11;
+    let size = evaluation.sprite_size;
+    let zoom = evaluation.zoom;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut drawn = [false; SMS_VDP_WIDTH];
-    for (_index, sx, pattern, color, row) in active {
-        if color == 0 {
+    for sprite in &evaluation.selected {
+        if sprite.color == 0 {
             continue;
         }
         for source_x in 0..size {
             let tile = if size == 16 {
-                (pattern & 0xFC) + (source_x / 8) * 2 + row / 8
+                (usize::from(sprite.pattern) & 0xFC) + (source_x / 8) * 2 + sprite.row / 8
             } else {
-                pattern
+                usize::from(sprite.pattern)
             };
-            let at = (pattern_base + tile * 8 + (row & 7)) & 0x3FFF;
+            let at = (pattern_base + tile * 8 + (sprite.row & 7)) & 0x3FFF;
             if vram[at] & (0x80 >> (source_x & 7)) == 0 {
                 continue;
             }
             for dx in 0..zoom {
-                let x = sx + (source_x * zoom + dx) as i32;
+                let x = sprite.x + (source_x * zoom + dx) as i32;
                 if !(start_x as i32..end_x as i32).contains(&x) {
                     continue;
                 }
@@ -1305,7 +1294,7 @@ fn render_legacy_sprites_span(
                 }
                 occupied[x] = true;
                 if !drawn[x] {
-                    tms_pixel(frame, x, y, color);
+                    tms_pixel(frame, x, y, sprite.color);
                     drawn[x] = true;
                 }
             }
@@ -1368,6 +1357,7 @@ fn render_scanline_for_revision(
         revision,
         active_height,
         None,
+        None,
         0,
         SMS_VDP_WIDTH,
     );
@@ -1388,6 +1378,7 @@ fn render_scanline_for_revision_with_evaluation(
     revision: SmsVdpRevision,
     active_height: usize,
     sprite_evaluation: Option<&Mode4SpriteEvaluation>,
+    legacy_sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
@@ -1401,6 +1392,7 @@ fn render_scanline_for_revision_with_evaluation(
             frame,
             y,
             !hardware_sprite_limit,
+            legacy_sprite_evaluation,
             start_x,
             end_x,
         );
