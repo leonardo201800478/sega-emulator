@@ -76,7 +76,7 @@ As entradas externas TH são eventos do backend, não mutações imediatas da GU
 - Eventos externos usam `HardwarePhase(1)`; eventos CPU/barramento usam phase 0. Em empate de timestamp, a leitura CPU/barramento observa o nível anterior e a entrada externa é aplicada depois. Essa é uma regra ordinal determinística do modelo, não uma fase elétrica medida.
 - Snapshots temporais preservam níveis e eventos pendentes; o trace registra timestamp, jogador e nível.
 
-**Limite:** eventos externos TH ainda não provocam o latch físico do H-counter. A documentação SMS Power descreve o latch quando TH está ativo-low. O modelo MAME arma em TH low e agenda `hcount_latch` no retorno a high, com offset de HPos configurável (default 19). A divergência não está resolvida por medição independente; portanto, nenhum atraso foi importado como regra universal.
+**Limite:** eventos externos TH ainda não provocam o latch físico do H-counter. A [documentação SMS Power sobre o Light Phaser](https://www.smspower.org/Development/LightPhaser) descreve o latch quando TH está ativo-low. O [SmsVdpTest](https://github.com/FluBBaOfWard/SmsVdpTest) especifica o teste de captura TH 0→1. Já o [modelo MAME](https://github.com/mamedev/mame/blob/master/src/mame/sega/sms_m.cpp#L2211-L2254) arma em TH low e agenda `hcount_latch` no retorno a high, com offset de HPos configurável (default 19). A divergência não está resolvida por medição independente; portanto, nenhum atraso foi importado como regra universal.
 
 ## Referências
 
