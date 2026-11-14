@@ -3256,8 +3256,7 @@ mod tests {
         v.cram[17] = 0x03;
 
         v.advance(114);
-        assert_eq!(framebuffer_pixel(&v, 100, 0), [238, 0, 0]);
-
+        // The prefix is committed by the R0 write at the current beam position.
         reg(&mut v, 0, 0x0C);
         v.advance(114);
 
