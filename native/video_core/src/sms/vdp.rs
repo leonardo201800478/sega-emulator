@@ -604,14 +604,6 @@ impl SmsVdp {
         }
     }
 
-    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
-        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
-    }
-
-    fn latch_sms1_legacy_sprite_overflow(&mut self, evaluation: &LegacySpriteEvaluation) {
-        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
-    }
-
     fn prime_sms1_sprite_line_buffer(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
             || self.sprite_line_buffer.is_some()
@@ -623,11 +615,6 @@ impl SmsVdp {
         }
         let evaluation = self.evaluate_sms1_sprite_line(0);
         let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(0);
-        if self.registers[0] & 0x04 != 0 {
-            self.latch_sms1_sprite_overflow(&evaluation);
-        } else {
-            self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
-        }
         self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
             target_line: 0,
             evaluation,
@@ -679,11 +666,6 @@ impl SmsVdp {
         if let Some(target_line) = next_line {
             let evaluation = self.evaluate_sms1_sprite_line(target_line);
             let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(target_line);
-            if self.registers[0] & 0x04 != 0 {
-                self.latch_sms1_sprite_overflow(&evaluation);
-            } else {
-                self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
-            }
             self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
                 target_line,
                 evaluation,
@@ -820,23 +802,6 @@ impl SmsVdp {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
-                if register == 0
-                    && self.profile.revision == SmsVdpRevision::Sega3155124
-                    && (previous ^ first) & 0x04 != 0
-                {
-                    let overflow_index = if first & 0x04 != 0 {
-                        self.sprite_line_buffer
-                            .as_ref()
-                            .filter(|buffer| buffer.target_line == self.scanline)
-                            .and_then(|buffer| buffer.evaluation.overflow_index)
-                    } else {
-                        self.legacy_sprite_line_buffer
-                            .as_ref()
-                            .filter(|buffer| buffer.target_line == self.scanline)
-                            .and_then(|buffer| buffer.evaluation.overflow_index)
-                    };
-                    self.latch_sms1_sprite_overflow_index(overflow_index);
-                }
                 if previous != first && register <= 1 {
                     sega_observability::tracing::debug!(
                         target: "sega::vdp",
