@@ -49,6 +49,11 @@ pub enum SmsTemporalTraceEvent {
         phase: Z80M1Phase,
         pins: Z80M1Pins,
     },
+    ExternalThTransition {
+        timestamp: MachineTime,
+        player: u8,
+        high: bool,
+    },
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
@@ -636,7 +641,20 @@ impl SmsTemporalMachine {
                 .dispatch_next()?
                 .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
             self.sync_vdp_interrupt_line();
-            if matches!(dispatch, SmsTemporalDispatch::ExternalThTransition { .. }) {
+            if let SmsTemporalDispatch::ExternalThTransition {
+                player,
+                high,
+                completed_at,
+            } = dispatch
+            {
+                if self.trace_enabled {
+                    self.trace_events
+                        .push(SmsTemporalTraceEvent::ExternalThTransition {
+                            timestamp: completed_at,
+                            player,
+                            high,
+                        });
+                }
                 continue;
             }
             return self.dispatch_cpu_event(dispatch);
@@ -1351,6 +1369,32 @@ mod tests {
         assert_eq!(restored.bus.io().external_th_level(1), Ok(false));
         assert_eq!(restored.bus.io().read_port(0xDD) & (1 << 6), 0);
         assert_eq!(restored.bus.io().external_th_level(2), Ok(true));
+    }
+
+    #[test]
+    fn external_th_transition_is_recorded_in_the_temporal_replay_trace() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.set_trace_enabled(true);
+        let timestamp = MachineTime::from_ticks(3);
+        machine
+            .schedule_external_th_transition(2, false, timestamp)
+            .unwrap();
+
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert!(machine
+            .take_trace()
+            .contains(&SmsTemporalTraceEvent::ExternalThTransition {
+                timestamp,
+                player: 2,
+                high: false,
+            }));
+        assert_eq!(machine.bus.io().external_th_level(2), Ok(false));
     }
 
     #[test]
