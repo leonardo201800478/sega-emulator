@@ -1,8 +1,8 @@
 # SMS1 VDP — matriz de evidências temporais
 
-**Data:** 14/11/2026  
-**Baseline:** `main` em `23c77a21ae427feecfb70fa6e78692e588f72416`  
-**ASIC-alvo:** Sega 315-5124 / SMS1  
+**Data:** 14/11/2026
+**Baseline:** `main` em `23c77a21ae427feecfb70fa6e78692e588f72416`
+**ASIC-alvo:** Sega 315-5124 / SMS1
 **Estado:** auditoria em andamento; sem liberação in-game.
 
 ## 1. Como interpretar as evidências
