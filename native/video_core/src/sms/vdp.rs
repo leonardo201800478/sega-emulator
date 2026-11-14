@@ -1039,7 +1039,7 @@ mod tests {
     use super::super::profile::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
     use super::{
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
-        TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
+        TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline, render_legacy_sprites, render_scanline,
         render_scanline_for_revision,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1065,6 +1065,53 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn mode4_sprite_evaluation_preserves_sat_order_and_next_line_y_rule() {
+        let mut vram = vec![0; 0x4000];
+        let mut regs = [0; 16];
+        regs[5] = 0x7E;
+        // A raw Y of 9 selects output line 10 (the SMS Y coordinate is +1).
+        for index in 0..10 {
+            vram[0x3F00 + index] = 9;
+            vram[0x3F80 + index * 2] = (index * 8) as u8;
+            vram[0x3F81 + index * 2] = index as u8;
+        }
+        vram[0x3F00 + 10] = 0xD0;
+
+        let selected = evaluate_mode4_sprites(
+            &vram,
+            &regs,
+            10,
+            SmsVdpRevision::Sega3155246,
+            192,
+        );
+
+        assert_eq!(selected.len(), 10);
+        assert_eq!(
+            selected.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            (0..10).collect::<Vec<_>>(),
+            "SAT evaluation must preserve table order"
+        );
+        assert!(selected.iter().all(|sprite| sprite.3 == 0));
+    }
+
+    #[test]
+    fn mode4_sprite_evaluation_honors_192_line_terminator() {
+        let mut vram = vec![0; 0x4000];
+        let mut regs = [0; 16];
+        regs[5] = 0x7E;
+        vram[0x3F00] = 0xD0;
+        vram[0x3F01] = 9;
+        let selected = evaluate_mode4_sprites(
+            &vram,
+            &regs,
+            10,
+            SmsVdpRevision::Sega3155246,
+            192,
+        );
+        assert!(selected.is_empty());
+    }
+
     #[test]
     fn owns_16k_vram_and_32_byte_cram() {
         let v = SmsVdp::default();
