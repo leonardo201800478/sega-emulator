@@ -1439,7 +1439,8 @@ mod tests {
     use super::{
         COLLISION, CRAM_SIZE, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp,
         StereoPresentation, TMS_PALETTE, VBLANK, evaluate_mode4_sprites, render_legacy_scanline,
-        render_legacy_sprites, render_scanline, render_scanline_for_revision,
+        render_legacy_scanline_span, render_legacy_sprites, render_legacy_sprites_span,
+        render_scanline, render_scanline_for_revision,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
