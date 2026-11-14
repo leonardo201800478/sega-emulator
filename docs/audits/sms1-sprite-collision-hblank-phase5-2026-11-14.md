@@ -2,7 +2,7 @@
 
 **ASIC:** Sega 315-5124
 **Scope:** collision status timing and status-port acknowledgement
-**Model:** scanline renderer with HBlank boundary
+**Model:** scanline renderer; line-close is only a coarse proxy for the documented HBlank status latch
 **Status:** focused regression added; CI validation pending
 
 ## Hardware evidence
@@ -24,13 +24,13 @@ The shared SMS VDP composes a scanline when its 228-T-state line interval closes
 - preserves the earlier SAT sprite as the displayed pixel;
 - exposes the latched status through port $BF, whose read clears status.
 
-This is consistent with the documented HBlank-level status latch. It is not a dot-accurate collision timestamp: the model does not identify the first overlapping pixel's H-counter position.
+This is directionally consistent with the documented HBlank status latch, but the current renderer commits at the end of the 228-T-state scanline, not at a measured HBlank-start dot. Treat line-close as a coarse approximation only. It is not a dot-accurate collision timestamp: the model does not identify the first overlapping pixel's H-counter position.
 
 ## Regression added
 
-`sms1_sprite_collision_is_latched_at_hblank_and_cleared_by_status_read` checks:
+`sms1_sprite_collision_is_committed_at_scanline_close_and_cleared_by_status_read` checks:
 1. no collision flag before the end of the current scanline;
-2. collision is visible at the line/HBlank boundary when two opaque sprites overlap;
+2. collision is visible when the scanline renderer closes the line containing two opaque overlapping sprites;
 3. reading $BF returns the collision flag and clears it;
 4. the following scanline, whose corresponding sprite pattern row is transparent, does not reassert collision.
 
