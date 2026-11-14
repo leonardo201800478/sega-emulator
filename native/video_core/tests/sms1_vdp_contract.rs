@@ -35,14 +35,7 @@ fn frame_pixel(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
 }
 
 fn configure_sms1_background(vdp: &mut SmsVdp, r2: u8, r3: u8, r4: u8) {
-    for (register, value) in [
-        (0, 0x04),
-        (1, 0x40),
-        (2, r2),
-        (3, r3),
-        (4, r4),
-        (5, 0x7F),
-    ] {
+    for (register, value) in [(0, 0x04), (1, 0x40), (2, r2), (3, r3), (4, r4), (5, 0x7F)] {
         write_register(vdp, register, value);
     }
     write_vram(vdp, 0x3F00, 0xD0);
