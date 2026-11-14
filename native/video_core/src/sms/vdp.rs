@@ -599,6 +599,70 @@ fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
     (address & !0x1800) | (address & mask)
 }
 
+/// Select Mode 4 sprites intersecting the requested output line.
+///
+/// The SMS VDP parses the SAT in table order and retains at most eight sprite
+/// numbers for the following line. This pure evaluator deliberately returns
+/// the full ordered candidate list so overflow/status policy and composition
+/// remain separate. Temporal latching of this list is handled by the VDP
+/// state machine in a subsequent change; this function alone does not claim
+/// to model the SAT evaluation boundary.
+fn evaluate_mode4_sprites(
+    vram: &[u8],
+    regs: &[u8; 16],
+    y: usize,
+    revision: SmsVdpRevision,
+    height: usize,
+) -> Vec<(usize, i32, usize, usize)> {
+    let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
+    let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
+    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
+    let mut active = Vec::with_capacity(8);
+    for index in 0..64 {
+        let y_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, index, regs[5])
+        } else {
+            (sat + index) & 0x3FFF
+        };
+        let raw_y = vram[y_address];
+        if raw_y == 0xD0 && height == 192 {
+            break;
+        }
+        let sprite_y = if raw_y >= 0xF0 {
+            i32::from(raw_y) - 255
+        } else {
+            i32::from(raw_y) + 1
+        };
+        if (y as i32) < sprite_y
+            || (y as i32) >= sprite_y + (sprite_height * zoom)
+        {
+            continue;
+        }
+        let x_offset = 0x80 + index * 2;
+        let x_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset, regs[5])
+        } else {
+            (sat + x_offset) & 0x3FFF
+        };
+        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
+        } else {
+            (sat + x_offset + 1) & 0x3FFF
+        };
+        let mut sprite_x = i32::from(vram[x_address]);
+        if regs[0] & 0x08 != 0 {
+            sprite_x -= 8;
+        }
+        let mut tile = usize::from(vram[tile_address]);
+        if sprite_height == 16 {
+            tile &= !1;
+        }
+        let row = ((y as i32 - sprite_y) / zoom) as usize;
+        active.push((index, sprite_x, tile, row));
+    }
+    active
+}
+
 fn render_legacy_scanline(
     vram: &[u8],
     regs: &[u8; 16],
@@ -899,51 +963,12 @@ fn render_scanline_for_revision(
         put_pixel(frame, x, y, palette_rgb(cram, bg_color[x]));
     }
 
-    let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let sprite_pattern = usize::from(regs[6] & 0x04) << 11;
     let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
     let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    let mut active: Vec<(usize, i32, usize, usize)> = Vec::with_capacity(64);
-    for index in 0..64 {
-        let y_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, index, regs[5])
-        } else {
-            (sat + index) & 0x3FFF
-        };
-        let raw_y = vram[y_address];
-        if raw_y == 0xD0 && height == 192 {
-            break;
-        }
-        let sy = if raw_y >= 0xF0 {
-            i32::from(raw_y) - 255
-        } else {
-            i32::from(raw_y) + 1
-        };
-        if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) {
-            continue;
-        }
-        let x_offset = 0x80 + index * 2;
-        let x_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset, regs[5])
-        } else {
-            (sat + x_offset) & 0x3FFF
-        };
-        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
-            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
-        } else {
-            (sat + x_offset + 1) & 0x3FFF
-        };
-        let mut sx = i32::from(vram[x_address]);
-        if regs[0] & 0x08 != 0 {
-            sx -= 8;
-        }
-        let mut tile = usize::from(vram[tile_address]);
-        if sprite_height == 16 {
-            tile &= !1;
-        }
-        let row = ((y as i32 - sy) / zoom) as usize;
-        active.push((index, sx, tile, row));
-    }
+    // SAT evaluation is kept separate from pixel composition. This is the
+    // first step toward the SMS hardware's per-line sprite-number buffer.
+    let active = evaluate_mode4_sprites(vram, regs, y, revision, height);
     if active.len() > 8 && *status & OVERFLOW == 0 {
         *status = (*status & !0x1F) | OVERFLOW | ((active[8].0 as u8) & 0x1F);
     }
