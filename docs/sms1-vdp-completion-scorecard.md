@@ -3,7 +3,7 @@
 **Sistema-alvo:** Sega Master System 1
 **ASIC prioritário:** Sega 315-5124
 **Backend:** Rust / `sega-video`
-**Baseline integrada:** `main` após PR #831 (`72d8cc36aa88dceda61e4a7e083bbf100f711964`)
+**Baseline integrada:** `main` após PR #832 (`a56c5d947e2ca87bf774be28efbb0108d6c5a168`)
 **Estado:** EM DESENVOLVIMENTO — NÃO LIBERADO PARA TESTE IN-GAME
 
 Este scorecard registra somente capacidades presentes na `main` e evidências executadas no SHA correspondente. PR aberta, branch de trabalho ou teste ainda em execução não contam como implementação integrada.
@@ -24,13 +24,13 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 | R8 horizontal scroll | IMPLEMENTED_APPROXIMATE | Latch em HPos 21; fase absoluta ainda sem validação física |
 | R9 vertical scroll | IMPLEMENTED_APPROXIMATE | Valor pendente aplicado na fronteira de scanline conforme modelo atual |
 | R10 / HINT counter | IMPLEMENTED_SCANLINE | Contador e flag funcional; instante de HBlank ainda coarse |
-| SAT / avaliação de sprites | IMPLEMENTED_SCANLINE | Buffer de avaliação para a linha seguinte; timestamp interno não medido |
-| Sprite overflow | IMPLEMENTED_APPROXIMATE | Índice associado e latch durante avaliação SAT |
+| SAT / avaliação de sprites | IMPLEMENTED_SCANLINE | PR #832: Mode 4 captura X/tile, shift R0 e seleção R6 durante avaliação; bitplanes continuam lidos na composição. Legacy/TMS ainda sem buffer equivalente; timestamp não medido |
+| Sprite overflow | IMPLEMENTED_APPROXIMATE | Mode 4: índice associado e latch durante avaliação SAT. Legacy/TMS: detecção coarse na composição por spans |
 | Sprite collision | IMPLEMENTED_APPROXIMATE | Sobreposição de pixels opacos; commit no fechamento da scanline, não no dot/HBlank físico |
 | HBlank / contador horizontal | NOT_CLOSED | HPos modelado parcialmente; todos os eventos e limites físicos não validados |
 | VBlank / IRQ | IMPLEMENTED_SCANLINE | Flags e integração funcional; instante sublinha e arbitragem completa ainda pendentes |
 | Scheduler / determinismo | IMPLEMENTED_INTEGRATED | VDP avança pelo Scheduler; snapshots incluem o estado de rasterização parcial |
-| Save State | IMPLEMENTED_WITH_VERSIONING | PR #831 atualiza snapshots temporais (bus v16, machine v29); teste de clone/restore do estado parcial |
+| Save State | IMPLEMENTED_WITH_VERSIONING | PR #832 atualiza snapshots temporais (bus v16, machine v29); teste de rejeição do formato anterior e clone/restore do buffer Mode 4 |
 | SMS2 / outros perfis | REGRESSION_GATED | Renderer e perfis não SMS1 preservados pelos testes direcionados; não generalizar spans SMS1 |
 
 ## 2. Política de granularidade
@@ -47,7 +47,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 1. Fechar a temporalidade física dos registradores R0-R10 e os latches específicos; a composição parcial Mode 4/legacy está integrada, mas seus boundaries continuam aproximados.
 2. Validar o comportamento de CRAM dot e o instante de latch da paleta.
 3. Modelar ou justificar por evidência o fetch-ahead de tiles, bitplanes e padrões de sprites.
-4. Refinar a avaliação SAT e os fetches X/tile/pattern sem destruir a separação avaliação/composição.
+4. Completar a captura de metadados SAT no caminho legacy/TMS e modelar fetches X/tile/pattern sem destruir a separação avaliação/composição; Mode 4 já captura X/tile e R0/R6, mas bitplanes continuam coarse.
 5. Fechar o instante de HBlank, VBlank, HINT e a ordem dos flags em relação ao Scheduler/Z80.
 6. Demonstrar equivalência determinística entre execução contínua, execução em blocos e save/load state.
 7. Executar regressões SMS1/SMS2 e build Windows x64 Release no candidato final.
@@ -62,6 +62,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 - PR #829 — spans R1-R7: 83 testes `sega-video`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, runtime Release e build Windows x64 Release aprovados no HEAD validado.
 - PR #830 — R0 em Mode 4: 84 testes `sega-video`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, runtime Release e build Windows x64 Release aprovados no HEAD validado.
 - PR #831 — spans Mode 4/legacy e R0: 91 testes `sega-video`, 149 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release (45 + 1 testes) e build Windows x64 Release aprovados no HEAD `19c34080757f84aec5d7fb24a5dd3355badf5d41`.
+- PR #832 — metadados SAT Mode 4: 92 testes `sega-video`, 131 testes `sega-sms-core`, 14 testes SMS de integração, Rustfmt, Clippy, documentação, validação Z80/DD-FD, runtime Release e build Windows x64 Release aprovados no HEAD `1e0a1191f7bdc37c57520a3cc6b78e142206b1c6`.
 
 Os resultados acima pertencem aos respectivos commits e workflows; não são automaticamente atribuídos a commits futuros.
 

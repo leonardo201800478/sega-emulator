@@ -70,6 +70,7 @@ pub struct SmsVdp {
     latched_scroll_y: u8,
     pending_scroll_y: Option<u8>,
     sprite_line_buffer: Option<Mode4SpriteLineBuffer>,
+    legacy_sprite_line_buffer: Option<LegacySpriteLineBuffer>,
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -125,6 +126,7 @@ impl SmsVdp {
             latched_scroll_y: 0,
             pending_scroll_y: None,
             sprite_line_buffer: None,
+            legacy_sprite_line_buffer: None,
             status: 0,
             address: 0,
             read_buffer: 0,
@@ -310,6 +312,7 @@ impl SmsVdp {
         self.latched_scroll_y = 0;
         self.pending_scroll_y = None;
         self.sprite_line_buffer = None;
+        self.legacy_sprite_line_buffer = None;
         self.status = 0;
         self.address = 0;
         self.read_buffer = 0;
@@ -450,6 +453,10 @@ impl SmsVdp {
             .sprite_line_buffer
             .as_ref()
             .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
+        let legacy_sprite_evaluation = self
+            .legacy_sprite_line_buffer
+            .as_ref()
+            .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
         let overflow_was_sticky = self.status & OVERFLOW != 0;
         let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
@@ -463,6 +470,7 @@ impl SmsVdp {
             self.profile.revision,
             active_height,
             sprite_evaluation,
+            legacy_sprite_evaluation,
             start_x,
             end_x,
         );
@@ -492,28 +500,45 @@ impl SmsVdp {
         }
     }
 
-    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
-        if let Some(index) = evaluation.overflow_index
+    fn latch_sms1_sprite_overflow_index(&mut self, index: Option<usize>) {
+        if let Some(index) = index
             && self.status & OVERFLOW == 0
         {
             self.status = (self.status & !0x1F) | OVERFLOW | ((index as u8) & 0x1F);
         }
     }
 
+    fn latch_sms1_sprite_overflow(&mut self, evaluation: &Mode4SpriteEvaluation) {
+        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
+    }
+
+    fn latch_sms1_legacy_sprite_overflow(&mut self, evaluation: &LegacySpriteEvaluation) {
+        self.latch_sms1_sprite_overflow_index(evaluation.overflow_index);
+    }
+
     fn prime_sms1_sprite_line_buffer(&mut self) {
         if self.profile.revision != SmsVdpRevision::Sega3155124
-            || self.registers[0] & 0x04 == 0
             || self.sprite_line_buffer.is_some()
+            || self.legacy_sprite_line_buffer.is_some()
             || self.scanline != 0
             || self.tstates_into_line != 0
         {
             return;
         }
         let evaluation = self.evaluate_sms1_sprite_line(0);
-        self.latch_sms1_sprite_overflow(&evaluation);
+        let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(0);
+        if self.registers[0] & 0x04 != 0 {
+            self.latch_sms1_sprite_overflow(&evaluation);
+        } else {
+            self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
+        }
         self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
             target_line: 0,
             evaluation,
+        });
+        self.legacy_sprite_line_buffer = Some(LegacySpriteLineBuffer {
+            target_line: 0,
+            evaluation: legacy_evaluation,
         });
     }
 
@@ -533,9 +558,19 @@ impl SmsVdp {
         )
     }
 
+    fn evaluate_sms1_legacy_sprite_line(&self, target_line: u16) -> LegacySpriteEvaluation {
+        evaluate_legacy_sprites(
+            &self.vram,
+            &self.registers,
+            usize::from(target_line),
+            self.profile.sprite_limit != SpriteLimitMode::HardwareLimit,
+        )
+    }
+
     fn prepare_next_sms1_sprite_line(&mut self, completed_line: u16, height: u16) {
-        if self.profile.revision != SmsVdpRevision::Sega3155124 || self.registers[0] & 0x04 == 0 {
+        if self.profile.revision != SmsVdpRevision::Sega3155124 {
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
             return;
         }
         let next_line = if completed_line + 1 < height {
@@ -547,15 +582,23 @@ impl SmsVdp {
         };
         if let Some(target_line) = next_line {
             let evaluation = self.evaluate_sms1_sprite_line(target_line);
-            // Hardware documentation places overflow in the SAT parsing phase,
-            // before the selected line is drawn.
-            self.latch_sms1_sprite_overflow(&evaluation);
+            let legacy_evaluation = self.evaluate_sms1_legacy_sprite_line(target_line);
+            if self.registers[0] & 0x04 != 0 {
+                self.latch_sms1_sprite_overflow(&evaluation);
+            } else {
+                self.latch_sms1_legacy_sprite_overflow(&legacy_evaluation);
+            }
             self.sprite_line_buffer = Some(Mode4SpriteLineBuffer {
                 target_line,
                 evaluation,
             });
+            self.legacy_sprite_line_buffer = Some(LegacySpriteLineBuffer {
+                target_line,
+                evaluation: legacy_evaluation,
+            });
         } else {
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
         }
     }
 
@@ -567,15 +610,14 @@ impl SmsVdp {
             let mut render_registers = self.registers;
             render_registers[8] = self.latched_scroll_x;
             render_registers[9] = self.latched_scroll_y;
-            let sprite_evaluation = if self.profile.revision == SmsVdpRevision::Sega3155124
-                && self.registers[0] & 0x04 != 0
-            {
-                self.sprite_line_buffer
-                    .as_ref()
-                    .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation))
-            } else {
-                None
-            };
+            let sprite_evaluation = self
+                .sprite_line_buffer
+                .as_ref()
+                .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation));
+            let legacy_sprite_evaluation = self
+                .legacy_sprite_line_buffer
+                .as_ref()
+                .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation));
             render_scanline_for_revision_with_evaluation(
                 &self.vram,
                 &self.cram,
@@ -587,6 +629,7 @@ impl SmsVdp {
                 self.profile.revision,
                 usize::from(height),
                 sprite_evaluation,
+                legacy_sprite_evaluation,
                 usize::from(self.raster_span_cursor_x),
                 SMS_VDP_WIDTH,
             );
@@ -601,6 +644,7 @@ impl SmsVdp {
                 self.h_counter_latch = 0x08 + (self.light_x / 2) as u8;
             }
             self.sprite_line_buffer = None;
+            self.legacy_sprite_line_buffer = None;
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
                 sega_observability::tracing::trace!(
@@ -680,6 +724,23 @@ impl SmsVdp {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
+                if register == 0
+                    && self.profile.revision == SmsVdpRevision::Sega3155124
+                    && (previous ^ first) & 0x04 != 0
+                {
+                    let overflow_index = if first & 0x04 != 0 {
+                        self.sprite_line_buffer
+                            .as_ref()
+                            .filter(|buffer| buffer.target_line == self.scanline)
+                            .and_then(|buffer| buffer.evaluation.overflow_index)
+                    } else {
+                        self.legacy_sprite_line_buffer
+                            .as_ref()
+                            .filter(|buffer| buffer.target_line == self.scanline)
+                            .and_then(|buffer| buffer.evaluation.overflow_index)
+                    };
+                    self.latch_sms1_sprite_overflow_index(overflow_index);
+                }
                 if previous != first && register <= 1 {
                     sega_observability::tracing::debug!(
                         target: "sega::vdp",
@@ -824,6 +885,65 @@ fn sms1_sprite_attribute_address(sat_base: usize, offset: usize, register5: u8) 
 }
 
 /// SMS1 R6 bits 1-0 gate sprite pattern address bits 12-11.
+fn evaluate_legacy_sprites(
+    vram: &[u8],
+    regs: &[u8; 16],
+    y: usize,
+    unlocked: bool,
+) -> LegacySpriteEvaluation {
+    let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
+    let sprite_size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
+    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
+    let sprite_limit = if unlocked { 32 } else { 4 };
+    let mut selected = Vec::with_capacity(sprite_limit);
+    let mut overflow_index = None;
+
+    for index in 0..32 {
+        let at = (table + index * 4) & 0x3FFF;
+        let raw_y = vram[at];
+        if raw_y == 0xD0 {
+            break;
+        }
+        let mut sprite_y = i32::from(raw_y.wrapping_add(1));
+        if sprite_y >= 0xE0 {
+            sprite_y -= 0x100;
+        }
+        if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_size * zoom) as i32 {
+            continue;
+        }
+        if selected.len() == 4 {
+            overflow_index.get_or_insert(index);
+            if !unlocked {
+                break;
+            }
+        }
+        if selected.len() == sprite_limit {
+            break;
+        }
+
+        let attributes = vram[at + 3];
+        let mut x = i32::from(vram[at + 1]);
+        if attributes & 0x80 != 0 {
+            x -= 32;
+        }
+        let row = ((y as i32 - sprite_y) / zoom as i32) as usize;
+        selected.push(LegacySpriteEntry {
+            x,
+            pattern: vram[at + 2],
+            color: attributes & 0x0F,
+            row,
+        });
+    }
+
+    LegacySpriteEvaluation {
+        selected,
+        overflow_index,
+        sprite_size,
+        zoom,
+        pattern_register: regs[6],
+    }
+}
+
 fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
     let mask = usize::from(register6 & 0x03) << 11;
     (address & !0x1800) | (address & mask)
@@ -866,6 +986,29 @@ struct Mode4SpriteEvaluation {
 struct Mode4SpriteLineBuffer {
     target_line: u16,
     evaluation: Mode4SpriteEvaluation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LegacySpriteEntry {
+    x: i32,
+    pattern: u8,
+    color: u8,
+    row: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacySpriteEvaluation {
+    selected: Vec<LegacySpriteEntry>,
+    overflow_index: Option<usize>,
+    sprite_size: usize,
+    zoom: usize,
+    pattern_register: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacySpriteLineBuffer {
+    target_line: u16,
+    evaluation: LegacySpriteEvaluation,
 }
 
 /// Evaluate Mode 4 SAT candidates in table order.
@@ -967,7 +1110,17 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+    render_legacy_scanline_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        None,
+        0,
+        SMS_VDP_WIDTH,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -978,6 +1131,7 @@ fn render_legacy_scanline_span(
     frame: &mut [u8],
     y: usize,
     unlocked: bool,
+    sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
@@ -1071,7 +1225,17 @@ fn render_legacy_scanline_span(
             tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     }
-    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
+    render_legacy_sprites_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        sprite_evaluation,
+        start_x,
+        end_x,
+    );
 }
 
 #[cfg(test)]
@@ -1083,7 +1247,17 @@ fn render_legacy_sprites(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
+    render_legacy_sprites_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        None,
+        0,
+        SMS_VDP_WIDTH,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1094,65 +1268,50 @@ fn render_legacy_sprites_span(
     frame: &mut [u8],
     y: usize,
     unlocked: bool,
+    sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
     let start_x = start_x.min(SMS_VDP_WIDTH);
     let end_x = end_x.min(SMS_VDP_WIDTH).max(start_x);
-    let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
-    let pattern_base = usize::from(regs[6] & 0x07) << 11;
-    let size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
-    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
-    let mut active: Vec<(usize, i32, usize, u8, usize)> = Vec::with_capacity(32);
-    for index in 0..32 {
-        let at = (table + index * 4) & 0x3FFF;
-        let raw_y = vram[at];
-        if raw_y == 0xD0 {
-            break;
-        }
-        let mut sy = i32::from(raw_y.wrapping_add(1));
-        if sy >= 0xE0 {
-            sy -= 0x100;
-        }
-        if (y as i32) < sy || (y as i32) >= sy + (size * zoom) as i32 {
-            continue;
-        }
-        // Overflow is a line-evaluation result. Re-composing later spans must
-        // not reassert a flag that software acknowledged after the first span.
-        if start_x == 0 && active.len() == 4 && *status & OVERFLOW == 0 {
-            *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
-        }
-        if active.len() >= 4 && !unlocked {
-            break;
-        }
-        let mut sx = i32::from(vram[at + 1]);
-        let attr = vram[at + 3];
-        if attr & 0x80 != 0 {
-            sx -= 32;
-        }
-        let pattern = usize::from(vram[at + 2]);
-        let row = ((y as i32 - sy) / zoom as i32) as usize;
-        active.push((index, sx, pattern, attr & 0x0F, row));
+    let fallback_evaluation;
+    let evaluation = if let Some(evaluation) = sprite_evaluation {
+        evaluation
+    } else {
+        fallback_evaluation = evaluate_legacy_sprites(vram, regs, y, unlocked);
+        &fallback_evaluation
+    };
+    // SMS1 overflow was already latched when the line buffer was prepared.
+    // Only the unbuffered fallback path derives it during composition.
+    if sprite_evaluation.is_none()
+        && start_x == 0
+        && let Some(index) = evaluation.overflow_index
+        && *status & OVERFLOW == 0
+    {
+        *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
     }
 
+    let pattern_base = usize::from(evaluation.pattern_register & 0x07) << 11;
+    let size = evaluation.sprite_size;
+    let zoom = evaluation.zoom;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut drawn = [false; SMS_VDP_WIDTH];
-    for (_index, sx, pattern, color, row) in active {
-        if color == 0 {
+    for sprite in &evaluation.selected {
+        if sprite.color == 0 {
             continue;
         }
         for source_x in 0..size {
             let tile = if size == 16 {
-                (pattern & 0xFC) + (source_x / 8) * 2 + row / 8
+                (usize::from(sprite.pattern) & 0xFC) + (source_x / 8) * 2 + sprite.row / 8
             } else {
-                pattern
+                usize::from(sprite.pattern)
             };
-            let at = (pattern_base + tile * 8 + (row & 7)) & 0x3FFF;
+            let at = (pattern_base + tile * 8 + (sprite.row & 7)) & 0x3FFF;
             if vram[at] & (0x80 >> (source_x & 7)) == 0 {
                 continue;
             }
             for dx in 0..zoom {
-                let x = sx + (source_x * zoom + dx) as i32;
+                let x = sprite.x + (source_x * zoom + dx) as i32;
                 if !(start_x as i32..end_x as i32).contains(&x) {
                     continue;
                 }
@@ -1162,7 +1321,7 @@ fn render_legacy_sprites_span(
                 }
                 occupied[x] = true;
                 if !drawn[x] {
-                    tms_pixel(frame, x, y, color);
+                    tms_pixel(frame, x, y, sprite.color);
                     drawn[x] = true;
                 }
             }
@@ -1225,6 +1384,7 @@ fn render_scanline_for_revision(
         revision,
         active_height,
         None,
+        None,
         0,
         SMS_VDP_WIDTH,
     );
@@ -1245,6 +1405,7 @@ fn render_scanline_for_revision_with_evaluation(
     revision: SmsVdpRevision,
     active_height: usize,
     sprite_evaluation: Option<&Mode4SpriteEvaluation>,
+    legacy_sprite_evaluation: Option<&LegacySpriteEvaluation>,
     start_x: usize,
     end_x: usize,
 ) {
@@ -1258,6 +1419,7 @@ fn render_scanline_for_revision_with_evaluation(
             frame,
             y,
             !hardware_sprite_limit,
+            legacy_sprite_evaluation,
             start_x,
             end_x,
         );
@@ -1656,6 +1818,60 @@ mod tests {
     }
 
     #[test]
+    fn sms1_legacy_sprite_x_pattern_color_and_r6_are_latched_per_line() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x00; // Legacy/TMS mode.
+        vdp.registers[1] = 0x40;
+        vdp.registers[5] = 0x7F;
+        vdp.registers[6] = 0;
+
+        vdp.vram[0x3F80] = 0xFF;
+        vdp.vram[0x3F81] = 20;
+        vdp.vram[0x3F82] = 1;
+        vdp.vram[0x3F83] = 4;
+        vdp.vram[0x3F84] = 0xD0;
+        vdp.vram[8..16].fill(0xFF);
+        // Pattern 2 in the R6=1 table has only its leftmost pixel set.
+        vdp.vram[0x810..0x818].fill(0x80);
+
+        // Line 0 completion evaluates the legacy SAT metadata for line 1.
+        vdp.advance(LINE_TSTATES);
+        vdp.vram[0x3F81] = 80;
+        vdp.vram[0x3F82] = 2;
+        vdp.vram[0x3F83] = 2;
+        vdp.registers[6] = 1;
+
+        vdp.advance(LINE_TSTATES);
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        let old_position = line_bytes + 20 * 3;
+        let new_position = line_bytes + 80 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[old_position..old_position + 3],
+            &TMS_PALETTE[4],
+            "the selected line must retain its old X, pattern, color and R6"
+        );
+        assert_eq!(
+            &vdp.working_framebuffer[new_position..new_position + 3],
+            &TMS_PALETTE[0],
+            "later SAT writes must not move the already-selected sprite"
+        );
+
+        // The next line evaluation observes the new SAT and R6 values.
+        vdp.advance(LINE_TSTATES);
+        let next_line_position = line_bytes * 2 + 80 * 3;
+        let next_line_second_pixel = next_line_position + 3;
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_position..next_line_position + 3],
+            &TMS_PALETTE[2]
+        );
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_second_pixel..next_line_second_pixel + 3],
+            &TMS_PALETTE[0],
+            "the updated pattern row must be fetched from the newly selected pattern table"
+        );
+    }
+
+    #[test]
     fn sms1_sprite_line_buffer_is_preserved_by_vdp_clone_restore() {
         let mut original = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         original.registers[0] = 0x04;
@@ -1668,6 +1884,10 @@ mod tests {
 
         original.advance(LINE_TSTATES);
         let mut restored = original.clone();
+        assert_eq!(
+            original.legacy_sprite_line_buffer,
+            restored.legacy_sprite_line_buffer
+        );
         original.vram[0x3F00] = 20;
         restored.vram[0x3F00] = 20;
 
@@ -1902,6 +2122,7 @@ mod tests {
                     &mut split,
                     0,
                     false,
+                    None,
                     start_x,
                     end_x,
                 );
@@ -1939,6 +2160,7 @@ mod tests {
             &mut split,
             1,
             false,
+            None,
             0,
             108,
         );
@@ -1949,6 +2171,7 @@ mod tests {
             &mut split,
             1,
             false,
+            None,
             108,
             SMS_VDP_WIDTH,
         );
@@ -2020,7 +2243,7 @@ mod tests {
     }
 
     #[test]
-    fn status_read_clears_deferred_legacy_span_flags_for_the_current_line() {
+    fn status_read_acknowledges_legacy_overflow_and_collision_without_reactivation() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[1] = 0x40;
         v.registers[5] = 0x7F;
@@ -2034,12 +2257,13 @@ mod tests {
         v.vram[8..16].fill(0xFF);
         v.vram[0x3F80 + 5 * 4] = 0xD0;
 
-        // The first partial composition detects both overflow and collision.
+        // Overflow is latched by the line evaluation; the first partial
+        // composition detects the overlapping opaque sprite pixels.
         v.advance(114);
+        assert_ne!(v.status & OVERFLOW, 0);
         // A register write is the externally observable boundary that commits
         // the already-scanned prefix in this selective-raster model.
         reg(&mut v, 7, 0);
-        assert_ne!(v.line_overflow_status & OVERFLOW, 0);
         assert!(v.line_collision_seen);
 
         // Reading the status port acknowledges flags already detected this line.
@@ -2049,7 +2273,9 @@ mod tests {
         assert_eq!(v.line_overflow_status, 0);
         assert!(!v.line_collision_seen);
 
-        // The suffix must not resurrect the acknowledged prefix flags.
+        // Remove the SAT entries for the next line. The current suffix must
+        // still use its latched entries, but the next line must not relatch overflow.
+        v.vram[0x3F80] = 0xD0;
         v.advance(114);
         assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
     }
