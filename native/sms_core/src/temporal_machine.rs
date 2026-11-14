@@ -25,7 +25,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 32;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 33;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +48,11 @@ pub enum SmsTemporalTraceEvent {
         timestamp: MachineTime,
         phase: Z80M1Phase,
         pins: Z80M1Pins,
+    },
+    ExternalThTransition {
+        timestamp: MachineTime,
+        player: u8,
+        high: bool,
     },
 }
 
@@ -379,6 +384,18 @@ impl SmsTemporalMachine {
         })
     }
 
+    /// Queue a timestamped external TH transition on the shared machine timeline.
+    pub fn schedule_external_th_transition(
+        &mut self,
+        player: u8,
+        high: bool,
+        timestamp: MachineTime,
+    ) -> Result<MachineTime, SmsTemporalMachineError> {
+        Ok(self
+            .bus
+            .schedule_external_th_transition(player, high, timestamp)?)
+    }
+
     /// Start the next instruction and expose its first bus request.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         // Sample the VDP's level IRQ at the CPU instruction boundary. The
@@ -618,14 +635,40 @@ impl SmsTemporalMachine {
 
     /// Dispatch one event and resume the matching CPU continuation.
     pub fn dispatch_next(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
-        let dispatch = self
-            .bus
-            .dispatch_next()?
-            .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
-        // Re-evaluate the wired-OR INT level after the VDP clock and any I/O
-        // side effect at this Scheduler boundary, before the next CPU sample.
-        self.sync_vdp_interrupt_line();
+        loop {
+            let dispatch = self
+                .bus
+                .dispatch_next()?
+                .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
+            self.sync_vdp_interrupt_line();
+            if let SmsTemporalDispatch::ExternalThTransition {
+                player,
+                high,
+                completed_at,
+            } = dispatch
+            {
+                if self.trace_enabled {
+                    self.trace_events
+                        .push(SmsTemporalTraceEvent::ExternalThTransition {
+                            timestamp: completed_at,
+                            player,
+                            high,
+                        });
+                }
+                continue;
+            }
+            return self.dispatch_cpu_event(dispatch);
+        }
+    }
+
+    fn dispatch_cpu_event(
+        &mut self,
+        dispatch: SmsTemporalDispatch,
+    ) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         match dispatch {
+            SmsTemporalDispatch::ExternalThTransition { .. } => {
+                Err(SmsTemporalMachineError::InvalidState)
+            }
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
                     let request = self
@@ -1278,7 +1321,7 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalMachine, SmsTemporalMachineError};
+    use super::{SmsTemporalMachine, SmsTemporalMachineError, SmsTemporalTraceEvent};
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
@@ -1304,6 +1347,56 @@ mod tests {
                 return step;
             }
         }
+    }
+
+    #[test]
+    fn external_th_transition_is_consumed_on_the_cpu_scheduler_timeline_and_restores() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine
+            .schedule_external_th_transition(1, false, MachineTime::from_ticks(6))
+            .unwrap();
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(restored.now(), MachineTime::from_ticks(12));
+        assert_eq!(restored.bus.io().external_th_level(1), Ok(false));
+        assert_eq!(restored.bus.io().read_port(0xDD) & (1 << 6), 0);
+        assert_eq!(restored.bus.io().external_th_level(2), Ok(true));
+    }
+
+    #[test]
+    fn external_th_transition_is_recorded_in_the_temporal_replay_trace() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.set_trace_enabled(true);
+        let timestamp = MachineTime::from_ticks(3);
+        machine
+            .schedule_external_th_transition(2, false, timestamp)
+            .unwrap();
+
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert!(
+            machine
+                .take_trace()
+                .contains(&SmsTemporalTraceEvent::ExternalThTransition {
+                    timestamp,
+                    player: 2,
+                    high: false,
+                })
+        );
+        assert_eq!(machine.bus.io().external_th_level(2), Ok(false));
     }
 
     #[test]
@@ -1738,10 +1831,10 @@ mod tests {
     fn vdp_testrom_timing_snapshot_version_rejects_previous_semantics() {
         let machine = SmsTemporalMachine::new(vec![0; 0x4000], 3).unwrap();
         let mut state = machine.export_state();
-        assert_eq!(state.format_version, 32);
-        assert_eq!(state.bus.format_version, 19);
+        assert_eq!(state.format_version, 33);
+        assert_eq!(state.bus.format_version, 20);
 
-        state.format_version = 31;
+        state.format_version = 32;
         assert!(matches!(
             SmsTemporalMachine::restore_state(state),
             Err(SmsTemporalMachineError::InvalidState)

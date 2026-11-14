@@ -15,7 +15,7 @@ use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
-pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 4;
+pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 5;
 pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 /// PSG input clock follows the SMS Z80 clock on the supported SMS profiles.
 pub const SMS_PSG_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(1);
@@ -35,6 +35,11 @@ pub enum SmsTemporalEvent {
     M1TStateComplete {
         continuation_id: u64,
     },
+    /// Timestamped active-low TH line transition from an external peripheral.
+    ExternalThTransition {
+        player: u8,
+        high: bool,
+    },
 }
 
 /// Versioned in-memory state for the coordinator and its scheduler timeline.
@@ -52,6 +57,8 @@ pub enum SmsTemporalCoordinatorError {
     ZeroBusCycleDuration,
     DurationOverflow,
     DeadlineOverflow,
+    InvalidExternalThPlayer(u8),
+    InvalidExternalThTimestamp,
     InvalidState,
     Scheduler(SchedulerError),
 }
@@ -65,6 +72,12 @@ impl fmt::Display for SmsTemporalCoordinatorError {
             }
             Self::DurationOverflow => f.write_str("bus cycle duration overflow"),
             Self::DeadlineOverflow => f.write_str("bus completion deadline overflow"),
+            Self::InvalidExternalThPlayer(player) => {
+                write!(f, "SMS external TH player must be 1 or 2, got {player}")
+            }
+            Self::InvalidExternalThTimestamp => {
+                f.write_str("SMS external TH timestamp must be future and aligned to a Z80 T-state")
+            }
             Self::InvalidState => f.write_str("SMS temporal coordinator state is inconsistent"),
             Self::Scheduler(error) => write!(f, "SMS machine scheduler failed: {error}"),
         }
@@ -214,6 +227,36 @@ impl SmsTemporalCoordinator {
         Ok(deadline)
     }
 
+    /// Schedule an external TH line transition on the shared machine timeline.
+    ///
+    /// The timestamp must be strictly in the future and aligned to the configured
+    /// Z80 T-state scale. Hardware phase 1 is an explicit tie-break policy:
+    /// a CPU/bus event at the same timestamp (phase 0) samples the prior TH level.
+    /// This ordering stratum is not a claim about a measured electrical phase.
+    pub fn schedule_external_th_transition(
+        &mut self,
+        player: u8,
+        high: bool,
+        timestamp: MachineTime,
+    ) -> Result<MachineTime, SmsTemporalCoordinatorError> {
+        if player != 1 && player != 2 {
+            return Err(SmsTemporalCoordinatorError::InvalidExternalThPlayer(player));
+        }
+        timestamp
+            .checked_duration_since(self.now())
+            .filter(|elapsed| {
+                *elapsed > 0 && *elapsed % u128::from(self.master_ticks_per_tstate) == 0
+            })
+            .ok_or(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)?;
+        self.scheduler.schedule_at_with_phase(
+            timestamp,
+            HardwarePhase::new(1),
+            PlatformPriority::new(0),
+            SmsTemporalEvent::ExternalThTransition { player, high },
+        )?;
+        Ok(timestamp)
+    }
+
     /// Dispatch the next boundary after advancing the registered clock domain.
     pub fn dispatch_next(
         &mut self,
@@ -315,6 +358,50 @@ mod tests {
         SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalEvent,
     };
     use sega_temporal_core::MachineTime;
+
+    #[test]
+    fn external_th_transition_is_ordered_after_same_timestamp_bus_completion() {
+        let mut machine = SmsTemporalCoordinator::new(3).unwrap();
+        let deadline = machine.schedule_bus_completion(7, 4, 0).unwrap();
+        assert_eq!(
+            machine
+                .schedule_external_th_transition(1, false, deadline)
+                .unwrap(),
+            deadline
+        );
+
+        let first = machine.dispatch_next().unwrap().unwrap();
+        assert_eq!(
+            first.event.payload,
+            SmsTemporalEvent::BusCompletion { request_id: 7 }
+        );
+        let second = machine.dispatch_next().unwrap().unwrap();
+        assert_eq!(
+            second.event.payload,
+            SmsTemporalEvent::ExternalThTransition {
+                player: 1,
+                high: false
+            }
+        );
+        assert_eq!(first.event.timestamp, second.event.timestamp);
+    }
+
+    #[test]
+    fn external_th_transition_rejects_invalid_player_and_timestamp() {
+        let mut machine = SmsTemporalCoordinator::new(3).unwrap();
+        assert_eq!(
+            machine.schedule_external_th_transition(3, false, MachineTime::from_ticks(3)),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThPlayer(3))
+        );
+        assert_eq!(
+            machine.schedule_external_th_transition(1, false, MachineTime::from_ticks(4)),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)
+        );
+        assert_eq!(
+            machine.schedule_external_th_transition(1, false, MachineTime::ZERO),
+            Err(SmsTemporalCoordinatorError::InvalidExternalThTimestamp)
+        );
+    }
 
     #[test]
     fn scheduled_bus_boundary_advances_only_the_registered_cpu_domain() {
