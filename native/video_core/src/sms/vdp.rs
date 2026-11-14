@@ -348,7 +348,11 @@ impl SmsVdp {
             }
             0x81 => {
                 let value = self.status
-                    | if self.line_collision_seen { COLLISION } else { 0 }
+                    | if self.line_collision_seen {
+                        COLLISION
+                    } else {
+                        0
+                    }
                     | self.line_overflow_status;
                 self.status = 0;
                 // A status read returns and acknowledges flags already detected
