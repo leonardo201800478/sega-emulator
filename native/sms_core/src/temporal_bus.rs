@@ -1012,8 +1012,7 @@ mod tests {
 
         // A snapshot taken after the bus sample but before the phase-one input
         // event must retain the same-timestamp external transition.
-        let mut after_completion =
-            SmsTemporalBus::restore_state(restored.export_state()).unwrap();
+        let mut after_completion = SmsTemporalBus::restore_state(restored.export_state()).unwrap();
         after_completion
             .acknowledge_completion(port_read.id)
             .unwrap();
