@@ -73,6 +73,71 @@ fn cram_write_uses_32_entry_alias_and_masks_to_six_bits() {
 }
 
 #[test]
+fn cram_write_ignores_all_address_bits_above_the_five_bit_index() {
+    let mut vdp = new_sms1();
+    let cases = [
+        (0x0020, 0xFF),
+        (0x0040, 0xC1),
+        (0x0100, 0x7E),
+        (0x3FE0, 0xAA),
+    ];
+
+    for (address, value) in cases {
+        select(&mut vdp, address, 3);
+        vdp.write_port(0xBE, value);
+
+        assert_eq!(
+            vdp.cram()[0],
+            value & 0x3F,
+            "CRAM address {address:#06X} must alias index zero"
+        );
+    }
+
+    assert_eq!(vdp.vram()[0], 0x00, "CRAM writes must not modify VRAM");
+}
+
+#[test]
+fn sms1_profile_rejects_sms2_extended_height_modes_through_public_api() {
+    let mut vdp = new_sms1();
+
+    for mode_bits in [0x08, 0x10] {
+        vdp.write_port(0xBF, 0x40 | mode_bits);
+        vdp.write_port(0xBF, 0x81);
+
+        assert_eq!(vdp.raster_position().visible_height, 192);
+    }
+}
+
+#[test]
+fn mode4_background_pixels_are_published_on_vblank_through_public_ports() {
+    let mut vdp = new_sms1();
+
+    select(&mut vdp, 0x0000, 1);
+    vdp.write_port(0xBE, 0x80);
+    select(&mut vdp, 0x3800, 1);
+    vdp.write_port(0xBE, 0x00);
+    vdp.write_port(0xBE, 0x00);
+    select(&mut vdp, 0x3F00, 1);
+    vdp.write_port(0xBE, 0xD0);
+    select(&mut vdp, 0x0001, 3);
+    vdp.write_port(0xBE, 0x03);
+
+    for (register, value) in [(0, 0x04), (1, 0x40), (2, 0x0E), (5, 0x7E)] {
+        vdp.write_port(0xBF, value);
+        vdp.write_port(0xBF, 0x80 | register);
+    }
+
+    // 228 T-states/line is the current deterministic integration model.
+    // This assertion validates frame composition, not physical raster timing.
+    vdp.advance(228 * 192);
+
+    let frame = vdp.framebuffer();
+    assert_eq!(frame.len(), 256 * 192 * 3);
+    assert_eq!(&frame[0..3], &[255, 0, 0]);
+    assert_eq!(&frame[3..6], &[0, 0, 0]);
+}
+
+#[test]
 fn register_write_accepts_r0_through_r10_and_ignores_r11() {
     let mut vdp = new_sms1();
 
