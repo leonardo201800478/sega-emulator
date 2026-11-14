@@ -1791,6 +1791,60 @@ mod tests {
     }
 
     #[test]
+    fn sms1_legacy_sprite_x_pattern_color_and_r6_are_latched_per_line() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[0] = 0x00; // Legacy/TMS mode.
+        vdp.registers[1] = 0x40;
+        vdp.registers[5] = 0x7F;
+        vdp.registers[6] = 0;
+
+        vdp.vram[0x3F80] = 0xFF;
+        vdp.vram[0x3F81] = 20;
+        vdp.vram[0x3F82] = 1;
+        vdp.vram[0x3F83] = 4;
+        vdp.vram[0x3F84] = 0xD0;
+        vdp.vram[8..16].fill(0xFF);
+        // Pattern 2 in the R6=1 table has only its leftmost pixel set.
+        vdp.vram[0x810..0x818].fill(0x80);
+
+        // Line 0 completion evaluates the legacy SAT metadata for line 1.
+        vdp.advance(LINE_TSTATES);
+        vdp.vram[0x3F81] = 80;
+        vdp.vram[0x3F82] = 2;
+        vdp.vram[0x3F83] = 2;
+        vdp.registers[6] = 1;
+
+        vdp.advance(LINE_TSTATES);
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        let old_position = line_bytes + 20 * 3;
+        let new_position = line_bytes + 80 * 3;
+        assert_eq!(
+            &vdp.working_framebuffer[old_position..old_position + 3],
+            &TMS_PALETTE[4],
+            "the selected line must retain its old X, pattern, color and R6"
+        );
+        assert_eq!(
+            &vdp.working_framebuffer[new_position..new_position + 3],
+            &TMS_PALETTE[0],
+            "later SAT writes must not move the already-selected sprite"
+        );
+
+        // The next line evaluation observes the new SAT and R6 values.
+        vdp.advance(LINE_TSTATES);
+        let next_line_position = line_bytes * 2 + 80 * 3;
+        let next_line_second_pixel = next_line_position + 3;
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_position..next_line_position + 3],
+            &TMS_PALETTE[2]
+        );
+        assert_eq!(
+            &vdp.working_framebuffer[next_line_second_pixel..next_line_second_pixel + 3],
+            &TMS_PALETTE[0],
+            "the updated pattern row must be fetched from the newly selected pattern table"
+        );
+    }
+
+    #[test]
     fn sms1_sprite_line_buffer_is_preserved_by_vdp_clone_restore() {
         let mut original = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         original.registers[0] = 0x04;
