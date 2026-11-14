@@ -1793,9 +1793,15 @@ mod tests {
         vdp.registers[10] = 0;
 
         vdp.advance(17);
-        assert!(!vdp.interrupt_pending(), "HINT must remain clear before T-state 18");
+        assert!(
+            !vdp.interrupt_pending(),
+            "HINT must remain clear before T-state 18"
+        );
         vdp.advance(1);
-        assert!(vdp.interrupt_pending(), "HINT asserts at the quantized HPos 26 edge");
+        assert!(
+            vdp.interrupt_pending(),
+            "HINT asserts at the quantized HPos 26 edge"
+        );
     }
 
     #[test]
