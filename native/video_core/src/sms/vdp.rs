@@ -349,6 +349,10 @@ impl SmsVdp {
             0x81 => {
                 let value = self.status;
                 self.status = 0;
+                // A status read acknowledges flags already detected in this line.
+                // Do not let deferred span latches resurrect them at line close.
+                self.line_collision_seen = false;
+                self.line_overflow_status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
                 value
@@ -459,7 +463,8 @@ impl SmsVdp {
         if partial_status & COLLISION != 0 {
             self.line_collision_seen = true;
         }
-        if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0 {
+        if !overflow_was_sticky && partial_status & OVERFLOW != 0 && self.line_overflow_status == 0
+        {
             self.line_overflow_status = partial_status & (OVERFLOW | 0x1F);
         }
         self.raster_span_cursor_x = end_x as u16;
@@ -765,6 +770,7 @@ fn tms_pixel(frame: &mut [u8], x: usize, y: usize, color: u8) {
         frame[i..i + 3].copy_from_slice(&tms_rgb(color));
     }
 }
+#[allow(clippy::too_many_arguments)]
 fn tms_span_range(
     frame: &mut [u8],
     x: usize,
@@ -801,6 +807,7 @@ fn tms_quarter_range(
     }
 }
 
+#[cfg(test)]
 fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, width: usize) {
     for bit in 0..width {
         tms_pixel(
@@ -811,6 +818,7 @@ fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, widt
         );
     }
 }
+#[cfg(test)]
 fn tms_quarter(frame: &mut [u8], x: usize, y: usize, color: u8) {
     for dx in 0..4 {
         tms_pixel(frame, x + dx, y, color);
@@ -923,6 +931,7 @@ fn evaluate_mode4_sprites(
     }
 }
 
+#[cfg(test)]
 fn render_legacy_scanline(
     vram: &[u8],
     regs: &[u8; 16],
@@ -934,6 +943,7 @@ fn render_legacy_scanline(
     render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_legacy_scanline_span(
     vram: &[u8],
     regs: &[u8; 16],
@@ -1047,6 +1057,7 @@ fn render_legacy_scanline_span(
     render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
 }
 
+#[cfg(test)]
 fn render_legacy_sprites(
     vram: &[u8],
     regs: &[u8; 16],
@@ -1058,6 +1069,7 @@ fn render_legacy_sprites(
     render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, 0, SMS_VDP_WIDTH);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_legacy_sprites_span(
     vram: &[u8],
     regs: &[u8; 16],
@@ -1088,7 +1100,9 @@ fn render_legacy_sprites_span(
         if (y as i32) < sy || (y as i32) >= sy + (size * zoom) as i32 {
             continue;
         }
-        if active.len() == 4 && *status & OVERFLOW == 0 {
+        // Overflow is a line-evaluation result. Re-composing later spans must
+        // not reassert a flag that software acknowledged after the first span.
+        if start_x == 0 && active.len() == 4 && *status & OVERFLOW == 0 {
             *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
         }
         if active.len() >= 4 && !unlocked {
@@ -1949,6 +1963,36 @@ mod tests {
         assert_ne!(v.status & OVERFLOW, 0);
         assert_eq!(v.status & 0x1F, 4);
         assert_eq!(restored.status, v.status);
+    }
+
+    #[test]
+    fn status_read_clears_deferred_legacy_span_flags_for_the_current_line() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[5] = 0x7F;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 20;
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[8..16].fill(0xFF);
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        // The first partial composition detects both overflow and collision.
+        v.advance(114);
+        assert_ne!(v.line_overflow_status & OVERFLOW, 0);
+        assert!(v.line_collision_seen);
+
+        // Reading the status port acknowledges flags already detected this line.
+        let _ = v.read_port(0xBF);
+        assert_eq!(v.line_overflow_status, 0);
+        assert!(!v.line_collision_seen);
+
+        // The suffix must not resurrect the acknowledged prefix flags.
+        v.advance(114);
+        assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
     }
 
     #[test]
