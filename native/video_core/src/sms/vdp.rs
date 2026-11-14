@@ -1852,8 +1852,15 @@ mod tests {
         assert_eq!(vdp.status & VBLANK, 0, "the status flag is still pending");
 
         vdp.advance(3);
-        assert_ne!(vdp.status & VBLANK, 0, "VBlank status latches at HPos 24 / T16");
-        assert!(vdp.interrupt_pending(), "the VINT request remains pending until status read");
+        assert_ne!(
+            vdp.status & VBLANK,
+            0,
+            "VBlank status latches at HPos 24 / T16"
+        );
+        assert!(
+            vdp.interrupt_pending(),
+            "the VINT request remains pending until status read"
+        );
 
         let status = vdp.read_port(0xBF);
         assert_ne!(status & VBLANK, 0);
@@ -1866,10 +1873,18 @@ mod tests {
 
         vdp.advance(LINE_TSTATES);
         assert_eq!(vdp.scanline, 1);
-        assert_eq!(vdp.read_v_counter(), 0, "VCounter retains the prior line at HPos 0");
+        assert_eq!(
+            vdp.read_v_counter(),
+            0,
+            "VCounter retains the prior line at HPos 0"
+        );
 
         vdp.advance(14);
-        assert_eq!(vdp.read_v_counter(), 0, "VCounter has not latched at HPos 21");
+        assert_eq!(
+            vdp.read_v_counter(),
+            0,
+            "VCounter has not latched at HPos 21"
+        );
         vdp.advance(1);
         assert_eq!(vdp.read_v_counter(), 1, "VCounter changes at HPos 23 / T15");
     }
