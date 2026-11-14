@@ -1122,6 +1122,7 @@ fn render_scanline_for_revision_with_evaluation(
     let sprite_height = evaluation.sprite_height;
     let zoom = evaluation.zoom;
     let active = &evaluation.selected;
+    let count = active.len();
     let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
@@ -1159,7 +1160,7 @@ fn render_scanline_for_revision_with_evaluation(
             raw_pattern
         };
         let width_scale = if revision == SmsVdpRevision::Sega3155124 && zoom == 2 {
-            if rank < 4 { 2 } else { 1 }
+            if rank < count.saturating_sub(4) { 2 } else { 1 }
         } else {
             zoom
         };
@@ -1749,7 +1750,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_horizontal_zoom_applies_to_first_four_selected_sprites() {
+    fn sms1_horizontal_zoom_skips_last_four_selected_sprites() {
         for sprite_count in [2usize, 4, 6, 8] {
             let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
             v.registers[0] = 0x04;
@@ -1780,7 +1781,7 @@ mod tests {
 
             for index in 0..sprite_count {
                 let x = index * 28;
-                let doubled = index < 4;
+                let doubled = index < sprite_count.saturating_sub(4);
                 let width = if doubled { 16 } else { 8 };
                 assert_eq!(
                     &frame[(x + width - 1) * 3..(x + width) * 3],
