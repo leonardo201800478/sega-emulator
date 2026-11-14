@@ -3,7 +3,7 @@
 //! These tests exercise the public port surface and documented register/memory
 //! protocol. They do not assert the legacy scanline duration as physical timing.
 
-use sega_video::sms::{SmsVdp, SmsVdpProfile};
+use sega_video::sms::{SmsVdp, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
 
 fn new_sms1() -> SmsVdp {
     SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc())
@@ -236,6 +236,39 @@ fn sms1_r4_mask_gates_background_plane_two_and_three_pattern_addresses() {
     write_cram(&mut unmasked, 4, 0x03);
     unmasked.advance(228 * 192);
     assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [255, 0, 0]);
+}
+
+#[test]
+fn sms2_ignores_sms1_r2_r3_r4_background_address_masks() {
+    let profile = SmsVdpProfile::new(
+        SmsVdpRevision::Sega3155246,
+        VideoStandard::Ntsc,
+        SpriteLimitMode::HardwareLimit,
+    );
+    let mut vdp = SmsVdp::new_with_profile(profile);
+    for (register, value) in [
+        (0, 0x04),
+        (1, 0x40),
+        (2, 0x0E),
+        (3, 0x00),
+        (4, 0x00),
+        (5, 0x7F),
+    ] {
+        write_register(&mut vdp, register, value);
+    }
+    write_vram(&mut vdp, 0x3F00, 0xD0);
+    write_vram(&mut vdp, 0x3C00, 2);
+    write_vram(&mut vdp, 0x3C01, 0);
+    write_vram(&mut vdp, 0x3C02, 64);
+    write_vram(&mut vdp, 0x3C03, 0);
+    write_vram(&mut vdp, 0x0040, 0x80);
+    write_vram(&mut vdp, 0x0802, 0x80);
+    write_cram(&mut vdp, 1, 0x03);
+    write_cram(&mut vdp, 4, 0x03);
+
+    vdp.advance(228 * 192);
+    assert_eq!(frame_pixel(vdp.framebuffer(), 0, 128), [255, 0, 0]);
+    assert_eq!(frame_pixel(vdp.framebuffer(), 8, 128), [255, 0, 0]);
 }
 
 #[test]
