@@ -657,7 +657,7 @@ impl SmsVdp {
                 let previous = self.registers[register];
                 let mode4_unchanged =
                     register == 0 && (previous ^ first) & 0x04 == 0;
-                if (mode4_unchanged || (1..=7).contains(&register) {
+                if mode4_unchanged || (1..=7).contains(&register) {
                     self.commit_raster_span_to_beam();
                 }
                 self.registers[register] = first;
