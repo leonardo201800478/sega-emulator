@@ -1,9 +1,9 @@
 # SMS1 VDP — scorecard de conclusão
 
-**Sistema-alvo:** Sega Master System 1  
-**ASIC prioritário:** Sega 315-5124  
-**Backend:** Rust / `sega-video`  
-**Baseline integrada:** `main` após PR #828 (`1e4053b9db3053a73dcbdce5793e16ac1ccf961c`)  
+**Sistema-alvo:** Sega Master System 1
+**ASIC prioritário:** Sega 315-5124
+**Backend:** Rust / `sega-video`
+**Baseline integrada:** `main` após PR #828 (`1e4053b9db3053a73dcbdce5793e16ac1ccf961c`)
 **Estado:** EM DESENVOLVIMENTO — NÃO LIBERADO PARA TESTE IN-GAME
 
 Este scorecard registra somente capacidades presentes na `main` e evidências executadas no SHA correspondente. PR aberta, branch de trabalho ou teste ainda em execução não contam como implementação integrada.
