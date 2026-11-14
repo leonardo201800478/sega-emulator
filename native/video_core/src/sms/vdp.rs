@@ -1830,7 +1830,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_sprite_collision_is_latched_at_hblank_and_cleared_by_status_read() {
+    fn sms1_sprite_collision_is_committed_at_scanline_close_and_cleared_by_status_read() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -1850,14 +1850,14 @@ mod tests {
         assert_eq!(
             v.status & COLLISION,
             0,
-            "collision must not be visible before the line reaches HBlank"
+            "scanline-level model must not commit collision before the line closes"
         );
 
         v.advance(1);
         assert_ne!(
             v.status & COLLISION,
             0,
-            "opaque sprite overlap must latch collision at the scanline boundary"
+            "opaque sprite overlap must be committed when the scanline renderer closes the line"
         );
 
         let status = v.read_port(0xBF);
