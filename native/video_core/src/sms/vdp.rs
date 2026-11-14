@@ -1110,7 +1110,17 @@ fn render_legacy_scanline(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_scanline_span(vram, regs, status, frame, y, unlocked, None, 0, SMS_VDP_WIDTH);
+    render_legacy_scanline_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        None,
+        0,
+        SMS_VDP_WIDTH,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1237,7 +1247,17 @@ fn render_legacy_sprites(
     y: usize,
     unlocked: bool,
 ) {
-    render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, None, 0, SMS_VDP_WIDTH);
+    render_legacy_sprites_span(
+        vram,
+        regs,
+        status,
+        frame,
+        y,
+        unlocked,
+        None,
+        0,
+        SMS_VDP_WIDTH,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
