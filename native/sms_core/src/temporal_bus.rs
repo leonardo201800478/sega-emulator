@@ -963,6 +963,61 @@ mod tests {
     }
 
     #[test]
+    fn sms1_partial_cram_raster_span_survives_temporal_bus_snapshot_restore() {
+        let mut bus = SmsTemporalBus::new_with_hardware_profile(
+            vec![0; 0x4000],
+            3,
+            DEFAULT_SMS_PSG_CLOCK_HZ,
+            44_100,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+        .unwrap();
+
+        {
+            let vdp = bus.vdp_mut();
+            vdp_write_register(vdp, 0, 0x04);
+            vdp_write_register(vdp, 1, 0x40);
+            vdp_write_register(vdp, 2, 0x0E);
+            vdp_write_register(vdp, 5, 0x7F);
+            vdp_write_cram(vdp, 1, 0x03);
+            for row in 0..8_u16 {
+                vdp_write_memory(vdp, row * 4, 0xFF);
+            }
+            vdp_write_memory(vdp, 0x3F00, 0xD0);
+        }
+
+        let first_half = request(1, Z80BusOperation::MemoryRead, 0, 114);
+        bus.begin_request(first_half, 0).unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(first_half.id).unwrap();
+
+        // The VDP has committed the prefix with the old CRAM value. Snapshot
+        // the raster cursor and pending line state before changing the suffix.
+        vdp_write_cram(bus.vdp_mut(), 1, 0x0C);
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+
+        for candidate in [&mut bus, &mut restored] {
+            let second_half = request(2, Z80BusOperation::MemoryRead, 0, 114);
+            candidate.begin_request(second_half, 0).unwrap();
+            assert!(matches!(
+                candidate.dispatch_next().unwrap(),
+                Some(SmsTemporalDispatch::BusCompletion(_))
+            ));
+            candidate.acknowledge_completion(second_half.id).unwrap();
+        }
+
+        assert_eq!(
+            bus.vdp(),
+            restored.vdp(),
+            "raster cursor and already-committed framebuffer prefix must survive the bus snapshot"
+        );
+    }
+
+    #[test]
     fn sega_mapper_writes_take_effect_at_scheduler_deadline_and_reads_see_selected_bank() {
         let mut bus = SmsTemporalBus::new(patterned_rom(4), 3).unwrap();
         let cases = [
@@ -1594,7 +1649,7 @@ mod temporal_vdp_tests {
         // Two direct four-T-state bus writes complete at T8 (HPos 12).
         assert_eq!(captured, 0xEE);
         let mut snapshot = bus.export_state();
-        assert_eq!(snapshot.format_version, 13);
+        assert_eq!(snapshot.format_version, 14);
 
         let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(restored.vdp().read_h_counter(), captured);
