@@ -1098,7 +1098,14 @@ mod tests {
         }
         vram[0x3F00 + 10] = 0xD0;
 
-        let evaluation = evaluate_mode4_sprites(&vram, &regs, 10, SmsVdpRevision::Sega3155246, 192, 8);
+        let evaluation = evaluate_mode4_sprites(
+            &vram,
+            &regs,
+            10,
+            SmsVdpRevision::Sega3155246,
+            192,
+            8,
+        );
 
         assert_eq!(evaluation.selected.len(), 8);
         assert_eq!(
