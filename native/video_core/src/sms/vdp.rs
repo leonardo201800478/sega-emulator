@@ -2828,7 +2828,9 @@ mod tests {
         v.registers[2] = 0x0E;
         v.registers[5] = 0x7E;
         v.cram[1] = 0x03;
-        v.vram[0] = 0x80;
+        for row in 0..8 {
+            v.vram[row * 4] = 0x80;
+        }
         v.vram[0x3800] = 0;
         v.vram[0x3F00] = 0xD0;
         v
