@@ -40,7 +40,7 @@ No perfil SMS1/315-5124, a seleção Y/elegibilidade da SAT é armazenada em `Mo
 ## Limites conhecidos
 
 - R8 agora usa latch em HPos 21 (T14 no perfil de 228 T-states/342 posições) e o H-counter usa latch persistente por TH ascendente. O modelo é confrontado com MAME 315-5124 e a ROM de diagnóstico SmsVdpTest, mas ainda não foi executado em hardware SMS1/SMS2; a fase absoluta no reset permanece pendente de validação física. Outros registradores e fetches mid-scanline continuam aproximados.
-- No SMS1, a seleção de sprites é persistida entre scanlines e overflow é latched durante a avaliação SAT. Collision é detectada pela sobreposição de pixels opacos durante a composição e fica visível no fechamento da scanline/HBlank; a leitura de status limpa as flags. O dot exato da colisão não é modelado, e X/tile/pattern ainda não têm fetch temporal próprio.
+- No SMS1, a seleção de sprites é persistida entre scanlines e overflow é latched durante a avaliação SAT. Collision é detectada pela sobreposição de pixels opacos durante a composição e é commitada no fechamento da scanline pelo modelo atual; isso é apenas uma aproximação coarse do latch de status documentado em HBlank, não o instante medido de início de HBlank. A leitura de status limpa as flags. O dot exato da colisão não é modelado, e X/tile/pattern ainda não têm fetch temporal próprio.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.
