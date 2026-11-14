@@ -1864,6 +1864,10 @@ mod tests {
 
         original.advance(LINE_TSTATES);
         let mut restored = original.clone();
+        assert_eq!(
+            original.legacy_sprite_line_buffer,
+            restored.legacy_sprite_line_buffer
+        );
         original.vram[0x3F00] = 20;
         restored.vram[0x3F00] = 20;
 
