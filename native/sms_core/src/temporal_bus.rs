@@ -1640,18 +1640,8 @@ mod temporal_vdp_tests {
         }
 
         fn capture_th(bus: &mut SmsTemporalBus) {
-            transact(
-                bus,
-                10,
-                Z80BusOperation::PortWrite { value: 0xDD },
-                0x003F,
-            );
-            transact(
-                bus,
-                11,
-                Z80BusOperation::PortWrite { value: 0xDF },
-                0x003F,
-            );
+            transact(bus, 10, Z80BusOperation::PortWrite { value: 0xDD }, 0x003F);
+            transact(bus, 11, Z80BusOperation::PortWrite { value: 0xDF }, 0x003F);
         }
 
         let mut continuous = SmsTemporalBus::new_with_hardware_profile(
