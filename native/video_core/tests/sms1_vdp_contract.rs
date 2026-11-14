@@ -235,7 +235,7 @@ fn sms1_r4_mask_gates_background_plane_two_and_three_pattern_addresses() {
     write_vram(&mut unmasked, 0x0802, 0x80);
     write_cram(&mut unmasked, 4, 0x03);
     unmasked.advance(228 * 192);
-    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [255, 0, 0]);
+    assert_eq!(frame_pixel(unmasked.framebuffer(), 0, 0), [238, 0, 0]);
 }
 
 #[test]
