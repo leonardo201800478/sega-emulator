@@ -1,9 +1,9 @@
 # SMS1 Mode 4 — overflow latching during SAT evaluation, phase 3
 
-**ASIC:** Sega 315-5124  
-**Scope:** sprite overflow status timing relative to the SAT line buffer  
-**Implementation class:** scanline-level functional model  
-**Status:** code and focused CI validation pending  
+**ASIC:** Sega 315-5124
+**Scope:** sprite overflow status timing relative to the SAT line buffer
+**Implementation class:** scanline-level functional model
+**Status:** code and focused CI validation pending
 **Physical subline oracle:** unavailable
 
 ## 1. Hardware evidence
