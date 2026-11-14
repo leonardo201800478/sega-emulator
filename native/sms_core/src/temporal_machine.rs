@@ -784,8 +784,6 @@ impl SmsTemporalMachine {
         }
     }
 
-
-
     /// Read-only access to the SMS VDP owned by the temporal bus.
     pub const fn vdp(&self) -> &SmsVdp {
         self.bus.vdp()
