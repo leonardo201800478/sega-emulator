@@ -1817,6 +1817,151 @@ mod tests {
     }
 
     #[test]
+    fn legacy_scanline_spans_match_full_line_for_each_tms_mode() {
+        let mut v = SmsVdp::default();
+        v.registers[2] = 0x01;
+        v.registers[3] = 0x01;
+        v.registers[4] = 0x01;
+        v.registers[5] = 0x7F;
+        v.registers[6] = 0x01;
+        v.registers[7] = 0x21;
+        for (index, byte) in v.vram.iter_mut().enumerate() {
+            *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
+        }
+        v.vram[0x3F80] = 0xD0;
+
+        let modes = [(0x00, 0x40), (0x00, 0x50), (0x00, 0x48), (0x00, 0x58), (0x02, 0x40)];
+        for (r0, r1) in modes {
+            v.registers[0] = r0;
+            v.registers[1] = r1;
+            let mut full_status = 0;
+            let mut full = vec![0; FRAME_SIZE];
+            render_legacy_scanline(&v.vram, &v.registers, &mut full_status, &mut full, 0, false);
+
+            let mut split_status = 0;
+            let mut split = vec![0; FRAME_SIZE];
+            for (start_x, end_x) in [(0, 63), (63, 108), (108, 171), (171, SMS_VDP_WIDTH)] {
+                render_legacy_scanline_span(
+                    &v.vram,
+                    &v.registers,
+                    &mut split_status,
+                    &mut split,
+                    0,
+                    false,
+                    start_x,
+                    end_x,
+                );
+            }
+            assert_eq!(
+                &split[..SMS_VDP_WIDTH * 3],
+                &full[..SMS_VDP_WIDTH * 3],
+                "legacy mode r0={r0:#04x} r1={r1:#04x} must compose identically across spans"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_sprite_spans_match_full_line_for_a_sprite_crossing_the_boundary() {
+        let mut v = SmsVdp::default();
+        v.registers[1] = 0x40;
+        v.registers[5] = 0x7F;
+        v.vram[0x3F80] = 0;
+        v.vram[0x3F81] = 104;
+        v.vram[0x3F82] = 1;
+        v.vram[0x3F83] = 4;
+        v.vram[0x3F84] = 0xD0;
+        v.vram[8..16].fill(0xFF);
+
+        let mut full_status = 0;
+        let mut full = vec![0; FRAME_SIZE];
+        render_legacy_sprites(&v.vram, &v.registers, &mut full_status, &mut full, 1, false);
+
+        let mut split_status = 0;
+        let mut split = vec![0; FRAME_SIZE];
+        render_legacy_sprites_span(
+            &v.vram,
+            &v.registers,
+            &mut split_status,
+            &mut split,
+            1,
+            false,
+            0,
+            108,
+        );
+        render_legacy_sprites_span(
+            &v.vram,
+            &v.registers,
+            &mut split_status,
+            &mut split,
+            1,
+            false,
+            108,
+            SMS_VDP_WIDTH,
+        );
+
+        assert_eq!(
+            &split[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6],
+            &full[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6]
+        );
+    }
+
+    #[test]
+    fn sms1_mode4_to_legacy_transition_preserves_the_mode4_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+
+        v.advance(114);
+        reg(&mut v, 0, 0x00);
+        reg(&mut v, 1, 0x00);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 8, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn sms1_legacy_to_mode4_transition_preserves_the_legacy_prefix() {
+        let mut v = setup_midline_sms1_write_fixture();
+        v.registers[0] = 0;
+        v.registers[1] = 0;
+        v.vram[0] = 0xFF;
+
+        v.advance(114);
+        reg(&mut v, 0, 0x04);
+        reg(&mut v, 1, 0x40);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [0, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [238, 0, 0]);
+    }
+
+    #[test]
+    fn legacy_overflow_from_a_committed_prefix_survives_sat_base_change() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 10 + (index as u8 * 8);
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        v.advance(114);
+        reg(&mut v, 5, 0x00);
+        v.vram[0] = 0xD0;
+        v.advance(114);
+
+        assert_ne!(v.status & OVERFLOW, 0);
+        assert_eq!(v.status & 0x1F, 4);
+    }
+
+    #[test]
     fn sms1_r5_bit_zero_aliases_sprite_x_and_tile_addresses_into_y_table() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
