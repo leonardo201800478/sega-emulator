@@ -1023,17 +1023,7 @@ fn render_legacy_scanline_span(
             } else {
                 backdrop
             };
-            tms_span_range(
-                frame,
-                col * 8,
-                y,
-                bits,
-                fg,
-                bg,
-                8,
-                start_x,
-                end_x,
-            );
+            tms_span_range(frame, col * 8, y, bits, fg, bg, 8, start_x, end_x);
         }
     }
     render_legacy_sprites_span(vram, regs, status, frame, y, unlocked, start_x, end_x);
