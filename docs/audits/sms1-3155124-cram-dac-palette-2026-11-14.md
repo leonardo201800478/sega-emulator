@@ -1,8 +1,8 @@
 # SMS1 315-5124 — CRAM DAC output palette
 
-**ASIC:** Sega 315-5124  
-**Scope:** conversion of 6-bit CRAM entries to RGB24 framebuffer values  
-**Implementation:** revision-specific digital output-level table  
+**ASIC:** Sega 315-5124
+**Scope:** conversion of 6-bit CRAM entries to RGB24 framebuffer values
+**Implementation:** revision-specific digital output-level table
 **Status:** functional implementation and focused tests pending CI; physical calibration remains open
 
 ## Evidence and provenance
