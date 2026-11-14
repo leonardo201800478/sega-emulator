@@ -345,10 +345,7 @@ mod tests {
             io.set_external_th_level(3, false),
             Err(SmsIoError::InvalidPlayer(3))
         );
-        assert_eq!(
-            io.external_th_level(3),
-            Err(SmsIoError::InvalidPlayer(3))
-        );
+        assert_eq!(io.external_th_level(3), Err(SmsIoError::InvalidPlayer(3)));
     }
 
     #[test]
