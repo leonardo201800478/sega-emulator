@@ -1009,17 +1009,24 @@ mod tests {
             panic!("phase-zero port read must complete before phase-one TH input");
         };
         assert_eq!(completion.data, Some(0xFF));
-        restored.acknowledge_completion(port_read.id).unwrap();
+
+        // A snapshot taken after the bus sample but before the phase-one input
+        // event must retain the same-timestamp external transition.
+        let mut after_completion =
+            SmsTemporalBus::restore_state(restored.export_state()).unwrap();
+        after_completion
+            .acknowledge_completion(port_read.id)
+            .unwrap();
 
         assert_eq!(
-            restored.dispatch_next().unwrap(),
+            after_completion.dispatch_next().unwrap(),
             Some(SmsTemporalDispatch::ExternalThTransition {
                 player: 1,
                 high: false,
                 completed_at: deadline,
             })
         );
-        assert_eq!(restored.io().read_port(0xDD) & (1 << 6), 0);
+        assert_eq!(after_completion.io().read_port(0xDD) & (1 << 6), 0);
     }
 
     #[test]
