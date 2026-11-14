@@ -3250,6 +3250,7 @@ mod tests {
     #[test]
     fn midline_r0_sprite_shift_preserves_the_unshifted_prefix() {
         let mut v = setup_midline_sms1_write_fixture();
+        v.registers[5] = 0x7F;
         set_sprite(&mut v, 0, 0xFF, 100, 1);
         v.vram[0x3F01] = 0xD0;
         solid_sprite_tile(&mut v, 1, 1);
