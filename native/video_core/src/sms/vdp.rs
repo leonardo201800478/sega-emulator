@@ -433,9 +433,11 @@ impl SmsVdp {
         let mut render_registers = self.registers;
         render_registers[8] = self.latched_scroll_x;
         render_registers[9] = self.latched_scroll_y;
-        let sprite_evaluation = self.sprite_line_buffer.as_ref().and_then(|buffer| {
-            (buffer.target_line == self.scanline).then_some(&buffer.evaluation)
-        });
+        let active_height = usize::from(self.visible_height());
+        let sprite_evaluation = self
+            .sprite_line_buffer
+            .as_ref()
+            .and_then(|buffer| (buffer.target_line == self.scanline).then_some(&buffer.evaluation));
         let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
             &self.vram,
@@ -446,7 +448,7 @@ impl SmsVdp {
             line,
             self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
             self.profile.revision,
-            usize::from(self.visible_height()),
+            active_height,
             sprite_evaluation,
             start_x,
             end_x,
@@ -551,9 +553,9 @@ impl SmsVdp {
             let sprite_evaluation = if self.profile.revision == SmsVdpRevision::Sega3155124
                 && self.registers[0] & 0x04 != 0
             {
-                self.sprite_line_buffer.as_ref().and_then(|buffer| {
-                    (buffer.target_line == line).then_some(&buffer.evaluation)
-                })
+                self.sprite_line_buffer
+                    .as_ref()
+                    .and_then(|buffer| (buffer.target_line == line).then_some(&buffer.evaluation))
             } else {
                 None
             };
@@ -2031,7 +2033,11 @@ mod tests {
         v.vram[2 * 32 + 1] = 0xFF;
 
         v.advance(LINE_TSTATES);
-        assert_ne!(v.status & COLLISION, 0, "line zero establishes a sticky collision");
+        assert_ne!(
+            v.status & COLLISION,
+            0,
+            "line zero establishes a sticky collision"
+        );
 
         // Line one has no selected sprites. A partial CRAM commit must not
         // mistake the previous line's sticky status bit for a new collision.
