@@ -44,7 +44,7 @@ Este scorecard registra somente capacidades presentes na `main` e evidências ex
 
 ## 3. Limitações que bloqueiam teste in-game
 
-1. Fechar a temporalidade física dos registradores R0-R10 e os latches específicos; a composição parcial Mode 4/legacy está integrada, mas os latches de escrita ainda são boundaries coarse.
+1. Fechar a temporalidade física de R0-R9 e latches específicos; o evento HINT/R10 está modelado em T14, mas ainda precisa de validação independente com a ROM e o barramento CPU.
 2. Validar o comportamento de CRAM dot e o instante de latch da paleta.
 3. Modelar ou justificar por evidência o fetch-ahead de tiles, bitplanes e padrões de sprites.
 4. Modelar fetches de padrão por sprite/dot e separar seleção SAT de fetch real; Mode 4 e legacy/TMS já capturam metadados por scanline, mas bitplanes continuam consultados durante a composição.
