@@ -9,9 +9,9 @@ pub const SMS_VDP_MAX_HEIGHT: usize = 240;
 const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
-// SMS1 line events are quantized to the VDP's current T-state input. HPos 24
-// maps exactly to T-state 16; HPos 26 maps to the first representable edge
-// (T-state 18 / HPos 27); active display ends at HPos 319 (T-state 213).
+// SMS1 boundaries follow the SmsVdpTest Z80-clock/pixel mapping:
+// VINT HPos 20/T13, HINT HPos 21/T14, VCounter HPos 23/T15,
+// overflow and VBlank flag HPos 24/T16. HBlank closes active pixels at T213.
 const SMS_VINT_IRQ_TSTATE: u64 = 13;
 const SMS_HINT_TSTATE: u64 = 14;
 const SMS_VCOUNTER_LATCH_TSTATE: u64 = 15;
@@ -1820,15 +1820,15 @@ mod tests {
         vdp.registers[0] = 0x14; // Mode 4 plus HINT enable.
         vdp.registers[10] = 0;
 
-        vdp.advance(17);
+        vdp.advance(13);
         assert!(
             !vdp.interrupt_pending(),
-            "HINT must remain clear before T-state 18"
+            "HINT must remain clear before the HPos 21 boundary"
         );
         vdp.advance(1);
         assert!(
             vdp.interrupt_pending(),
-            "HINT asserts at the quantized HPos 26 edge"
+            "HINT asserts at the HPos 21 / T-state 14 boundary"
         );
     }
 
