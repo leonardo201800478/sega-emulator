@@ -436,7 +436,7 @@ impl SmsVdp {
         let sprite_evaluation = self.sprite_line_buffer.as_ref().and_then(|buffer| {
             (buffer.target_line == self.scanline).then_some(&buffer.evaluation)
         });
-        let mut partial_status = self.status;
+        let mut partial_status = self.status & !COLLISION;
         render_scanline_for_revision_with_evaluation(
             &self.vram,
             &self.cram,
@@ -3106,18 +3106,69 @@ mod tests {
         assert_eq!(vdp.read_h_counter(), 0x4E);
     }
 
-    #[test]
-    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
+    fn setup_midline_cram_write_fixture() -> SmsVdp {
         let mut v = setup_midline_write_fixture();
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+        }
+        v
+    }
+
+    fn framebuffer_pixel(vdp: &SmsVdp, x: usize, y: usize) -> [u8; 3] {
+        let offset = (y * SMS_VDP_WIDTH + x) * 3;
+        vdp.working_framebuffer[offset..offset + 3]
+            .try_into()
+            .expect("RGB24 pixel has three channels")
+    }
+
+    #[test]
+    fn midline_cram_write_commits_old_and_new_color_spans() {
+        let mut v = setup_midline_cram_write_fixture();
 
         v.advance(114);
         addr(&mut v, 1, 0xC0);
         v.write_port(0xBE, 0x0C);
         v.advance(114);
 
-        // CRAM is mutated immediately and the line is rendered at its end;
-        // therefore even pixels left of the write phase use the new color.
-        // This is a model-characterization assertion, not a hardware oracle.
-        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+        // HPos 171 minus the comparative active-area start HPos 63 gives
+        // the current coarse commit boundary at active pixel 108.
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 238, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 238, 0]);
+    }
+
+    #[test]
+    fn midline_r7_write_commits_old_and_new_backdrop_spans() {
+        let mut v = setup_midline_write_fixture();
+        v.registers[1] = 0;
+        v.cram[16] = 0x03;
+        v.cram[17] = 0x0C;
+
+        v.advance(114);
+        reg(&mut v, 7, 1);
+        v.advance(114);
+
+        assert_eq!(framebuffer_pixel(&v, 0, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 107, 0), [238, 0, 0]);
+        assert_eq!(framebuffer_pixel(&v, 108, 0), [0, 238, 0]);
+        assert_eq!(framebuffer_pixel(&v, 255, 0), [0, 238, 0]);
+    }
+
+    #[test]
+    fn midline_cram_raster_spans_are_chunking_invariant_and_clone_restorable() {
+        let mut whole = setup_midline_cram_write_fixture();
+        whole.advance(114);
+        addr(&mut whole, 1, 0xC0);
+        whole.write_port(0xBE, 0x0C);
+
+        let mut restored = whole.clone();
+        whole.advance(114);
+        restored.advance(57);
+        restored.advance(57);
+
+        assert_eq!(whole.raster_position(), restored.raster_position());
+        assert_eq!(whole.working_framebuffer, restored.working_framebuffer);
+        assert_eq!(whole.status(), restored.status());
     }
 }
