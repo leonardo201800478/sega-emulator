@@ -73,6 +73,42 @@ fn cram_write_uses_32_entry_alias_and_masks_to_six_bits() {
 }
 
 #[test]
+fn cram_write_ignores_all_address_bits_above_the_five_bit_index() {
+    let mut vdp = new_sms1();
+    let cases = [
+        (0x0020, 0xFF),
+        (0x0040, 0xC1),
+        (0x0100, 0x7E),
+        (0x3FE0, 0xAA),
+    ];
+
+    for (address, value) in cases {
+        select(&mut vdp, address, 3);
+        vdp.write_port(0xBE, value);
+
+        assert_eq!(
+            vdp.cram()[0],
+            value & 0x3F,
+            "CRAM address {address:#06X} must alias index zero"
+        );
+    }
+
+    assert_eq!(vdp.vram()[0], 0x00, "CRAM writes must not modify VRAM");
+}
+
+#[test]
+fn sms1_profile_rejects_sms2_extended_height_modes_through_public_api() {
+    let mut vdp = new_sms1();
+
+    for mode_bits in [0x08, 0x10] {
+        vdp.write_port(0xBF, 0x40 | mode_bits);
+        vdp.write_port(0xBF, 0x81);
+
+        assert_eq!(vdp.raster_position().visible_height, 192);
+    }
+}
+
+#[test]
 fn register_write_accepts_r0_through_r10_and_ignores_r11() {
     let mut vdp = new_sms1();
 
