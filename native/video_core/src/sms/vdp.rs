@@ -702,8 +702,10 @@ fn evaluate_mode4_sprites(
     sprite_limit: usize,
 ) -> Mode4SpriteEvaluation {
     let sat = (usize::from(regs[5] & 0x7E) << 7) & 0x3F00;
-    let sprite_height = if regs[1] & 0x02 != 0 { 16 } else { 8 };
-    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
+    let sprite_height = if regs[1] & 0x02 != 0 { 16_usize } else { 8 };
+    let zoom = if regs[1] & 0x01 != 0 { 2_usize } else { 1 };
+    let sprite_height_i32 = sprite_height as i32;
+    let zoom_i32 = zoom as i32;
     let sprite_limit = sprite_limit.min(64);
     let mut selected = Vec::with_capacity(sprite_limit);
     let mut overflow_index = None;
@@ -722,7 +724,9 @@ fn evaluate_mode4_sprites(
         } else {
             i32::from(raw_y) + 1
         };
-        if (y as i32) < sprite_y || (y as i32) >= sprite_y + (sprite_height * zoom) {
+        if (y as i32) < sprite_y
+            || (y as i32) >= sprite_y + (sprite_height_i32 * zoom_i32)
+        {
             continue;
         }
         if selected.len() == 8 {
@@ -734,7 +738,7 @@ fn evaluate_mode4_sprites(
         if selected.len() == sprite_limit {
             break;
         }
-        let row = ((y as i32 - sprite_y) / zoom) as usize;
+        let row = ((y as i32 - sprite_y) / zoom_i32) as usize;
         selected.push((index, row));
     }
     Mode4SpriteEvaluation {
@@ -1150,7 +1154,7 @@ fn render_scanline_for_revision_with_evaluation(
                 continue;
             }
             for zx in 0..width_scale {
-                let x = sx + (px * width_scale + zx);
+                let x = sx + (px * width_scale + zx) as i32;
                 if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
                     continue;
                 }
