@@ -1958,11 +1958,40 @@ mod tests {
 
         v.advance(114);
         reg(&mut v, 5, 0x00);
+        let mut restored = v.clone();
+        v.vram[0] = 0xD0;
+        restored.vram[0] = 0xD0;
+        v.advance(114);
+        restored.advance(114);
+
+        assert_ne!(v.status & OVERFLOW, 0);
+        assert_eq!(v.status & 0x1F, 4);
+        assert_eq!(restored.status, v.status);
+    }
+
+    #[test]
+    fn legacy_partial_overflow_does_not_replace_an_existing_sticky_index() {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7F;
+        v.status = OVERFLOW | 3;
+        for index in 0..5 {
+            let at = 0x3F80 + index * 4;
+            v.vram[at] = 0xFF;
+            v.vram[at + 1] = 10 + (index as u8 * 8);
+            v.vram[at + 2] = 1;
+            v.vram[at + 3] = 4;
+        }
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+
+        v.advance(114);
+        reg(&mut v, 5, 0x00);
         v.vram[0] = 0xD0;
         v.advance(114);
 
         assert_ne!(v.status & OVERFLOW, 0);
-        assert_eq!(v.status & 0x1F, 4);
+        assert_eq!(v.status & 0x1F, 3);
     }
 
     #[test]
