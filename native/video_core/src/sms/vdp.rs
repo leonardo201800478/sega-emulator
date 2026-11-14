@@ -2833,6 +2833,21 @@ mod tests {
         v
     }
 
+    fn setup_sms1_midline_write_fixture() -> SmsVdp {
+        let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[3] = 0xFF;
+        v.registers[4] = 0x07;
+        v.registers[5] = 0x7F;
+        v.cram[1] = 0x03;
+        v.vram[0] = 0x80;
+        v.vram[0x3800] = 0;
+        v.vram[0x3F00] = 0xD0;
+        v
+    }
+
     #[test]
     fn r8_write_at_hpos_21_updates_the_current_scanline() {
         let mut actual = setup_midline_write_fixture();
@@ -2909,7 +2924,56 @@ mod tests {
     }
 
     #[test]
-    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
+    fn sms1_cram_write_during_active_display_is_visible_from_the_next_scanline() {
+        let mut v = setup_sms1_midline_write_fixture();
+        v.advance(32);
+        v.advance(82);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        v.advance(114);
+
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
+
+        v.advance(SMS_CRAM_LATCH_TSTATE);
+        v.advance(LINE_TSTATES - SMS_CRAM_LATCH_TSTATE);
+        assert_eq!(
+            &v.working_framebuffer[line_bytes..line_bytes + 3],
+            &[0, 255, 0]
+        );
+    }
+
+    #[test]
+    fn sms1_cram_write_before_hblank_latch_affects_the_current_scanline() {
+        let mut v = setup_sms1_midline_write_fixture();
+        v.advance(14);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        v.advance(LINE_TSTATES - 14);
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+    }
+
+    #[test]
+    fn sms1_cram_hblank_latch_is_chunking_invariant() {
+        let mut whole = setup_sms1_midline_write_fixture();
+        whole.advance(14);
+        addr(&mut whole, 1, 0xC0);
+        whole.write_port(0xBE, 0x0C);
+        whole.advance(LINE_TSTATES - 14);
+
+        let mut chunks = setup_sms1_midline_write_fixture();
+        chunks.advance(14);
+        addr(&mut chunks, 1, 0xC0);
+        chunks.write_port(0xBE, 0x0C);
+        chunks.advance(5);
+        chunks.advance(13);
+        chunks.advance(LINE_TSTATES - 32);
+
+        assert_eq!(whole, chunks);
+    }
+
+    #[test]
+    fn sms2_midline_cram_write_retains_the_current_scanline_model() {
         let mut v = setup_midline_write_fixture();
 
         v.advance(114);
@@ -2917,8 +2981,7 @@ mod tests {
         v.write_port(0xBE, 0x0C);
         v.advance(114);
 
-        // CRAM is mutated immediately and the line is rendered at its end;
-        // therefore even pixels left of the write phase use the new color.
+        // SMS2 retains the pre-existing scanline model in this SMS1-first phase.
         // This is a model-characterization assertion, not a hardware oracle.
         assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
     }
