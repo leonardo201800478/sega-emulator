@@ -1,8 +1,8 @@
 # Unified VDP family migration
 
-**Status:** migration in progress — architecture baseline  
-**Priority:** SMS1 → SMS2 → SG-1000 → Game Gear  
-**Target crate:** `native/video_core` (`sega-video`)  
+**Status:** migration in progress — architecture baseline
+**Priority:** SMS1 → SMS2 → SG-1000 → Game Gear
+**Target crate:** `native/video_core` (`sega-video`)
 **Migration branch:** `feat/unified-vdp-migration-sms1-first-20261114`
 
 ## 1. Objective
