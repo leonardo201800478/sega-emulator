@@ -445,9 +445,7 @@ impl SmsVdp {
     }
 
     fn prepare_next_sms1_sprite_line(&mut self, completed_line: u16, height: u16) {
-        if self.profile.revision != SmsVdpRevision::Sega3155124
-            || self.registers[0] & 0x04 == 0
-        {
+        if self.profile.revision != SmsVdpRevision::Sega3155124 || self.registers[0] & 0x04 == 0 {
             self.sprite_line_buffer = None;
             return;
         }
@@ -475,9 +473,9 @@ impl SmsVdp {
             let sprite_evaluation = if self.profile.revision == SmsVdpRevision::Sega3155124
                 && self.registers[0] & 0x04 != 0
             {
-                self.sprite_line_buffer.take().and_then(|buffer| {
-                    (buffer.target_line == line).then_some(buffer.evaluation)
-                })
+                self.sprite_line_buffer
+                    .take()
+                    .and_then(|buffer| (buffer.target_line == line).then_some(buffer.evaluation))
             } else {
                 None
             };
@@ -692,8 +690,9 @@ struct Mode4SpriteLineBuffer {
 /// hardware's eight-entry capacity, even when the caller requests additional
 /// candidates for unlocked compatibility rendering. The selected vector is
 /// bounded by sprite_limit (8 for hardware, up to 64 for compatibility).
-/// This remains scanline-level; its temporal handoff to the next line is a
-/// separate state-machine change.
+/// SMS1 retains the result for the following scanline at the preceding
+/// scanline boundary. This is a functional approximation, not a measured
+/// subline evaluation timestamp.
 fn evaluate_mode4_sprites(
     vram: &[u8],
     regs: &[u8; 16],
