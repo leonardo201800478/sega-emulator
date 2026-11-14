@@ -1834,6 +1834,67 @@ mod tests {
     }
 
     #[test]
+    fn sms1_vint_irq_precedes_the_vblank_status_flag() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+        vdp.registers[1] = 0x20; // VINT enable.
+        let height = u64::from(vdp.visible_height());
+
+        vdp.advance(LINE_TSTATES * height);
+        vdp.advance(12);
+        assert!(!vdp.interrupt_pending());
+        assert_eq!(vdp.status & VBLANK, 0);
+
+        vdp.advance(1);
+        assert!(vdp.interrupt_pending(), "VINT IRQ asserts at HPos 20 / T13");
+        assert_eq!(vdp.status & VBLANK, 0, "the status flag is still pending");
+
+        vdp.advance(3);
+        assert_ne!(vdp.status & VBLANK, 0, "VBlank status latches at HPos 24 / T16");
+        assert!(vdp.interrupt_pending(), "the VINT request remains pending until status read");
+
+        let status = vdp.read_port(0xBF);
+        assert_ne!(status & VBLANK, 0);
+        assert!(!vdp.interrupt_pending());
+    }
+
+    #[test]
+    fn sms1_vcounter_changes_at_hpos23_of_each_scanline() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+
+        vdp.advance(LINE_TSTATES);
+        assert_eq!(vdp.scanline, 1);
+        assert_eq!(vdp.read_v_counter(), 0, "VCounter retains the prior line at HPos 0");
+
+        vdp.advance(14);
+        assert_eq!(vdp.read_v_counter(), 0, "VCounter has not latched at HPos 21");
+        vdp.advance(1);
+        assert_eq!(vdp.read_v_counter(), 1, "VCounter changes at HPos 23 / T15");
+    }
+
+    #[test]
+    fn sms1_hcounter_latch_matches_measured_z80_clock_pixel_table() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+
+        vdp.tstates_into_line = 0;
+        vdp.latch_h_counter();
+        assert_eq!(vdp.read_h_counter(), 0xE9);
+
+        vdp.tstates_into_line = 1;
+        vdp.latch_h_counter();
+        assert_eq!(vdp.read_h_counter(), 0xEA);
+
+        vdp.tstates_into_line = 14;
+        assert_eq!(vdp.current_hpos(), 21);
+        vdp.latch_h_counter();
+        assert_eq!(vdp.read_h_counter(), 0xF3);
+
+        vdp.tstates_into_line = 16;
+        assert_eq!(vdp.current_hpos(), 24);
+        vdp.latch_h_counter();
+        assert_eq!(vdp.read_h_counter(), 0xF5);
+    }
+
+    #[test]
     fn sms1_vblank_flag_and_frame_ready_latch_at_hpos24_of_vblank_line() {
         let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         let height = u64::from(vdp.visible_height());
