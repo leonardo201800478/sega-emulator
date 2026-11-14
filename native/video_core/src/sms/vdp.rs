@@ -941,6 +941,7 @@ fn render_scanline(
     );
 }
 
+#[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
     reason = "explicit render inputs keep hardware state ownership at the VDP boundary"
