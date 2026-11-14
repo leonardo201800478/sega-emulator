@@ -1591,6 +1591,44 @@ mod temporal_vdp_tests {
     }
 
     #[test]
+    fn h_counter_port_reads_return_the_th_latched_value_without_retiming_it() {
+        let mut bus = SmsTemporalBus::new_with_hardware_profile(
+            vec![0; 0x4000],
+            3,
+            super::DEFAULT_SMS_PSG_CLOCK_HZ,
+            super::DEFAULT_AUDIO_SAMPLE_RATE,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            super::Territory::Export,
+        )
+        .unwrap();
+
+        // Drive TH low, then release it as an input. The rising edge is
+        // committed by the temporal bus at T8 / HPos 12 and captures 0xEE.
+        transact(
+            &mut bus,
+            1,
+            Z80BusOperation::PortWrite { value: 0xDD },
+            0x003F,
+        );
+        transact(
+            &mut bus,
+            2,
+            Z80BusOperation::PortWrite { value: 0xDF },
+            0x003F,
+        );
+        assert_eq!(bus.vdp().read_h_counter(), 0xEE);
+
+        // Reads through mirrored $7F ports observe the frozen latch. Advancing
+        // the Scheduler between reads must not turn H-counter into a live clock.
+        let first = transact(&mut bus, 3, Z80BusOperation::PortRead, 0x127F);
+        assert_eq!(first.data, Some(0xEE));
+
+        let second = transact(&mut bus, 4, Z80BusOperation::PortRead, 0x007F);
+        assert_eq!(second.data, Some(0xEE));
+        assert_eq!(bus.vdp().read_h_counter(), 0xEE);
+    }
+
+    #[test]
     fn vdp_raster_progress_is_chunk_invariant_and_survives_bus_restore() {
         const FRAME_TSTATES: u32 = 228 * 262;
         let mut whole = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
