@@ -361,6 +361,7 @@ impl SmsVdp {
     /// SMS VDP data ($BE) and control/status ($BF) ports.
     pub fn read_port(&mut self, port: u16) -> u8 {
         if self.profile.revision == SmsVdpRevision::Sega3155124
+            && self.scanline < self.visible_height()
             && (port as u8) & 0xC1 == 0x81
         {
             // Status reads are observable beam boundaries: compose the pixels
@@ -1815,7 +1816,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_hinterrupt_is_asserted_at_the_hpos26_tstate_boundary() {
+    fn sms1_hinterrupt_is_asserted_at_the_hpos21_tstate_boundary() {
         let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         vdp.registers[0] = 0x14; // Mode 4 plus HINT enable.
         vdp.registers[10] = 0;
@@ -2376,28 +2377,25 @@ mod tests {
         v.vram[8..16].fill(0xFF);
         v.vram[0x3F80 + 5 * 4] = 0xD0;
 
-        // Overflow is latched by the line evaluation; the first partial
-        // composition detects the overlapping opaque sprite pixels.
+        // Overflow is latched at HPos 24; a partial commit reaches the
+        // overlapping opaque sprite pixels before the status read.
         v.advance(114);
         assert_ne!(v.status & OVERFLOW, 0);
-        // A register write is the externally observable boundary that commits
-        // the already-scanned prefix in this selective-raster model.
         reg(&mut v, 7, 0);
-        assert!(v.line_collision_seen);
+        assert_ne!(v.status & COLLISION, 0);
+        assert!(!v.line_collision_seen);
 
-        // Before HBlank, overflow is visible but collision remains pending.
         let status = v.read_port(0xBF);
         assert_ne!(status & OVERFLOW, 0);
-        assert_eq!(status & COLLISION, 0);
+        assert_ne!(status & COLLISION, 0);
         assert_eq!(v.line_overflow_status, 0);
-        assert!(v.line_collision_seen);
+        assert!(!v.line_collision_seen);
 
-        // Remove the SAT entries for the next line. The current suffix still
-        // uses its latched entries; HBlank must publish the pending collision.
+        // Remove SAT entries for the next line. The current suffix retains
+        // its latched entries but contains no additional overlapping pixels.
         v.vram[0x3F80] = 0xD0;
         v.advance(114);
-        assert_eq!(v.status & OVERFLOW, 0);
-        assert_ne!(v.status & COLLISION, 0);
+        assert_eq!(v.status & (OVERFLOW | COLLISION), 0);
     }
 
     #[test]
@@ -2706,7 +2704,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_sprite_collision_is_latched_at_hblank_and_cleared_by_status_read() {
+    fn sms1_sprite_collision_becomes_visible_when_beam_crosses_overlap_pixel() {
         let mut v = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -2716,35 +2714,30 @@ mod tests {
         set_sprite(&mut v, 1, 0xFF, 20, 2);
         v.vram[0x3F02] = 0xD0;
 
-        // Both sprites have opaque pixels only on row zero. The following
-        // scanline therefore cannot reassert the collision flag.
-        v.vram[32] = 0xFF;
-        v.vram[2 * 32 + 1] = 0xFF;
+        // Only sprite pixel X=20 is opaque in both patterns. The next
+        // span must not rediscover that already-committed pixel.
+        v.vram[32] = 0x80;
+        v.vram[2 * 32 + 1] = 0x80;
 
+        v.advance(55);
         assert_eq!(v.status & COLLISION, 0);
-        v.advance(212);
-        assert_eq!(
-            v.status & COLLISION,
-            0,
-            "collision remains pending before the HBlank boundary at HPos 319"
-        );
+        let before_pixel = v.read_port(0xBF);
+        assert_eq!(before_pixel & COLLISION, 0);
 
         v.advance(1);
+        let at_pixel = v.read_port(0xBF);
         assert_ne!(
-            v.status & COLLISION,
+            at_pixel & COLLISION,
             0,
-            "HBlank must latch collision after the active display has been composed"
+            "status read after the overlapping pixel must observe collision"
         );
-
-        let status = v.read_port(0xBF);
-        assert_ne!(status & COLLISION, 0);
         assert_eq!(v.status & COLLISION, 0);
 
-        v.advance(LINE_TSTATES);
+        v.advance(LINE_TSTATES - 56);
         assert_eq!(
             v.status & COLLISION,
             0,
-            "the next transparent sprite row must not reassert collision"
+            "the suffix must not reassert a collision already acknowledged"
         );
     }
 
