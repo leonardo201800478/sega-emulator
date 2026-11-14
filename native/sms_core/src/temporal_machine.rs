@@ -3367,8 +3367,10 @@ mod temporal_interrupt_wiring_tests {
         let mut rom = vec![0x00; 0x4000];
         rom[0] = 0xFB; // EI; following bytes are NOPs.
         let mut machine = SmsTemporalMachine::new(rom, 1).unwrap();
-        vdp_write_register(machine.bus.vdp_mut(), 0, 0x10); // HINT enable.
-        vdp_write_register(machine.bus.vdp_mut(), 10, 0); // First-line HINT at T14.
+        machine.bus.vdp_mut().write_port(0xBF, 0x10); // R0: HINT enable.
+        machine.bus.vdp_mut().write_port(0xBF, 0x80);
+        machine.bus.vdp_mut().write_port(0xBF, 0x00); // R10: first-line HINT at T14.
+        machine.bus.vdp_mut().write_port(0xBF, 0x8A);
 
         machine.step_instruction(0).unwrap(); // EI: T0..T4.
         machine.step_instruction(0).unwrap(); // NOP: T4..T8.
