@@ -15,7 +15,8 @@ pub use state::{ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState
 pub use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
 
 use sega_temporal_core::{
-    ClockDomain, ClockDomainSnapshot, ClockError, EventQueue, EventQueueError, HardwarePhase,
+    ClockDomain, ClockDomainPreview, ClockDomainSnapshot, ClockError, EventQueue, EventQueueError,
+    HardwarePhase,
     PlatformPriority, ScheduledEvent,
 };
 
@@ -30,6 +31,14 @@ pub struct ClockAdvance {
     pub elapsed_cycles: u128,
     pub total_cycles: u128,
     pub phase: u128,
+}
+
+/// Internal preflight data. Keeping the token private preserves ClockAdvance's
+/// public construction and inspection API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PreparedClockAdvance {
+    advance: ClockAdvance,
+    preview: ClockDomainPreview,
 }
 
 /// An event together with all device-clock advances up to its timestamp.
@@ -490,8 +499,8 @@ impl<T> MachineScheduler<T> {
             1
         };
 
-        let advances = match self.calculate_advances(timestamp) {
-            Ok(advances) => advances,
+        let prepared = match self.calculate_advances(timestamp) {
+            Ok(prepared) => prepared,
             Err(error) => {
                 sega_observability::tracing::error!(
                     target: "sega::scheduler",
@@ -502,15 +511,18 @@ impl<T> MachineScheduler<T> {
                 return Err(error);
             }
         };
-        if let Err(error) = self.apply_advances(timestamp, &advances) {
-            sega_observability::tracing::error!(
-                target: "sega::scheduler",
-                timestamp = ?timestamp,
-                error = %error,
-                "clock-domain advance failed before event dispatch"
-            );
-            return Err(error);
-        }
+        let advances = match self.apply_advances(timestamp, prepared) {
+            Ok(advances) => advances,
+            Err(error) => {
+                sega_observability::tracing::error!(
+                    target: "sega::scheduler",
+                    timestamp = ?timestamp,
+                    error = %error,
+                    "clock-domain advance failed before event dispatch"
+                );
+                return Err(error);
+            }
+        };
         let event = self
             .events
             .pop_next()
@@ -559,8 +571,8 @@ impl<T> MachineScheduler<T> {
             );
             return Err(SchedulerError::EventPendingBeforeTarget);
         }
-        let advances = self.calculate_advances(target)?;
-        self.apply_advances(target, &advances)?;
+        let prepared = self.calculate_advances(target)?;
+        let advances = self.apply_advances(target, prepared)?;
         sega_observability::tracing::trace!(
             target: "sega::scheduler",
             target = ?target,
@@ -580,15 +592,22 @@ impl<T> MachineScheduler<T> {
         self.events.len()
     }
 
-    fn calculate_advances(&self, target: MachineTime) -> Result<Vec<ClockAdvance>, SchedulerError> {
+    fn calculate_advances(
+        &self,
+        target: MachineTime,
+    ) -> Result<Vec<PreparedClockAdvance>, SchedulerError> {
         let mut advances = Vec::with_capacity(self.clocks.len());
         for (&id, domain) in &self.clocks {
-            let (elapsed_cycles, snapshot) = domain.preview_advance_to(target)?;
-            advances.push(ClockAdvance {
-                domain: id,
-                elapsed_cycles,
-                total_cycles: snapshot.total_cycles,
-                phase: snapshot.phase,
+            let preview = domain.preview_advance_token(target)?;
+            let snapshot = preview.snapshot();
+            advances.push(PreparedClockAdvance {
+                advance: ClockAdvance {
+                    domain: id,
+                    elapsed_cycles: preview.elapsed_cycles(),
+                    total_cycles: snapshot.total_cycles,
+                    phase: snapshot.phase,
+                },
+                preview,
             });
         }
         Ok(advances)
@@ -597,19 +616,21 @@ impl<T> MachineScheduler<T> {
     fn apply_advances(
         &mut self,
         target: MachineTime,
-        advances: &[ClockAdvance],
-    ) -> Result<(), SchedulerError> {
-        // All arithmetic was preflighted by calculate_advances. Repeating the
-        // checked operation here cannot fail unless an internal invariant broke.
-        for advance in advances {
+        prepared: Vec<PreparedClockAdvance>,
+    ) -> Result<Vec<ClockAdvance>, SchedulerError> {
+        // Every token was generated from the current domain state before any
+        // mutation. Commit consumes the exact result instead of converting twice.
+        let mut advances = Vec::with_capacity(prepared.len());
+        for item in prepared {
             let domain = self
                 .clocks
-                .get_mut(&advance.domain)
-                .ok_or(SchedulerError::UnknownClockDomain(advance.domain))?;
-            domain.advance_to(target)?;
+                .get_mut(&item.advance.domain)
+                .ok_or(SchedulerError::UnknownClockDomain(item.advance.domain))?;
+            domain.commit_preview(item.preview)?;
+            advances.push(item.advance);
         }
         self.now = target;
-        Ok(())
+        Ok(advances)
     }
 }
 
