@@ -19,7 +19,7 @@ use sega_media::{CartridgeCatalog, SmsRegionPreference, resolve_sms_region};
 use sega_sms_core::{
     ControllerButtons, PsgAmplitudeEvent, SmsOverscanMode, SmsTemporalMachine,
     SmsTemporalMachineState, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
-    Territory, VideoStandard,
+    Territory, VideoStandard, Z80M1Phase,
 };
 use sega_sn76489::H2StreamingRenderer;
 #[cfg(windows)]
@@ -31,7 +31,10 @@ const H2_EVENT_CAPTURE_CAPACITY: usize = 16_384;
 const AUDIO_RENDERER_FADE_SAMPLES: usize = 256;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
 const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
-const DEBUG_TRACE_CAPACITY: usize = 2_048;
+// Retain a materially useful diagnostic window without turning the trace into
+// an unbounded instruction/T-state log. The collector remains opt-in.
+const DEBUG_TRACE_CAPACITY: usize = 16_384;
+const DEBUG_TRACE_QUEUE_CAPACITY: usize = 4_096;
 const WORKER_COMMAND_QUEUE_CAPACITY: usize = 64;
 // Running workers accept control commands at complete-frame boundaries; debug builds may need
 // substantially longer than one wall-clock frame to reach that safe point.
@@ -916,6 +919,10 @@ enum WorkerCommand {
         Option<DiagnosticPublisher<SmsTemporalTraceEvent>>,
         SyncSender<Result<(), String>>,
     ),
+    ArmTraceOnNextStart(
+        DiagnosticPublisher<SmsTemporalTraceEvent>,
+        SyncSender<Result<(), String>>,
+    ),
     SetSpriteLimitMode(SpriteLimitMode, SyncSender<Result<(), String>>),
     SetOverscanMode(SmsOverscanMode, SyncSender<Result<(), String>>),
     SetBreakpoint(u16, bool, SyncSender<Result<(), String>>),
@@ -946,6 +953,7 @@ impl WorkerCommand {
             Self::LoadState(_, _) => "load_state",
             Self::ReadMemory(_, _, _) => "read_memory",
             Self::SetTraceEnabled(_, _, _) => "set_trace_enabled",
+            Self::ArmTraceOnNextStart(_, _) => "arm_trace_on_next_start",
             Self::SetSpriteLimitMode(_, _) => "set_sprite_limit_mode",
             Self::SetOverscanMode(_, _) => "set_overscan_mode",
             Self::SetBreakpoint(_, _, _) => "set_breakpoint",
@@ -976,7 +984,7 @@ fn set_trace_capture(
     }
     let collector = if enabled {
         Some(
-            DiagnosticCollector::start(512, DEBUG_TRACE_CAPACITY)
+            DiagnosticCollector::start(DEBUG_TRACE_QUEUE_CAPACITY, DEBUG_TRACE_CAPACITY)
                 .map_err(|error| format!("failed to start SMS debugger collector: {error}"))?,
         )
     } else {
@@ -997,6 +1005,33 @@ fn set_trace_capture(
     Ok(())
 }
 
+/// Prepare a collector and serialize trace arming with Start on the machine worker.
+///
+/// Unlike a host-side running-state check, the worker processes this command in
+/// the same FIFO as Start, so the stopped-state validation cannot race a resume.
+fn arm_trace_capture(
+    commands: &SyncSender<WorkerCommand>,
+    collector_slot: &Mutex<Option<DiagnosticCollector<SmsTemporalTraceEvent>>>,
+) -> Result<(), String> {
+    let mut slot = collector_slot
+        .lock()
+        .map_err(|_| "debugger collector state is unavailable".to_owned())?;
+    if slot.is_some() {
+        return Err("SMS debugger trace capture is already armed or enabled".to_owned());
+    }
+    let collector = DiagnosticCollector::start(DEBUG_TRACE_QUEUE_CAPACITY, DEBUG_TRACE_CAPACITY)
+        .map_err(|error| format!("failed to start SMS debugger collector: {error}"))?;
+    let publisher = collector.publisher();
+    let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+    enqueue_worker_command(
+        commands,
+        WorkerCommand::ArmTraceOnNextStart(publisher, reply_sender),
+    )?;
+    receive_worker_reply(reply_receiver, "arming debugger trace for the next start")??;
+    *slot = Some(collector);
+    Ok(())
+}
+
 /// Machine state is captured by the worker; retained trace is read on the host.
 fn capture_debug_snapshot(
     commands: &SyncSender<WorkerCommand>,
@@ -1010,7 +1045,9 @@ fn capture_debug_snapshot(
         .map_err(|_| "debugger collector state is unavailable".to_owned())?;
     if let Some(collector) = slot.as_ref() {
         snapshot.trace_events = collector.snapshot();
-        snapshot.trace_dropped = collector.ingress_dropped();
+        snapshot.trace_dropped = collector
+            .ingress_dropped()
+            .saturating_add(collector.history_dropped());
         snapshot.trace_enabled = true;
     }
     Ok(snapshot)
@@ -1125,6 +1162,19 @@ impl SmsTemporalWorkerDebugHandle {
     /// Enable or disable bounded scheduler and bus trace capture.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
         set_trace_capture(&self.commands, &self.trace_collector, enabled)
+    }
+
+    /// Arm diagnostic capture while the machine is stopped.
+    ///
+    /// The collector is prepared now, but the first emulated events are produced
+    /// only after the next `start()`. Call this before loading/starting the ROM
+    /// when the boot sequence itself must be captured.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the machine is running or the collector cannot start.
+    pub fn arm_trace_on_next_start(&self) -> Result<(), String> {
+        arm_trace_capture(&self.commands, &self.trace_collector)
     }
 
     /// Capture an immutable, owned machine snapshot.
@@ -1503,6 +1553,19 @@ impl SmsTemporalWorker {
     /// Enable or disable bounded scheduler/bus trace capture.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
         set_trace_capture(&self.commands, &self.trace_collector, enabled)
+    }
+
+    /// Arm diagnostic capture while the machine is stopped.
+    ///
+    /// The capture is ready before the next `start()`, so the boot sequence is
+    /// included from its first emulated instruction. Call this before loading
+    /// or starting the ROM when startup behavior is under investigation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the machine is running or the collector cannot start.
+    pub fn arm_trace_on_next_start(&self) -> Result<(), String> {
+        arm_trace_capture(&self.commands, &self.trace_collector)
     }
 
     /// Change the active SMS VDP sprite rendering limit through the machine worker.
@@ -2318,15 +2381,39 @@ fn worker_loop(
     drop(video_mailbox);
 }
 
+/// Keep high-value diagnostic transitions and discard per-T-state noise before
+/// crossing the worker boundary. This is observation-only: it never changes the
+/// machine, Scheduler, bus transaction, WAIT-state handling or event ordering.
+fn is_debugger_diagnostic_event(event: &SmsTemporalTraceEvent) -> bool {
+    match *event {
+        SmsTemporalTraceEvent::BusCompleted { .. }
+        | SmsTemporalTraceEvent::ExternalThTransition { .. } => true,
+        // T3 is the opcode sampling boundary. Retain one event per M1 fetch so
+        // simple instructions (e.g. NOP) remain observable without forwarding
+        // every M1 T-state or internal cycle into the bounded host collector.
+        SmsTemporalTraceEvent::M1TStateCompleted {
+            phase: Z80M1Phase::T3,
+            ..
+        } => true,
+        SmsTemporalTraceEvent::InternalCycleCompleted { .. }
+        | SmsTemporalTraceEvent::M1TStateCompleted { .. } => false,
+    }
+}
+
+/// Drain the machine-local trace at a safe worker boundary and publish only
+/// selected events. The bounded collector counts queue overflow separately.
 fn drain_machine_trace(
     machine: &mut SmsTemporalMachine,
     publisher: Option<&DiagnosticPublisher<SmsTemporalTraceEvent>>,
 ) {
+    let events = machine.take_trace();
     let Some(publisher) = publisher.filter(|publisher| publisher.is_active()) else {
         return;
     };
-    for event in machine.take_trace() {
-        let _ = publisher.try_publish(event);
+    for event in events {
+        if is_debugger_diagnostic_event(&event) {
+            let _ = publisher.try_publish(event);
+        }
     }
 }
 
@@ -2628,6 +2715,22 @@ fn handle_command(
             *trace_enabled = enabled;
             *trace_publisher = publisher;
             let _ = reply.send(Ok(()));
+        }
+        WorkerCommand::ArmTraceOnNextStart(publisher, reply) => {
+            if *running {
+                let _ = reply.send(Err(
+                    "arm_trace_on_next_start requires a stopped machine".to_owned()
+                ));
+            } else if *trace_enabled {
+                let _ = reply.send(Err(
+                    "SMS debugger trace capture is already enabled".to_owned()
+                ));
+            } else {
+                machine.set_trace_enabled(true);
+                *trace_enabled = true;
+                *trace_publisher = Some(publisher);
+                let _ = reply.send(Ok(()));
+            }
         }
         WorkerCommand::SetSpriteLimitMode(mode, reply) => {
             machine.set_sprite_limit_mode(mode);
@@ -3441,6 +3544,40 @@ mod tests {
 
         handle.set_trace_enabled(false).unwrap();
         assert!(!worker.debug_snapshot().unwrap().trace_enabled);
+    }
+
+    #[test]
+    fn armed_trace_captures_from_the_first_started_frame() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        let initial_frame = worker.frame_number();
+
+        worker.arm_trace_on_next_start().unwrap();
+        let armed = worker.debug_snapshot().unwrap();
+        assert!(armed.trace_enabled);
+        assert!(armed.trace_events.is_empty());
+
+        worker.start().unwrap();
+        assert!(worker.wait_for_frame_after(initial_frame, Duration::from_secs(2)));
+        worker.pause().unwrap();
+
+        let captured = worker.debug_snapshot().unwrap();
+        assert!(captured.trace_enabled);
+        assert!(
+            !captured.trace_events.is_empty(),
+            "arming before start must retain events from the boot/run sequence"
+        );
+    }
+
+    #[test]
+    fn arming_trace_while_running_is_rejected() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.start().unwrap();
+
+        let result = worker.arm_trace_on_next_start();
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("requires a stopped machine"));
+        worker.pause().unwrap();
     }
 
     #[test]
