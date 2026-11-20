@@ -132,3 +132,48 @@ fn z80_in_immediate_a_reads_the_th_latched_hcounter_through_the_scheduler() {
     assert_eq!(reads[0].2, 4, "I/O read M-cycle must take four T-states");
     assert_eq!(reads[0].3, Some(captured));
 }
+
+#[test]
+fn z80_vcounter_port_read_at_t15_observes_pre_latch_value() {
+    // 58 NOPs consume 232 T-states. IN A,($7E) then completes at
+    // line 1/T15 (228 + 15 = 243), exactly on the VCounter latch boundary.
+    // The CPU must sample the pre-edge value; the VDP advances to the new
+    // line value immediately after that same completion boundary.
+    let mut program = vec![0x00; 58];
+    program.extend_from_slice(&[
+        0xDB, 0x7E, // IN A,($7E)
+        0x32, 0x00, 0xC0, // LD ($C000),A
+    ]);
+    let mut machine = machine_with_program(&program);
+    machine.set_trace_enabled(true);
+
+    run_instructions(&mut machine, 60);
+
+    assert_eq!(
+        machine.inspect_memory(0xC000),
+        0,
+        "a VCounter read completing exactly at T15 must observe the value before the latch edge"
+    );
+    assert_eq!(
+        machine.vdp().read_v_counter(),
+        1,
+        "the VDP must still process the T15 latch event at the same scheduler timestamp"
+    );
+
+    let reads: Vec<_> = machine
+        .take_trace()
+        .into_iter()
+        .filter_map(|event| match event {
+            SmsTemporalTraceEvent::BusCompleted {
+                timestamp,
+                operation: Z80BusOperation::PortRead,
+                address,
+                data,
+                ..
+            } if address & 0x00FF == 0x7E => Some((timestamp.ticks(), data)),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(reads, vec![(243, Some(0))]);
+}

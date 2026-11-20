@@ -18,7 +18,9 @@ const LINE_TSTATES: u64 = 228;
 // boundaries, not sub-T-state arbitration or dot-accurate timestamps.
 const SMS_VINT_IRQ_TSTATE: u64 = 13;
 const SMS_HINT_TSTATE: u64 = 14;
-const SMS_VCOUNTER_LATCH_TSTATE: u64 = 15;
+// SMS1 changes VCounter at HPos 23. With 1.5 HPos per Z80 T-state,
+// T16 is the first representable boundary at or beyond HPos 23 (HPos 24).
+const SMS_VCOUNTER_LATCH_TSTATE: u64 = 16;
 const SMS_SPRITE_OVERFLOW_TSTATE: u64 = 16;
 const SMS_FRAME_PUBLISH_TSTATE: u64 = 16;
 const SMS_HBLANK_TSTATE: u64 = 213;
@@ -607,71 +609,79 @@ impl SmsVdp {
     fn process_tstate_events(&mut self) {
         let tstate = u64::from(self.tstates_into_line);
         let height = self.visible_height();
-        match tstate {
-            // HINT includes the first non-visible line. VINT is asserted on
-            // the following line so the status register still identifies the
-            // boundary HINT when the CPU services its interrupt.
-            SMS_VINT_IRQ_TSTATE if self.scanline == height + 1 => {
-                self.vint_pending = true;
-            }
-            SMS_HINT_TSTATE if self.scanline <= height => {
-                if self.line_counter == 0 {
-                    self.line_irq_pending = true;
-                    sega_observability::tracing::trace!(
-                        target: "sega::vdp",
-                        scanline = self.scanline,
-                        reload_value = self.registers[10],
-                        frame_number = self.frame_number,
-                        "SMS VDP line interrupt asserted"
-                    );
-                    self.line_counter = self.registers[10];
-                } else {
-                    self.line_counter = self.line_counter.wrapping_sub(1);
-                }
-            }
-            SMS_VCOUNTER_LATCH_TSTATE => {
-                self.v_counter_latch = self.scanline;
-            }
-            SMS_SPRITE_OVERFLOW_TSTATE if self.scanline < height => {
-                let overflow_index = if self.registers[0] & 0x04 != 0 {
-                    self.sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                } else {
-                    self.legacy_sprite_line_buffer
-                        .as_ref()
-                        .filter(|buffer| buffer.target_line == self.scanline)
-                        .and_then(|buffer| buffer.evaluation.overflow_index)
-                };
-                self.latch_sprite_overflow_index(overflow_index);
-            }
-            // Publish the completed visible image at line height/T16. The
-            // VBlank status flag follows at line height+1/T17 (HCount $F5).
-            SMS_FRAME_PUBLISH_TSTATE if self.scanline == height => {
-                self.publish_completed_frame();
-            }
-            SMS_VBLANK_FLAG_TSTATE if self.scanline == height + 1 => {
-                self.status |= VBLANK;
-                sega_observability::tracing::debug!(
+
+        // These are independent device events, not mutually exclusive states.
+        // In particular, VCounter latch and SMS1 sprite overflow both occur at
+        // T16; frame publication also shares T16 on the final visible line.
+        // Keep each event independently dispatchable at a shared timestamp.
+        if tstate == SMS_VINT_IRQ_TSTATE && self.scanline == height + 1 {
+            self.vint_pending = true;
+        }
+
+        // HINT includes the first non-visible line. VINT is asserted on the
+        // following line so the status register still identifies the boundary
+        // HINT when the CPU services its interrupt.
+        if tstate == SMS_HINT_TSTATE && self.scanline <= height {
+            if self.line_counter == 0 {
+                self.line_irq_pending = true;
+                sega_observability::tracing::trace!(
                     target: "sega::vdp",
+                    scanline = self.scanline,
+                    reload_value = self.registers[10],
                     frame_number = self.frame_number,
-                    visible_height = height,
-                    video_standard = ?self.profile.video_standard,
-                    "SMS VDP entered VBlank"
+                    "SMS VDP line interrupt asserted"
                 );
+                self.line_counter = self.registers[10];
+            } else {
+                self.line_counter = self.line_counter.wrapping_sub(1);
             }
-            SMS_HBLANK_TSTATE
-                if self.profile.revision == SmsVdpRevision::Sega3155124
-                    && self.scanline < height =>
-            {
-                self.commit_raster_span_to_beam();
-                if self.line_overflow_status != 0 {
-                    self.status = (self.status & !0x1F) | self.line_overflow_status;
-                    self.line_overflow_status = 0;
-                }
+        }
+
+        if tstate == SMS_VCOUNTER_LATCH_TSTATE {
+            self.v_counter_latch = self.scanline;
+        }
+
+        if tstate == SMS_SPRITE_OVERFLOW_TSTATE && self.scanline < height {
+            let overflow_index = if self.registers[0] & 0x04 != 0 {
+                self.sprite_line_buffer
+                    .as_ref()
+                    .filter(|buffer| buffer.target_line == self.scanline)
+                    .and_then(|buffer| buffer.evaluation.overflow_index)
+            } else {
+                self.legacy_sprite_line_buffer
+                    .as_ref()
+                    .filter(|buffer| buffer.target_line == self.scanline)
+                    .and_then(|buffer| buffer.evaluation.overflow_index)
+            };
+            self.latch_sprite_overflow_index(overflow_index);
+        }
+
+        // Publish the completed visible image at line height/T16. The VBlank
+        // status flag follows at line height+1/T17 (HCount $F5).
+        if tstate == SMS_FRAME_PUBLISH_TSTATE && self.scanline == height {
+            self.publish_completed_frame();
+        }
+
+        if tstate == SMS_VBLANK_FLAG_TSTATE && self.scanline == height + 1 {
+            self.status |= VBLANK;
+            sega_observability::tracing::debug!(
+                target: "sega::vdp",
+                frame_number = self.frame_number,
+                visible_height = height,
+                video_standard = ?self.profile.video_standard,
+                "SMS VDP entered VBlank"
+            );
+        }
+
+        if tstate == SMS_HBLANK_TSTATE
+            && self.profile.revision == SmsVdpRevision::Sega3155124
+            && self.scanline < height
+        {
+            self.commit_raster_span_to_beam();
+            if self.line_overflow_status != 0 {
+                self.status = (self.status & !0x1F) | self.line_overflow_status;
+                self.line_overflow_status = 0;
             }
-            _ => {}
         }
     }
 
@@ -1961,6 +1971,11 @@ mod tests {
         vdp.advance(16);
         assert_ne!(vdp.status & OVERFLOW, 0);
         assert_eq!(vdp.status & 0x1F, 8);
+        assert_eq!(
+            vdp.read_v_counter(),
+            1,
+            "VCounter latch and sprite overflow must both commit at the shared T16 boundary"
+        );
 
         let status = vdp.read_port(0xBF);
         assert_ne!(status & OVERFLOW, 0);
@@ -2149,7 +2164,7 @@ mod tests {
     }
 
     #[test]
-    fn sms1_vcounter_changes_at_hpos23_of_each_scanline() {
+    fn sms1_vcounter_changes_at_first_tstate_after_hpos23() {
         let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
 
         vdp.advance(LINE_TSTATES);
@@ -2160,14 +2175,18 @@ mod tests {
             "VCounter retains the prior line at HPos 0"
         );
 
-        vdp.advance(14);
+        vdp.advance(15);
         assert_eq!(
             vdp.read_v_counter(),
             0,
-            "VCounter has not latched at HPos 21"
+            "VCounter remains on the prior line at T15/HPos22, before HPos23"
         );
         vdp.advance(1);
-        assert_eq!(vdp.read_v_counter(), 1, "VCounter changes at HPos 23 / T15");
+        assert_eq!(
+            vdp.read_v_counter(),
+            1,
+            "VCounter changes at T16, the first Z80 T-state after the HPos23 threshold"
+        );
     }
 
     #[test]

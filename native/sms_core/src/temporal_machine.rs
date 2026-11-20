@@ -38,16 +38,52 @@ pub enum SmsTemporalTraceEvent {
         base_tstates: u8,
         wait_tstates: u32,
         data: Option<u8>,
+        cpu_pc_before: u16,
+        cpu_pc_after: u16,
+        cpu_halted: bool,
+        cpu_int_line: Option<u8>,
+        cpu_iff1: bool,
+        cpu_ei_delay: u8,
+        cpu_halt_exit_int: bool,
+        cpu_halt_exit_nmi: bool,
     },
     InternalCycleCompleted {
         timestamp: MachineTime,
         continuation_id: u64,
         tstates: u32,
+        cpu_pc_before: u16,
+        cpu_pc_after: u16,
+        cpu_halted: bool,
+        cpu_int_line: Option<u8>,
+        cpu_iff1: bool,
+        cpu_ei_delay: u8,
+        cpu_halt_exit_int: bool,
+        cpu_halt_exit_nmi: bool,
     },
     M1TStateCompleted {
         timestamp: MachineTime,
         phase: Z80M1Phase,
         pins: Z80M1Pins,
+    },
+    M1FetchCompleted {
+        timestamp: MachineTime,
+        /// Address from which the opcode byte was sampled during T3.
+        address: u16,
+        /// Refresh address presented on the M1 T4 pins (I:R after increment).
+        refresh_address: u16,
+        cpu_pc: u16,
+        cpu_halted: bool,
+        cpu_int_line: Option<u8>,
+        cpu_iff1: bool,
+        cpu_ei_delay: u8,
+        cpu_halt_exit_int: bool,
+        cpu_halt_exit_nmi: bool,
+    },
+    InterruptLineChanged {
+        timestamp: MachineTime,
+        line: Option<u8>,
+        vdp_irq: bool,
+        external_irq: bool,
     },
     ExternalThTransition {
         timestamp: MachineTime,
@@ -736,7 +772,11 @@ impl SmsTemporalMachine {
                         .bus
                         .pending_request()
                         .ok_or(SmsTemporalMachineError::InvalidState)?;
-                    Some((request, self.cpu.export_state().handshake.wait_tstates))
+                    Some((
+                        request,
+                        self.cpu.export_state().handshake.wait_tstates,
+                        self.cpu.registers.pc,
+                    ))
                 } else {
                     None
                 };
@@ -757,7 +797,7 @@ impl SmsTemporalMachine {
                     self.instruction_started_at = None;
                 }
 
-                if let Some((request, wait_tstates)) = trace_data {
+                if let Some((request, wait_tstates, cpu_pc_before)) = trace_data {
                     self.trace_events.push(SmsTemporalTraceEvent::BusCompleted {
                         timestamp: completion.completed_at,
                         request_id: request.id,
@@ -766,6 +806,20 @@ impl SmsTemporalMachine {
                         base_tstates: request.base_tstates,
                         wait_tstates,
                         data: completion.data,
+                        cpu_pc_before,
+                        cpu_pc_after: self.cpu.registers.pc,
+                        cpu_halted: self.cpu.halted,
+                        cpu_int_line: self.cpu.int_pending,
+                        cpu_iff1: self.cpu.iff1,
+                        cpu_ei_delay: self.cpu.ei_delay,
+                        cpu_halt_exit_int: matches!(
+                            self.cpu.halt_exit_pending,
+                            Some(sega_z80_cpu::Z80HaltExit::Int)
+                        ),
+                        cpu_halt_exit_nmi: matches!(
+                            self.cpu.halt_exit_pending,
+                            Some(sega_z80_cpu::Z80HaltExit::Nmi)
+                        ),
                     });
                 }
                 Ok(step)
@@ -815,7 +869,29 @@ impl SmsTemporalMachine {
 
                 self.m1 = Some(m1);
                 if next_phase == Z80M1Phase::Complete {
-                    self.finish_m1_fetch()
+                    let step = self.finish_m1_fetch()?;
+                    if self.trace_enabled {
+                        self.trace_events
+                            .push(SmsTemporalTraceEvent::M1FetchCompleted {
+                                timestamp: completed_at,
+                                address: m1_state.cycle.address,
+                                refresh_address: m1_state.cycle.refresh_address,
+                                cpu_pc: self.cpu.registers.pc,
+                                cpu_halted: self.cpu.halted,
+                                cpu_int_line: self.cpu.int_pending,
+                                cpu_iff1: self.cpu.iff1,
+                                cpu_ei_delay: self.cpu.ei_delay,
+                                cpu_halt_exit_int: matches!(
+                                    self.cpu.halt_exit_pending,
+                                    Some(sega_z80_cpu::Z80HaltExit::Int)
+                                ),
+                                cpu_halt_exit_nmi: matches!(
+                                    self.cpu.halt_exit_pending,
+                                    Some(sega_z80_cpu::Z80HaltExit::Nmi)
+                                ),
+                            });
+                    }
+                    Ok(step)
                 } else {
                     let request = self
                         .cpu
@@ -835,6 +911,7 @@ impl SmsTemporalMachine {
                 // Prepare the CPU transition before acknowledging the scheduler
                 // event. On failure, both the bus completion and continuation
                 // metadata remain available for snapshot/restore/retry.
+                let cpu_pc_before = self.cpu.registers.pc;
                 let mut next_cpu = self.cpu.clone();
                 let step = next_cpu.complete_internal_cycle()?;
                 self.bus
@@ -856,6 +933,20 @@ impl SmsTemporalMachine {
                             timestamp: completion.completed_at,
                             continuation_id: completion.continuation_id,
                             tstates,
+                            cpu_pc_before,
+                            cpu_pc_after: self.cpu.registers.pc,
+                            cpu_halted: self.cpu.halted,
+                            cpu_int_line: self.cpu.int_pending,
+                            cpu_iff1: self.cpu.iff1,
+                            cpu_ei_delay: self.cpu.ei_delay,
+                            cpu_halt_exit_int: matches!(
+                                self.cpu.halt_exit_pending,
+                                Some(sega_z80_cpu::Z80HaltExit::Int)
+                            ),
+                            cpu_halt_exit_nmi: matches!(
+                                self.cpu.halt_exit_pending,
+                                Some(sega_z80_cpu::Z80HaltExit::Nmi)
+                            ),
                         });
                 }
                 Ok(step)
@@ -1132,6 +1223,15 @@ impl SmsTemporalMachine {
     fn sync_vdp_interrupt_line(&mut self) {
         let vdp_irq = self.bus.vdp().interrupt_pending().then_some(0xFF);
         let effective_line = self.external_int_line.or(vdp_irq);
+        if self.trace_enabled && self.cpu.int_pending != effective_line {
+            self.trace_events
+                .push(SmsTemporalTraceEvent::InterruptLineChanged {
+                    timestamp: self.bus.now(),
+                    line: effective_line,
+                    vdp_irq: vdp_irq.is_some(),
+                    external_irq: self.external_int_line.is_some(),
+                });
+        }
         self.bus
             .set_interrupt_vector(effective_line.unwrap_or(0xFF));
         self.cpu.set_int_line(effective_line);
@@ -2209,7 +2309,7 @@ mod tests {
         retired(machine.step_instruction(0).unwrap(), 0x34, 11);
 
         let trace = machine.take_trace();
-        assert_eq!(trace.len(), 7);
+        assert_eq!(trace.len(), 8);
         assert!(matches!(
             trace[0],
             super::SmsTemporalTraceEvent::M1TStateCompleted {
@@ -2228,6 +2328,16 @@ mod tests {
         ));
         assert!(matches!(
             trace[4],
+            super::SmsTemporalTraceEvent::M1FetchCompleted {
+                timestamp,
+                address: 0,
+                refresh_address: 1,
+                cpu_pc: 1,
+                ..
+            } if timestamp == MachineTime::from_ticks(12)
+        ));
+        assert!(matches!(
+            trace[5],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryRead,
@@ -2237,7 +2347,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(21)
         ));
         assert!(matches!(
-            trace[5],
+            trace[6],
             super::SmsTemporalTraceEvent::InternalCycleCompleted {
                 timestamp,
                 tstates: 1,
@@ -2245,7 +2355,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(24)
         ));
         assert!(matches!(
-            trace[6],
+            trace[7],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryWrite { value: 1 },
@@ -2320,7 +2430,29 @@ mod tests {
             Z80MicroStep::BusRequest(_)
         ));
         // The four M1 phase boundaries are captured separately from the mapper write.
-        assert_eq!(original.take_trace().len(), 4);
+        let fetch_trace = original.take_trace();
+        assert_eq!(
+            fetch_trace
+                .iter()
+                .filter(|event| matches!(
+                    **event,
+                    super::SmsTemporalTraceEvent::M1TStateCompleted { .. }
+                ))
+                .count(),
+            4,
+            "each of the four M1 T-state boundaries must be retained"
+        );
+        assert_eq!(
+            fetch_trace
+                .iter()
+                .filter(|event| matches!(
+                    **event,
+                    super::SmsTemporalTraceEvent::M1FetchCompleted { .. }
+                ))
+                .count(),
+            1,
+            "the completed M1 fetch must be recorded separately"
+        );
 
         original.schedule_pending_bus(2).unwrap();
         assert_eq!(original.memory().selected_banks(), [0, 1, 2]);

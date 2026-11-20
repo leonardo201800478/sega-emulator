@@ -1,0 +1,84 @@
+name: SMS VDP full ROM conformance
+
+# PR validation must check the exact head SHA, never a stale or merge-ref snapshot.
+
+on:
+  pull_request:
+    paths:
+      - "native/sms_core/**"
+      - "native/video_core/**"
+      - "scripts/prepare_sms_vdp_test_rom.py"
+      - ".github/workflows/sms-vdp-full-rom.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sms-vdp-full-rom-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-rom:
+    name: SmsVdpTest v1.31 full ROM (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component clippy
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default 1.99.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Download and verify WLA-DX v10.7
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "wla-dx-v10.7-win64.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "wla-dx-v10.7"
+          Invoke-WebRequest -Uri "https://github.com/vhelin/wla-dx/releases/download/v10.7/wla_dx_v10.7_Win64.zip" -OutFile $archive
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "82922a530ae989bd5f8057fa4cfef3d0022d7353b5aeb7858b9320eae9b56ebd"
+          if ($actual -ne $expected) { throw "WLA-DX archive SHA256 mismatch: $actual" }
+          Expand-Archive -Path $archive -DestinationPath $extract -Force
+          $assembler = Get-ChildItem -Path $extract -Recurse -Filter "wla-z80.exe" | Select-Object -First 1
+          $linker = Get-ChildItem -Path $extract -Recurse -Filter "wlalink.exe" | Select-Object -First 1
+          if ($null -eq $assembler -or $null -eq $linker) { throw "WLA-DX assembler/linker not found in verified archive" }
+          Add-Content -Path $env:GITHUB_PATH -Value $assembler.DirectoryName
+          Add-Content -Path $env:GITHUB_ENV -Value "WLA_DX_BIN=$($assembler.DirectoryName)"
+
+      - name: Clone and patch pinned SmsVdpTest source
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "sms-vdp-test"
+          git clone --filter=blob:none https://github.com/FluBBaOfWard/SmsVdpTest.git $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source checkout 490c00b38c83012dee5a7a582097f080c210a3e7
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/prepare_sms_vdp_test_rom.py (Join-Path $source "testmain.asm")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -Path $env:GITHUB_ENV -Value "SMSVDPTEST_SOURCE=$source"
+
+      - name: Assemble upstream SMS VDP test ROM
+        shell: pwsh
+        run: |
+          Push-Location $env:SMSVDPTEST_SOURCE
+          & (Join-Path $env:WLA_DX_BIN "wla-z80.exe") -o object.o testmain.asm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "[objects]`nobject.o" | Set-Content -Path linkfile -Encoding ascii
+          & (Join-Path $env:WLA_DX_BIN "wlalink.exe") -d -r -v -s linkfile output.sms
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path "output.sms")) { throw "WLA-DX did not produce output.sms" }
+          Add-Content -Path $env:GITHUB_ENV -Value "SMSVDPTEST_ROM_PATH=$(Join-Path $env:SMSVDPTEST_SOURCE 'output.sms')"
+          Pop-Location
+
+      - name: Run full ROM through SMS Z80 and MachineScheduler
+        shell: pwsh
+        run: |
+          cargo test --release --locked --manifest-path native/sms_core/Cargo.toml --test sms_vdp_full_rom_conformance -- --ignored --nocapture

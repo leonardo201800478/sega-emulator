@@ -89,9 +89,10 @@ fn smsvdptest_run_test25_vcounter_transition_has_one_increment_and_stable_follow
     let before = read_after_nops(57);
     assert_eq!(before, (0x00, 239));
 
-    // One more NOP moves the same IN completion to T15 exactly.
+    // One more NOP moves the same IN completion to T15 exactly, still
+    // before the HPos23 threshold (first representable Z80 boundary is T16).
     let at_boundary = read_after_nops(58);
-    assert_eq!(at_boundary, (0x01, 243));
+    assert_eq!(at_boundary, (0x00, 243));
 
     // The next sample remains on the new counter value, matching the
     // third sample in SmsVdpTest RunTest25's before/after transition check.
