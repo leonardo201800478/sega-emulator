@@ -69,6 +69,7 @@ A ordem abaixo organiza o trabalho de produto. Pode haver trabalho em paralelo q
 | DP-2 | Preferências e recuperação de estado da janela | Alta | Salvar/restaurar, defaults, diretórios por sistema/operação, geometria validada e recuperação de estado inválido |
 | DP-3 | Catálogo de sistemas, formatos e carregamento | Alta | Matriz de mídia comprovada por loader/runtime; filtros gerados do catálogo; validação e rejeição segura |
 | DP-4 | Organização funcional da interface | Alta | Menus e telas coerentes com capacidades reais; nenhuma ação visual sem implementação |
+| DP-4A | HUD/OSD sobreposta ao jogo e mensagens operacionais | Alta | Overlay posicionado no viewport, catálogo tipado de eventos, fila limitada, prioridades/TTL e integração de lifecycle/input/ROM; Save State quando o serviço de slots existir |
 | DP-5 | Diagnóstico básico opt-in e orçamento de desempenho | Alta | Snapshots coarse-grained, coleta desativada por padrão, limites e testes de overhead/armazenamento |
 | DP-6 | CLI e documentação de capacidades | Média | `--help`, versão, comandos suportados e documentação gerados/validados a partir dos mesmos serviços |
 | DP-7 | Auditoria final de integração e UX | Bloqueante para declarar R5 concluído | Testes de persistência, navegação, mídia, consentimento, recuperação, empacotamento e regressão aprovados |
@@ -291,6 +292,69 @@ Regras:
 - navegação entre telas não pode alterar estado de emulação, proporção, fullscreen ou foco de forma acidental;
 - layout deve permanecer utilizável em janela normal, maximizada e fullscreen;
 - restaurar layout deve ser possível sem apagar preferências não relacionadas.
+
+## 9A. DP-4A — HUD/OSD sobreposta ao jogo
+
+**Prioridade:** Alta. **Issue:** [#1112 — HUD sobreposta ao jogo e catálogo de mensagens operacionais](https://github.com/leonardo201800478/sega-emulator/issues/1112).
+
+A HUD/OSD é infraestrutura do produto desktop e deve ser implementada antes da integração RetroAchievements. O serviço será genérico: RetroAchievements poderá publicar eventos no futuro, mas não será dependência da HUD.
+
+### Baseline e lacunas conhecidas
+
+O README do desktop registra FPS visibility/text size persistidos, porém o posicionamento por canto permanece pendente porque a composição Slint atual não dispõe de uma superfície de overlay posicionável separadamente. Save/Load State existem como APIs in-memory no worker SMS, mas arquivos persistentes e slots na GUI ainda não estão implementados. Esses fatos devem ser revalidados na main antes de codificar.
+
+### Catálogo de mensagens
+
+| Domínio | Eventos/mensagens | Condição para exibição |
+|---|---|---|
+| ROM/mídia | Carregada, rejeitada, formato inválido, incompatível, identificação incompleta | Somente após resultado real do loader/validador |
+| Sistema/região | Sistema e variante; região selecionada e região efetivamente aplicada | Não confundir preferência selecionada com configuração ativa da máquina |
+| Controles | Dispositivo conectado/desconectado, P1/P2 atribuído/liberado, dispositivo substituído | Eventos reais de hotplug e confirmação do mapeamento |
+| Save State | Salvando, salvo, falha, carregando, carregado, falha, slot selecionado | Slot/arquivo só quando o serviço de persistência e slots existir; sucesso após confirmação |
+| Sessão | Reset, pausa, retomada, step-frame, Stop/POWER OFF, ROM descarregada | Mensagens semanticamente distintas; evitar notificações redundantes |
+| Áudio | Inicialização, dispositivo indisponível/desconectado, recuperação | Somente quando o estado do endpoint for conhecido |
+| Desempenho | FPS de origem e FPS de apresentação | Métricas distintas, com definição e janela de amostragem explícitas |
+| Futuro | Achievements, progresso, leaderboard e Rich Presence | Consumidor futuro via adaptador de eventos; sem acoplamento ao OSD |
+
+### Indicadores persistentes
+
+- Estado da sessão e identificação do sistema/jogo, quando disponíveis.
+- Região efetivamente aplicada.
+- FPS de origem do emulador e FPS de apresentação/renderização, identificados separadamente.
+- Slot ativo, somente quando existir serviço real de slots.
+- Estado resumido de controles/áudio apenas quando sustentado por dados reais.
+
+### Preferências de apresentação
+
+- Quatro âncoras (superior esquerdo/direito e inferior esquerdo/direito), margem e escala/tamanho.
+- Visibilidade independente de indicadores persistentes e mensagens temporárias.
+- Duração por categoria, com opção de manter avisos críticos até dispensar.
+- Limite de mensagens simultâneas, prioridade, deduplicação, agrupamento e política explícita de overflow.
+- Ícones/textos acessíveis; informação não pode depender exclusivamente de cor.
+- Overlay não captura input do jogo nem altera foco, pausa, fullscreen ou proporção.
+
+### Arquitetura obrigatória
+
+1. Runtime/serviços emitem eventos tipados que descrevem fatos; não enviam strings de UI nem inferem sucesso a partir do clique.
+2. O serviço OSD no host transforma eventos em mensagens com IDs estáveis, parâmetros, prioridade, categoria, TTL e política de deduplicação.
+3. Slint compõe a camada visual sobre o viewport de vídeo. Primeiro auditar a composição atual e provar que a solução não cria segundo renderer/device/queue, não duplica o frame e não altera a proporção.
+4. OSD consome eventos de lifecycle e snapshots imutáveis/coarse-grained; nenhum callback por instrução/ciclo.
+5. Sem I/O, serialização, logging persistente, bloqueios, espera ou alocação ilimitada no Scheduler/worker de emulação. A exibição operacional não habilita coleta diagnóstica DP-0.
+6. Mensagens de conclusão só são emitidas após confirmação do serviço; falha, cancelamento e sucesso são estados distintos.
+
+### Fatiamento e gates
+
+- **OSD-0 — auditoria:** mapear composição Slint/WGPU, eventos existentes, contratos e lacunas; especificar catálogo e modelo de mensagem.
+- **OSD-1 — overlay visual:** posicionamento, escala, visibilidade, TTL e fila limitada; testes unitários e UI sem depender do runtime.
+- **OSD-2 — sessão/mídia:** ROM, região efetivamente aplicada, reset, pausa, retomada, Stop/POWER OFF e descarregamento.
+- **OSD-3 — dispositivos:** hotplug SDL3, atribuição P1/P2 e estados de áudio suportados.
+- **OSD-4 — Save State:** slots e mensagens de save/load somente após existir serviço persistente validado; não simular funcionalidade.
+- **OSD-5 — indicadores:** FPS de origem/apresentação e estado da sessão.
+- **OSD-6 — aceite:** resize, fullscreen, escala, acessibilidade, flood/duplicação, overflow e orçamento de desempenho.
+
+Critérios de aceite: overlay visível em janela, maximizada e fullscreen; sem mudança do frame ou proporção; mensagens corretas após confirmação; hotplug sem flood; TTL/prioridade/deduplicação/overflow testados; FPS corretamente rotulados; nenhuma interferência no Scheduler/áudio/input; nenhum sink diagnóstico habilitado; evidências vinculadas ao SHA. `SKIPPED` e `NOT RUN` não são PASS.
+
+**Fora de escopo:** implementação do serviço persistente de Save State/slots, debugger avançado e integração RetroAchievements. A HUD apenas define o ponto futuro de integração para esses eventos.
 
 ## 10. DP-5 — diagnóstico básico, não debugger avançado
 

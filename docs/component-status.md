@@ -24,6 +24,7 @@
 | 3D Glasses / outros periféricos | Referências técnicas disponíveis | Especificação e implementação na fase P4, por compatibilidade de console |
 | Debugger SMS | Parcial e em evolução | Captura de duração fixa, snapshots CPU/VDP, exportação e usabilidade; não bloqueia hardware |
 | R5 desktop | Parcial | Biblioteca, configurações consolidadas, HUD/telemetria e limpeza segura de legado |
+| HUD/OSD operacional | Parcial / planejada | FPS visibility/text size já documentados; overlay posicionável, catálogo de mensagens, fila/TTL/prioridades e eventos operacionais ainda pendentes; issue #1112 |
 
 ## Estados e proveniência
 
