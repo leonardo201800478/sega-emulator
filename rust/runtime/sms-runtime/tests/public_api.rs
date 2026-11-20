@@ -1,7 +1,7 @@
 //! Public API tests for the Rust-only SMS runtime boundary.
 
 use sega_sms_core::ControllerButtons;
-use sega_sms_runtime::SmsTemporalWorker;
+use sega_sms_runtime::{DiagnosticsConsent, SmsTemporalWorker};
 
 #[test]
 fn public_worker_api_loads_steps_resets_and_accepts_controller_levels() {
@@ -36,6 +36,7 @@ fn public_worker_api_loads_steps_resets_and_accepts_controller_levels() {
 #[test]
 fn public_worker_api_saves_and_restores_a_complete_paused_machine_state() {
     let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+    worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
 
     worker.step_frame(100_000).unwrap();
     let saved = worker.save_state().unwrap();
@@ -64,6 +65,7 @@ fn public_worker_api_saves_and_restores_a_complete_paused_machine_state() {
 #[test]
 fn invalid_save_state_is_rejected_without_mutating_the_running_machine() {
     let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+    worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
     worker.step_frame(100_000).unwrap();
 
     let before = worker.debug_snapshot().unwrap();
@@ -94,6 +96,7 @@ fn save_state_rejects_a_different_rom_without_mutating_the_target_machine() {
     let saved = source.save_state().unwrap();
 
     let target = SmsTemporalWorker::new(vec![0xFF; 0x4000], "usa").unwrap();
+    target.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
     target.step_frame(100_000).unwrap();
     let before = target.debug_snapshot().unwrap();
 

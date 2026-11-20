@@ -111,47 +111,51 @@ O inventário deve localizar também ações duplicadas, opções sem consumidor
 
 ### 5.2 Proibição de coleta sem autorização
 
-**É proibido gerar ou registrar logs, traces, telemetria diagnóstica ou relatórios automaticamente sem autorização explícita do usuário.** A proibição vale para Debug e Release e inclui:
+**É proibido coletar, reter ou registrar diagnósticos sem autorização explícita do usuário.** A regra vale para Debug e Release e abrange:
 
-- arquivos de log e arquivos rotativos;
-- saída diagnóstica em console/terminal;
-- traces de instruções, barramentos, Scheduler ou áudio;
-- snapshots diagnósticos gravados automaticamente;
-- métricas históricas e relatórios em background;
-- captura automática de dados para crash/telemetria.
+- logs estruturados e saídas diagnósticas em console/terminal;
+- traces de instruções, barramentos, Scheduler, vídeo ou áudio;
+- snapshots de CPU/máquina e históricos de eventos;
+- métricas de desempenho, frame pacing e saúde de áudio;
+- relatórios e arquivos diagnósticos em background.
 
-Mensagens operacionais necessárias para informar uma falha ao usuário na própria interface não devem ser convertidas automaticamente em registros persistentes.
+Mensagens operacionais necessárias para informar uma falha na própria interface não devem ser convertidas automaticamente em registros persistentes.
+
+A única exceção automática é um **relatório mínimo de falha crítica de bootstrap** quando uma falha classificada impede a inicialização do emulador. Esse relatório é independente do logger e do consentimento, criado somente no caminho de falha, e contém apenas categoria estática e timestamp. Não pode conter payload de panic, backtrace, ROM/BIOS, memória, caminhos absolutos, identificadores pessoais ou conteúdo de sessão. Erros comuns de ROM, falhas de jogo após o boot e panics de runtime não geram relatório automático.
 
 Requisitos do consentimento:
 
-- desligado por padrão em toda instalação e perfil;
-- ação explícita e informada para habilitar;
-- finalidade e escopo apresentados antes de iniciar;
-- habilitação independente para logs e captura de diagnóstico quando os custos/volumes forem diferentes;
+- uma única autorização global, apresentada no Debugger como Coleta de logs, cobre logs, métricas, snapshots, traces e históricos;
+- a ação deve informar finalidade e escopo antes de iniciar;
+- um controle secundário de trace pode restringir/ativar captura detalhada, mas só funciona enquanto a autorização global estiver ativa e nunca a substitui;
+- desligado por padrão no início de cada sessão da aplicação; não persistir nem restaurar automaticamente;
 - revogação imediata, sem reinício;
-- estado de consentimento persistido de forma explícita e auditável;
 - build Release nunca implica consentimento;
-- não iniciar coleta por flag implícita, configuração herdada, variável de ambiente ou fallback silencioso.
+- variável de ambiente, configuração herdada, abertura do Debugger ou carregamento de ROM nunca habilitam coleta.
 
-Quando desativado, o caminho de logging deve evitar formatação, alocação, serialização, I/O e envio para filas. A política deve abranger também bibliotecas e subsistemas que possam emitir logs próprios. Saídas diretas `println!`/`eprintln!` não podem permanecer como mecanismo operacional de diagnóstico.
+Ao revogar, parar timers e publicação, desabilitar trace no worker, descartar eventos pendentes, fechar o sink, limpar filas, ring buffers, histórico do debugger e buffers de métricas do host. Uma nova autorização inicia uma sessão de coleta limpa. Não produzir snapshot JSON automático no encerramento; qualquer exportação exige ação explícita do usuário.
+
+Quando desativado, o caminho de diagnóstico deve evitar formatação, alocação, serialização, I/O, amostragem e envio para filas. Todos os subsistemas devem usar o pipeline central de observabilidade; não manter sinks paralelos nem saídas diretas println!/eprintln! como mecanismo operacional de diagnóstico.
 
 ### 5.3 Impacto e armazenamento
 
 Com consentimento ativo:
 
+- um pipeline central de eventos estruturados, com níveis e targets filtráveis;
 - captura em thread de background, com fila limitada e política explícita de descarte;
 - nenhuma espera do Scheduler por consumidor, disco ou interface;
 - limites configuráveis de tamanho por arquivo, quantidade de arquivos e quota total;
 - rotação e retenção finitas;
 - taxa limitada para eventos repetitivos;
 - sem dumps integrais de ROM, RAM ou estados por padrão;
-- sem trace por instrução/ciclo, salvo ação específica e temporária do usuário;
-- indicador visível de captura ativa, finalidade e destino;
-- desligamento imediato ao revogar consentimento ou encerrar a sessão.
+- sem trace por instrução/ciclo por padrão;
+- indicador visível de coleta ativa e finalidade;
+- exportação de trace/snapshot somente por ação explícita;
+- encerramento imediato da coleta ao revogar consentimento.
 
-A infraestrutura de observabilidade já existente deve ser auditada antes de criar outra. Sua presença não prova que todos os sinks respeitam consentimento nem que o overhead é desprezível.
+A infraestrutura de observabilidade existente deve ser a única entrada de logs persistentes. Sua presença não prova que todos os produtores, buffers e snapshots respeitam consentimento nem que o overhead é desprezível.
 
-Critérios de aceite: testes demonstram zero arquivos/saídas diagnósticas sem consentimento; revogação interrompe novas gravações; limites são respeitados; fila cheia não bloqueia runtime; benchmark compara execução com observabilidade desligada e habilitada, registrando overhead no SHA avaliado.
+Critérios de aceite: testes demonstram ausência de sinks/arquivos/amostras sem consentimento; revogação encerra trace e limpa buffers; limites e contadores de descarte são respeitados; fila cheia não bloqueia runtime; benchmark compara execução com observabilidade desligada e habilitada, registrando overhead no SHA avaliado.
 
 ## 6. DP-1 — registro central de capacidades
 

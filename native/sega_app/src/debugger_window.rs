@@ -74,8 +74,14 @@ pub(crate) fn render_debugger_contents(
     ui: &mut egui::Ui,
     worker: Option<&SmsTemporalWorkerDebugHandle>,
     state: &mut DebuggerWindowState,
+    diagnostics_enabled: bool,
 ) {
-    if let Some(worker) = worker {
+    if !diagnostics_enabled {
+        state.snapshot = None;
+        state.trace_capture_enabled = false;
+        state.status =
+            "Ative Coleta de logs no menu Diagnóstico para capturar snapshots e traces".into();
+    } else if let Some(worker) = worker {
         if state.last_refresh.elapsed() >= Duration::from_millis(100) {
             match worker.debug_snapshot() {
                 Ok(snapshot) => {
@@ -94,6 +100,9 @@ pub(crate) fn render_debugger_contents(
             state.last_refresh = Instant::now();
         }
         ui.ctx().request_repaint_after(Duration::from_millis(100));
+    } else {
+        state.snapshot = None;
+        state.trace_capture_enabled = false;
     }
 
     ui.horizontal_wrapped(|ui| {
@@ -109,7 +118,7 @@ pub(crate) fn render_debugger_contents(
         return;
     };
 
-    render_debugger_toolbar(ui, worker, state);
+    render_debugger_toolbar(ui, worker, state, diagnostics_enabled);
 
     if let Some(snapshot) = state.snapshot.as_ref() {
         ui.separator();
@@ -135,6 +144,7 @@ fn render_debugger_toolbar(
     ui: &mut egui::Ui,
     worker: &SmsTemporalWorkerDebugHandle,
     state: &mut DebuggerWindowState,
+    diagnostics_enabled: bool,
 ) {
     ui.horizontal_wrapped(|ui| {
         if ui
@@ -174,11 +184,14 @@ fn render_debugger_toolbar(
 
         let trace_enabled = state.trace_capture_enabled;
         if ui
-            .button(if trace_enabled {
-                "Desativar trace"
-            } else {
-                "Ativar trace"
-            })
+            .add_enabled(
+                diagnostics_enabled || trace_enabled,
+                egui::Button::new(if trace_enabled {
+                    "Desativar trace"
+                } else {
+                    "Ativar trace"
+                }),
+            )
             .clicked()
         {
             match worker.set_trace_enabled(!trace_enabled) {

@@ -1,3 +1,4 @@
+use crate::DiagnosticsConsent;
 use crate::writer::{FanoutWriter, SizeRotatingWriter, SwitchableMakeWriter};
 use serde::Serialize;
 use std::any::Any;
@@ -30,27 +31,6 @@ pub type InitError = Box<dyn Error + Send + Sync>;
 
 type FilterHandle = reload::Handle<EnvFilter, Registry>;
 type WriterSlot = Arc<RwLock<Option<NonBlocking>>>;
-
-/// Capability representing an affirmative user action to enable diagnostics.
-///
-/// The host must create this value only inside the callback that handles the
-/// user's affirmative opt-in. Rust cannot independently verify a human action;
-/// this capability makes the authorization boundary explicit in the API.
-#[derive(Clone, Copy, Debug)]
-#[must_use = "pass the consent capability to the diagnostics activation API"]
-pub struct DiagnosticsConsent {
-    _private: (),
-}
-
-impl DiagnosticsConsent {
-    /// Create a consent capability after the user explicitly enables diagnostics.
-    ///
-    /// Call only in direct response to an affirmative UI action, never during
-    /// startup, preference restoration, or background processing.
-    pub fn from_explicit_user_action() -> Self {
-        Self { _private: () }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct LogConfig {

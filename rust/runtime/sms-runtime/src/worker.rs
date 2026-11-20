@@ -16,6 +16,7 @@ use crate::audio::AudioSession;
 use sega_audio_runtime::{AnalogOutputConfig, AudioOutputMetrics, DEFAULT_PCM_SOURCE_RATE_HZ};
 use sega_debugger_core::{BreakpointSet, DiagnosticCollector, DiagnosticPublisher};
 use sega_media::{CartridgeCatalog, SmsRegionPreference, resolve_sms_region};
+use sega_observability::DiagnosticsConsent;
 use sega_sms_core::{
     ControllerButtons, PsgAmplitudeEvent, SmsOverscanMode, SmsTemporalMachine,
     SmsTemporalMachineState, SmsTemporalTraceEvent, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
@@ -998,34 +999,41 @@ impl WorkerCommand {
 fn set_trace_capture(
     commands: &SyncSender<WorkerCommand>,
     collector_slot: &Mutex<Option<DiagnosticCollector<SmsTemporalTraceEvent>>>,
+    telemetry: &WorkerTelemetry,
     enabled: bool,
 ) -> Result<(), String> {
+    if enabled && !telemetry.diagnostics_enabled() {
+        return Err("Enable Coleta de logs no Debugger antes de ativar o trace".to_owned());
+    }
+
     let mut slot = collector_slot
         .lock()
         .map_err(|_| "debugger collector state is unavailable".to_owned())?;
-    if enabled == slot.is_some() {
+    if enabled {
+        if slot.is_some() {
+            return Ok(());
+        }
+        let collector = DiagnosticCollector::start(512, DEBUG_TRACE_CAPACITY)
+            .map_err(|error| format!("failed to start SMS debugger collector: {error}"))?;
+        let publisher = Some(collector.publisher());
+        let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
+        enqueue_worker_command(
+            commands,
+            WorkerCommand::SetTraceEnabled(true, publisher, reply_sender),
+        )?;
+        receive_worker_reply(reply_receiver, "enabling debugger trace capture")??;
+        *slot = Some(collector);
         return Ok(());
     }
-    let collector = if enabled {
-        Some(
-            DiagnosticCollector::start(512, DEBUG_TRACE_CAPACITY)
-                .map_err(|error| format!("failed to start SMS debugger collector: {error}"))?,
-        )
-    } else {
-        None
-    };
-    let publisher = collector.as_ref().map(|collector| collector.publisher());
+
+    // Revoke and clear retained events before asking the machine worker to
+    // disable trace generation at its next command boundary.
+    drop(slot.take());
     let (reply_sender, reply_receiver) = mpsc::sync_channel(1);
-    enqueue_worker_command(
-        commands,
-        WorkerCommand::SetTraceEnabled(enabled, publisher, reply_sender),
-    )?;
-    receive_worker_reply(reply_receiver, "changing debugger trace capture")??;
-    if enabled {
-        *slot = collector;
-    } else {
-        slot.take();
-    }
+    commands
+        .send(WorkerCommand::SetTraceEnabled(false, None, reply_sender))
+        .map_err(|_| "SMS worker stopped while disabling debugger trace".to_owned())?;
+    receive_worker_reply(reply_receiver, "disabling debugger trace capture")??;
     Ok(())
 }
 
@@ -1042,7 +1050,9 @@ fn capture_debug_snapshot(
         .map_err(|_| "debugger collector state is unavailable".to_owned())?;
     if let Some(collector) = slot.as_ref() {
         snapshot.trace_events = collector.snapshot();
-        snapshot.trace_dropped = collector.ingress_dropped();
+        snapshot.trace_dropped = collector
+            .ingress_dropped()
+            .saturating_add(collector.history_dropped());
         snapshot.trace_enabled = true;
     }
     Ok(snapshot)
@@ -1056,7 +1066,7 @@ pub struct SmsWorkerSaveState {
     pub machine_state: SmsTemporalMachineState,
 }
 
-pub const SMS_WORKER_SAVE_STATE_VERSION: u16 = 1;
+pub const SMS_WORKER_SAVE_STATE_VERSION: u16 = 2;
 
 /// Owned, immutable SMS/Z80 state captured on the machine worker thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1093,7 +1103,7 @@ pub struct SmsDebugSnapshot {
     pub framebuffer_rgb: Vec<u8>,
     /// Most recent scheduler/bus events, oldest first.
     pub trace_events: Vec<SmsTemporalTraceEvent>,
-    /// Number of trace events discarded after the bounded history filled.
+    /// Number of trace events discarded by the machine buffer, ingress queue, or retained history.
     pub trace_dropped: u64,
     /// Whether runtime trace capture is currently enabled.
     pub trace_enabled: bool,
@@ -1154,13 +1164,21 @@ impl SmsTemporalWorkerDebugHandle {
         self.request_unit(|reply| WorkerCommand::SetBreakpoint(address, enabled, reply))
     }
 
-    /// Enable or disable bounded scheduler and bus trace capture.
+    /// Set bounded scheduler/bus trace capture; enabling requires explicit diagnostics consent.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
-        set_trace_capture(&self.commands, &self.trace_collector, enabled)
+        set_trace_capture(
+            &self.commands,
+            &self.trace_collector,
+            &self.telemetry,
+            enabled,
+        )
     }
 
-    /// Capture an immutable, owned machine snapshot.
+    /// Capture an immutable, owned machine snapshot only after explicit diagnostics consent.
     pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        if !self.telemetry.diagnostics_enabled() {
+            return Err("SMS diagnostics consent is not enabled".to_owned());
+        }
         capture_debug_snapshot(&self.commands, &self.trace_collector)
     }
 
@@ -1482,9 +1500,20 @@ impl SmsTemporalWorker {
         receive_worker_reply(reply_receiver, "exporting cartridge SRAM")
     }
 
-    /// Enable or disable optional diagnostic telemetry without changing emulation.
-    pub fn set_diagnostics_enabled(&self, enabled: bool) {
-        self.telemetry.set_diagnostics_enabled(enabled);
+    /// Enable optional diagnostic telemetry using the shared consent capability.
+    pub fn enable_diagnostics(&self, _consent: &DiagnosticsConsent) {
+        self.telemetry.set_diagnostics_enabled(true);
+    }
+
+    /// Revoke diagnostics, disable trace capture, and discard all retained trace data.
+    pub fn disable_diagnostics(&self) -> Result<(), String> {
+        self.telemetry.set_diagnostics_enabled(false);
+        set_trace_capture(
+            &self.commands,
+            &self.trace_collector,
+            &self.telemetry,
+            false,
+        )
     }
 
     pub fn reset(&self) -> Result<(), String> {
@@ -1515,8 +1544,11 @@ impl SmsTemporalWorker {
         self.request_unit(WorkerCommand::StepInstruction)
     }
 
-    /// Capture a coherent, owned debugger snapshot at a worker command boundary.
+    /// Capture a coherent, owned debugger snapshot only after explicit diagnostics consent.
     pub fn debug_snapshot(&self) -> Result<SmsDebugSnapshot, String> {
+        if !self.telemetry.diagnostics_enabled() {
+            return Err("SMS diagnostics consent is not enabled".to_owned());
+        }
         capture_debug_snapshot(&self.commands, &self.trace_collector)
     }
 
@@ -1544,9 +1576,14 @@ impl SmsTemporalWorker {
         receive_worker_reply(reply_receiver, "restoring a save state")?
     }
 
-    /// Enable or disable bounded scheduler/bus trace capture.
+    /// Set bounded scheduler/bus trace capture; enabling requires explicit diagnostics consent.
     pub fn set_trace_enabled(&self, enabled: bool) -> Result<(), String> {
-        set_trace_capture(&self.commands, &self.trace_collector, enabled)
+        set_trace_capture(
+            &self.commands,
+            &self.trace_collector,
+            &self.telemetry,
+            enabled,
+        )
     }
 
     /// Change the active SMS VDP sprite rendering limit through the machine worker.
@@ -2366,10 +2403,15 @@ fn drain_machine_trace(
     machine: &mut SmsTemporalMachine,
     publisher: Option<&DiagnosticPublisher<SmsTemporalTraceEvent>>,
 ) {
+    // Always drain the machine-side bounded buffer. If consent was revoked,
+    // the publisher is inactive and these events are discarded immediately.
+    let events = machine.take_trace();
+    let dropped = machine.take_trace_dropped();
     let Some(publisher) = publisher.filter(|publisher| publisher.is_active()) else {
         return;
     };
-    for event in machine.take_trace() {
+    publisher.record_dropped(dropped);
+    for event in events {
         let _ = publisher.try_publish(event);
     }
 }
@@ -2853,9 +2895,9 @@ fn handle_command(
 mod tests {
     use super::{
         AudioRendererMode, AudioRendererState, BreakpointSet, DEFAULT_MAX_FRAME_INSTRUCTIONS,
-        FRAME_PACING_WINDOW_CAPACITY, FramePacingDeadline, FramePacingSample, FramePacingWindow,
-        Ordering, SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker, SpriteLimitMode,
-        WorkerTelemetry, build_sms_temporal_machine,
+        DiagnosticsConsent, FRAME_PACING_WINDOW_CAPACITY, FramePacingDeadline, FramePacingSample,
+        FramePacingWindow, Ordering, SMS_INTERNAL_AUDIO_SAMPLE_RATE, SmsTemporalWorker,
+        SpriteLimitMode, WorkerTelemetry, build_sms_temporal_machine,
         build_sms_temporal_machine_with_revision_and_sram_size, calculate_next_frame_deadline,
         execute_frame, execute_frame_with_renderer, frame_duration_from_machine_ticks,
         sms_temporal_hardware_profile, sms_temporal_region_profile,
@@ -3245,6 +3287,7 @@ mod tests {
         let rom = vec![0x76; 0x4000];
 
         let worker = SmsTemporalWorker::new_with_bios(rom, bios.clone(), "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
 
         assert_eq!(worker.inspect_memory(0, 3).unwrap(), bios[..3]);
         assert_eq!(worker.debug_snapshot().unwrap().sp, 0x0000);
@@ -3371,6 +3414,7 @@ mod tests {
     #[test]
     fn sprite_limit_mode_changes_only_through_worker_command_queue() {
         let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         assert_eq!(
             worker.debug_snapshot().unwrap().sprite_limit_mode,
             SpriteLimitMode::HardwareLimit
@@ -3396,6 +3440,7 @@ mod tests {
     #[test]
     fn stop_powers_off_machine_but_keeps_rom_available_for_restart() {
         let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         worker.step_frame(100_000).unwrap();
         assert!(worker.machine_time_ticks() > 0);
 
@@ -3412,6 +3457,7 @@ mod tests {
     #[test]
     fn reset_preserves_host_selected_sprite_limit_mode() {
         let worker = SmsTemporalWorker::new(vec![0; 0x4000], "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         worker
             .set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility)
             .unwrap();
@@ -3448,7 +3494,7 @@ mod tests {
     #[test]
     fn single_instruction_step_advances_scheduler_on_paused_worker() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
-        worker.set_diagnostics_enabled(true);
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
 
         let initial_ticks = worker.machine_time_ticks();
         assert_eq!(worker.total_instructions(), 0);
@@ -3480,6 +3526,7 @@ mod tests {
     #[test]
     fn debugger_snapshot_and_mapper_reads_are_owned_and_bounded() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         let initial_ticks = worker.machine_time_ticks();
 
         let snapshot = worker.debug_snapshot().unwrap();
@@ -3500,6 +3547,7 @@ mod tests {
         assert_send_sync::<SmsTemporalWorkerDebugHandle>();
 
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         let handle = worker.debug_handle();
 
         assert_eq!(
@@ -3517,6 +3565,8 @@ mod tests {
     #[test]
     fn trace_capture_is_opt_in_and_exposes_bounded_owned_events() {
         let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        assert!(worker.debug_snapshot().is_err());
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
         let initial = worker.debug_snapshot().unwrap();
         assert!(!initial.trace_enabled);
         assert!(initial.trace_events.is_empty());
@@ -3536,9 +3586,31 @@ mod tests {
     }
 
     #[test]
+    fn diagnostics_revocation_disables_trace_and_discards_retained_events() {
+        let worker = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+
+        assert!(worker.set_trace_enabled(true).is_err());
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
+        worker.set_trace_enabled(true).unwrap();
+        worker.step_instruction().unwrap();
+        assert!(worker.debug_snapshot().unwrap().trace_enabled);
+
+        worker.disable_diagnostics().unwrap();
+        assert!(worker.debug_snapshot().is_err());
+
+        worker.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
+        let after_reconsent = worker.debug_snapshot().unwrap();
+        assert!(!after_reconsent.trace_enabled);
+        assert!(after_reconsent.trace_events.is_empty());
+        assert_eq!(after_reconsent.trace_dropped, 0);
+    }
+
+    #[test]
     fn trace_opt_in_does_not_change_machine_progression() {
         let traced = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
         let untraced = SmsTemporalWorker::new(SYNTHETIC_ROM.to_vec(), "usa").unwrap();
+        traced.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
+        untraced.enable_diagnostics(&DiagnosticsConsent::from_explicit_user_action());
 
         traced.set_trace_enabled(true).unwrap();
         for _ in 0..32 {

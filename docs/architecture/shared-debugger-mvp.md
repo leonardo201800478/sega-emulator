@@ -25,7 +25,7 @@ Each console runtime may expose the following coarse-grained operations when its
 1. pause / resume;
 2. execute one complete CPU instruction while preserving scheduler and peripheral timing;
 3. add/remove/clear address breakpoints;
-4. inspect a read-only machine snapshot;
+4. inspect a read-only machine snapshot only while the global diagnostics consent is active;
 5. read a bounded recent event history;
 6. export a local diagnostic report.
 
@@ -42,7 +42,7 @@ The SMS adapter should expose:
 - recent bus events with machine timestamp, operation, address, data, base T-states and WAIT states;
 - an instruction breakpoint and single-instruction command.
 
-The existing `SmsTemporalMachine::set_trace_enabled` / `take_trace` API is the event source. The runtime worker drains it after each frame or paused command into a 2,048-event FIFO history. Overflow discards the oldest event and increments the dropped counter. Capture is opt-in and disabling it clears both pending and retained events; the underlying machine trace vector is drained at each worker boundary.
+The existing `SmsTemporalMachine::set_trace_enabled` / `take_trace` API is the event source. The machine-side buffer is capped at 65,536 events and reports upstream drops. The runtime worker drains it at frame/command boundaries into a 2,048-event FIFO history fed by a 512-entry non-blocking queue. Capture requires the same global Coleta de logs consent as all other diagnostics. The UI passes one `DiagnosticsConsent` capability to the logger and worker; the trace toggle is only a secondary capture control. Revoking consent disables machine trace, drops the collector, and clears pending and retained events. The machine-side buffer is drained even if its publisher has become inactive.
 
 ## GUI
 
@@ -51,9 +51,9 @@ A dedicated, independently movable and resizable native Debugger window should e
 - Pause / Continue / Step against the same `SmsTemporalWorker` that owns the running game (no second machine instance);
 - independent native window chrome, free movement and resizing;
 - a hexadecimal PC breakpoint field with Add / Remove / Clear;
-- CPU and hardware summary;
+- CPU and hardware summary, only while diagnostics consent is active;
 - memory address + short hex/ASCII view;
-- recent events and dropped-event count (trace capture is opt-in; the GUI refreshes live snapshots at 10 Hz while running);
+- recent events and dropped-event count (trace and snapshots require global diagnostics consent; the GUI refreshes snapshots at 10 Hz only while consent is active);
 - export report to a user-selected local file.
 
 The GUI sends commands and renders snapshots only. It must not execute instructions, advance machine time, decode hardware state or own hardware timing. The debugger is opened from DEBUG > Abrir janela do Debugger and is hosted by an egui deferred native viewport, not embedded over the game viewport. The deferred viewport has independent repaint scheduling; it uses a cloneable command handle to the existing worker rather than taking ownership or creating a second machine.
@@ -66,8 +66,11 @@ A new console adds an adapter that maps its native CPU/machine state into the sh
 
 ## Safety and privacy
 
-- Trace capture is opt-in and bounded.
+- One global diagnostics consent is opt-in and session-scoped; snapshots, metrics and trace capture are all subordinate to it.
+- Trace capture is additionally bounded at the machine buffer, ingress queue and retained-history layers.
 - Diagnostic files are local and user-requested.
+- Revocation immediately stops timers/publication, disables worker trace, drops the collector and clears host/runtime diagnostic buffers.
+- Consent starts disabled for each application session and is never restored from preferences.
 - Never include ROM bytes, BIOS bytes, copyrighted instruction dumps or full memory images in GitHub issues/PRs.
 - Do not change emulation behavior to make debugging easier.
 - Breakpoints stop only at documented instruction boundaries; no mid-cycle pause is implied.

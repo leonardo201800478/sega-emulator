@@ -3,7 +3,7 @@
 
 use eframe::egui;
 use rfd::FileDialog;
-use sega_sms_runtime::{SmsDebugSnapshot, SmsTemporalWorker};
+use sega_sms_runtime::{DiagnosticsConsent, SmsDebugSnapshot, SmsTemporalWorker};
 use std::{
     fs,
     path::PathBuf,
@@ -26,6 +26,7 @@ pub struct DebuggerApp {
     memory_address: String,
     memory_bytes: Vec<u8>,
     snapshot: Option<SmsDebugSnapshot>,
+    diagnostics_consent: Option<DiagnosticsConsent>,
     texture: Option<egui::TextureHandle>,
     displayed_frame: u64,
     status: String,
@@ -43,6 +44,7 @@ impl Default for DebuggerApp {
             memory_address: "C000".into(),
             memory_bytes: Vec::new(),
             snapshot: None,
+            diagnostics_consent: None,
             texture: None,
             displayed_frame: u64::MAX,
             status: "Abra uma ROM SMS".into(),
@@ -60,13 +62,26 @@ impl DebuggerApp {
             return;
         };
 
+        let trace_was_enabled = self
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.trace_enabled);
+        let consent = self.diagnostics_consent;
         let result = fs::read(&path)
             .map_err(|error| error.to_string())
             .and_then(|rom| SmsTemporalWorker::new(rom, "usa"));
         match result {
             Ok(worker) => {
-                // Detailed diagnostics remain disabled until the user explicitly
-                // enables Debugger mode from the controls.
+                if let Some(consent) = consent.as_ref() {
+                    worker.enable_diagnostics(consent);
+                    if trace_was_enabled
+                        && let Err(error) = worker.set_trace_enabled(true)
+                    {
+                        let _ = worker.disable_diagnostics();
+                        self.status = format!("Falha ao restaurar trace no novo worker: {error}");
+                        return;
+                    }
+                }
                 self.worker = Some(worker);
                 self.rom_path = Some(path);
                 self.running = false;
@@ -85,6 +100,13 @@ impl DebuggerApp {
 
     fn refresh_snapshot(&mut self) {
         self.last_snapshot_refresh = Instant::now();
+        if self.diagnostics_consent.is_none() {
+            self.snapshot = None;
+            if self.worker.is_some() {
+                self.status = "Ative Modo Debugger para capturar snapshots e traces".into();
+            }
+            return;
+        }
         let Some(worker) = self.worker.as_ref() else {
             self.snapshot = None;
             return;
@@ -193,21 +215,33 @@ impl DebuggerApp {
         let Some(worker) = self.worker.as_ref() else {
             return;
         };
-        let enabled = !self
-            .snapshot
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.trace_enabled);
-        match worker.set_trace_enabled(enabled) {
+        let enabled = self.diagnostics_consent.is_none();
+        let consent = enabled.then(DiagnosticsConsent::from_explicit_user_action);
+        let result = if let Some(consent) = consent.as_ref() {
+            worker.enable_diagnostics(consent);
+            worker.set_trace_enabled(true)
+        } else {
+            worker.disable_diagnostics()
+        };
+        match result {
             Ok(()) => {
-                worker.set_diagnostics_enabled(enabled);
-                self.refresh_snapshot();
-                self.status = if enabled {
-                    "Modo Debugger habilitado (captura limitada em memória)".into()
+                self.diagnostics_consent = consent;
+                if enabled {
+                    self.refresh_snapshot();
+                    self.status = "Coleta de logs e trace habilitada nesta sessão".into();
                 } else {
-                    "Modo Debugger desabilitado; captura detalhada interrompida".into()
-                };
+                    self.snapshot = None;
+                    self.status = "Coleta revogada; trace e snapshots foram descartados".into();
+                }
             }
-            Err(error) => self.status = format!("Falha ao configurar modo Debugger: {error}"),
+            Err(error) => {
+                if enabled {
+                    let _ = worker.disable_diagnostics();
+                }
+                self.diagnostics_consent = None;
+                self.snapshot = None;
+                self.status = format!("Falha ao alterar coleta diagnóstica: {error}");
+            }
         }
     }
 
@@ -234,6 +268,10 @@ impl DebuggerApp {
     }
 
     fn export_diagnostic(&mut self) {
+        if self.diagnostics_consent.is_none() {
+            self.status = "Habilite Modo Debugger antes de exportar diagnóstico".into();
+            return;
+        }
         let Some(snapshot) = self.snapshot.as_ref() else {
             self.status = "Nenhum snapshot disponível para exportação".into();
             return;

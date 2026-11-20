@@ -13,11 +13,11 @@ Status: reconstruction started; this branch establishes the opt-in boundary. The
 
 ## User consent and persistence
 
-- Debugger mode is disabled on every application start and whenever a new ROM worker is created.
-- Enabling Debugger mode is an explicit user action in the DEBUG controls.
+- The global diagnostics consent is disabled on every application start and is never restored from preferences. A replacement ROM worker may inherit the current in-session consent, but no consent is inherited across application sessions.
+- Enabling the global Coleta de logs option in the Debugger creates one `DiagnosticsConsent` capability passed to both the central logger and SMS worker. It authorizes logs, metrics, snapshots and traces; the trace toggle is a secondary control and cannot enable capture without this capability.
 - Enabling it may collect bounded records in memory only; it must not create directories or files.
 - Filesystem access is allowed only after a separate explicit Export command and a user-selected destination.
-- Disabling Debugger mode stops publication, clears pending and retained diagnostic records, and disables detailed runtime telemetry.
+- Revoking consent stops publication/timers, disables worker trace at a command boundary, drops the collector, clears pending/retained records and host pacing buffers, and disables detailed runtime telemetry. Re-enabling starts with empty buffers.
 - Ordinary runtime error reporting required for application stability is not a diagnostic trace and must not implicitly activate collection or persistence.
 
 ## Diagnostic domains
@@ -53,7 +53,7 @@ Unavailable fields must be reported as unavailable, never inferred or fabricated
 
 ## Acceptance gates
 
-- With Debugger mode off: trace disabled, detailed telemetry disabled, collector inactive, no diagnostic files/directories created.
+- With global diagnostics consent off: trace disabled, snapshots rejected, detailed telemetry disabled, collector inactive, diagnostic buffers cleared, and no diagnostic files/directories created (except the separately specified minimal bootstrap-failure report).
 - With Debugger mode on: events arrive in machine-time order; emulation never blocks on collector; overflow is counted.
 - Disabling: no new records are published and all retained capture data is cleared.
 - Export: no file is written until the user invokes Export; report contains a schema version, capture configuration and dropped counts.

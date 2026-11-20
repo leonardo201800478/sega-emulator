@@ -4,9 +4,11 @@
 
 O logging é transversal aos crates compartilhados e não participa do controle temporal da máquina. CPU, VDP, PSG, Scheduler, barramentos e hosts publicam eventos estruturados; a aplicação nativa instala o subscriber e mantém o ciclo de vida do escritor.
 
-**Coleta desativada por padrão (opt-in).** A aplicação não inicializa o subscriber, não cria o diretório de logs, não instala o panic hook e não grava snapshots enquanto o usuário não ativar explicitamente `Opções > Diagnóstico > Ativar coleta de diagnóstico`. A opção não é persistida: cada inicialização começa desligada.
+**Coleta desativada por padrão (opt-in).** A aplicação não inicializa o subscriber, não cria o diretório de logs, não instala o panic hook e não grava snapshots enquanto o usuário não ativar explicitamente `Debugger > Coleta de logs`. A opção não é persistida: cada inicialização começa desligada.
 
-Ao desativar a coleta durante a execução, o filtro global é recarregado para `off` e o panic hook deixa de gravar. O worker de escrita permanece ocioso para permitir reativação sem reiniciar. Eventos já enfileirados antes da desativação ainda podem terminar de ser gravados; nenhum evento novo é aceito pelo filtro desligado.
+A autorização é representada por um único `DiagnosticsConsent`, criado somente no callback de ação afirmativa do usuário e passado ao logger central e ao worker SMS. O worker não expõe setter booleano público para habilitar diagnósticos. O host Slint consulta `LoggingHandle::is_enabled()` para condicionar seus eventos e timers; a cópia do token mantida em memória serve apenas para autorizar workers substitutos durante a mesma sessão.
+
+Ao revogar a coleta durante a execução, o gate compartilhado é fechado, o filtro global é recarregado para `off`, eventos pendentes são descartados, o ring buffer é limpo e o worker antigo é encerrado com o sink fechado. Uma nova autorização inicia uma sessão de coleta limpa. O trace do worker SMS também é desabilitado, seu collector é descartado e os buffers de métricas do host/runtime são limpos.
 
 O caminho de hardware não executa operações de disco. Quando ativada, a coleta usa uma fila limitada e uma thread de escrita independente. Quando desativada, não há coleta de eventos de diagnóstico.
 
@@ -55,24 +57,20 @@ No Windows, o diretório padrão é:
 Arquivos:
 
 - `sega-emulator.log`: JSON Lines, rotação por tamanho (10 MiB por arquivo, cinco backups).
-- `sega-emulator-diagnostics.json`: snapshot da sessão escrito no encerramento ou na exportação.
-- `sega-emulator-crash.log`: registro privado de panic, somente quando o consentimento está ativo no instante da falha.
+- `sega-emulator-diagnostics.json`: não é escrito automaticamente no encerramento; eventual exportação exige ação explícita do usuário.
+- `sega-emulator-crash.log`: nome legado reservado à política de falha crítica de bootstrap; não deve ser usado por um panic hook global.
 
-### Política do crash log — ADR 0012 / DP0-F5
+### Política de falha crítica de bootstrap — substitui a abordagem de panic hook
 
-O hook privado é instalado somente durante a inicialização consentida da infraestrutura. O hook consulta o estado atômico do consentimento no instante do panic. Se o consentimento tiver sido revogado, não grava o arquivo privado.
+A política aprovada **não instala hook global de panic**. Panics de runtime pós-boot seguem o mecanismo padrão do Rust e não geram arquivos diagnósticos automáticos.
 
-O registro permitido contém somente timestamp Unix em milissegundos, ID de sessão sanitizado, nome-base do arquivo-fonte, linha, coluna e indicador booleano de que o payload era textual. O conteúdo do payload, caminho absoluto, diretórios pessoais e backtrace não são capturados.
+A única gravação automática permitida é um relatório mínimo quando um erro classificado de bootstrap impede a inicialização do emulador. O relatório é independente do logger e do consentimento, é criado somente no ramo de falha e contém categoria estática e timestamp. Não captura payload, backtrace, ROM/BIOS, memória, caminhos absolutos, diretórios pessoais ou conteúdo de sessão. Erros comuns de ROM, firmware, jogo e áudio após o boot não são falhas críticas de bootstrap.
 
-Cada registro tem limite de 1 KiB. O arquivo tem limite derivado de `LogConfig.max_file_size_bytes`; se o próximo registro não couber, ele é descartado em vez de executar rotação no hook. A rotação e a retenção de backups ocorrem durante a inicialização consentida, antes da instalação do hook. O limite de backups usa `LogConfig.retained_files`.
-
-Falhas de abertura, escrita ou flush do arquivo privado não impedem a chamada do hook anterior do Rust, que é delegada exatamente uma vez. O hook não usa logger, subscriber, worker, GUI, Scheduler, mutexes de aplicação, `catch_unwind`, rede ou backtrace. A saída padrão de panic continua separada do arquivo privado e preserva o comportamento normal de falha.
-
-A implementação foi validada no commit de código 8bedcb3a6956faf3a3bb8351ccdd08a47bc43a11: Windows x64 Debug e Release passaram em rustfmt, Clippy e testes (14 testes por perfil); o CI Linux Release também aprovou Clippy e os testes da feature runtime. A PR #1099 aguarda somente a conclusão dos checks gerais restantes e o merge.
+**Estado de implementação:** a infraestrutura ainda contém o hook privado legado descrito no ADR 0012. Sua remoção e a implementação de `record_bootstrap_failure` são pendências P0; DP-0 não pode ser declarado concluído antes dessa correção e de seus testes.
 
 `SEGA_LOG_DIR` permite substituir o diretório e `SEGA_LOG_FILTER` define o filtro inicial. O filtro pode ser recarregado em runtime por `LoggingHandle::set_filter`.
 
-O `WorkerGuard` só é criado após o opt-in e permanece vivo durante a execução. No encerramento normal, a aplicação só registra o evento final e grava o snapshot JSON se a coleta ainda estiver ativa; depois descarta o guard. Se a coleta estiver desativada, nenhum snapshot de encerramento é produzido.
+O `WorkerGuard` só é criado após o opt-in e permanece vivo durante a execução. No encerramento normal, a aplicação pode registrar o evento final se a coleta estiver ativa e então encerra o logger; não grava snapshot JSON automaticamente. Qualquer exportação de snapshot deve partir de uma ação explícita do usuário.
 
 ## Níveis e filtros
 

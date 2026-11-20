@@ -210,7 +210,17 @@ impl<T> DiagnosticPublisher<T> {
         }
     }
 
-    /// Return the number of events discarded because the input queue was full.
+    /// Record events discarded by an upstream bounded producer buffer.
+    ///
+    /// This keeps machine-side trace overflow in the same diagnostic drop count.
+    pub fn record_dropped(&self, count: u64) {
+        use std::sync::atomic::Ordering;
+        if count > 0 && self.active.load(Ordering::Acquire) {
+            self.dropped.fetch_add(count, Ordering::Relaxed);
+        }
+    }
+
+    /// Return the number of events discarded before reaching retained history.
     #[must_use]
     pub fn dropped(&self) -> u64 {
         self.dropped.load(std::sync::atomic::Ordering::Acquire)
@@ -303,10 +313,19 @@ impl<T: Send + 'static> DiagnosticCollector<T> {
             .unwrap_or_default()
     }
 
-    /// Return the number of events dropped before reaching the collector.
+    /// Return the number of events discarded by upstream producers or the ingress queue.
     #[must_use]
     pub fn ingress_dropped(&self) -> u64 {
         self.publisher.dropped()
+    }
+
+    /// Return the number of events discarded by the bounded retained history.
+    #[must_use]
+    pub fn history_dropped(&self) -> u64 {
+        self.history
+            .lock()
+            .map(|history| history.dropped())
+            .unwrap_or_default()
     }
 
     /// Stop the collector, join its thread, and clear retained diagnostic data.
@@ -405,5 +424,20 @@ mod tests {
         assert_eq!(history.capacity(), 1);
         assert_eq!(history.entries().front(), Some(&2));
         assert_eq!(history.dropped(), 1);
+    }
+    #[test]
+    fn collector_reports_both_ingress_and_retained_history_drops() {
+        use super::{DiagnosticCollector, PublishResult};
+
+        let collector = DiagnosticCollector::start(8, 2).unwrap();
+        let publisher = collector.publisher();
+        assert_eq!(publisher.try_publish(1), PublishResult::Accepted);
+        assert_eq!(publisher.try_publish(2), PublishResult::Accepted);
+        assert_eq!(publisher.try_publish(3), PublishResult::Accepted);
+        publisher.record_dropped(4);
+
+        assert_eq!(collector.snapshot(), [2, 3]);
+        assert_eq!(collector.ingress_dropped(), 4);
+        assert_eq!(collector.history_dropped(), 1);
     }
 }

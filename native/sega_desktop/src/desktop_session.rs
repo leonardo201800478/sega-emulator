@@ -265,11 +265,20 @@ impl DesktopSession {
         }
     }
 
-    /// Enable/disable detailed SMS diagnostics without inventing SG-1000 trace support.
-    pub fn set_sms_diagnostics_enabled(&self, enabled: bool) {
+    /// Enable SMS diagnostics using the same explicit consent capability as the logger.
+    pub fn enable_sms_diagnostics(&self, consent: &DiagnosticsConsent) -> Result<(), String> {
         if let Self::Sms { worker, .. } = self {
-            worker.set_diagnostics_enabled(enabled);
+            worker.enable_diagnostics(consent);
         }
+        Ok(())
+    }
+
+    /// Revoke SMS diagnostics and discard all retained trace data.
+    pub fn disable_sms_diagnostics(&self) -> Result<(), String> {
+        if let Self::Sms { worker, .. } = self {
+            worker.disable_diagnostics()?;
+        }
+        Ok(())
     }
 
     /// Return the runtime's latest reported audio output error, if any.
@@ -288,8 +297,13 @@ impl DesktopSession {
         }
     }
 
-    /// Capture a concise system-neutral debugger summary from the selected worker.
-    pub fn debug_summary(&self) -> Result<String, String> {
+    /// Capture a concise system-neutral debugger summary only while central diagnostics consent is active.
+    pub fn debug_summary(&self, diagnostics_enabled: bool) -> Result<String, String> {
+        if !diagnostics_enabled {
+            return Err(
+                "Ative Coleta de logs no Debugger antes de capturar um snapshot".to_owned(),
+            );
+        }
         match self {
             Self::Sms { worker, .. } => worker.debug_snapshot().map(|snapshot| {
                 format!(
@@ -348,6 +362,7 @@ impl DesktopSession {
 #[cfg(test)]
 mod tests {
     use super::{DesktopSession, DesktopSystem};
+    use sega_observability::DiagnosticsConsent;
     use sega_sg1000_runtime::Sg1000TemporalWorker;
     use sega_sms_runtime::SmsTemporalWorker;
 

@@ -53,14 +53,44 @@ mod windows_host {
     const SMS_EXTENDED_HEIGHTS: [u32; 2] = [224, 240];
 
     // Host diagnostics are session-only and remain disabled until the user opts in.
-    static HOST_DIAGNOSTICS_ENABLED: AtomicBool = AtomicBool::new(false);
-
     fn host_diagnostics_enabled() -> bool {
-        HOST_DIAGNOSTICS_ENABLED.load(Ordering::Acquire)
+        sega_observability::current().is_some_and(|logging| logging.is_enabled())
     }
 
     macro_rules! diagnostic_log {
-        ($($argument:tt)*) => {
+        (error, $($argument:tt)*) => {
+            if host_diagnostics_enabled() {
+                sega_observability::tracing::error!(
+                    target: "sega::host",
+                    message = %format!($($argument)*)
+                );
+            }
+        };
+        (warn, $($argument:tt)*) => {
+            if host_diagnostics_enabled() {
+                sega_observability::tracing::warn!(
+                    target: "sega::host",
+                    message = %format!($($argument)*)
+                );
+            }
+        };
+        (debug, $($argument:tt)*) => {
+            if host_diagnostics_enabled() {
+                sega_observability::tracing::debug!(
+                    target: "sega::host",
+                    message = %format!($($argument)*)
+                );
+            }
+        };
+        (trace, $($argument:tt)*) => {
+            if host_diagnostics_enabled() {
+                sega_observability::tracing::trace!(
+                    target: "sega::host",
+                    message = %format!($($argument)*)
+                );
+            }
+        };
+        (info, $($argument:tt)*) => {
             if host_diagnostics_enabled() {
                 sega_observability::tracing::info!(
                     target: "sega::host",
@@ -68,12 +98,15 @@ mod windows_host {
                 );
             }
         };
+        ($($argument:tt)*) => {
+            diagnostic_log!(info, $($argument)*);
+        };
     }
 
-    fn set_diagnostics_consent(enabled: bool) -> Result<(), String> {
-        if enabled {
-            // This function is called directly by the Slint diagnostics opt-in callback.
-            let consent = sega_observability::DiagnosticsConsent::from_explicit_user_action();
+    fn set_diagnostics_consent(
+        consent: Option<&sega_observability::DiagnosticsConsent>,
+    ) -> Result<(), String> {
+        if let Some(consent) = consent {
             let logging = if let Some(logging) = sega_observability::current() {
                 logging
             } else {
@@ -87,13 +120,13 @@ mod windows_host {
                     },
                 );
                 sega_observability::init_after_explicit_consent(
-                    &consent,
+                    consent,
                     sega_observability::LogConfig::default(),
                     session,
                 )
                 .map_err(|error| error.to_string())?
             };
-            logging.enable(&consent)?;
+            logging.enable(consent)?;
         } else if let Some(logging) = sega_observability::current() {
             logging.disable()?;
         }
@@ -283,7 +316,7 @@ mod windows_host {
             if let Some(join) = self.join.take()
                 && join.join().is_err()
             {
-                diagnostic_log!("R4_SDL3 event=poll_thread_panicked");
+                diagnostic_log!(error, "R4_SDL3 event=poll_thread_panicked");
             }
         }
     }
@@ -327,7 +360,7 @@ mod windows_host {
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
                             .status_update = Some(status);
-                        diagnostic_log!("R4_SDL3 event=initialization_failed error={error}");
+                        diagnostic_log!(error, "R4_SDL3 event=initialization_failed error={error}");
                         return;
                     }
                 };
@@ -345,7 +378,7 @@ mod windows_host {
                             }
                         }
                         Err(error) => {
-                            diagnostic_log!("R4_SDL3 event=poll_failed error={error}");
+                            diagnostic_log!(warn, "R4_SDL3 event=poll_failed error={error}");
                             let mut latest = thread_snapshot
                                 .lock()
                                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -369,7 +402,7 @@ mod windows_host {
                 let status =
                     format!("SDL3 indisponível — teclado ativo: falha ao iniciar thread: {error}");
                 app.set_input_status(status.into());
-                diagnostic_log!("R4_SDL3 event=thread_start_failed error={error}");
+                diagnostic_log!(error, "R4_SDL3 event=thread_start_failed error={error}");
                 Sdl3PollingThread { stop, join: None }
             }
         };
@@ -405,7 +438,7 @@ mod windows_host {
                 && let Some(worker) = worker_slot.borrow().as_ref()
                 && let Err(error) = worker.request_nmi()
             {
-                diagnostic_log!("R4_SDL3 action=pause_nmi error={error}");
+                diagnostic_log!(warn, "R4_SDL3 action=pause_nmi error={error}");
             }
             last_pause_pressed = pause_pressed;
 
@@ -421,6 +454,7 @@ mod windows_host {
                         );
                         if let Err(error) = worker.set_controller_at(1, combined, Instant::now()) {
                             diagnostic_log!(
+                                warn,
                                 "R4_SDL3 player=1 action=controller_update error={error}"
                             );
                         }
@@ -430,7 +464,7 @@ mod windows_host {
                         && let Err(error) =
                             worker.set_controller_at(2, next_players[1], Instant::now())
                     {
-                        diagnostic_log!("R4_SDL3 player=2 action=controller_update error={error}");
+                        diagnostic_log!(warn, "R4_SDL3 player=2 action=controller_update error={error}");
                     }
                 }
             }
@@ -1264,22 +1298,22 @@ mod windows_host {
                             Rectangle { height: 220px; background: #192231; border-radius: 10px; border-width: 1px; border-color: #344154;
                                 VerticalLayout { padding: 14px; spacing: 8px;
                                     Text { font-size: 16px; text: "Runtime e CPU"; color: #F1F5FA; }
-                                    CompactButton { text: "Capturar snapshot da CPU"; enabled: root.has-rom; clicked => { root.debug-snapshot-requested(); } }
-                                    CompactButton { text: root.trace-enabled ? "Desativar modo Debugger" : "Ativar modo Debugger"; enabled: root.has-rom && root.active-system != "sg1000"; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
-                                    CompactButton { text: "Exportar trace para arquivo"; enabled: root.has-rom && root.trace-enabled && root.active-system != "sg1000"; clicked => { root.trace-export-requested(); } }
+                                    CompactButton { text: "Capturar snapshot da CPU"; enabled: root.has-rom && root.diagnostics-enabled; clicked => { root.debug-snapshot-requested(); } }
+                                    CompactButton { text: root.trace-enabled ? "Desativar trace" : "Ativar trace"; enabled: root.has-rom && root.active-system != "sg1000" && root.diagnostics-enabled; clicked => { root.trace-enabled = !root.trace-enabled; root.trace-toggle-requested(root.trace-enabled); } }
+                                    CompactButton { text: "Exportar trace para arquivo"; enabled: root.has-rom && root.trace-enabled && root.diagnostics-enabled && root.active-system != "sg1000"; clicked => { root.trace-export-requested(); } }
                                     Text { font-size: 11px; text: root.debug-status; color: rgb(142, 171, 255); wrap: word-wrap; }
                                     Text { font-size: 10px; text: "A GUI solicita snapshots e traces; não executa instruções nem controla ciclos."; color: #B4C0D0; wrap: word-wrap; }
                                 }
                             }
                             Rectangle { height: 112px; background: #192231; border-radius: 10px; border-width: 1px; border-color: #344154;
                                 VerticalLayout { padding: 14px; spacing: 6px;
-                                    Text { font-size: 16px; text: "Coleta de logs e métricas"; color: #F1F5FA; }
+                                    Text { font-size: 16px; text: "Coleta de logs, métricas e traces"; color: #F1F5FA; }
                                     CheckBox {
-                                        text: "Autorizar logs e métricas diagnósticas nesta sessão";
+                                        text: "Autorizar coleta diagnóstica nesta sessão";
                                         checked <=> root.diagnostics-enabled;
                                         toggled => { root.diagnostics-toggle-requested(self.checked); }
                                     }
-                                    Text { font-size: 10px; text: "Desativado por padrão. Quando ativo, registra eventos estruturados, frame pacing e saúde do áudio em arquivos de log e snapshot final na pasta de logs do usuário. A autorização não é persistida."; color: #B4C0D0; wrap: word-wrap; }
+                                    Text { font-size: 10px; text: "Desativado por padrão. A autorização desta sessão abrange logs, métricas, snapshots e traces. Desativar interrompe a coleta e limpa os buffers; exportar trace exige ação explícita. A autorização não é persistida."; color: #B4C0D0; wrap: word-wrap; }
                                 }
                             }
                             Rectangle { height: 84px; background: #192231; border-radius: 10px; border-width: 1px; border-color: #344154;
@@ -1679,7 +1713,7 @@ mod windows_host {
         recent.insert(0, path);
         recent.truncate(MAX_RECENT_ROMS);
         if let Err(error) = save_recent_roms(recent) {
-            diagnostic_log!("R2_PREFERENCES recent_roms_save_failed error={error}");
+            diagnostic_log!(warn, "R2_PREFERENCES recent_roms_save_failed error={error}");
         }
     }
 
@@ -1869,6 +1903,7 @@ mod windows_host {
                                     app.set_lifecycle_status(lifecycle_status.into());
                                     if let Err(error) = mailbox.notify_if_pending() {
                                         diagnostic_log!(
+                                            error,
                                             "R2_FRAME_NOTIFY renderer_recovery_failed error={error}"
                                         );
                                     }
@@ -1876,7 +1911,7 @@ mod windows_host {
                             });
                         }
                         Err(error) => {
-                            diagnostic_log!("R2_LIFECYCLE event=TextureImportFailed error={error}");
+                            diagnostic_log!(error, "R2_LIFECYCLE event=TextureImportFailed error={error}");
                             let app_weak = app_weak.clone();
                             let status = format!("FALHA ao importar textura WGPU: {error}");
                             Timer::single_shot(Duration::ZERO, move || {
@@ -1913,6 +1948,7 @@ mod windows_host {
                 }
                 (RenderingState::RenderingSetup, _) => {
                     diagnostic_log!(
+                        error,
                         "R2_LIFECYCLE event=RenderingSetupFailed reason=GraphicsAPI_not_WGPU30"
                     );
                     let app_weak = app_weak.clone();
@@ -2325,6 +2361,7 @@ mod windows_host {
                 }
             };
             diagnostic_log!(
+                debug,
                 "R2_FRAME_PACING_HOST qpc_available={} qpc_ticks={} qpc_frequency={} window_ms={} wakeups={} empty_wakeups={} consumed={} uploaded={} sequence_gaps={} wake_interval_avg_us={} wake_interval_max_us={} wake_interval_samples={} wake_interval_p50_us={} wake_interval_p95_us={} wake_interval_p99_us={} wake_interval_jitter_p95_us={} consumed_interval_avg_us={} consumed_interval_max_us={} consumed_interval_samples={} consumed_interval_p50_us={} consumed_interval_p95_us={} consumed_interval_p99_us={} consumed_interval_jitter_p95_us={} mailbox_residence_avg_us={} mailbox_residence_max_us={} mailbox_residence_samples={} mailbox_residence_p50_us={} mailbox_residence_p95_us={} mailbox_residence_p99_us={} convert_avg_us={} convert_max_us={} convert_samples={} convert_p50_us={} convert_p95_us={} convert_p99_us={} queue_write_avg_us={} queue_write_max_us={} queue_write_samples={} queue_write_p50_us={} queue_write_p95_us={} queue_write_p99_us={} callback_avg_us={} callback_max_us={} callback_samples={} callback_p50_us={} callback_p95_us={} callback_p99_us={} mailbox_take_avg_us={} mailbox_take_max_us={} mailbox_take_samples={} mailbox_take_p50_us={} mailbox_take_p95_us={} mailbox_take_p99_us={} mailbox_replaced_total={} worker_samples={} worker_total_samples={} worker_frame_interval_p50_us={} worker_frame_interval_p95_us={} worker_frame_interval_p99_us={} worker_frame_interval_jitter_p95_us={} machine_ticks_per_frame_min={} machine_ticks_per_frame_p50={} machine_ticks_per_frame_max={} worker_step_p50_us={} worker_step_p95_us={} worker_step_p99_us={} video_publish_p95_us={} audio_submit_p95_us={} frame_processing_p50_us={} frame_processing_p95_us={} frame_processing_p99_us={} pacing_wait_budget_p50_us={} pacing_wait_budget_p95_us={} pacing_wait_budget_p99_us={} pacing_wait_elapsed_p50_us={} pacing_wait_elapsed_p95_us={} pacing_wait_elapsed_p99_us={} frame_budget_p50_us={} frame_budget_p95_us={} frame_budget_p99_us={} psg_samples_p50={} psg_samples_p95={} psg_samples_p99={} pacing_timeout_lateness_p50_us={} pacing_timeout_lateness_p95_us={} pacing_timeout_lateness_p99_us={} pacing_timeout_count_total={} pacing_command_wakeups_total={} pacing_command_remaining_p95_us={} command_handler_p95_us={} machine_clock_hz={} physical_present_timestamp=unavailable_slint_owned",
                 u8::from(qpc_available),
                 qpc_ticks,
@@ -2462,6 +2499,7 @@ mod windows_host {
                     0.0
                 };
                 diagnostic_log!(
+                    debug,
                     "R3_AUDIO_HEALTH configured={} sample_rate_hz={} queue_capacity_frames={} queue_queued_frames={} queue_high_water_frames={} accepted_frames_total={} consumed_frames_total={} requested_frames_total={} dropped_frames_total={} dropped_blocks_total={} underrun_frames_total={} underrun_events_total={} flushed_frames_total={} zero_fill_percent_total={:.3} window_valid={} window_ms={} counter_reset={} rate_valid={} accepted_frames_delta={} consumed_frames_delta={} requested_frames_delta={} dropped_frames_delta={} dropped_blocks_delta={} underrun_frames_delta={} underrun_events_delta={} flushed_frames_delta={} accepted_frames_per_second={:.1} requested_frames_per_second={:.1} zero_fill_percent_window={:.3} output_error={:?}",
                     u8::from(audio.sample_rate_hz > 0),
                     audio.sample_rate_hz,
@@ -2743,7 +2781,7 @@ mod windows_host {
                 });
                 if let Err(error) = result {
                     notification_pending.store(false, Ordering::Release);
-                    diagnostic_log!("R2_FRAME_NOTIFY enqueue_failed error={error}");
+                    diagnostic_log!(warn, "R2_FRAME_NOTIFY enqueue_failed error={error}");
                 }
             });
 
@@ -3286,6 +3324,7 @@ mod windows_host {
         };
         if let Err(error) = worker.set_audio_renderer(renderer) {
             diagnostic_log!(
+                warn,
                 "R3_AUDIO renderer selection failed; PSG remains the fallback: {error}"
             );
         }
@@ -3315,6 +3354,7 @@ mod windows_host {
         );
         if let Err(error) = result {
             diagnostic_log!(
+                warn,
                 "R3_AUDIO CPAL unavailable; continuing without physical audio: {error}"
             );
         }
@@ -3464,6 +3504,7 @@ mod windows_host {
         );
         if let Err(error) = result {
             diagnostic_log!(
+                warn,
                 "R3_AUDIO SG-1000 CPAL unavailable; continuing without physical audio: {error}"
             );
         }
@@ -3544,10 +3585,13 @@ mod windows_host {
         save_store: Arc<SaveRamStore>,
         mailbox: &FrameMailbox,
         settings: &SmsWorkerSettings,
+        diagnostics_consent: Option<sega_observability::DiagnosticsConsent>,
     ) -> Result<(), String> {
         let rom = read_rom_image(path)?;
         let (next, next_save_context) = create_desktop_session(rom, settings, save_store)?;
-        next.set_sms_diagnostics_enabled(host_diagnostics_enabled());
+        if let Some(consent) = diagnostics_consent.as_ref() {
+            next.enable_sms_diagnostics(consent)?;
+        }
 
         let previous = worker_slot.borrow_mut().take();
         if let Some(previous) = previous {
@@ -3650,6 +3694,7 @@ mod windows_host {
                 }
                 Err(error) => {
                     diagnostic_log!(
+                        warn,
                         "SMS_REGION preference=auto catalog_error={error}; fallback=usa"
                     );
                     SmsRegion::Usa
@@ -3823,6 +3868,8 @@ mod windows_host {
             record_recent_rom(&mut recent_roms.borrow_mut(), path.clone());
         }
         let worker = Rc::new(RefCell::new(worker));
+        let diagnostics_consent_slot =
+            Rc::new(RefCell::new(None::<sega_observability::DiagnosticsConsent>));
         let save_context = Rc::new(RefCell::new(initial_save_context));
         let recent_rom = Rc::new(RefCell::new(rom_path.clone()));
 
@@ -3962,7 +4009,7 @@ mod windows_host {
             if let Some(worker) = start_worker.borrow().as_ref()
                 && let Err(error) = worker.start()
             {
-                diagnostic_log!("R2_CONTROL action=start error={error}");
+                diagnostic_log!(warn, "R2_CONTROL action=start error={error}");
             } else if let Some(app) = start_app.upgrade() {
                 app.set_emulation_paused(false);
             }
@@ -3974,7 +4021,7 @@ mod windows_host {
             if let Some(worker) = pause_worker.borrow().as_ref()
                 && let Err(error) = worker.pause()
             {
-                diagnostic_log!("R2_CONTROL action=pause error={error}");
+                diagnostic_log!(warn, "R2_CONTROL action=pause error={error}");
             } else if let Some(app) = pause_app.upgrade() {
                 app.set_emulation_paused(true);
             }
@@ -4010,7 +4057,7 @@ mod windows_host {
                     }
                     Err(error) => {
                         app.set_rom_status(format!("Falha ao reiniciar o console: {error}").into());
-                        diagnostic_log!("R2_CONTROL action=reset error={error}");
+                        diagnostic_log!(warn, "R2_CONTROL action=reset error={error}");
                     }
                 }
             }
@@ -4021,7 +4068,7 @@ mod windows_host {
             if let Some(worker) = step_worker.borrow().as_ref()
                 && let Err(error) = worker.step_frame(100_000)
             {
-                diagnostic_log!("R2_CONTROL action=step_frame error={error}");
+                diagnostic_log!(warn, "R2_CONTROL action=step_frame error={error}");
             }
         });
 
@@ -4136,6 +4183,7 @@ mod windows_host {
                     && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
                 {
                     diagnostic_log!(
+                        warn,
                         "SLINT_KEYBOARD action=keyboard_controller_press error={error}"
                     );
                 }
@@ -4146,7 +4194,7 @@ mod windows_host {
                     if let Some(worker) = keyboard_press_worker.borrow().as_ref()
                         && let Err(error) = worker.request_nmi()
                     {
-                        diagnostic_log!("SLINT_KEYBOARD action=keyboard_nmi error={error}");
+                        diagnostic_log!(warn, "SLINT_KEYBOARD action=keyboard_nmi error={error}");
                     }
                 }
                 KeyboardAction::Start => app.invoke_start_requested(),
@@ -4178,6 +4226,7 @@ mod windows_host {
                     && let Err(error) = worker.set_controller_at(1, buttons, Instant::now())
                 {
                     diagnostic_log!(
+                        warn,
                         "SLINT_KEYBOARD action=keyboard_controller_release error={error}"
                     );
                 }
@@ -4199,12 +4248,13 @@ mod windows_host {
             if let Some(worker) = keyboard_focus_worker.borrow().as_ref()
                 && let Err(error) = worker.set_controller_at(1, combined, Instant::now())
             {
-                diagnostic_log!("SLINT_KEYBOARD action=keyboard_focus_release error={error}");
+                diagnostic_log!(warn, "SLINT_KEYBOARD action=keyboard_focus_release error={error}");
             }
         });
 
         let open_app = app.as_weak();
         let open_worker = Rc::clone(&worker);
+        let open_diagnostics_consent = Rc::clone(&diagnostics_consent_slot);
         let open_save_context = Rc::clone(&save_context);
         let open_save_store = Arc::clone(&save_store);
         let open_recent = Rc::clone(&recent_rom);
@@ -4336,6 +4386,7 @@ mod windows_host {
                 Arc::clone(&open_save_store),
                 &open_mailbox,
                 &open_settings,
+                open_diagnostics_consent.borrow().as_ref().copied(),
             ) {
                 Ok(()) => {
                     *open_gamepad_state.borrow_mut() = [ControllerButtons::default(); 2];
@@ -4353,6 +4404,7 @@ mod windows_host {
                         )));
                         app.set_has_rom(true);
                         app.set_active_system(system.to_owned().into());
+                        app.set_trace_enabled(false);
                         app.set_audio_status(if video_only_capture_enabled() {
                             "Saída física desativada pelo modo de captura somente vídeo.".into()
                         } else if open_worker
@@ -4362,7 +4414,7 @@ mod windows_host {
                         {
                             "CPAL ativo — volume aplicado no DSP de saída.".into()
                         } else {
-                            "Saída CPAL indisponível; consulte R3_AUDIO nos logs.".into()
+                            "Saída CPAL indisponível; ative Coleta de logs para detalhes.".into()
                         });
                         app.set_emulation_paused(false);
                         app.set_rom_status(
@@ -4382,7 +4434,8 @@ mod windows_host {
                         app.set_recent_rom_path(path.display().to_string().into());
                         app.set_rom_path_input(path.display().to_string().into());
                         app.set_debug_status(
-                            "ROM carregada; snapshot ainda não solicitado.".into(),
+                            "ROM carregada; ative Coleta de logs para capturar snapshots e traces."
+                                .into(),
                         );
                     }
                 }
@@ -4693,7 +4746,7 @@ mod windows_host {
             let Some(worker) = worker_guard.as_ref() else {
                 return;
             };
-            let result = worker.debug_summary();
+            let result = worker.debug_summary(host_diagnostics_enabled());
             if let Some(app) = debug_app.upgrade() {
                 app.set_debug_status(
                     result
@@ -4800,7 +4853,7 @@ mod windows_host {
                 keyboard_button2_key: app.get_keyboard_button2_key().to_string(),
             };
             if let Err(error) = save_desktop_preferences(&prefs) {
-                diagnostic_log!("R2_PREFERENCES save_failed error={error}");
+                diagnostic_log!(warn, "R2_PREFERENCES save_failed error={error}");
             }
         });
 
@@ -5013,7 +5066,7 @@ mod windows_host {
             if let Some(worker) = sprite_worker.borrow().as_ref()
                 && let Err(error) = worker.set_sprite_limit_enabled(enabled)
             {
-                diagnostic_log!("R2_VIDEO action=sprite_limit_toggle error={error}");
+                diagnostic_log!(warn, "R2_VIDEO action=sprite_limit_toggle error={error}");
                 if let Some(app) = sprite_app.upgrade() {
                     app.set_sprite_limit_enabled(!enabled);
                     app.set_rom_status(
@@ -5026,18 +5079,19 @@ mod windows_host {
         let trace_worker = Rc::clone(&worker);
         let trace_app = app.as_weak();
         app.on_trace_toggle_requested(move |enabled| {
-            let result = trace_worker.borrow().as_ref().map_or_else(
-                || Err("SMS worker indisponível".to_owned()),
-                |worker| {
-                    worker.set_sms_trace_enabled(enabled)?;
-                    Ok(())
-                },
-            );
+            let result = if enabled && !host_diagnostics_enabled() {
+                Err("Habilite Coleta de logs antes de ativar o trace".to_owned())
+            } else {
+                trace_worker.borrow().as_ref().map_or_else(
+                    || Err("SMS worker indisponível".to_owned()),
+                    |worker| worker.set_sms_trace_enabled(enabled),
+                )
+            };
             if let Err(error) = result
                 && let Some(app) = trace_app.upgrade()
             {
-                app.set_trace_enabled(!enabled);
-                app.set_debug_status(format!("Falha ao alterar modo Debugger: {error}").into());
+                app.set_trace_enabled(false);
+                app.set_debug_status(format!("Falha ao alterar trace: {error}").into());
             }
         });
 
@@ -5054,6 +5108,7 @@ mod windows_host {
         let host_pacing = Arc::new(Mutex::new(HostFramePacingWindow::new()));
         let diagnostics_host_pacing = Arc::clone(&host_pacing);
         let diagnostics_worker = Rc::clone(&worker);
+        let diagnostics_consent_control = Rc::clone(&diagnostics_consent_slot);
         let diagnostics_app = app.as_weak();
         let diagnostics_timer = Rc::new(create_frame_diagnostics_timer(
             &app,
@@ -5064,45 +5119,66 @@ mod windows_host {
         app.on_diagnostics_toggle_requested(move |enabled| {
             if !enabled {
                 diagnostics_timer_control.stop();
-                HOST_DIAGNOSTICS_ENABLED.store(false, Ordering::Release);
-                if let Some(worker) = diagnostics_worker.borrow().as_ref() {
-                    worker.set_sms_diagnostics_enabled(false);
+                *diagnostics_host_pacing
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                    HostFramePacingWindow::new();
+                if let Some(app) = diagnostics_app.upgrade() {
+                    app.set_trace_enabled(false);
                 }
+                *diagnostics_consent_control.borrow_mut() = None;
+                // Close the central gate first; no diagnostic producer may publish
+                // while the worker is being asked to release its in-memory buffers.
+                let consent_result = set_diagnostics_consent(None);
+                let worker_result = diagnostics_worker
+                    .borrow()
+                    .as_ref()
+                    .map_or(Ok(()), DesktopSession::disable_sms_diagnostics);
+                if let Some(app) = diagnostics_app.upgrade() {
+                    app.set_debug_status(match (worker_result, consent_result) {
+                        (Ok(()), Ok(())) => "Coleta revogada; timer, trace, métricas e buffers diagnósticos foram encerrados.".to_owned(),
+                        (Err(worker_error), _) => format!("Coleta revogada; falha ao encerrar o trace do worker: {worker_error}"),
+                        (_, Err(logging_error)) => format!("Coleta interrompida; falha ao fechar o logger: {logging_error}"),
+                    }.into());
+                }
+                return;
             }
 
-            let result = set_diagnostics_consent(enabled);
+            let consent = sega_observability::DiagnosticsConsent::from_explicit_user_action();
+            let result = set_diagnostics_consent(Some(&consent)).and_then(|()| {
+                diagnostics_worker
+                    .borrow()
+                    .as_ref()
+                    .map_or(Ok(()), |worker| worker.enable_sms_diagnostics(&consent))
+            });
             match result {
                 Ok(()) => {
+                    *diagnostics_consent_control.borrow_mut() = Some(consent);
+                    *diagnostics_host_pacing
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                        HostFramePacingWindow::new();
                     if should_run_diagnostics_timer(enabled, true) {
-                        *diagnostics_host_pacing
-                            .lock()
-                            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                            HostFramePacingWindow::new();
-                        HOST_DIAGNOSTICS_ENABLED.store(true, Ordering::Release);
-                        if let Some(worker) = diagnostics_worker.borrow().as_ref() {
-                            worker.set_sms_diagnostics_enabled(true);
-                        }
                         diagnostics_timer_control.restart();
                     }
                     if let Some(app) = diagnostics_app.upgrade() {
-                        app.set_debug_status(if enabled {
-                            "Coleta diagnóstica autorizada nesta sessão; arquivos na pasta de logs do usuário.".into()
-                        } else {
-                            "Coleta diagnóstica desativada; novas métricas e eventos foram interrompidos.".into()
-                        });
+                        app.set_debug_status(
+                            "Coleta autorizada nesta sessão: logs, métricas e traces permanecem sob o mesmo consentimento.".into(),
+                        );
                     }
                 }
                 Err(error) => {
                     diagnostics_timer_control.stop();
-                    HOST_DIAGNOSTICS_ENABLED.store(false, Ordering::Release);
+                    *diagnostics_consent_control.borrow_mut() = None;
+                    let _ = set_diagnostics_consent(None);
                     if let Some(worker) = diagnostics_worker.borrow().as_ref() {
-                        worker.set_sms_diagnostics_enabled(false);
+                        let _ = worker.disable_sms_diagnostics();
                     }
                     if let Some(app) = diagnostics_app.upgrade() {
                         app.set_diagnostics_enabled(false);
+                        app.set_trace_enabled(false);
                         app.set_debug_status(
-                            format!("Não foi possível alterar a coleta diagnóstica: {error}")
-                                .into(),
+                            format!("Não foi possível ativar a coleta diagnóstica: {error}").into(),
                         );
                     }
                 }
@@ -5168,7 +5244,7 @@ mod windows_host {
         let mut final_save_error = None;
         if let Some(active_worker) = worker.borrow_mut().take() {
             if let Err(error) = active_worker.pause() {
-                diagnostic_log!("SRAM_SAVE pause_before_exit_failed error={error}");
+                diagnostic_log!(error, "SRAM_SAVE pause_before_exit_failed error={error}");
             }
             if let Err(error) =
                 persist_desktop_session_sram(&active_worker, save_context.borrow().as_ref())
@@ -5183,10 +5259,10 @@ mod windows_host {
         let _ = mailbox.close();
         app.set_gpu_texture(slint::Image::default());
         if let Some(error) = final_save_error.as_ref() {
-            diagnostic_log!("SRAM_SAVE final_save_failed error={error}");
+            diagnostic_log!(error, "SRAM_SAVE final_save_failed error={error}");
         }
         if let Err(error) = &run_result {
-            diagnostic_log!("SLINT event_loop_failed error={error}");
+            diagnostic_log!(error, "SLINT event_loop_failed error={error}");
         }
         shutdown_diagnostics();
         if let Some(error) = final_save_error {
