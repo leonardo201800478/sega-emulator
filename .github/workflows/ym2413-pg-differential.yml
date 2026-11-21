@@ -55,7 +55,8 @@ jobs:
               + "\nint16_t opll_trace_operator_output = 0;"
               + "\nuint8_t opll_trace_selected_instr = 0;"
               + "\nuint8_t opll_trace_selected_op = 0;"
-              + "\nuint8_t opll_trace_testmode_at_dolfo = 0;\n",
+              + "\nuint8_t opll_trace_testmode_at_dolfo = 0;"
+              + "\nuint8_t opll_trace_rm_enable_before_operator = 0;\n",
               1,
           )
           stage = "    OPLL_PhaseGenerate(chip);\n\n    OPLL_Operator(chip);"
@@ -64,7 +65,8 @@ jobs:
           source = source.replace(
               stage,
               "    OPLL_PhaseGenerate(chip);\n"
-              "    opll_trace_pg_out_before_operator = chip->pg_out;\n\n"
+              "    opll_trace_pg_out_before_operator = chip->pg_out;\n"
+              "    opll_trace_rm_enable_before_operator = (uint8_t)chip->rm_enable;\n\n"
               "    OPLL_Operator(chip);",
               1,
           )
@@ -262,6 +264,49 @@ jobs:
           python3 tools/ym2413-nuked-oracle/compare_operator.py \
             --nuked-trace "$RUNNER_TEMP/nuked-operator.jsonl"
 
+      - name: Generate all-five-voice Rhythm Mode operator sequence
+        run: |
+          python3 - "$RUNNER_TEMP/rhythm-events.csv" <<'PY'
+          import csv
+          import sys
+
+          events = []
+          def write_register(address, value, call):
+              events.append((call, 0, address))
+              events.append((call + 2, 1, value))
+
+          base = 0
+          # Yamaha application manual Table III-9 rhythm frequency setup:
+          # R#16/17/18 = 20/50/C0 and R#26/27/28 = 05/05/01.
+          # KEY-ON bits in R#26-R#28 remain clear in Rhythm Mode.
+          for address, value in (
+              (0x16, 0x20), (0x17, 0x50), (0x18, 0xC0),
+              (0x26, 0x05), (0x27, 0x05), (0x28, 0x01),
+              (0x36, 0x00), (0x37, 0x00), (0x38, 0x00),
+          ):
+              write_register(address, value, base)
+              base += 40
+
+          # Rhythm enable plus BD, SD, TOM, TC and HH key-on bits.
+          write_register(0x0E, 0x3F, base + 200)
+          events.sort()
+          if any(events[i][0] >= events[i + 1][0] for i in range(len(events) - 1)):
+              raise ValueError("rhythm events must have unique increasing call indices")
+          with open(sys.argv[1], "w", newline="", encoding="utf-8") as stream:
+              writer = csv.writer(stream)
+              writer.writerow(("# call_index", "port", "value"))
+              writer.writerows(events)
+          PY
+          "$RUNNER_TEMP/ym2413-nuked-trace" --calls 147456 \
+            --events "$RUNNER_TEMP/rhythm-events.csv" \
+            > "$RUNNER_TEMP/nuked-rhythm-operator.jsonl"
+
+      - name: Differentially validate all five serial rhythm output latches
+        run: |
+          python3 tools/ym2413-nuked-oracle/compare_operator.py \
+            --nuked-trace "$RUNNER_TEMP/nuked-rhythm-operator.jsonl" \
+            --require-rhythm
+
       - name: Differentially validate serial AM LFO shift/carry state
         run: |
           python3 tools/ym2413-nuked-oracle/compare_am_lfo.py \
@@ -280,6 +325,71 @@ jobs:
           python3 tools/ym2413-nuked-oracle/compare_fm3_integrated.py \
             --nuked-trace "$RUNNER_TEMP/nuked-operator.jsonl" \
             --rust-trace "$RUNNER_TEMP/rust-fm3.jsonl"
+
+      - name: Generate multi-voice Rhythm Mode register sequence
+        run: |
+          python3 - "$RUNNER_TEMP/rhythm-integrated-events.csv" <<'PY'
+          import csv
+          import sys
+
+          events = []
+          def write_register(address, value, call):
+              events.append((call, 0, address))
+              events.append((call + 2, 1, value))
+
+          base = 0
+          # Yamaha application manual Table III-9 rhythm frequency setup.
+          # R#26-R#28 contain no melodic KEY-ON bit while RHY is active.
+          for address, value in (
+              (0x16, 0x20), (0x17, 0x50), (0x18, 0xC0),
+              (0x26, 0x05), (0x27, 0x05), (0x28, 0x01),
+              (0x36, 0x00), (0x37, 0x00), (0x38, 0x00),
+          ):
+              write_register(address, value, base)
+              base += 16
+
+          # Rhythm mode with individual percussion triggers, then simultaneous voices.
+          write_register(0x0E, 0x20, 1800)
+          for call, control in (
+              (3000, 0x21),
+              (11000, 0x22),
+              (19000, 0x24),
+              (27000, 0x28),
+              (35000, 0x30),
+              (43000, 0x3F),
+              (80000, 0x20),
+              (90000, 0x3F),
+          ):
+              write_register(0x0E, control, call)
+
+          events.sort()
+          if any(events[i][0] >= events[i + 1][0] for i in range(len(events) - 1)):
+              raise ValueError("rhythm events must have unique increasing call indices")
+          with open(sys.argv[1], "w", newline="", encoding="utf-8") as stream:
+              writer = csv.writer(stream)
+              writer.writerow(("# call_index", "port", "value"))
+              writer.writerows(events)
+          PY
+
+      - name: Capture Nuked full Rhythm Mode reference
+        run: |
+          "$RUNNER_TEMP/ym2413-nuked-trace" --calls 147456 \
+            --events "$RUNNER_TEMP/rhythm-integrated-events.csv" \
+            > "$RUNNER_TEMP/nuked-rhythm-integrated.jsonl"
+
+      - name: Capture production Rust integrated Rhythm Mode state
+        run: |
+          cargo run --quiet --locked \
+            --manifest-path native/ym2413/Cargo.toml \
+            --example pg_serial_trace -- \
+            "$RUNNER_TEMP/rhythm-integrated-events.csv" 147456 0 \
+            > "$RUNNER_TEMP/rust-rhythm-integrated.jsonl"
+
+      - name: Characterize integrated Rhythm Mode control and synthesis against Nuked
+        run: |
+          python3 tools/ym2413-nuked-oracle/compare_rhythm_integrated.py \
+            --nuked-trace "$RUNNER_TEMP/nuked-rhythm-integrated.jsonl" \
+            --rust-trace "$RUNNER_TEMP/rust-rhythm-integrated.jsonl"
 
       - name: Generate all-channel melodic register sequence
         run: |

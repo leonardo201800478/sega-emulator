@@ -22,6 +22,7 @@ extern int16_t opll_trace_operator_output;
 extern uint8_t opll_trace_selected_instr;
 extern uint8_t opll_trace_selected_op;
 extern uint8_t opll_trace_testmode_at_dolfo;
+extern uint8_t opll_trace_rm_enable_before_operator;
 #endif
 
 #define MAX_EVENTS 65536
@@ -329,6 +330,8 @@ int main(int argc, char **argv) {
         printf(",\"op_phase_index\":%u,\"op_output\":%d",
                (unsigned)opll_trace_operator_phase_index,
                (int)opll_trace_operator_output);
+        printf(",\"op_calc_rm_enable\":%u",
+               (unsigned)opll_trace_rm_enable_before_operator);
 #endif
         printf(",\"ch_out\":%d,\"ch_out_hh\":%d,\"ch_out_tm\":%d,\"ch_out_bd\":%d,\"ch_out_sd\":%d,\"ch_out_tc\":%d",
                (int)chip.ch_out, (int)chip.ch_out_hh, (int)chip.ch_out_tm,

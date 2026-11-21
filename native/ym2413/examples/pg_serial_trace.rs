@@ -92,7 +92,7 @@ fn write_json_array<T: std::fmt::Display>(
     output.push(']');
 }
 
-fn reset_service() -> Result<Ym2413PgSerialService, Box<dyn Error>> {
+fn reset_service(rhythm_register: Option<u32>) -> Result<Ym2413PgSerialService, Box<dyn Error>> {
     let damp_config = DampTransitionConfig::new(
         124,
         DampTransitionCoordination::IndependentPerOperator,
@@ -114,23 +114,32 @@ fn reset_service() -> Result<Ym2413PgSerialService, Box<dyn Error>> {
     };
     let bank = Ym2413SynthesisBank::with_initial_state(initial)
         .map_err(|error| invalid_data(format!("invalid synthesis bank state: {error:?}")))?;
-    Ok(Ym2413PgSerialService::new(bank))
+    let service = Ym2413PgSerialService::new(bank);
+    match rhythm_register {
+        Some(register) => service
+            .with_rhythm_noise_register(register, 0)
+            .map_err(|error| {
+                invalid_data(format!("invalid rhythm register candidate: {error:?}")).into()
+            }),
+        None => Ok(service),
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.len() != 2 {
+    if !(2..=3).contains(&args.len()) {
         return Err(IoError::new(
             ErrorKind::InvalidInput,
-            "usage: pg_serial_trace <events.csv> <OPLL_Clock call count>",
+            "usage: pg_serial_trace <events.csv> <OPLL_Clock call count> [rhythm LFSR register candidate]",
         )
         .into());
     }
     let calls: u64 = args[1].parse()?;
     let events = load_events(Path::new(&args[0]), calls)?;
+    let rhythm_register = args.get(2).map(|value| value.parse::<u32>()).transpose()?;
 
     let mut core = Ym2413Core::new();
-    let mut service = reset_service()?;
+    let mut service = reset_service(rhythm_register)?;
     let mut event_index = 0usize;
     let mut phases = [0u32; 18];
 
@@ -172,6 +181,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         let eg_levels: [u8; 18] = std::array::from_fn(|index| envelope.operators[index].level);
         let eg_states: [u8; 18] =
             std::array::from_fn(|index| envelope.operators[index].stage as u8);
+        let rm_enable = core_state.rm_enable as u8;
+        let rhythm_control = core_state.registers[0x0e];
+        let rhythm_mode_enabled = u8::from(rhythm_control & 0x20 != 0);
+        let rhythm_noise_register = service_state
+            .rhythm_noise
+            .map_or(-1_i64, |noise| i64::from(noise.lfsr.register));
+        let rhythm_phase_latches = service_state.pipeline.rhythm_phase_latches;
 
         let mut trace_line = String::with_capacity(4096);
         let _ = write!(
@@ -309,10 +325,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         let _ = write!(
             &mut trace_line,
-            ",\"eg_pending_rate\":{},\"eg_pending_zero_rate\":{},\"eg_next_slot\":{}}}",
+            ",\"eg_pending_rate\":{},\"eg_pending_zero_rate\":{},\"eg_next_slot\":{},\"rm_enable\":{},\"op_calc_rm_enable\":{},\"rm_select\":{},\"rhythm_control\":{},\"rhythm_mode_enabled\":{},\"rm_noise\":{},\"rhythm_noise_register\":{},\"rhythm_noise_cursor\":{},\"rhythm_noise_steps\":{},\"rhythm_hh_bit2\":{},\"rhythm_hh_bit3\":{},\"rhythm_hh_bit7\":{},\"rhythm_hh_bit8\":{},\"rhythm_tc_bit3\":{},\"rhythm_tc_bit5\":{},\"ch_out_hh\":{},\"ch_out_tm\":{},\"ch_out_bd\":{},\"ch_out_sd\":{},\"ch_out_tc\":{}}}",
             timer.pending_rate,
             u8::from(timer.pending_zero_rate),
-            timer.next_slot
+            timer.next_slot,
+            rm_enable,
+            rm_enable,
+            core_state.rm_select,
+            rhythm_control,
+            rhythm_mode_enabled,
+            rhythm_noise_register,
+            rhythm_noise_register,
+            service_state.rhythm_noise_cursor,
+            service_state.rhythm_noise_steps,
+            u8::from(rhythm_phase_latches.hh_bit2),
+            u8::from(rhythm_phase_latches.hh_bit3),
+            u8::from(rhythm_phase_latches.hh_bit7),
+            u8::from(rhythm_phase_latches.hh_bit8),
+            u8::from(rhythm_phase_latches.tc_bit3),
+            u8::from(rhythm_phase_latches.tc_bit5),
+            operator.rhythm_channel_outputs[0],
+            operator.rhythm_channel_outputs[1],
+            operator.rhythm_channel_outputs[2],
+            operator.rhythm_channel_outputs[3],
+            operator.rhythm_channel_outputs[4]
         );
         println!("{trace_line}");
     }

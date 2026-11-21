@@ -40,6 +40,11 @@ OUTPUT_FIELDS = (
     "ch_out",
     "op_phase_index",
     "op_output",
+    "ch_out_hh",
+    "ch_out_tm",
+    "ch_out_bd",
+    "ch_out_sd",
+    "ch_out_tc",
 )
 
 
@@ -54,12 +59,10 @@ def load_trace(path: Path) -> list[dict[str, object]]:
 
     samples = rows[1:]
     for row in samples:
-        required = (*INPUT_FIELDS, *OUTPUT_FIELDS)
+        required = (*INPUT_FIELDS, *OUTPUT_FIELDS, "op_calc_rm_enable")
         missing = [field for field in required if field not in row]
         if missing:
             raise ValueError(f"call {row.get('call_index')}: missing {missing}")
-        if int(row.get("calc_rm_enable", row["rm_enable"])) != 0:
-            raise ValueError("operator-only differential currently excludes all Rhythm Mode slot overrides")
     if {int(row["cycle_before"]) for row in samples} != set(range(18)):
         raise ValueError("trace must cover all eighteen serial operator cycles")
     return samples
@@ -70,9 +73,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--nuked-trace", required=True, type=Path)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--require-rhythm", action="store_true")
     args = parser.parse_args()
 
     samples = load_trace(args.nuked_trace)
+    rhythm_modes = {int(row["op_calc_rm_enable"]) for row in samples}
+    if args.require_rhythm:
+        if not any(mode & 0x40 for mode in rhythm_modes):
+            raise ValueError("trace never exercises rm_enable bit 6 at OPLL_Operator")
+        if not any(mode & 0x80 for mode in rhythm_modes):
+            raise ValueError("trace never exercises rm_enable bit 7 at OPLL_Operator")
+        for field in ("ch_out_hh", "ch_out_tm", "ch_out_bd", "ch_out_sd", "ch_out_tc"):
+            if not any(int(row[field]) != 0 for row in samples):
+                raise ValueError(f"rhythm trace never produces nonzero {field}")
     feedback_values = {int(row["op_calc_c_fb"]) for row in samples}
     waveform_values = {
         (int(row["op_calc_c_dc"]), int(row["op_calc_c_dm"])) for row in samples
@@ -81,10 +94,11 @@ def main() -> int:
         int(row["op_calc_eg_out"]) > 0 and int(row["op_calc_eg_silent"]) == 0
         for row in samples
     )
-    if not any(feedback_values):
-        raise ValueError("trace never exercises nonzero feedback")
-    if not any(dc & 0x04 or dm & 0x04 for dc, dm in waveform_values):
-        raise ValueError("trace never exercises a delayed DC/DM waveform bit")
+    if not args.require_rhythm:
+        if not any(feedback_values):
+            raise ValueError("trace never exercises nonzero feedback")
+        if not any(dc & 0x04 or dm & 0x04 for dc, dm in waveform_values):
+            raise ValueError("trace never exercises a delayed DC/DM waveform bit")
     if active_eg_calls == 0:
         raise ValueError("trace never exercises a non-silent nonzero EG output")
 
@@ -107,6 +121,12 @@ def main() -> int:
                         row["ch_out"],
                         row["op_phase_index"],
                         row["op_output"],
+                        row["op_calc_rm_enable"],
+                        row["ch_out_hh"],
+                        row["ch_out_tm"],
+                        row["ch_out_bd"],
+                        row["ch_out_sd"],
+                        row["ch_out_tc"],
                     )
                 )
 
@@ -157,8 +177,9 @@ def main() -> int:
                     "ch_out",
                     "op_phase_index",
                     "op_output",
+                    "rhythm_channel_outputs[HH,TOM,BD,SD,TC]",
                 ],
-                "scope": "Nuked OPLL_Operator stage with oracle-supplied pre-call latches; not integrated EG/PG validation",
+                "scope": "Nuked OPLL_Operator stage with oracle-supplied pre-call latches and post-call rhythm output latches; not integrated EG/PG validation",
             },
             indent=2,
         )

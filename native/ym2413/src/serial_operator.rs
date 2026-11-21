@@ -8,7 +8,7 @@
 
 use crate::synthesis_tables::{YM2413_EXP_TABLE, YM2413_LOG_SINE_TABLE};
 
-pub const YM2413_SERIAL_OPERATOR_STATE_VERSION: u16 = 2;
+pub const YM2413_SERIAL_OPERATOR_STATE_VERSION: u16 = 3;
 pub const YM2413_SERIAL_OPERATOR_FEEDBACK_SLOTS: usize = 9;
 pub const YM2413_SERIAL_OPERATOR_SLOTS: u8 = 18;
 
@@ -97,12 +97,14 @@ pub struct Ym2413SerialOperatorState {
     pub c_am: bool,
     /// Last raw signed operator output produced by OPLL_Operator.
     pub last_operator_output: i16,
-    /// Last melodic channel-output latch produced by OPLL_Operator.
+    /// Last channel-output latch produced by OPLL_Operator.
     pub last_channel_output: i16,
     /// Last mirrored ten-bit phase address.
     pub last_phase_index: u16,
     /// Last effective feedback phase contribution before PG addition.
     pub last_feedback_phase: i32,
+    /// Retained rhythm-channel outputs in Nuked order: HH, TOM, BD, SD, TC.
+    pub rhythm_channel_outputs: [i16; 5],
 }
 
 impl Default for Ym2413SerialOperatorState {
@@ -144,6 +146,7 @@ impl Default for Ym2413SerialOperatorState {
             last_channel_output: 0,
             last_phase_index: 0,
             last_feedback_phase: 0,
+            rhythm_channel_outputs: [0; 5],
         }
     }
 }
@@ -181,7 +184,7 @@ pub struct Ym2413SerialOperatorPatch2Latches {
 pub struct Ym2413SerialOperatorSample {
     /// Raw signed EXP-stage output before channel scaling.
     pub operator_output: i16,
-    /// The normal melodic ch_out value; rhythm routing is intentionally separate.
+    /// Channel output after melodic muting or rhythm-latch routing.
     pub channel_output: i16,
     /// Ten-bit phase address after modulation and waveform mirroring.
     pub phase_index: u16,
@@ -237,6 +240,7 @@ impl Ym2413SerialOperator {
                 last_channel_output: 0,
                 last_phase_index: 0,
                 last_feedback_phase: 0,
+                rhythm_channel_outputs: [0; 5],
             },
         }
     }
@@ -329,24 +333,43 @@ impl Ym2413SerialOperator {
         Ok(())
     }
 
-    /// Execute one Nuked-compatible serial OPLL_Operator stage.
+    /// Execute one Nuked-compatible serial OPLL_Operator stage in melodic mode.
     ///
-    /// The caller must first service PhaseGenerate for this cycle. The current
-    /// EG output and silence latches are deliberately consumed as-is; the
-    /// caller updates them only after this method, matching OPLL_Clock order.
-    /// Rhythm-specific output routing is excluded from this melodic FM-3 stage.
+    /// This preserves the FM-3 behavior. Rhythm mode must be selected
+    /// explicitly through tick_operator_with_rhythm_mode; no register or
+    /// mode state is inferred by this datapath.
     pub fn tick_operator(
         &mut self,
         cycle: u8,
         pg_out: u16,
     ) -> Result<Ym2413SerialOperatorSample, Ym2413SerialOperatorError> {
+        self.tick_operator_with_rhythm_mode(cycle, pg_out, 0)
+    }
+
+    /// Execute one serial operator stage with the documented Rhythm Mode
+    /// cycle overrides and the five delayed rhythm-channel output latches.
+    ///
+    /// rm_enable is Nuked's post-shift mode latch. Bits 6 and 7 are kept
+    /// independent because they control different operator selectors during
+    /// mode transitions. The caller owns the latch and slot schedule; this
+    /// method advances no clock or generator.
+    pub fn tick_operator_with_rhythm_mode(
+        &mut self,
+        cycle: u8,
+        pg_out: u16,
+        rm_enable: u8,
+    ) -> Result<Ym2413SerialOperatorSample, Ym2413SerialOperatorError> {
         if cycle >= YM2413_SERIAL_OPERATOR_SLOTS {
             return Err(Ym2413SerialOperatorError::InvalidCycle(cycle));
         }
 
-        let ismod1 = ((cycle + 1) / 3) & 1 != 0;
-        let ismod2 = ((cycle + 3) / 3) & 1 != 0;
-        let ismod3 = (cycle / 3) & 1 != 0;
+        let rhythm_operator_select = rm_enable & 0x40 != 0;
+        let rhythm_output_select = rm_enable & 0x80 != 0;
+        let ismod1 =
+            !(rhythm_output_select && matches!(cycle, 15 | 16)) && ((cycle + 1) / 3) & 1 != 0;
+        let ismod2 =
+            !(rhythm_operator_select && matches!(cycle, 13 | 14)) && ((cycle + 3) / 3) & 1 != 0;
+        let ismod3 = !(rhythm_operator_select && matches!(cycle, 16 | 17)) && (cycle / 3) & 1 != 0;
 
         let mut op_mod = if ismod3 {
             u32::from(self.state.op_mod) << 1
@@ -401,9 +424,38 @@ impl Ym2413SerialOperator {
         }
         self.state.op_mod = (output as u16) & 0x01ff;
 
+        // Read the previous rhythm latch for OPLL_Channel, then retain this
+        // cycle's output at the measured source cycle. These are distinct
+        // serial events; do not collapse them into one sample-domain mix.
+        let rhythm_output = match cycle {
+            2 => self.state.rhythm_channel_outputs[0], // Hi-Hat
+            3 => self.state.rhythm_channel_outputs[1], // Tom-Tom
+            4 => self.state.rhythm_channel_outputs[2], // Bass Drum
+            8 => self.state.rhythm_channel_outputs[3], // Snare Drum
+            9 => self.state.rhythm_channel_outputs[4], // Top Cymbal
+            _ => 0,
+        };
+        let channel_output = if ismod1 {
+            if rhythm_output_select {
+                rhythm_output
+            } else {
+                0
+            }
+        } else {
+            output >> 3
+        };
+        match cycle {
+            15 => self.state.rhythm_channel_outputs[0] = output >> 3, // HH
+            16 => self.state.rhythm_channel_outputs[1] = output >> 3, // TOM
+            17 => self.state.rhythm_channel_outputs[2] = output >> 3, // BD
+            0 => self.state.rhythm_channel_outputs[3] = output >> 3,  // SD
+            1 => self.state.rhythm_channel_outputs[4] = output >> 3,  // TC
+            _ => {}
+        }
+
         let sample = Ym2413SerialOperatorSample {
             operator_output: output,
-            channel_output: if ismod1 { 0 } else { output >> 3 },
+            channel_output,
             phase_index: phase as u16,
             feedback_phase: op_mod as i32,
         };
@@ -492,6 +544,16 @@ impl Ym2413SerialOperator {
             || state.c_instr > 15
             || state.c_op > 1
             || state.last_phase_index > 0x03ff
+            || state.rhythm_channel_outputs[0] < -256
+            || state.rhythm_channel_outputs[0] > 255
+            || state.rhythm_channel_outputs[1] < -256
+            || state.rhythm_channel_outputs[1] > 255
+            || state.rhythm_channel_outputs[2] < -256
+            || state.rhythm_channel_outputs[2] > 255
+            || state.rhythm_channel_outputs[3] < -256
+            || state.rhythm_channel_outputs[3] > 255
+            || state.rhythm_channel_outputs[4] < -256
+            || state.rhythm_channel_outputs[4] > 255
         {
             return Err(Ym2413SerialOperatorError::InvalidState);
         }
@@ -506,6 +568,121 @@ mod tests {
         Ym2413SerialOperatorPatch2Latches, Ym2413SerialOperatorState,
     };
     use crate::synthesis_tables::YM2413_EXP_TABLE;
+
+    #[test]
+    fn rhythm_mode_retains_and_routes_the_five_serial_channel_outputs() {
+        let state = Ym2413SerialOperatorState {
+            op_exp_m: 2042,
+            op_exp_s: 0,
+            eg_out: 0,
+            eg_silent: false,
+            rhythm_channel_outputs: [0; 5],
+            ..Ym2413SerialOperatorState::default()
+        };
+        let mut operator = Ym2413SerialOperator::restore_state(state).unwrap();
+
+        let source = operator
+            .tick_operator_with_rhythm_mode(15, 0, 0xff)
+            .unwrap();
+        assert_eq!(source.operator_output, 2042);
+        assert_eq!(source.channel_output, 255);
+        assert_eq!(operator.state().rhythm_channel_outputs[0], 255);
+
+        // Cycle 2 consumes the retained HH value, not the current operator.
+        let routed = operator.tick_operator_with_rhythm_mode(2, 0, 0xff).unwrap();
+        assert_eq!(routed.channel_output, 255);
+
+        // The legacy melodic entry point must continue to mute rhythm returns.
+        let mut melodic = Ym2413SerialOperator::restore_state(state).unwrap();
+        let melodic_source = melodic.tick_operator(15, 0).unwrap();
+        assert_eq!(melodic_source.channel_output, 0);
+        assert_eq!(melodic.state().rhythm_channel_outputs[0], 255);
+    }
+
+    #[test]
+    fn rhythm_mode_applies_nuked_modulator_selector_overrides() {
+        let state = Ym2413SerialOperatorState {
+            op_mod: 0x20,
+            op_fbsum: 0x80,
+            c_fb: 7,
+            ..Ym2413SerialOperatorState::default()
+        };
+
+        for cycle in [13_u8, 14] {
+            let mut melodic = Ym2413SerialOperator::restore_state(state).unwrap();
+            let mut rhythm = Ym2413SerialOperator::restore_state(state).unwrap();
+            assert_eq!(melodic.tick_operator(cycle, 0).unwrap().feedback_phase, 128);
+            assert_eq!(
+                rhythm
+                    .tick_operator_with_rhythm_mode(cycle, 0, 0xff)
+                    .unwrap()
+                    .feedback_phase,
+                0,
+                "ismod2 override at cycle {cycle}"
+            );
+        }
+
+        for cycle in [16_u8, 17] {
+            let mut melodic = Ym2413SerialOperator::restore_state(state).unwrap();
+            let mut rhythm = Ym2413SerialOperator::restore_state(state).unwrap();
+            assert_eq!(melodic.tick_operator(cycle, 0).unwrap().feedback_phase, 64);
+            assert_eq!(
+                rhythm
+                    .tick_operator_with_rhythm_mode(cycle, 0, 0xff)
+                    .unwrap()
+                    .feedback_phase,
+                0,
+                "ismod3 override at cycle {cycle}"
+            );
+        }
+    }
+
+    #[test]
+    fn rhythm_mode_selector_bits_remain_independent_during_mode_transitions() {
+        let state = Ym2413SerialOperatorState {
+            op_mod: 0x20,
+            op_fbsum: 0x80,
+            c_fb: 7,
+            ..Ym2413SerialOperatorState::default()
+        };
+
+        let mut bit7_only = Ym2413SerialOperator::restore_state(state).unwrap();
+        assert_eq!(
+            bit7_only
+                .tick_operator_with_rhythm_mode(13, 0, 0x80)
+                .unwrap()
+                .feedback_phase,
+            128
+        );
+
+        let mut bit6_only = Ym2413SerialOperator::restore_state(state).unwrap();
+        assert_eq!(
+            bit6_only
+                .tick_operator_with_rhythm_mode(13, 0, 0x40)
+                .unwrap()
+                .feedback_phase,
+            0
+        );
+    }
+
+    #[test]
+    fn rhythm_output_latches_round_trip_and_reject_impossible_amplitudes() {
+        let state = Ym2413SerialOperatorState {
+            rhythm_channel_outputs: [-256, -1, 0, 1, 255],
+            ..Ym2413SerialOperatorState::default()
+        };
+        let restored = Ym2413SerialOperator::restore_state(state).unwrap();
+        assert_eq!(restored.export_state(), state);
+
+        let invalid = Ym2413SerialOperatorState {
+            rhythm_channel_outputs: [256, 0, 0, 0, 0],
+            ..state
+        };
+        assert_eq!(
+            Ym2413SerialOperator::restore_state(invalid),
+            Err(Ym2413SerialOperatorError::InvalidState)
+        );
+    }
 
     #[test]
     fn reset_state_matches_nuked_initial_eg_output_latch() {

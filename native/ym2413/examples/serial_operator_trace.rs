@@ -36,9 +36,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             continue;
         }
         let fields: Vec<&str> = trimmed.split(',').map(str::trim).collect();
-        if fields.len() != 35 {
+        if fields.len() != 41 {
             return Err(format!(
-                "line {}: expected 35 CSV columns, got {}",
+                "line {}: expected 41 CSV columns, got {}",
                 line_number + 1,
                 fields.len()
             )
@@ -73,9 +73,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             )
         })?;
 
-        let sample = operator.tick_operator(cycle, pg_out).map_err(|error| {
-            format!("line {}: operator stage failed: {error:?}", line_number + 1)
-        })?;
+        let rm_enable: u8 = parse(&fields, 35)?;
+        let sample = operator
+            .tick_operator_with_rhythm_mode(cycle, pg_out, rm_enable)
+            .map_err(|error| {
+                format!("line {}: operator stage failed: {error:?}", line_number + 1)
+            })?;
         let actual = operator.export_state();
 
         let expected_exp_m: u16 = parse(&fields, 8)?;
@@ -97,6 +100,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let expected_ch_out: i16 = parse(&fields, 32)?;
         let expected_phase_index: u16 = parse(&fields, 33)?;
         let expected_operator_output: i16 = parse(&fields, 34)?;
+        let expected_rhythm_outputs: [i16; 5] = std::array::from_fn(|index| {
+            fields[36 + index]
+                .parse()
+                .expect("validated signed rhythm output latch")
+        });
 
         if actual.op_exp_m != expected_exp_m
             || actual.op_exp_s != expected_exp_s
@@ -109,6 +117,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             || sample.channel_output != expected_ch_out
             || sample.phase_index != expected_phase_index
             || sample.operator_output != expected_operator_output
+            || actual.rhythm_channel_outputs != expected_rhythm_outputs
         {
             return Err(format!(
                 "call {call} cycle {cycle}: Nuked operator mismatch:                  exp_m {}/{} exp_s {}/{} logsin {}/{} neg {}/{} mod {}/{}                  fbsum {}/{} fb1 {:?}/{:?} fb2 {:?}/{:?} ch_out {}/{} phase_index {}/{} operator_output {}/{}",

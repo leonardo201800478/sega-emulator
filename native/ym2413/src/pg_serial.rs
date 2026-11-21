@@ -5,16 +5,22 @@
 //! counter in one cloneable state machine. The core remains the sole owner of
 //! input clocks and the serial EG sequencer.
 //!
-//! This first integration gate covers normal melodic mode. Rhythm-specific PG
-//! phase combiners and the special channel-7..9 parameter routing remain FM-5.
+//! Melodic and explicitly seeded Rhythm Mode slots share this serial PG/operator
+//! service. Unknown physical LFSR reset state and unsettled mode transitions
+//! remain gated rather than being filled with guessed noise or patch state.
 
 use crate::am_lfo::{Ym2413SerialAmLfo, Ym2413SerialAmLfoError, Ym2413SerialAmLfoState};
 use crate::channel::{ChannelSynthesisError, OperatorPhaseParameters, decode_channel_synthesis};
-use crate::envelope_sequencer::{EnvelopeSequencerState, EnvelopeSequencerTick};
+use crate::envelope_sequencer::{
+    EnvelopeRhythmSelect, EnvelopeSequencerState, EnvelopeSequencerTick,
+};
 use crate::phase::{PhaseGenerator, PhaseGeneratorError};
 use crate::rhythm::{
     Ym2413RhythmNoiseError, Ym2413RhythmNoiseSlotSample, Ym2413RhythmSlotNoiseSequencer,
     Ym2413RhythmSlotNoiseSequencerState,
+};
+use crate::rhythm_channel::{
+    RhythmOperatorSynthesisConfig, RhythmVoiceSynthesisConfig, decode_rhythm_synthesis,
 };
 use crate::rhythm_dispatch::{Ym2413SerialSlotDispatch, dispatch_serial_slot};
 use crate::serial_operator::{
@@ -28,8 +34,8 @@ use crate::synthesis::{
     Ym2413SynthesisInitialState,
 };
 
-pub const YM2413_PG_SERIAL_STATE_VERSION: u16 = 7;
-pub const YM2413_PG_SERIAL_PIPELINE_STATE_VERSION: u16 = 3;
+pub const YM2413_PG_SERIAL_STATE_VERSION: u16 = 9;
+pub const YM2413_PG_SERIAL_PIPELINE_STATE_VERSION: u16 = 4;
 
 /// Maximum increment reachable from the legal FNUM/BLOCK/MUL/PM input domain.
 pub const YM2413_PG_INCREMENT_MAX: u32 = 987_840;
@@ -96,6 +102,25 @@ impl From<Ym2413RhythmNoiseError> for Ym2413PgSerialError {
     }
 }
 
+/// Captured PG phase bits shared by the three special Rhythm Mode phase paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Ym2413RhythmPhaseLatches {
+    pub hh_bit2: bool,
+    pub hh_bit3: bool,
+    pub hh_bit7: bool,
+    pub hh_bit8: bool,
+    pub tc_bit3: bool,
+    pub tc_bit5: bool,
+}
+
+impl Ym2413RhythmPhaseLatches {
+    const fn rhythm_mix_bit(self) -> bool {
+        (self.hh_bit2 ^ self.hh_bit7)
+            || (self.hh_bit3 ^ self.tc_bit5)
+            || (self.tc_bit3 ^ self.tc_bit5)
+    }
+}
+
 /// Parameters retained by Nuked's c_fnum/c_block/c_multi/c_vib latches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ym2413PgParameterLatch {
@@ -138,6 +163,8 @@ pub struct Ym2413PgSerialPipelineState {
     /// while Test Mode bit 3 is active.
     pub lfo_vib_counter: u8,
     pub parameters: Ym2413PgParameterLatch,
+    /// HH/TCY phase bits captured at their serial PG boundaries.
+    pub rhythm_phase_latches: Ym2413RhythmPhaseLatches,
 }
 
 /// Complete serial PG service snapshot, including all eighteen PG accumulators.
@@ -156,6 +183,121 @@ pub struct Ym2413PgSerialServiceState {
     pub rhythm_noise_steps: u64,
     /// Last sampled Hi-Hat and Snare Drum noise bits, retained for later phase routing.
     pub rhythm_noise_samples: [Option<bool>; 2],
+}
+
+/// Resolve one serial rhythm selector to its static voice/operator configuration.
+fn rhythm_voice_operator(
+    registers: &[u8; 64],
+    selector: EnvelopeRhythmSelect,
+    cycle: u8,
+) -> Result<
+    (
+        RhythmVoiceSynthesisConfig,
+        RhythmOperatorSynthesisConfig,
+        bool,
+    ),
+    Ym2413PgSerialError,
+> {
+    let config = decode_rhythm_synthesis(registers)
+        .map_err(|error| Ym2413PgSerialError::Channel(ChannelSynthesisError::Rhythm(error)))?;
+    let (voice_index, carrier) = match selector {
+        EnvelopeRhythmSelect::BassDrumFirst => (0, false),
+        EnvelopeRhythmSelect::HiHat => (1, false),
+        EnvelopeRhythmSelect::TomTom => (3, false),
+        EnvelopeRhythmSelect::BassDrumSecond => (0, true),
+        EnvelopeRhythmSelect::SnareDrum => (2, true),
+        EnvelopeRhythmSelect::TopCymbal => (4, true),
+        EnvelopeRhythmSelect::None => {
+            return Err(Ym2413PgSerialError::UnsupportedRhythmMode { cycle, channel: 0 });
+        }
+    };
+    let voice = config.voices[voice_index];
+    let operator = (if carrier {
+        voice.carrier
+    } else {
+        voice.modulator
+    })
+    .ok_or(Ym2413PgSerialError::Channel(ChannelSynthesisError::Rhythm(
+        crate::rhythm_channel::RhythmChannelSynthesisError::MissingEnvelopeOperator { cycle },
+    )))?;
+    Ok((voice, operator, carrier))
+}
+
+/// Resolve per-slot patch fields that are not shared by the two BD operators.
+///
+/// The capture-derived BD candidate stores FB and DM in modulator-specific
+/// fields. The pinned Nuked rhythm table models BD-carrier separately with
+/// FB=0 and DM=0. Keep the serial latches operator-specific; this does not
+/// certify the complete physical rhythm ROM or the analog BD transfer.
+/// Evidence and the unresolved SD SL candidate are recorded in
+/// `docs/audits/ym2413-fm5-2b-serial-rhythm-pipeline-2026-11-21.md`.
+fn rhythm_operator_patch2_latches(
+    selector: EnvelopeRhythmSelect,
+    voice: RhythmVoiceSynthesisConfig,
+    operator: RhythmOperatorSynthesisConfig,
+) -> Ym2413SerialOperatorPatch2Latches {
+    let bass_drum_modulator = matches!(selector, EnvelopeRhythmSelect::BassDrumFirst);
+    Ym2413SerialOperatorPatch2Latches {
+        feedback: if bass_drum_modulator {
+            voice.feedback
+        } else {
+            0
+        },
+        dc_waveform: voice.carrier.is_some_and(|value| value.patch.half_wave),
+        dm_waveform: bass_drum_modulator
+            && voice.modulator.is_some_and(|value| value.patch.half_wave),
+        am_enabled: operator.patch.am_enabled,
+        vibrato_enabled: operator.patch.vibrato_enabled,
+        multiplier: operator.phase.multiplier,
+        sustain_level: operator.patch.sustain_level,
+        fnum: voice.channel_frequency.fnum,
+        block: voice.channel_frequency.block,
+    }
+}
+
+/// Capture the special HH/TCY phase bits and form the corresponding PG address.
+/// The equations and capture cycles mirror Nuked-OPLL OPLL_PhaseGenerate.
+fn rhythm_pg_output(
+    cycle: u8,
+    phase: u32,
+    rm_enable: u8,
+    rhythm_noise_available: bool,
+    noise_bit: Option<bool>,
+    latches: &mut Ym2413RhythmPhaseLatches,
+) -> u16 {
+    if cycle == 13 {
+        latches.hh_bit2 = (phase >> 11) & 1 != 0;
+        latches.hh_bit3 = (phase >> 12) & 1 != 0;
+        latches.hh_bit7 = (phase >> 16) & 1 != 0;
+        latches.hh_bit8 = (phase >> 17) & 1 != 0;
+    } else if cycle == 17 && rm_enable & 0x80 != 0 {
+        latches.tc_bit3 = (phase >> 12) & 1 != 0;
+        latches.tc_bit5 = (phase >> 14) & 1 != 0;
+    }
+
+    if rm_enable & 0x80 == 0 || !rhythm_noise_available {
+        return (phase >> 9) as u16;
+    }
+
+    match cycle {
+        13 => match noise_bit {
+            Some(noise) => {
+                let phase_bit = latches.rhythm_mix_bit();
+                let low = if phase_bit ^ noise { 0x0d0 } else { 0x034 };
+                (if phase_bit { 0x0200 } else { 0 }) | low
+            }
+            None => (phase >> 9) as u16,
+        },
+        16 => match noise_bit {
+            Some(noise) => {
+                (if latches.hh_bit8 { 0x0200 } else { 0 })
+                    | (if latches.hh_bit8 ^ noise { 0x0100 } else { 0 })
+            }
+            None => (phase >> 9) as u16,
+        },
+        17 => (if latches.rhythm_mix_bit() { 0x0200 } else { 0 }) | 0x0100,
+        _ => (phase >> 9) as u16,
+    }
 }
 
 /// Cloneable serial PG state machine. Its Clone is deep: all mutable state is
@@ -184,6 +326,7 @@ impl Ym2413PgSerialService {
                 pg_output: 0,
                 lfo_vib_counter: 0,
                 parameters: Ym2413PgParameterLatch::RESET,
+                rhythm_phase_latches: Ym2413RhythmPhaseLatches::default(),
             },
             operator: Ym2413SerialOperator::new(),
             serial_am_lfo: Ym2413SerialAmLfo::new(),
@@ -362,6 +505,7 @@ impl Ym2413PgSerialService {
     fn generate_phase(
         &mut self,
         context: &Ym2413SlotServiceContext,
+        noise_bit: Option<bool>,
     ) -> Result<(), Ym2413PgSerialError> {
         let write = nuked_pg_phase_slot_descriptor(context.event.pg_phase_write_index).ok_or(
             Ym2413PgSerialError::InvalidSlotIndex(context.event.pg_phase_write_index),
@@ -389,7 +533,14 @@ impl Ym2413PgSerialService {
         } else {
             phase
         };
-        self.pipeline.pg_output = (phase >> 9) as u16;
+        self.pipeline.pg_output = rhythm_pg_output(
+            context.event.cycle,
+            phase,
+            context.rm_enable,
+            self.rhythm_noise.is_some(),
+            noise_bit,
+            &mut self.pipeline.rhythm_phase_latches,
+        );
         Ok(())
     }
 
@@ -418,9 +569,8 @@ impl Ym2413PgSerialService {
         self.synthesis.advance_pm_lfo_samples(1);
     }
 
-    /// Resolve the core cycle to a melodic slot when this slot is not owned
-    /// by Rhythm Mode. Percussion-owned and transitional slots remain gated
-    /// until their complete PG/operator path is integrated.
+    /// Resolve the core cycle to a melodic slot. Rhythm-owned slots use the
+    /// dedicated rhythm decoder and never borrow channels 7–9 as melodic inputs.
     fn require_melodic_slot(
         context: &Ym2413SlotServiceContext,
     ) -> Result<Ym2413SlotDescriptor, Ym2413PgSerialError> {
@@ -443,6 +593,18 @@ impl Ym2413PgSerialService {
                 cycle: context.event.cycle,
                 channel: context.event.selected_operator.channel,
             }),
+        }
+    }
+
+    /// Return the current pre-clock LFSR bit for this core-owned serial slot.
+    fn current_rhythm_noise_bit(&self, cycle: u8) -> Result<Option<bool>, Ym2413PgSerialError> {
+        if self.rhythm_noise_cursor != cycle {
+            return Err(Ym2413PgSerialError::InvalidState);
+        }
+        match self.rhythm_noise {
+            Some(sequencer) if sequencer.slot_index() == cycle => Ok(Some(sequencer.noise_bit())),
+            Some(_) => Err(Ym2413PgSerialError::InvalidState),
+            None => Ok(None),
         }
     }
 
@@ -486,7 +648,7 @@ impl Ym2413PgSerialService {
     }
 
     /// Reproduce PreparePatch2's channel/operator parameter selection for the
-    /// next serial cycle. Rhythm-specific patch routing is deliberately gated.
+    /// next serial cycle in melodic mode.
     fn latch_next_parameters(
         &mut self,
         context: &Ym2413SlotServiceContext,
@@ -516,6 +678,98 @@ impl Ym2413PgSerialService {
             })?;
         Ok(())
     }
+
+    /// Latch the rhythm patch parameters selected by the current serial cycle.
+    fn latch_next_rhythm_parameters(
+        &mut self,
+        context: &Ym2413SlotServiceContext,
+        selector: EnvelopeRhythmSelect,
+    ) -> Result<(), Ym2413PgSerialError> {
+        let (voice, operator, _) =
+            rhythm_voice_operator(&context.registers, selector, context.event.cycle)?;
+        self.pipeline.parameters = Ym2413PgParameterLatch::from_operator(operator.phase);
+        self.operator
+            .prepare_patch2(rhythm_operator_patch2_latches(selector, voice, operator))?;
+        Ok(())
+    }
+
+    /// Apply the rhythm voice's PreparePatch1 latches for the current slot.
+    fn prepare_rhythm_patch1(
+        &mut self,
+        context: &Ym2413SlotServiceContext,
+        selector: EnvelopeRhythmSelect,
+    ) -> Result<(), Ym2413PgSerialError> {
+        let (voice, operator, carrier) =
+            rhythm_voice_operator(&context.registers, selector, context.event.cycle)?;
+        let channel = voice.channel_frequency;
+        let register = context.registers[0x30 + usize::from(channel.channel)];
+        let mcsel = ((context.event.cycle + 1) / 3) & 1;
+        let total_level = if matches!(
+            selector,
+            EnvelopeRhythmSelect::HiHat | EnvelopeRhythmSelect::TomTom
+        ) {
+            (register >> 4) << 2
+        } else if mcsel != 0 {
+            voice.volume << 2
+        } else {
+            operator.patch.total_level
+        };
+        self.operator
+            .prepare_patch1(Ym2413SerialOperatorPatch1Latches {
+                total_level,
+                ksl_attenuation: operator.ksl,
+                ksl: operator.patch.key_scale_level,
+                adrr: [
+                    operator.patch.attack_rate,
+                    operator.patch.decay_rate,
+                    operator.patch.release_rate,
+                ],
+                envelope_type: operator.patch.sustained_envelope,
+                key_scale_rate: operator.patch.key_scale_rate,
+                key_scale_rate_frequency: (channel.block << 1) | ((channel.fnum >> 8) as u8 & 1),
+                key_scale_level_frequency: (channel.fnum >> 5) as u8,
+                key_scale_level_block: channel.block,
+            })?;
+        self.operator
+            .prepare_channel(register >> 4, u8::from(carrier))?;
+        Ok(())
+    }
+
+    /// Run the serial operator path for one rhythm-owned slot when the LFSR
+    /// seed is explicit. Unknown physical reset state remains non-synthesizing.
+    fn before_rhythm_operator_update(
+        &mut self,
+        context: &Ym2413SlotServiceContext,
+        selector: EnvelopeRhythmSelect,
+    ) -> Result<(), Ym2413PgSerialError> {
+        self.prepare_rhythm_patch1(context, selector)?;
+        self.serial_am_lfo.capture_output(context.event.cycle)?;
+        let noise_bit = if self.rhythm_noise.is_some() {
+            self.current_rhythm_noise_bit(context.event.cycle)?
+        } else {
+            None
+        };
+        self.generate_phase(context, noise_bit)?;
+        let operator_rm_enable = if self.rhythm_noise.is_some() {
+            context.rm_enable
+        } else {
+            0
+        };
+        self.operator.tick_operator_with_rhythm_mode(
+            context.event.cycle,
+            self.pipeline.pg_output,
+            operator_rm_enable,
+        )?;
+        self.calculate_increment()?;
+        let eg_levels = std::array::from_fn(|index| context.envelope_state.operators[index].level);
+        self.operator.advance_envelope_output(
+            context.event.cycle,
+            &eg_levels,
+            self.serial_am_lfo.output(),
+            context.registers[0x0f],
+        )?;
+        Ok(())
+    }
 }
 
 impl Ym2413SlotService for Ym2413PgSerialService {
@@ -538,8 +792,16 @@ impl Ym2413SlotService for Ym2413PgSerialService {
             Ym2413SerialSlotDispatch::Melodic { .. } => {
                 return Err(Ym2413PgSerialError::InvalidState);
             }
-            // Rhythm-owned and unsettled cycles still pass through the core EG
-            // and post-EG DoRhythm stage. Their PG/operator path is FM-5.2B.
+            // Unknown-seed Rhythm Mode and unsettled transitions still pass
+            // through core EG and DoRhythm, but do not fabricate synthesis state.
+            Ym2413SerialSlotDispatch::Rhythm { slot, selector, .. }
+                if self.rhythm_noise.is_some() && slot == context.event.selected_operator =>
+            {
+                return self.before_rhythm_operator_update(context, selector);
+            }
+            Ym2413SerialSlotDispatch::Rhythm { .. } if self.rhythm_noise.is_some() => {
+                return Err(Ym2413PgSerialError::InvalidState);
+            }
             _ => {
                 self.serial_am_lfo.capture_output(context.event.cycle)?;
                 return Ok(());
@@ -584,9 +846,22 @@ impl Ym2413SlotService for Ym2413PgSerialService {
         self.operator
             .prepare_channel(config.channel.instrument, operator_index)?;
         self.serial_am_lfo.capture_output(context.event.cycle)?;
-        self.generate_phase(context)?;
-        self.operator
-            .tick_operator(context.event.cycle, self.pipeline.pg_output)?;
+        let noise_bit = if self.rhythm_noise.is_some() {
+            self.current_rhythm_noise_bit(context.event.cycle)?
+        } else {
+            None
+        };
+        self.generate_phase(context, noise_bit)?;
+        let operator_rm_enable = if self.rhythm_noise.is_some() {
+            context.rm_enable
+        } else {
+            0
+        };
+        self.operator.tick_operator_with_rhythm_mode(
+            context.event.cycle,
+            self.pipeline.pg_output,
+            operator_rm_enable,
+        )?;
         self.calculate_increment()?;
         let eg_levels = std::array::from_fn(|index| context.envelope_state.operators[index].level);
         self.operator.advance_envelope_output(
@@ -629,8 +904,15 @@ impl Ym2413SlotService for Ym2413PgSerialService {
         .map_err(|_| Ym2413PgSerialError::InvalidSlotIndex(context.event.cycle))?
         {
             Ym2413SerialSlotDispatch::Melodic { .. } => self.latch_next_parameters(context),
-            // The rhythm-specific patch/PG/operator latches are intentionally
-            // not borrowed from the melodic channels in this stage.
+            Ym2413SerialSlotDispatch::Rhythm { slot, selector, .. }
+                if self.rhythm_noise.is_some() && slot == context.event.selected_operator =>
+            {
+                self.latch_next_rhythm_parameters(context, selector)
+            }
+            Ym2413SerialSlotDispatch::Rhythm { .. } if self.rhythm_noise.is_some() => {
+                Err(Ym2413PgSerialError::InvalidState)
+            }
+            // Unknown-seed and unsettled transitions remain explicitly gated.
             _ => Ok(()),
         }
     }
@@ -641,7 +923,7 @@ mod tests {
     use super::{
         YM2413_PG_SERIAL_PIPELINE_STATE_VERSION, YM2413_PG_SERIAL_STATE_VERSION,
         Ym2413PgParameterLatch, Ym2413PgSerialError, Ym2413PgSerialPipelineState,
-        Ym2413PgSerialService,
+        Ym2413PgSerialService, Ym2413RhythmPhaseLatches,
     };
     use crate::envelope::{
         AttackRate15Transition, DampTransitionConfig, DampTransitionCoordination, EnvelopeStage,
@@ -699,6 +981,58 @@ mod tests {
         }
     }
 
+    fn rhythm_context(
+        cycle: u8,
+        registers: [u8; 64],
+        selector: EnvelopeRhythmSelect,
+    ) -> Ym2413SlotServiceContext {
+        let eg = EnvelopeSequencer::new();
+        let state = eg.export_state();
+        let event = nuked_slot_service_event_with_testmode(cycle, 0xff, state.eg_dokon, 0).unwrap();
+        let mut registers = registers;
+        registers[0x0f] = 0;
+        let envelope_input = EnvelopeSlotInput {
+            rhythm_select: selector,
+            rhythm_bits: registers[0x0e] & 0x3f,
+            ..EnvelopeSlotInput::default()
+        };
+        Ym2413SlotServiceContext {
+            event,
+            registers,
+            envelope_input,
+            envelope_state: state,
+            rm_enable: 0xff,
+            rm_select: match selector {
+                EnvelopeRhythmSelect::BassDrumFirst => 0,
+                EnvelopeRhythmSelect::HiHat => 1,
+                EnvelopeRhythmSelect::TomTom => 2,
+                EnvelopeRhythmSelect::BassDrumSecond => 3,
+                EnvelopeRhythmSelect::SnareDrum => 4,
+                EnvelopeRhythmSelect::TopCymbal => 5,
+                EnvelopeRhythmSelect::None => 6,
+            },
+        }
+    }
+
+    fn rhythm_selector(cycle: u8) -> EnvelopeRhythmSelect {
+        match cycle {
+            11 => EnvelopeRhythmSelect::BassDrumFirst,
+            12 => EnvelopeRhythmSelect::HiHat,
+            13 => EnvelopeRhythmSelect::TomTom,
+            14 => EnvelopeRhythmSelect::BassDrumSecond,
+            15 => EnvelopeRhythmSelect::SnareDrum,
+            16 => EnvelopeRhythmSelect::TopCymbal,
+            _ => EnvelopeRhythmSelect::None,
+        }
+    }
+
+    fn advance_rhythm_slot(service: &mut Ym2413PgSerialService, cycle: u8, registers: [u8; 64]) {
+        let context = rhythm_context(cycle, registers, rhythm_selector(cycle));
+        service.before_eg_update(&context).unwrap();
+        let (tick, post_state) = tick(cycle);
+        service.after_eg_update(&context, tick, post_state).unwrap();
+    }
+
     fn tick(cycle: u8) -> (crate::EnvelopeSequencerTick, crate::EnvelopeSequencerState) {
         let mut eg = EnvelopeSequencer::new();
         for prior_cycle in 0..cycle {
@@ -725,10 +1059,114 @@ mod tests {
             pg_output: 0,
             lfo_vib_counter,
             parameters,
+            rhythm_phase_latches: Ym2413RhythmPhaseLatches::default(),
         };
         state.format_version = YM2413_PG_SERIAL_STATE_VERSION;
         service = Ym2413PgSerialService::restore_state(state).unwrap();
         service
+    }
+
+    #[test]
+    fn rhythm_patch2_keeps_bd_modulator_fb_and_dm_out_of_the_bd_carrier_slot() {
+        let mut registers = [0; 64];
+        registers[0x0e] = 0x20;
+        let cases = [
+            (11, EnvelopeRhythmSelect::BassDrumFirst, 7, true),
+            (12, EnvelopeRhythmSelect::HiHat, 0, false),
+            (13, EnvelopeRhythmSelect::TomTom, 0, false),
+            (14, EnvelopeRhythmSelect::BassDrumSecond, 0, false),
+            (15, EnvelopeRhythmSelect::SnareDrum, 0, false),
+            (16, EnvelopeRhythmSelect::TopCymbal, 0, false),
+        ];
+
+        for (cycle, selector, expected_feedback, expected_dm) in cases {
+            let (voice, operator, _) =
+                super::rhythm_voice_operator(&registers, selector, cycle).unwrap();
+            let latches = super::rhythm_operator_patch2_latches(selector, voice, operator);
+            assert_eq!(latches.feedback, expected_feedback, "cycle {cycle}");
+            assert_eq!(latches.dm_waveform, expected_dm, "cycle {cycle}");
+        }
+    }
+
+    #[test]
+    fn seeded_rhythm_pg_operator_path_is_snapshot_and_block_partition_deterministic() {
+        let mut registers = [0; 64];
+        registers[0x0e] = 0x3f;
+        registers[0x36] = 0xa5;
+        registers[0x37] = 0xb6;
+        registers[0x38] = 0xc7;
+
+        let mut continuous = Ym2413PgSerialService::new(initial_bank(0))
+            .with_rhythm_noise_seed(0x5a_1234, 0)
+            .unwrap();
+        for cycle in 0..18 {
+            advance_rhythm_slot(&mut continuous, cycle, registers);
+        }
+
+        let final_state = continuous.export_state();
+        assert_eq!(final_state.rhythm_noise_steps, 18);
+        assert_eq!(final_state.rhythm_noise_cursor, 0);
+        assert!(final_state.rhythm_noise_samples.iter().all(Option::is_some));
+        let restored = Ym2413PgSerialService::restore_state(final_state).unwrap();
+        assert_eq!(restored.export_state(), final_state);
+
+        let mut partitioned = Ym2413PgSerialService::new(initial_bank(0))
+            .with_rhythm_noise_seed(0x5a_1234, 0)
+            .unwrap();
+        for cycle in 0..9 {
+            advance_rhythm_slot(&mut partitioned, cycle, registers);
+        }
+        let midpoint = partitioned.export_state();
+        partitioned = Ym2413PgSerialService::restore_state(midpoint).unwrap();
+        for cycle in 9..18 {
+            advance_rhythm_slot(&mut partitioned, cycle, registers);
+        }
+        assert_eq!(partitioned.export_state(), final_state);
+    }
+
+    #[test]
+    fn rhythm_pg_phase_outputs_match_nuked_hihat_snare_and_cymbal_equations() {
+        let mut latches = super::Ym2413RhythmPhaseLatches {
+            tc_bit3: true,
+            tc_bit5: false,
+            ..super::Ym2413RhythmPhaseLatches::default()
+        };
+        let hihat_phase = (1_u32 << 11) | (1_u32 << 17);
+        assert_eq!(
+            super::rhythm_pg_output(13, hihat_phase, 0xff, true, Some(false), &mut latches),
+            0x2d0
+        );
+        assert!(latches.hh_bit2);
+        assert!(latches.hh_bit8);
+        assert!(!latches.hh_bit3);
+        assert!(!latches.hh_bit7);
+
+        assert_eq!(
+            super::rhythm_pg_output(16, 0, 0xff, true, Some(true), &mut latches),
+            0x200
+        );
+
+        let cymbal_phase = (1_u32 << 12) | (1_u32 << 14);
+        assert_eq!(
+            super::rhythm_pg_output(17, cymbal_phase, 0xff, true, None, &mut latches),
+            0x300
+        );
+        assert!(latches.tc_bit3);
+        assert!(latches.tc_bit5);
+    }
+
+    #[test]
+    fn rhythm_pg_phase_output_is_not_fabricated_without_an_explicit_noise_state() {
+        let mut latches = super::Ym2413RhythmPhaseLatches::default();
+        let phase = 0x12_3456;
+        assert_eq!(
+            super::rhythm_pg_output(13, phase, 0xff, false, None, &mut latches),
+            (phase >> 9) as u16
+        );
+        assert_eq!(
+            super::rhythm_pg_output(17, phase, 0xff, false, None, &mut latches),
+            (phase >> 9) as u16
+        );
     }
 
     #[test]
@@ -926,7 +1364,7 @@ mod tests {
     }
 
     #[test]
-    fn rhythm_owned_slots_skip_melodic_operator_mutation_but_reach_do_rhythm() {
+    fn rhythm_owned_slots_use_seeded_rhythm_operator_path_and_reach_do_rhythm() {
         let rhythm_cycles = [
             (11, EnvelopeRhythmSelect::BassDrumFirst),
             (12, EnvelopeRhythmSelect::HiHat),
@@ -948,10 +1386,17 @@ mod tests {
             slot_context.rm_enable = 0xff;
             slot_context.rm_select = selector as u8;
             slot_context.envelope_input.rhythm_select = selector;
+            slot_context.event = nuked_slot_service_event_with_testmode(
+                cycle,
+                0xff,
+                slot_context.envelope_state.eg_dokon,
+                0,
+            )
+            .unwrap();
 
             service.before_eg_update(&slot_context).unwrap();
-            assert_eq!(service.synthesis().export_state(), synthesis_before);
-            assert_eq!(service.operator.export_state(), operator_before);
+            assert_ne!(service.synthesis().export_state(), synthesis_before);
+            assert_ne!(service.operator.export_state(), operator_before);
             let (tick, post) = tick(cycle);
             service.after_eg_update(&slot_context, tick, post).unwrap();
             assert_eq!(

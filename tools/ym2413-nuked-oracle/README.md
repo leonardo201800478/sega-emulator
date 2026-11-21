@@ -253,3 +253,61 @@ PreparePatch1/2 parameter latches, operator phase index, raw operator output,
 feedback history, and channel output on all 147,456 calls. The isolated
 operator and AM LFO differentials remain separate so a failure can be localized
 to a stage rather than hidden by an end-to-end mismatch.
+
+## Integrated Rhythm Mode PG/EG/operator differential
+
+The PG differential workflow also drives the production Rust core and serial
+service with the same delayed register-write event stream used by pinned
+Nuked-OPLL. The Rust trace is configured with LFSR register candidate zero to
+match Nuked's software reset state. This is a software-oracle alignment
+candidate only; it is not a claim about the physical YM2413 power-on seed.
+
+The fixture uses the rhythm-channel frequency values from Table III-9 of
+the YM2413 application manual: R#16/17/18 = 0x20/0x50/0xC0 and
+R#26/27/28 = 0x05/0x05/0x01, with melodic KEY-ON bits clear. The serial
+dispatcher test also asserts the documented one-based physical slots:
+BD 13/16, HH 14, TOM 15, SD 17 and TC 18.
+
+The comparator strictly checks serial cycle order, effective `rm_enable`,
+`rm_select`, rhythm control, LFSR state, global LFO/EG timer state and
+register-derived channel/slot identity on every call. Synthesis fields that
+depend on the non-hardware-certified rhythm patch candidates (PG increment and
+phase, EG rates/levels, operator feedback/waveform and output latches) are
+compared and reported as per-field divergences rather than silently ignored or
+treated as a hardware pass. The event sequence exercises each percussion
+trigger individually, all five together, a release interval and a second
+simultaneous trigger. This remains a software characterization and does not
+establish operator-to-raw-DAC conversion, analog MO/RO voltage, or physical
+four-clock subphase alignment.
+
+Reference: [YM2413 application manual](https://www.smspower.org/maxim/Documents/YM2413ApplicationManual).
+
+## Rhythm Mode serial operator differential
+
+The PG differential workflow also creates a separate all-five-voice Rhythm Mode
+sequence and captures the effective `rm_enable` value at the actual
+`OPLL_Operator` boundary, after the per-call shift and mode-write stage. The
+Rust replay uses that boundary value rather than the pre-call register image.
+
+The comparator checks the serial operator/feedback state and the five retained
+rhythm outputs (HH, TOM, BD, SD, TC) against Nuked after every call. The fixture
+requires both rhythm override bits to be observed and each of the five Nuked
+output latches to become nonzero. This isolates the operator and delayed-output
+latch behavior; it does not claim a full PG/EG/noise/PCM or MO/RO pin differential.
+
+Run the rhythm case from the repository root after generating a full trace:
+
+```sh
+python3 tools/ym2413-nuked-oracle/compare_operator.py \
+  --nuked-trace nuked-rhythm-operator.jsonl \
+  --require-rhythm
+```
+
+The melodic FM-3 integrated comparator remains a strict field-by-field
+differential. The Rhythm Mode comparator deliberately separates hard serial
+control/timing state from synthesis fields derived from the candidate rhythm
+patch table. It fails on control, selector, LFSR or global-timing divergence
+and reports every candidate-dependent synthesis field that differs from
+Nuked, including its first call and mismatch count. The isolated operator and
+AM LFO differentials remain strict gates so their results are not hidden by
+candidate patch differences.
