@@ -54,4 +54,14 @@ O Z80 compartilhado está encerrado no escopo praticável do perfil NMOS clássi
 7. Auditar diff e preservar evidências históricas; nunca atribuir teste a SHA diferente.
 8. Não fazer merge sem CI aplicável verde no HEAD final e autorização explícita.
 
+## Uso do Codex
+
+- **Usar o Codex exclusivamente para executar o merge de uma Pull Request**, depois que o agente concluir a auditoria, confirmar os gates aplicáveis no HEAD exato e verificar que a PR está mergeável.
+- Não delegar ao Codex implementação, refatoração, depuração, pesquisa técnica, leitura/auditoria do repositório, execução de testes, análise de CI, revisão de diffs, criação/atualização de PRs, reconciliação de branches ou preparação de commits.
+- O agente responsável pela tarefa deve conduzir diretamente essas atividades, registrar evidências e decidir tecnicamente se os critérios de merge foram satisfeitos.
+- Antes de solicitar/executar o merge via Codex, confirmar novamente: repositório e número da PR, branch base, SHA atual do HEAD, checks obrigatórios e workflows específicos aplicáveis, comentários/revisões pendentes e ausência de conflitos.
+- O merge só pode ocorrer com autorização explícita do usuário ou autorização permanente já registrada para aquela sequência, usando o SHA esperado do HEAD. Nunca contornar branch protection, checks obrigatórios ou revisões.
+- Se qualquer gate estiver pendente, falhar, estiver associado a outro SHA ou não puder ser verificado, não acionar o Codex para merge. Corrigir ou aguardar e repetir a auditoria.
+- Após o merge, o agente deve verificar o SHA resultante na branch base, o estado da PR e a integridade da árvore integrada. O uso do Codex termina na operação de merge; a verificação pós-merge continua sob responsabilidade do agente.
+
 Não usar Python, Qt, PyO3 ou Maturin no runtime, frontend, CI ou tooling obrigatório. Não versionar ROMs comerciais, BIOS proprietárias ou dumps protegidos.
