@@ -6,7 +6,7 @@
 //! operator-stage result latched after the channel-output stage.
 
 /// Version of the serial MO/RO output-pipeline snapshot format.
-pub const YM2413_OUTPUT_PIPELINE_STATE_VERSION: u16 = 1;
+pub const YM2413_OUTPUT_PIPELINE_STATE_VERSION: u16 = 2;
 /// Lowest valid one's-complement operator channel-output latch value.
 pub const YM2413_CHANNEL_OUTPUT_MIN: i16 = -256;
 /// Highest valid one's-complement operator channel-output latch value.
@@ -39,6 +39,18 @@ pub struct Ym2413OutputPipelineFrame {
     pub ro: Ym2413NukedOutputCode,
 }
 
+/// Core-integrated frame. None means the channel/operator pipeline has not
+/// supplied a validated value; unknown is never converted to digital silence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ym2413CoreOutputPipelineFrame {
+    /// Serial cycle whose output-buffer values were copied.
+    pub cycle: u8,
+    /// MO value copied at the beginning of this clock, if known.
+    pub mo: Option<Ym2413NukedOutputCode>,
+    /// RO value copied at the beginning of this clock, if known.
+    pub ro: Option<Ym2413NukedOutputCode>,
+}
+
 /// Complete serial pipeline state, including both latches and rm_enable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ym2413OutputPipelineState {
@@ -48,10 +60,16 @@ pub struct Ym2413OutputPipelineState {
     pub next_cycle: u8,
     /// Previous operator result consumed by the next channel stage.
     pub previous_channel_output: i16,
+    /// Whether the previous operator result is validated/known.
+    pub previous_channel_output_valid: bool,
     /// Channel-stage MO value copied to the external buffer next clock.
     pub output_m: i16,
+    /// Whether the MO output latch is validated/known.
+    pub output_m_valid: bool,
     /// Channel-stage RO value copied to the external buffer next clock.
     pub output_r: i16,
+    /// Whether the RO output latch is validated/known.
+    pub output_r_valid: bool,
     /// Signed Nuked int8_t mode-write shift register; right shifts are arithmetic.
     pub rm_enable: i8,
 }
@@ -65,6 +83,8 @@ pub enum Ym2413OutputPipelineError {
     InvalidCycle { expected: u8, actual: u8 },
     /// Operator channel output is outside the nine-bit one's-complement range.
     InvalidChannelOutput(i16),
+    /// The standalone non-optional API cannot represent an unknown output.
+    OutputUnknown,
 }
 
 impl core::fmt::Display for Ym2413OutputPipelineError {
@@ -78,6 +98,7 @@ impl core::fmt::Display for Ym2413OutputPipelineError {
             Self::InvalidChannelOutput(value) => {
                 write!(f, "invalid YM2413 one's-complement channel output: {value}")
             }
+            Self::OutputUnknown => f.write_str("YM2413 output is not known yet"),
         }
     }
 }
@@ -110,11 +131,47 @@ impl Ym2413OutputPipeline {
                 format_version: YM2413_OUTPUT_PIPELINE_STATE_VERSION,
                 next_cycle: 0,
                 previous_channel_output: 0,
+                previous_channel_output_valid: true,
                 output_m: 0,
+                output_m_valid: true,
                 output_r: 0,
+                output_r_valid: true,
                 rm_enable: 0,
             },
         }
+    }
+
+    /// Construct a production pipeline with unknown output latches.
+    ///
+    /// This is used when the upstream serial operator intentionally suppresses
+    /// an update because its source state (for example, an unseeded rhythm LFSR)
+    /// is unknown. It does not substitute zero or the previous sample.
+    pub const fn new_unknown() -> Self {
+        Self {
+            state: Ym2413OutputPipelineState {
+                format_version: YM2413_OUTPUT_PIPELINE_STATE_VERSION,
+                next_cycle: 0,
+                previous_channel_output: 0,
+                previous_channel_output_valid: false,
+                output_m: 0,
+                output_m_valid: false,
+                output_r: 0,
+                output_r_valid: false,
+                rm_enable: 0,
+            },
+        }
+    }
+
+    /// Align the next serial cycle when constructing a service for a restored core.
+    pub(crate) const fn with_next_cycle(
+        mut self,
+        next_cycle: u8,
+    ) -> Result<Self, Ym2413OutputPipelineError> {
+        if next_cycle >= 18 {
+            return Err(Ym2413OutputPipelineError::InvalidState);
+        }
+        self.state.next_cycle = next_cycle;
+        Ok(self)
     }
 
     /// Restore a validated snapshot, preserving both latches and signed rm_enable.
@@ -166,34 +223,90 @@ impl Ym2413OutputPipeline {
                 next_channel_output,
             ));
         }
+        if !self.state.output_m_valid || !self.state.output_r_valid {
+            return Err(Ym2413OutputPipelineError::OutputUnknown);
+        }
 
-        let frame = Ym2413OutputPipelineFrame {
+        let mut rm_enable = self.state.rm_enable >> 1;
+        if let Some(data) = qualified_rhythm_write_data {
+            rm_enable = ((rm_enable as u8 & 0x7f) | ((data & 0x20) << 2)) as i8;
+        }
+        let frame =
+            self.process_cycle_with_core_state(cycle, rm_enable, Some(next_channel_output))?;
+        Ok(Ym2413OutputPipelineFrame {
             cycle,
-            mo: Ym2413NukedOutputCode::new(self.state.output_m),
-            ro: Ym2413NukedOutputCode::new(self.state.output_r),
+            mo: frame.mo.ok_or(Ym2413OutputPipelineError::OutputUnknown)?,
+            ro: frame.ro.ok_or(Ym2413OutputPipelineError::OutputUnknown)?,
+        })
+    }
+
+    /// Process one serial cycle using the core-owned post-shift rm_enable.
+    ///
+    /// Unlike process_cycle, this entry point does not shift rm_enable or
+    /// apply a mode write: Ym2413Core has already performed both operations in
+    /// begin_slot. The optional operator result is latched for the next cycle.
+    /// An unknown prior ch_out makes the newly calculated MO/RO latches
+    /// unknown; it is not replaced with zero or held as a stale value.
+    pub fn process_cycle_with_core_state(
+        &mut self,
+        cycle: u8,
+        post_update_rm_enable: i8,
+        next_channel_output: Option<i16>,
+    ) -> Result<Ym2413CoreOutputPipelineFrame, Ym2413OutputPipelineError> {
+        if cycle != self.state.next_cycle {
+            return Err(Ym2413OutputPipelineError::InvalidCycle {
+                expected: self.state.next_cycle,
+                actual: cycle,
+            });
+        }
+        if let Some(value) = next_channel_output
+            && !(YM2413_CHANNEL_OUTPUT_MIN..=YM2413_CHANNEL_OUTPUT_MAX).contains(&value)
+        {
+            return Err(Ym2413OutputPipelineError::InvalidChannelOutput(value));
+        }
+
+        let frame = Ym2413CoreOutputPipelineFrame {
+            cycle,
+            mo: self
+                .state
+                .output_m_valid
+                .then(|| Ym2413NukedOutputCode::new(self.state.output_m)),
+            ro: self
+                .state
+                .output_r_valid
+                .then(|| Ym2413NukedOutputCode::new(self.state.output_r)),
         };
 
-        self.state.rm_enable >>= 1;
-        if let Some(data) = qualified_rhythm_write_data {
-            self.state.rm_enable =
-                ((self.state.rm_enable as u8 & 0x7f) | ((data & 0x20) << 2)) as i8;
+        self.state.rm_enable = post_update_rm_enable;
+        if self.state.previous_channel_output_valid {
+            let mut active = self.state.previous_channel_output;
+            let mut neutral = active >> 8;
+            if active >= 0 {
+                active += 1;
+                neutral += 1;
+            }
+
+            let rhythm_pipeline_active = post_update_rm_enable & 0x40 != 0;
+            let mute_m =
+                (cycle / 3) & 1 != 0 || (rhythm_pipeline_active && (cycle + 15) % 18 >= 12);
+            let mute_r = !rhythm_pipeline_active
+                || !matches!(cycle, 16 | 17 | 0 | 1 | 2 | 3 | 4 | 5 | 9 | 10);
+
+            self.state.output_m = if mute_m { neutral } else { active };
+            self.state.output_r = if mute_r { neutral } else { active };
+            self.state.output_m_valid = true;
+            self.state.output_r_valid = true;
+        } else {
+            self.state.output_m_valid = false;
+            self.state.output_r_valid = false;
         }
 
-        let mut active = self.state.previous_channel_output;
-        let mut neutral = active >> 8;
-        if active >= 0 {
-            active += 1;
-            neutral += 1;
+        if let Some(value) = next_channel_output {
+            self.state.previous_channel_output = value;
+            self.state.previous_channel_output_valid = true;
+        } else {
+            self.state.previous_channel_output_valid = false;
         }
-
-        let rhythm_pipeline_active = self.state.rm_enable & 0x40 != 0;
-        let mute_m = (cycle / 3) & 1 != 0 || (rhythm_pipeline_active && (cycle + 15) % 18 >= 12);
-        let mute_r =
-            !rhythm_pipeline_active || !matches!(cycle, 16 | 17 | 0 | 1 | 2 | 3 | 4 | 5 | 9 | 10);
-
-        self.state.output_m = if mute_m { neutral } else { active };
-        self.state.output_r = if mute_r { neutral } else { active };
-        self.state.previous_channel_output = next_channel_output;
         self.state.next_cycle = (cycle + 1) % 18;
         Ok(frame)
     }
@@ -359,6 +472,101 @@ mod tests {
         assert_eq!(prefix, expected[..7]);
         assert_eq!(resumed, expected[7..]);
         assert_eq!(restored.export_state(), continuous.export_state());
+    }
+
+    #[test]
+    fn core_owned_rm_enable_is_consumed_without_a_second_shift() {
+        let mut pipeline = Ym2413OutputPipeline::new();
+        let frame = pipeline
+            .process_cycle_with_core_state(0, -64, Some(12))
+            .unwrap();
+        assert_eq!(frame.mo, Some(Ym2413NukedOutputCode::new(0)));
+        assert_eq!(pipeline.export_state().rm_enable, -64);
+
+        pipeline
+            .process_cycle_with_core_state(1, 0x40, Some(0))
+            .unwrap();
+        assert_eq!(pipeline.export_state().rm_enable, 0x40);
+    }
+
+    #[test]
+    fn unknown_operator_result_propagates_without_fabricating_zero_or_stale_output() {
+        let mut pipeline = Ym2413OutputPipeline::new_unknown();
+        let first = pipeline.process_cycle_with_core_state(0, 0, None).unwrap();
+        assert_eq!(first.mo, None);
+        assert_eq!(first.ro, None);
+        assert!(!pipeline.export_state().previous_channel_output_valid);
+
+        let second = pipeline
+            .process_cycle_with_core_state(1, 0, Some(17))
+            .unwrap();
+        assert_eq!(second.mo, None);
+        assert_eq!(second.ro, None);
+        assert!(pipeline.export_state().previous_channel_output_valid);
+        assert!(!pipeline.export_state().output_m_valid);
+        assert!(!pipeline.export_state().output_r_valid);
+
+        let third = pipeline
+            .process_cycle_with_core_state(2, 0, Some(-9))
+            .unwrap();
+        assert_eq!(third.mo, Some(Ym2413NukedOutputCode::new(18)));
+        assert_eq!(third.ro, Some(Ym2413NukedOutputCode::new(1)));
+    }
+
+    #[test]
+    fn unknown_validity_survives_snapshot_restore_and_block_partitioning() {
+        let mut continuous = Ym2413OutputPipeline::new_unknown();
+        let mut split = Ym2413OutputPipeline::new_unknown();
+        let inputs = [
+            None,
+            None,
+            Some(4),
+            Some(-7),
+            Some(0),
+            None,
+            Some(12),
+            Some(3),
+        ];
+        let mut expected = Vec::new();
+        for (cycle, output) in inputs.into_iter().enumerate() {
+            expected.push(
+                continuous
+                    .process_cycle_with_core_state(cycle as u8, 0, output)
+                    .unwrap(),
+            );
+        }
+
+        let mut prefix = Vec::new();
+        for (cycle, output) in inputs[..4].iter().copied().enumerate() {
+            prefix.push(
+                split
+                    .process_cycle_with_core_state(cycle as u8, 0, output)
+                    .unwrap(),
+            );
+        }
+        let mut restored = Ym2413OutputPipeline::with_initial_state(split.export_state()).unwrap();
+        let mut resumed = Vec::new();
+        for (offset, output) in inputs[4..].iter().copied().enumerate() {
+            resumed.push(
+                restored
+                    .process_cycle_with_core_state((offset + 4) as u8, 0, output)
+                    .unwrap(),
+            );
+        }
+        assert_eq!(prefix, expected[..4]);
+        assert_eq!(resumed, expected[4..]);
+        assert_eq!(restored.export_state(), continuous.export_state());
+    }
+
+    #[test]
+    fn standalone_api_rejects_unknown_output_transactionally() {
+        let mut pipeline = Ym2413OutputPipeline::new_unknown();
+        let before = pipeline.export_state();
+        assert_eq!(
+            pipeline.process_cycle(0, 0, None),
+            Err(Ym2413OutputPipelineError::OutputUnknown)
+        );
+        assert_eq!(pipeline.export_state(), before);
     }
 
     #[test]

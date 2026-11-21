@@ -85,8 +85,8 @@ pub use output::{
 };
 pub use output_pipeline::{
     YM2413_CHANNEL_OUTPUT_MAX, YM2413_CHANNEL_OUTPUT_MIN, YM2413_OUTPUT_PIPELINE_STATE_VERSION,
-    Ym2413NukedOutputCode, Ym2413OutputPipeline, Ym2413OutputPipelineError,
-    Ym2413OutputPipelineFrame, Ym2413OutputPipelineState,
+    Ym2413CoreOutputPipelineFrame, Ym2413NukedOutputCode, Ym2413OutputPipeline,
+    Ym2413OutputPipelineError, Ym2413OutputPipelineFrame, Ym2413OutputPipelineState,
 };
 pub use pg_serial::{
     YM2413_PG_SERIAL_PIPELINE_STATE_VERSION, YM2413_PG_SERIAL_STATE_VERSION,
