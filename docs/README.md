@@ -40,6 +40,7 @@ PR Draft, branch, documento candidato ou CI parcialmente SKIPPED não alteram o 
 - [SMS1 × SMS2 — diferenças](hardware/sms1-sms2-hardware-difference-matrix-2026-11-15.md)
 - [SMS expansion and accessories roadmap](hardware/sms-expansion-accessories-roadmap.md)
 - [SG-1000](hardware/sg1000.md)
+- [Refinamento da arquitetura de cartuchos, mappers e ingestão de ROMs](architecture/cartridge-mapper-rom-ingestion.md)
 - [YM2413/FM model](architecture/ym2413-fm-model.md)
 - [SMS firmware/BIOS](architecture/sms-bios-firmware-loading.md)
 
