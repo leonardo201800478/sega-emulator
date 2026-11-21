@@ -1,11 +1,11 @@
 # YM2413 FM Completion Scorecard
 
 **Data de referência:** 2026-11-21
-**Repositório:** `leonardo201800478/sega-emulator`
-**Main atual após integração FM-3A:** `624bb3dc956080b18b5b924f94f3ab4ce49c83e4` (merge commit da PR #1147, 2026-11-21)
-**HEAD de código FM-3A validado antes do merge:** `c58a4215b81fff27e40a89c32b56f141f99d8964`
-**PR #1154 — FM-5.2A:** HEAD `0422cc85dcb6ceacf58246f97db900b5f23ef2f4`, aberta e validada nos gates aplicáveis.
-**PR #1156 — FM-5.2B:** branch draft empilhada sobre #1154; código validado no HEAD `6aed8b627b9b84b4459da1b0e65ffeb730b9fe35` (atualizações documentais posteriores na mesma branch).
+**Repositório:** `leonardo201800478/SUN`
+**Main atual:** `7e275424112d60f42b83380b60786fbd640c18b0`
+**PR #1154 — FM-5.2A:** HEAD `0422cc85dcb6ceacf58246f97db900b5f23ef2f4`, aberta; branch 20 commits à frente e 1 atrás da main (sem rebase ou merge nesta execução).
+**PR #1156 — FM-5.2B:** draft, empilhada sobre #1154; HEAD documental `e7b06bf1a6ba474721541fe198eb57cbf58e8095`.
+**PR #1157 — FM-5.3:** draft, empilhada sobre #1156; último HEAD de código `27650ff687c9495415644bca1db30585ffed21b9` (documentação posterior sem alteração de código).
 
 Este scorecard distingue implementação de componente, integração funcional, validação temporal e evidência física. Uma etapa só é considerada concluída quando seus critérios próprios estão demonstrados.
 
@@ -15,9 +15,13 @@ Este scorecard distingue implementação de componente, integração funcional, 
 
 Na `main` permanecem integrados os marcos FM-1, FM-2 e FM-3A: EG serial core-owned, serviço PG serial, operador FM, feedback, AM LFO e snapshots. As PRs #1133, #1145 e #1147 estão integradas. O FM-3A foi validado diferencialmente contra o Nuked-OPLL em 147.456 chamadas `OPLL_Clock`.
 
-A PR #1154 acrescenta o sequenciamento serial do LFSR (FM-5.2A). A PR draft empilhada #1156 acrescenta o primeiro caminho integrado de Rhythm Mode (FM-5.2B): roteamento dos cinco seletores, parâmetros rhythm-derived para PG/operador, equações PG de HH/SD/TCY, avanço LFSR pós-EG e snapshots dos latches de fase/saída. A execução de síntese de percussão continua condicionada a uma seed explícita; o reset físico não foi certificado.
+As PRs #1154, #1156 e #1157 continuam fora da main e empilhadas. FM-5.2C corrigiu a propriedade serial dos campos FB/DM do BD: o diferencial PG #364 eliminou `c_fb`/`c_dm` das divergências integradas. A divergência SD SL=6 (candidato de captura) versus SL=4 (Nuked fixado) e os estados EG dependentes continuam abertos; a tabela candidata não foi alterada para forçar paridade.
 
-O FM-5.2B já possui diferencial isolado do operador e dos cinco latches de ritmo aprovado, além de caracterização integrada de 147.456 chamadas com estado rígido de controle/temporização/LFSR coincidente com Nuked. A caracterização reporta divergências nos parâmetros de síntese derivados da tabela candidata (`c_fb`, `c_dm`, `c_sl` e estados EG dependentes), sem mascará-las. A fixture integrada agora usa os valores de frequência da Tabela III-9 do manual Yamaha e a regressão afirma explicitamente os slots físicos BD 13/16, HH 14, TOM 15, SD 17 e TC 18. CI #9825 e PG #361 passaram no HEAD de código validado. Ainda faltam certificação física dos patches/seed, saída final MO/RO/DAC/PCM, acumulação dos nove canais, portas FM F0–F2 no SMS e mixer PSG+FM. Não há PCM FM integrado ao runtime SMS nem validação física do chip.
+A PR draft #1157 acrescenta o serviço serial MO/RO, reutilizando a retenção existente, preservando as seis posições MO melódicas e as cinco saídas RO repetidas. A retenção agora preserva os dois níveis centrais medidos `-0` e `+0`, com snapshots v2. O último código `27650ff687c9495415644bca1db30585ffed21b9` recebeu CI #9852 **PASS**, PG differential #388 **PASS** e Rhythm reset #311 **PASS**. EG characterization #561 permanece em execução.
+
+A caracterização EG #550 concluiu como replay do Nuked, não como captura física: 506.768 replays de operador, 1.140.000 chamadas de sequenciador e 1.140.000 de timer sem divergências de replay; a matriz de 38 configurações ainda apresenta 44.064 divergências de nível e 71 de estágio para o candidato phase-minus-three. O candidato de fase externa é alimentado por latches e estados extraídos do próprio Nuked, portanto não é independente nem utilizável como correção de produção.
+
+Ainda faltam validação física de patches/seed, integração MO/RO ao core, palavra bruta do DAC e sua fase subclock, PCM, acumulação dos nove canais, portas FM F0–F2 no SMS e mixer PSG+FM. Não há PCM FM integrado ao runtime SMS nem validação física do chip.
 
 ## Marcos já publicados
 
@@ -44,8 +48,8 @@ O FM-5.2B já possui diferencial isolado do operador e dos cinco latches de ritm
 | FM-2 | PG serial e integração PG↔EG | **Integrado; diferencial de software aprovado** | PR #1145. 18 acumuladores, latches PG/PM, evento de reset de fase e snapshots; diferencial Nuked e limites de restauração aprovados. O alinhamento físico absoluto continua em aberto. |
 | FM-3 | Operadores, feedback e modulação | **FM-3A integrado e validado; FM-3 global parcial** | PR #1147. Operador serial, feedback de dois samples e AM LFO serial com diferencial integrado PASS. Faltam acumulação/roteamento final dos nove canais e PCM. |
 | FM-4 | Nove canais melódicos e instrumentos | **Parcial** | Decoder de registradores, patches candidatos e `evaluate_channel` existem. Ainda falta serviço temporal que percorra os nove canais e acumule uma amostra YM2413 final; presets não certificados por medição física. |
-| FM-5 | Rhythm Mode | **Parcial — caminho serial e caracterização de software integrados em branch draft** | PR #1154: LFSR serial FM-5.2A. PR #1156: roteamento BD/HH/TOM/SD/TCY, PG especial, operador e cinco latches. Diferencial isolado dos cinco latches PASS; caracterização integrada de 147.456 chamadas confirma controle/temporização/LFSR e reporta divergências da tabela candidata em `c_fb`, `c_dm`, `c_sl` e EG. Seed/patch físicos, MO/RO/DAC/PCM final e validação em hardware permanecem pendentes. |
-| FM-6 | Saída digital FM / DAC / PCM | **Parcial — contrato MO/RO isolado** | Roteamento por slot e nível reconstruído de domínio de medição existem. Falta conversão operador→palavra bruta do DAC, definição da janela subclock e PCM final. |
+| FM-5 | Rhythm Mode | **Parcial — FM-5.2C e serviço MO/RO FM-5.3 em PRs draft** | #1154 LFSR; #1156 roteamento/PG/operador de ritmo; #1157 serviço MO/RO e retenção de `-0`/`+0`. FB/DM corrigidos e PG diferencial #364 aprovado. SD SL/EG e seed/patch físicos continuam abertos. CI do último incremento pendente. |
+| FM-6 | Saída digital FM / DAC / PCM | **Parcial — MO/RO isolado; DAC bruto bloqueado por evidência** | Serviço MO/RO por slot e retenção de níveis medidos existem. A evidência andete 2015-03-05/11 corrige 511 para 512 picos medidos, incluindo dois zeros centrais. Falta codificação binária bruta, conversão operador→DAC, fase subclock, nível neutro e PCM. |
 | FM-7 | Perfis de hardware e integração SMS | **Pendente** | Portas F0–F2, latch/barramento, perfil Mark III/FM Unit e controle FM Auto/Off/On ainda não integrados ao runtime SMS. |
 | FM-8 | Mixer PSG + FM e áudio | **Pendente** | Acumulação determinística, mixer PSG+FM, resampling/saída host e snapshots agregados da máquina ainda não integrados. |
 
@@ -123,7 +127,7 @@ As seções históricas abaixo registram a evolução por PR e hipótese. Em cas
 
 As PRs #1133, #1145 e #1147 estão integradas à main. A PR #1154 (FM-5.2A) e a PR draft empilhada #1156 (FM-5.2B) permanecem fora da main. Não reabrir EG/PG/operador FM-3A sem regressão demonstrada.
 
-Próxima dependência do Rhythm Mode: reconciliar as divergências candidatas de `c_fb`, `c_dm`, `c_sl` e EG com evidência física, sem alterar parâmetros apenas para forçar paridade com Nuked; validar seed/patch em hardware; depois conectar retenção/roteamento MO/RO e definir palavra bruta do DAC/PCM. Em paralelo, FM-4 ainda precisa de dispatcher e acumulação dos nove canais melódicos.
+Próxima dependência do Rhythm Mode: concluir a validação exata do código FM-5.3 no CI atual; manter a divergência SD SL/EG caracterizada; integrar o serviço MO/RO ao core somente quando existir uma fonte de nível medido/digital temporalmente definida. Em FM-5.4, investigar a codificação bruta do DAC sem converter o intermediário do operador por suposição. Em paralelo, FM-4 ainda precisa de dispatcher e acumulação dos nove canais melódicos.
 
 Somente depois será correto fechar integração F0–F2 no SMS e mixer PSG+FM. Não usar integração SMS ou mixer como substituto da síntese FM ausente. Não declarar o chip pronto para ROMs enquanto não houver PCM FM reproduzível e regressões no runtime SMS/SG-1000.
 
@@ -1424,3 +1428,577 @@ validated against the pinned oracle, but the SD SL/EG divergence and physical
 patch uncertainty remain open. Do not start FM-5.3 implementation until the
 EG characterization result and exact-head CI are checked; then use the
 measured MO/RO schedule as the basis for a separate serial output stage.
+
+
+## FM-5.3 MO/RO output-service increment — 2026-11-21
+
+**Status: SERIAL OUTPUT SERVICE IMPLEMENTED; CORE INTEGRATION PENDING.**
+
+- Reused the existing main-branch `rhythm_output.rs` retention model and
+  `output.rs` MO/RO routing; no duplicate retention or pulse-width model.
+- Added `Ym2413RhythmOutputService` to compose the five retained percussion
+  values with the six surviving melodic MO slots in Rhythm Mode.
+- Output events preserve independent MO and RO pin identity.
+- The service accepts only explicit `Ym2413DacCode` measurement-domain
+  values, snapshots the retained values/cursor, and does not infer a raw DAC
+  word from the operator's signed intermediate.
+- Directed tests cover the measured 18-slot schedule, five identical repeats,
+  MO/RO independence, 3-active/1-neutral pulse width, transactional rejection,
+  and snapshot/restore across a slot-17 to slot-0 boundary.
+
+**Not complete:** this service is not yet called by `Ym2413Core`; no raw
+DAC-word conversion, neutral voltage, sub-clock pulse phase, PCM, SMS mixer,
+or Scheduler integration is claimed. The core remains the timing authority.
+
+### EG characterization #537 result
+
+The 38-configuration AR/DR/KSR characterization completed successfully as a
+reporting workflow, with important distinctions:
+
+- Hardware-operator replay: 506,768 samples, zero level mismatches and zero
+  stage mismatches.
+- EG sequencer replay: 1,140,000 calls, zero field mismatches.
+- EG timer replay: 1,140,000 calls, zero field mismatches.
+- Baseline rate-matrix candidate: 44,064 level mismatches and 71 stage
+  mismatches across 243,884 samples.
+- The separately evaluated external-rate-phase candidate: zero level and
+  stage mismatches across its compared samples.
+
+The workflow's SUCCESS means the characterization/replays completed; it does
+not mean the baseline candidate has zero mismatches. Do not change the
+production EG timing based only on a Nuked match; preserve the independent
+hardware replay evidence and investigate the candidate-rate phase separately.
+
+### Current validation caveat
+
+The previous CI #9828 failed on rustfmt at code commit `c9a5f731...`.
+Formatting was corrected in `6249ee472cde2f9f3615d5680d7ad0ddcdc3ff7e`.
+A new draft PR for the FM-5.3 service is used to obtain fresh CI on its
+current head. Until that workflow completes, do not mark the new service
+CI-validated.
+
+
+### Exact-head validation update — 2026-11-21
+
+For code commit `4af0e9ad6a0980e8c53fe65d8c224610c46017e0`:
+
+- CI #9841: **SUCCESS** — rustfmt, Clippy, workspace unit/integration tests,
+  observability runtime checks and documentation patch hygiene passed.
+- PG differential #377: **SUCCESS** — serial PG/operator, five rhythm latches,
+  AM LFO, FM-3 and integrated Rhythm Mode characterization completed.
+- Rhythm reset differential #300: **SUCCESS**.
+- EG characterization #550: final 38-configuration AR/DR/KSR sweep still
+  running; all preceding capture/replay/KSR/sequencer steps passed.
+
+The integrated Rhythm Mode differential retains only `c_sl`, `eg_sl` and
+`eg_state` candidate differences (8,092; 8,092; and 15,984 rows
+respectively). The SD SL candidate remains 6 versus pinned Nuked's 4.
+No `c_fb` or `c_dm` difference remains in that integrated report.
+
+The FM-5.3 service code is CI-validated as a standalone boundary. It is not
+yet integrated into `Ym2413Core`, the raw DAC conversion path, PCM, or the
+SMS mixer. Do not mark FM-5.3 complete.
+
+
+## EG #550 final result and evidence correction — 2026-11-21
+
+EG characterization #550 (run `44920956584`) completed successfully on code
+HEAD `4af0e9ad6a0980e8c53fe65d8c224610c46017e0`. Artifact:
+`ym2413-nuked-eg-characterization.zip`, ID `14713567996`,
+SHA-256 `c90a8ead1c272eb7a469ced43c72697c06936be4bfdcbfb3136c91c2b4100d6f`.
+
+**Important correction to earlier wording:** the workflow does not contain
+physical YM2413 capture data. The adapter generates its traces by calling
+the pinned Nuked-OPLL `OPLL_Reset`/`OPLL_Clock` implementation. The
+`eg_hardware_trace.rs` replay compares the Rust operator with Nuked-generated
+pre/post samples. Its 506,768 samples with zero mismatches are software
+differential replay, not physical hardware evidence. Likewise the 1,140,000
+sequencer calls and 1,140,000 timer calls replay Nuked-derived register/latch
+traces. Do not describe these as independent silicon captures.
+
+The exact 38-configuration rate matrix contains 243,884 selected samples:
+
+| Candidate | Level mismatches | Stage mismatches | Max absolute error |
+|---|---:|---:|---:|
+| Initial 127, deferred DAMP, unwrapped counter | 56,270 | 266 | 127 |
+| Initial 127, deferred DAMP, DECAY/SUSTAIN counter minus 3 | 44,064 | 71 | 127 |
+| Initial 127, wrapped counter | 83,586 | 266 | 127 |
+| Oracle-seeded external rate phase | 0 / 243,580 compared | 0 / 243,580 compared | 0 |
+
+The zero-mismatch external-rate candidate is **not an independent candidate**:
+the trace harness seeds each slot from Nuked's first observed post-DAMP level
+and state, excludes that row, then feeds each later update with rate-phase
+latches extracted from the preceding Nuked trace row. Eight seed rows per
+configuration are excluded (304 total). This is an oracle-fed isolation
+experiment, not a production rate-timer implementation. It cannot close
+the rate-phase/timer gate.
+
+For the phase-minus-three candidate, level mismatches by DR are:
+DR 0–4: 0; DR 5: 12,836; DR 6–7: 0; DR 8: 487; DR 9: 1,457;
+DR 10: 3,316; DR 11: 4,468; DR 12: 5,224; DR 13: 5,484;
+DR 14: 5,428; DR 15: 5,364. By KSR: KSR=0, 19,457; KSR=1, 24,607.
+The 12,836 DR=5 mismatches are the two AR=15 configurations (6,418 each).
+
+**Decision:** production EG remains unchanged. The phase-minus-three
+candidate remains mismatched. The oracle-fed external phase result remains
+diagnostic only. The timer/rate-latch generator needs an independent
+slot-phase investigation before any production timing change.
+
+Full audit:
+`docs/audits/ym2413-eg-rate-characterization-2026-11-21.md`.
+
+## FM-5.3 dual-zero retention and DAC evidence correction — 2026-11-21
+
+The earlier scorecard/audit wording that described only 511 measured YM2413 output levels and said -256 was absent was based on the initial 2015-02-09 histogram and is superseded by andete's 2015-03-05 oversampled follow-up. That follow-up resolved 512 peaks, including two unusually close central peaks interpreted as -0 and +0; the 2015-03-11 note further documents both levels. The author's proposal to collapse them in an idealized model is tentative.
+
+FM-5.3 now preserves both measured central-level tokens in `Ym2413DacCode`: `new(0)` is positive zero and `negative_zero()` is the distinct negative-zero candidate. The retention and MO/RO service state versions were advanced to 2. Tests cover distinctness, RO repeat retention and snapshot/restore.
+
+This representation remains a signed measured-output domain, **not** the raw nine-bit DAC word. The exact operator-i16 to DAC-word conversion, binary encoding, sub-clock latch phase and analog neutral level remain unresolved. Full evidence: `docs/audits/ym2413-dac-output-evidence-2026-11-21.md`.
+
+
+## FM-5.3 dual-zero retention — exact-head validation update
+
+Code HEAD: `27650ff687c9495415644bca1db30585ffed21b9`.
+
+- CI #9852: **SUCCESS** — rustfmt, Clippy, workspace unit/integration
+  tests, observability runtime Clippy/tests, and documentation hygiene.
+- PG differential #388: **SUCCESS** — all 147,456 calls and all 18 serial
+  cycles characterized. Strict serial/control/LFSR/timing passed. The
+  integrated Rhythm Mode result remains
+  `CHARACTERIZED_WITH_PATCH_CANDIDATE_DIVERGENCE`; only `c_sl`,
+  `eg_sl` and `eg_state` remain (8,092; 8,092; 15,984 rows).
+  FB/DM are not present in the integrated candidate-difference object.
+- Rhythm reset differential #311: **SUCCESS**.
+- EG characterization #561: still running at this update.
+
+The negative-zero tests pass as part of the workspace unit/integration suite.
+The two signed-zero tokens remain measured-domain values, not raw DAC words.
+No PCM or core integration is implied.
+
+The exact DAC evidence and unresolved binary encoding are documented in
+`docs/audits/ym2413-dac-output-evidence-2026-11-21.md`.
+
+
+## EG #561 final result — 2026-11-21
+
+EG characterization run `44922913393` completed **SUCCESS** on code HEAD
+`27650ff687c9495415644bca1db30585ffed21b9`. All 32 job steps passed,
+including the complete 38-configuration AR/DR/KSR sweep. Artifact
+`14714641687` (SHA-256
+`d29183dbcba6a52ea46612d4be6aaf05d949234210b7280108878d1296dc2f94`).
+
+The four-channel EG hardware-model replay passed 13,336 samples with zero
+level/stage mismatches; the sequencer replay passed 30,000 calls with zero
+field mismatches; and the integrated core replay passed 30,000 calls with
+zero field mismatches. These are software-oracle replay results, not physical
+silicon captures.
+
+The 38-configuration rate matrix still contains 44,064 level mismatches and
+71 stage mismatches for the deferred-DAMP/DECAY-phase-minus-three candidate
+across 243,884 samples. DR=5 contributes 12,836 level mismatches, all in
+AR=15 configurations; the first divergence shows Nuked's `maxrate` path
+transitioning level 127/state 3 to level 0/state 0 while the Rust candidate
+remains at 127/DECAY. DR 8–15 retain the remaining rate-dependent
+divergences. The phase-minus-three candidate is not accepted as a production
+fix, and the production EG algorithm remains unchanged.
+
+Full per-run evidence and next experiments:
+`docs/audits/ym2413-eg-rate-characterization-2026-11-21-run-561.md`.
+
+**Gate interpretation:** EG #561 closes the characterization workflow gate;
+it does not close EG rate-phase correctness, establish physical timing, or
+make the YM2413 complete. FM-5.3 MO/RO core integration remains separate.
+
+
+## FM-5.4 preliminary output-code mapping finding — 2026-11-21
+
+A review of andete's 2015-03-27 operator model identified the measured-output
+expression `255 - c`, where `c = lookupExp(s2) >> 4`. The author reports
+that this model predicts the measured output data. The 2015-04-09 notes
+describe one's-complement negation and its dual-zero representation; the
+2015-03-11 measurements confirm 512 output levels across 0..511 and distinct
+`-0`/`+0` values.
+
+The Rust serial operator's `channel_output` is `operator_output >> 3`, and
+its negative branch uses one's-complement negation. Therefore
+`255 - channel_output` is a credible **candidate measured-output-code
+mapping** (including positive zero -> 255 and negative zero -> 256). It
+covers 0..511 if the negative full-scale channel value is -256.
+
+This is not a direct capture of the physical operator-to-DAC bus. The Yamaha
+manual establishes a 9-bit DAC but does not specify the raw input encoding.
+Do not relabel this candidate as a proven physical DAC word or merge it into
+the production output service yet. Preserve the distinction between the
+operator's one's-complement i16 bit pattern and the signed measurement-domain
+tokens already retained by `Ym2413DacCode`.
+
+Full investigation and proposed non-production comparator:
+`docs/audits/ym2413-output-code-mapping-investigation-2026-11-21.md`.
+
+**Production decision:** no code change. Next FM-5.4 step is a directed,
+non-oracle-fed arithmetic comparison of operator output, channel output,
+candidate `255 - channel_output`, and the measured-output model, including
+both zeros and negative full scale. Physical DAC-word encoding remains
+unverified until independent digital evidence exists.
+
+
+## FM-5.4 measured-domain conversion helper — exact-head CI pending
+
+A bounded conversion API was added:
+`Ym2413DacCode::from_operator_channel_output(i16)`.
+
+It decodes the serial operator's one's-complement `channel_output` domain
+`-256..=255` into the signed measured-output domain `-255..=+255`,
+preserving `-0` (operator value -1) separately from `+0` (operator value
+0). The negative full-scale operator representation -256 maps to measured
+amplitude -255. Inputs outside the 9-bit one's-complement domain are rejected.
+
+An exhaustive test covers all 512 operator output patterns and verifies a
+bijective mapping, including both zero encodings and both endpoints. The
+helper is not yet called by `Ym2413RhythmOutputService` or the PG service;
+no timing or core integration is claimed. It is not a raw physical DAC word.
+
+Code commits:
+- `3092a6069a544bb755e52750fd3076aa2392dbf6` — conversion API and bounds.
+- `c510299c87e74b4c1ba27f7f8cc4d539048dd25e` — exhaustive 512-code test.
+
+Exact-head CI, PG differential, rhythm reset differential and EG
+characterization must be rerun on the final branch HEAD before the helper is
+accepted. The previously validated code HEAD `27650ff...` does not validate
+these new changes.
+
+
+## MO/RO temporal integration audit — 2026-11-21
+
+Pinned Nuked source confirms `OPLL_Channel` executes before
+`OPLL_Operator` and consumes the previous `ch_out` latch. More importantly,
+MO and RO use different cycle-to-measured-slot transforms:
+
+- MO: `(nuked_cycle + 3) % 18`; stable melodic mode has nine carrier outputs,
+  while stable Rhythm Mode has six MO outputs.
+- RO: `(nuked_cycle + 15) % 18`; its ten measured positions match the five
+  original and five repeated RO events. Stable active RO also depends on both
+  delayed `rm_enable` bits (bit 6 routing and bit 7 rhythm-source selection).
+
+For the original YM2413 branch, Nuked's muted pin value is sign-dependent;
+it is not a constant numeric zero. The current combined
+`Ym2413RhythmOutputService::process_slot` assumes one slot cursor for both
+pins and does not expose the sign-dependent neutral token. It must not be
+wired directly to the PG service with the raw core cycle.
+
+**Decision:** keep MO and RO integration blocked pending a separate per-pin
+adapter/cursor design, explicit neutral-token representation, and exact-cycle
+Nuked differential. The measured-domain operator conversion helper does not
+solve this temporal/pin-routing requirement.
+
+Full audit: `docs/audits/ym2413-mo-ro-cycle-alignment-2026-11-21.md`.
+
+
+## Exact-head formatting correction — 2026-11-21
+
+CI #9864 exposed two formatting-only failures:
+- Rustfmt requested a single-line assignment in the exhaustive 512-code test.
+- Documentation hygiene rejected five Markdown hard-break lines with trailing spaces in the EG #561 audit.
+
+Both were corrected without changing conversion semantics or characterization data. The Rust formatting correction is commit
+`05defa8d7f8f0e8c6eba8be759d06d0a0011a126`; the audit whitespace correction is commit
+`909bfea995848f3d925fef55a88fc8e4824045f1`.
+
+All exact-head workflows must be rerun on the final branch HEAD; no pass is claimed from the failed formatting run.
+
+
+## Corrected MO/RO cycle alignment and exact-head validation — 2026-11-21
+
+The previous MO/RO audit contained two interpretation errors and is
+superseded by the corrected report
+`docs/audits/ym2413-mo-ro-cycle-alignment-2026-11-21.md`.
+
+1. MO and RO use the **same** measured-slot coordinate:
+   `(nuked_cycle + 15) % 18`. The earlier MO `+3` transform was an
+   inverse-offset error. Independent per-pin cursors are not required merely
+   to compensate for different offsets.
+2. `rm_enable & 0x40` is a delayed mode-write pipeline bit, not a persistent
+   Rhythm Mode flag. Nuked shifts `rm_enable` every clock and loads its
+   upper bit during a register 0x0e write. The conditional MO/RO gating in
+   `OPLL_Channel` must be interpreted using that transient state. Nuked's
+   RO gating is explicitly marked as possibly incorrect in the pinned source.
+
+The new public helper `output_slot_for_nuked_cycle(cycle)` implements the
+shared 18-slot coordinate and rejects cycles outside 0..17. Unit tests cover
+all 18 cycle mappings and specifically prove alignment of the six measured
+Rhythm Mode MO slots and ten measured RO occurrences. This is only a
+coordinate conversion: it does not implement previous-`ch_out` timing,
+the extra output-buffer delay, `rm_enable` transition state, pin-neutral
+codes, or physical timing.
+
+Exact-head validations for pre-helper HEAD
+`1d0b9f09aabccb73d87620327ac27a7da6d328b7` all completed successfully:
+- CI #9868 (run `44924445269`): **SUCCESS**.
+- PG differential #404 (run `44924445347`): **SUCCESS**.
+- Rhythm reset differential #327 (run `44924445256`): **SUCCESS**.
+- EG characterization #577 (run `44924445358`): **SUCCESS**.
+
+These successes validate the prior conversion helper and code at that exact
+HEAD, not the new cycle-mapping helper. The current helper and export require
+fresh exact-head CI and differential runs. No core integration or YM2413
+completion is implied.
+
+
+## Final correction to MO/RO cycle coordinates — 2026-11-21
+
+The immediately preceding shared-offset correction was itself incorrect and
+is superseded by the final audit
+`docs/audits/ym2413-mo-ro-cycle-alignment-2026-11-21.md`.
+
+The pin schedules use distinct coordinate transforms:
+
+- MO: `(nuked_cycle + 3) % 18`. The base Nuked MO windows 0..2, 6..8
+  and 12..14 align with measured melodic carrier slots 3..5, 9..11 and
+  15..17. Persistent Rhythm Mode restricts the measured MO map to slots
+  3..5 and 9..11; that six-channel restriction must come from persistent
+  mode state, not transient `rm_enable & 0x40`.
+- RO: `(nuked_cycle + 15) % 18`. The conditional Nuked RO cycles align
+  with measured originals 13..17 and repeats 0,1,2,6,7. Nuked labels this
+  RO gate potentially incorrect, so this remains software schedule
+  correspondence only.
+
+`rm_enable` is shifted every `OPLL_Clock` and register 0x0e writes load
+its upper pipeline bit. Bit 6/7 are delayed transition state, not persistent
+Rhythm Mode flags. The previous shared helper was replaced with two public
+coordinate functions:
+`mo_output_slot_for_nuked_cycle` and
+`ro_output_slot_for_nuked_cycle`. Tests exhaustively verify all 18
+coordinates and the measured Rhythm Mode MO/RO positions.
+
+The combined output service still cannot be called with one raw Nuked cycle:
+MO and RO need separate slot coordinates, and the adapter must preserve the
+previous `ch_out` latch, output-buffer delay and sign-dependent neutral
+values. No PG/core integration is claimed.
+
+
+## MO/RO cycle adapter increment — exact-head validation pending
+
+The production output service now has distinct coordinate helpers and a
+bounded cycle entry point:
+
+- `mo_output_slot_for_nuked_cycle(cycle)`: `(cycle + 3) % 18`.
+- `ro_output_slot_for_nuked_cycle(cycle)`: `(cycle + 15) % 18`.
+- `Ym2413RhythmOutputService::process_nuked_cycle` computes both slots,
+  routes MO at its mapped slot, and advances the RO retention model at its
+  independently mapped slot. The RO retention cursor must be initialized to
+  the first mapped RO slot (for cycle zero, slot 15).
+
+The new cycle frame exposes both slot indices rather than pretending that
+one slot represents both pins. Unit tests cover all 18 mappings, the measured
+Rhythm Mode MO/RO positions, first-rotation uninitialized repeats, and
+transactional rejection of invalid cycles.
+
+This is still a slot-coordinate/retention adapter, not complete pin timing:
+the caller must provide already reconstructed measured-domain values. The
+method does not model the previous-`ch_out` latch, the additional
+`output_m/output_r` buffer delay, the transient `rm_enable` pipeline,
+sign-dependent neutral pin codes, or physical sub-clock phase. No core or
+PCM integration is claimed.
+
+Code commits:
+- `5c23dd51ba2282bf1e26eee4141c0f1ad57e83b2` — separate MO/RO transforms.
+- `4cfbfddbee6cd02059f620e6dcdeacc241545ddf` — public exports.
+- `cc9a632cd20dcca99612202fcf07e6af17538e9a` — cycle adapter and tests.
+- `3f273a2cc409185759dcbf6b2c73bf8c7fe932af` — frame export.
+
+The earlier shared-offset helper was removed. Exact-head CI, PG differential,
+rhythm reset differential and EG characterization are pending for this code.
+
+
+## Test-source correction before exact-head rerun
+
+The first workflow attempt on the new adapter exposed an unclosed test-module
+delimiter caused by a duplicated test attribute/signature in
+`output.rs`. The duplicate was removed and an unused test import was
+dropped. This was a source-structure error, not a behavioral test failure.
+The failing reset differential stopped at Rust compilation before executing
+its comparison. Exact-head CI and all YM2413 differentials are rerun after
+this correction; no pass is claimed for the failed attempt.
+
+
+## Rustfmt correction for the MO/RO cycle adapter
+
+The first CI attempt on the adapter found only formatting differences:
+- public re-export ordering/line wrapping in `native/ym2413/src/lib.rs`;
+- line wrapping in the two 18-entry mapping tests in `native/ym2413/src/output.rs`.
+
+Both were corrected with rustfmt-equivalent edits. No behavior or test data changed. Formatting commits:
+- `8dd7c754ad1a4021da0087fcef69e00cafcbe37b`
+- `51723854e724eefe9487c2d420a1fd1930fa1bcd`
+
+The CI failure was formatting-only. A fresh CI run is requested against the current PR head after the correction.
+
+
+## Latest exact-head validation status — 2026-11-21
+
+Current PR head: `fe7a774b4c4451515d8fb410dd0e5b5dfbdc70a7`.
+
+- CI #9888 (run `44926109073`): change classification and documentation
+  hygiene passed; Rust workspace regression is still running in the
+  observability runtime-feature validation step.
+- PG differential #424 (run `44926109082`): in progress at the integrated
+  core-owned serial PG comparison.
+- Rhythm reset differential #347 (run `44926109104`): **SUCCESS**.
+- EG characterization #597 (run `44926109099`): in progress at the complete
+  38-configuration AR/DR/KSR sweep.
+
+The earlier CI #9887 cancellation and the preceding formatting-only failure
+are not treated as passing validations. No final code-validation claim is
+made until CI #9888 and the PG/EG jobs complete.
+
+
+## Atualização de validação exata — 2026-11-21 (HEAD `77c7dbae414a0f99a4a47afde4947a5be52774c1`)
+
+Estado GitHub confirmado:
+- `main`: `7e275424112d60f42b83380b60786fbd640c18b0` (inalterada).
+- PR #1157: aberta, draft, branch `feat/ym2413-fm5-3-mo-ro-output-service`, base #1156; sem merge.
+- PR #1156: aberta, draft, empilhada sobre #1154; sem merge.
+- PR #1154: aberta, não draft, direcionada à `main`; sem merge.
+- A cadeia #1154 → #1156 → #1157 permanece empilhada. Não rebasear nem alterar a base automaticamente.
+
+Workflows do checkpoint:
+- PG differential #425, run `44926303535`: **workflow SUCCESS**, executado no HEAD `77c7dbae...`. O sucesso confirma execução e geração dos relatórios, não equivalência física nem fechamento da saída MO/RO. O job também registra divergências de dados candidatos de preset e diagnóstico de fase; esses dados devem permanecer caracterizados, sem promover hipótese de alinhamento a correção.
+- EG characterization #598, run `44926303531`: **workflow SUCCESS**, executado no mesmo HEAD. O relatório registra 243.884 amostras na matriz de 38 configurações, com 44.064 divergências de nível e 71 de estágio no candidato phase-minus-three. Os 506.768 replays de operador, 1.140.000 chamadas do sequenciador e 1.140.000 chamadas do timer não tiveram divergências de replay. São replays contra traços gerados pelo Nuked fixado, não capturas independentes de silício. O candidato external-rate continua teacher-forced e não pode ser promovido.
+- CI #9888, run `44926109073`: **SUCCESS** no HEAD `fe7a774b4c4451515d8fb410dd0e5b5dfbdc70a7`. O HEAD atual `77c7dbae...` contém somente atualização documental posterior, conforme histórico da PR; portanto, o runtime validado pelo CI não mudou. O CI #9888 não é uma validação do novo pipeline de pinos, que ainda não existe.
+
+## Próxima implementação bloqueante — pipeline temporal de pinos
+
+A inspeção de `output.rs` confirma que `Ym2413RhythmOutputService` ainda recebe níveis já reconstruídos no domínio medido. O serviço não possui estado para `ch_out` anterior, código neutro assinado, incremento positivo de `OPLL_Channel`, estágio de saída/buffer anterior nem pipeline temporal de `rm_enable`. Os testes atuais cobrem roteamento por slots, offsets independentes, retenção, zero negativo e snapshots; não cobrem a sequência completa `OPLL_Clock`.
+
+O Nuked fixado confirma a ordem observável: copiar `output_m/output_r` para o buffer; deslocar `rm_enable`; aplicar escrita pendente do modo; executar `OPLL_Channel` consumindo o `ch_out` anterior; executar `OPLL_Operator` para atualizar o próximo `ch_out`. Para o YM2413 original, o estágio de canal aplica incremento a `ch_out` não negativo e usa `ch_out >> 8` como código neutro com incremento correspondente quando não negativo. O comportamento RO do Nuked permanece explicitamente marcado como possivelmente incorreto.
+
+Decisão: não encaixar esse comportamento em `Ym2413DacCode`, que continua sendo token de amplitude medida. A próxima implementação deve introduzir um tipo separado para o código digital/comportamental do pino e um estado serial versionado que preserve as duas fronteiras de pipeline. A retenção medida MO/RO existente deve continuar isolada até que a conversão e a fase de observação tenham contrato explícito. Nenhuma integração ao core ou PCM deve ser inferida deste adaptador.
+
+**Status:** auditoria de estado concluída; pipeline temporal MO/RO ainda não implementado. Nenhuma alteração de runtime, rebase, merge ou atualização da `main` foi realizada nesta atualização.
+
+
+## Atualização supersedente — pipeline MO/RO implementado e diferencialmente validado (2026-11-21)
+
+HEAD da branch: f18848a450f1209c9777cdcc8238a4db1c9c5939.
+
+A antiga seção que classificava o pipeline temporal como ainda não implementado
+foi supersedida por esta entrega. O serviço de retenção medido continua
+separado; o novo módulo digital está em native/ym2413/src/output_pipeline.rs.
+
+Implementado:
+- Latches independentes para ch_out anterior e output_m/output_r anteriores.
+- Ordem de OPLL_Clock: cópia do buffer, shift assinado de rm_enable, escrita
+  qualificada de modo, estágio de canal e latch do próximo resultado do operador.
+- Código neutro dependente do sinal e incremento do caminho positivo.
+- Gate de MO/RO conforme a sequência do Nuked original.
+- Estado serial versionado e restauração determinística.
+- Testes unitários para sequência, sinal, zero, 0x0e, shift assinado, mute,
+  ciclo 18 e snapshot/restore.
+
+Descoberta relevante: rm_enable é int8_t no opll.h. O shift negativo do Nuked
+é aritmético no compilador usado pelo workflow; o modelo Rust passou a usar
+i8, reproduzindo a extensão de sinal observada. Não tratar rm_enable como
+u8 com shift lógico nem como booleano persistente.
+
+Diferencial dedicado:
+- Workflow #44930418493: SUCCESS, 1.200 ciclos.
+- Dois traces do Nuked foram byte-idênticos.
+- Escritas qualificadas 0x0e: 0x3f e 0x00.
+- 181 amostras com ch_out não zero.
+- Buffer MO/RO, latches pós-ciclo, rm_enable assinado, ch_out anterior/próximo
+  e cursor serial coincidiram.
+- Workflow do adaptador externo #44930418525: SUCCESS.
+- Rhythm reset differential #44930418590: SUCCESS.
+
+O relatório detalhado está em
+docs/audits/ym2413-mo-ro-output-pipeline-2026-11-21.md.
+
+CI #44930236424 passou para o primeiro commit da implementação e diferencial.
+No HEAD mais recente, CI #44930418522: rustfmt e documentação passaram; Clippy,
+testes gerais e validação final ainda estavam em execução no momento desta
+atualização. PG #44930418468 e EG #44930418372 também permaneciam em execução.
+
+**Classificação:** pipeline digital isolado validado por differential testing
+contra Nuked. Não é evidência de silício e ainda não está integrado ao core
+de produção, ao PCM ou ao serviço de retenção medido. YM2413 permanece aberto.
+
+A PR #1157 continua Draft. Nenhum rebase, merge ou alteração na main foi feito.
+
+
+## Atualização de workflows e limite de integração — 2026-11-21
+
+Status no código HEAD f18848a450f1209c9777cdcc8238a4db1c9c5939:
+- CI #44930418522: SUCCESS após rerun do job cancelado. Rustfmt, Clippy,
+  documentação, testes do workspace e qualidade passaram.
+- PG Differential #44930418468: SUCCESS como execução de workflow. Os dados
+  continuam caracterizados com divergências de candidatos de preset/fase;
+  sucesso do workflow não significa fechamento do PG nem validação de silício.
+- EG Characterization #44930418372: ainda em execução no último checkpoint;
+  a matriz de 38 configurações ainda não tinha publicado o resultado final.
+- MO/RO differential #44930418493: SUCCESS, 1.200 ciclos, comparações exatas.
+- PR #1157 permanece Draft; #1156 permanece Draft; #1154 permanece aberta.
+- main permanece em 7e275424112d60f42b83380b60786fbd640c18b0.
+
+### Fronteira identificada para a próxima integração
+
+A inspeção do core e do serviço PG identificou duas condições que impedem
+uma integração ingênua:
+
+1. Ym2413Core já é a autoridade de rm_enable: mantém o campo assinado e faz
+   seu deslocamento/aplicação de escrita durante a sequência de slots. O
+   pipeline isolado desloca rm_enable para reproduzir o Nuked no differential.
+   A integração de produção deve consumir o valor pós-update fornecido pelo
+   core, sem deslocá-lo uma segunda vez.
+2. Ym2413PgSerialService deliberadamente não executa o operador em slots de
+   Rhythm Mode cujo estado de ruído ainda não foi semeado. Nesses ciclos não
+   existe um próximo ch_out validado. Alimentar zero ou reutilizar o último
+   valor fabricaria uma saída e esconderia a lacuna de fidelidade.
+
+Contrato recomendado para integração:
+- método de processamento que receba rm_enable pós-update do core;
+- entrada opcional para o próximo ch_out, propagando explicitamente saída
+  desconhecida quando o operador de Rhythm Mode não pode ser calculado;
+- frame MO/RO com validade explícita, sem converter desconhecido em silêncio;
+- estado do pipeline incluído no snapshot do serviço serial, com cursor
+  alinhado ao ciclo do core;
+- testes de execução contínua/blocos e restore incluindo transições entre
+  Rhythm Mode desabilitado, habilitado com seed e habilitado sem seed.
+
+Nenhuma integração foi forçada nesta etapa: isso evita duplicar o estado
+temporal do core ou inventar amostras nos slots sem ruído validado.
+
+
+## Resultado final dos workflows de caracterização — 2026-11-21
+
+Após o checkpoint anterior, os workflows pendentes terminaram:
+
+**PG Differential #425 — run 44930418468: SUCCESS**
+- 2.600 chamadas, 46.800 valores de fase comparados.
+- PG base: 65.536 tuplas; zero divergências após floor normalization,
+  mas 256 divergências em unidade comum exata e 256 casos de meio LSB Rust.
+- PM: 524.288 tuplas; 404.965 divergências na posição sem rotação.
+- Melhor rotação cíclica observada: 6.
+- A tabela PM do MAME coincide com o candidato Rust após offset 6 e truncamento
+  em direção a zero. Isso é caracterização de candidato, não prova de origem
+  física da fase nem justificativa para alterar a implementação sem evidência.
+
+**EG Characterization #598 — run 44930418372: SUCCESS**
+- Matriz de 38 configurações AR/DR/KSR.
+- 243.884 amostras; 44.064 divergências de nível e 71 de estágio no candidato
+  initial_127_deferred_decay_phase_minus3.
+- Controle baseline: 56.270 divergências de nível e 266 de estágio.
+- Replays do sequenciador e timer: zero divergências de campo em 1.140.000
+  chamadas cada.
+- Replay do operador: zero divergências de nível/estágio em 506.768 amostras.
+- O candidato external_rate_phase apresentou zero divergências, mas continua
+  teacher-forced com fase externa/oráculo e não é uma correção independente.
+- O sucesso do workflow significa que a caracterização foi executada; EG não
+  está fechado.
+
+**CI #44930418522: SUCCESS** após rerun do job cancelado pela atualização da
+branch. Rustfmt, Clippy, higiene documental e testes do workspace passaram.
+
+**Estado global:** saída MO/RO digital isolada aprovada contra Nuked; PG e EG
+continuam em caracterização com divergências/candidatos não certificados.
+A integração de produção permanece pendente conforme a fronteira descrita
+neste scorecard.

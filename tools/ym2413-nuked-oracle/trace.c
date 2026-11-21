@@ -179,6 +179,11 @@ int main(int argc, char **argv) {
     for (uint64_t tick = 0; tick < calls; ++tick) {
         int32_t output[2] = {0, 0};
         uint32_t cycle_before = chip.cycles;
+        int16_t output_pipe_ch_out_before = chip.ch_out;
+        int8_t output_pipe_rm_enable_before = chip.rm_enable;
+        uint8_t output_pipe_mode_write_address_before = chip.write_mode_address;
+        uint8_t output_pipe_write_d_en_before = chip.write_d_en;
+        uint8_t output_pipe_write_data_before = chip.write_data;
         /* Inputs consumed by OPLL_PhaseCalcIncrement during this call. */
         uint16_t calc_fnum = chip.c_fnum;
         uint16_t calc_block = chip.c_block;
@@ -278,6 +283,12 @@ int main(int argc, char **argv) {
         printf(",\"op_calc_op_fb1\":"); print_i16_array(op_calc_op_fb1, 9);
         printf(",\"op_calc_op_fb2\":"); print_i16_array(op_calc_op_fb2, 9);
         printf(",\"output_m\":%" PRId32 ",\"output_r\":%" PRId32, output[0], output[1]);
+        printf(",\"output_pipe_ch_out_before\":%d,\"output_pipe_rm_enable_before\":%d",
+               (int)output_pipe_ch_out_before, (int)output_pipe_rm_enable_before);
+        printf(",\"output_pipe_mode_write_address_before\":%u,\"output_pipe_write_d_en_before\":%u,\"output_pipe_write_data_before\":%u",
+               (unsigned)output_pipe_mode_write_address_before,
+               (unsigned)output_pipe_write_d_en_before,
+               (unsigned)output_pipe_write_data_before);
         printf(",\"pg_inc\":%" PRIu32 ",\"pg_phase_next\":%" PRIu32 ",\"pg_phase\":",
                chip.pg_inc, chip.pg_phase_next);
         print_u32_array(chip.pg_phase, 18);

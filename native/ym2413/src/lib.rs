@@ -17,6 +17,7 @@ pub mod instrument;
 pub mod key_scale;
 pub mod operator;
 pub mod output;
+pub mod output_pipeline;
 pub mod pg_serial;
 pub mod phase;
 pub mod pm_lfo;
@@ -76,8 +77,16 @@ pub use operator::{
 };
 pub use output::{
     YM2413_OUTPUT_ACTIVE_CLOCKS, YM2413_OUTPUT_NEUTRAL_CLOCKS, YM2413_OUTPUT_SLOT_CLOCKS,
-    Ym2413OutputPin, Ym2413OutputPulse, Ym2413OutputRoutingError, Ym2413OutputSlotResult,
-    Ym2413OutputSource, melody_output_for_slot, rhythm_output_event, rhythm_slot_result,
+    YM2413_RHYTHM_OUTPUT_SERVICE_STATE_VERSION, Ym2413OutputCycleFrame, Ym2413OutputPin,
+    Ym2413OutputPulse, Ym2413OutputRoutingError, Ym2413OutputSlotResult, Ym2413OutputSource,
+    Ym2413RhythmOutputFrame, Ym2413RhythmOutputService, Ym2413RhythmOutputServiceError,
+    Ym2413RhythmOutputServiceState, melody_output_for_slot, mo_output_slot_for_nuked_cycle,
+    rhythm_output_event, rhythm_slot_result, ro_output_slot_for_nuked_cycle,
+};
+pub use output_pipeline::{
+    YM2413_CHANNEL_OUTPUT_MAX, YM2413_CHANNEL_OUTPUT_MIN, YM2413_OUTPUT_PIPELINE_STATE_VERSION,
+    Ym2413NukedOutputCode, Ym2413OutputPipeline, Ym2413OutputPipelineError,
+    Ym2413OutputPipelineFrame, Ym2413OutputPipelineState,
 };
 pub use pg_serial::{
     YM2413_PG_SERIAL_PIPELINE_STATE_VERSION, YM2413_PG_SERIAL_STATE_VERSION,

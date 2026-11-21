@@ -308,3 +308,181 @@ The previous “Next, rerun...” instruction is superseded: PG differential #36
 has now run and verified the FB/DM correction. The next work item remains
 isolating the SD SL/EG candidate difference, not changing the candidate table
 without new hardware evidence.
+
+
+## FM-5.3 investigation and output-service increment — 2026-11-21
+
+The original andete rhythm analysis at commit
+`4893d1c09faa0450b5d3355f19b7682d72822501` gives a measured 18-slot output
+schedule. Each slot is four input clocks; one full rotation is 72 input clocks
+(about 49.7 kHz at 3.57 MHz). The measured table is:
+
+| Physical slot | RO output | MO output |
+|---:|---|---|
+| 0 | HH repeat | — |
+| 1 | TOM repeat | — |
+| 2 | BD repeat | — |
+| 3 | — | melodic channel 0 |
+| 4 | — | melodic channel 1 |
+| 5 | — | melodic channel 2 |
+| 6 | SD repeat | — |
+| 7 | TC repeat | — |
+| 8 | — | — |
+| 9 | — | melodic channel 3 |
+| 10 | — | melodic channel 4 |
+| 11 | — | melodic channel 5 |
+| 12 | — | — |
+| 13 | HH original | — |
+| 14 | TOM original | — |
+| 15 | BD original | — |
+| 16 | SD original | — |
+| 17 | TC original | — |
+
+Andete reports that the five repeated percussion values are identical to
+their original outputs, even when parameters change between the two
+occurrences. The 9-by-5 shift-register topology suggested by the FHB013
+derivative die shot is not treated as proof of the YM2413's physical layout;
+the implementation models only the observed behavior.
+
+The 2015 measurement note reports separate MO and RO analog pins and a
+9-bit digital output domain with 511 observed levels (-255..+255). The
+MSX Resource Center reverse-engineering report independently states that
+each selected output level remains active for three input clocks before the
+pin returns to its neutral position. This supports the existing three-active,
+one-neutral pulse-width contract. It does not determine the sub-clock phase
+or neutral voltage.
+
+### Existing output components and new composition
+
+The following components already existed on `main` and were not duplicated:
+
+- `rhythm_output.rs`: versioned five-value retention, original slots 13..17,
+  repeated slots 0/1/2/6/7, and explicit uninitialized-repeat results.
+- `output.rs`: independent MO/RO routing, measured pulse width and event
+  validation.
+
+The FM-5.3 branch adds `Ym2413RhythmOutputService`, which composes those
+components into one serial slot boundary:
+
+- accepts an explicit measured-domain level for MO only at slots 3/4/5/9/10/11;
+- accepts original percussion levels only at slots 13..17;
+- emits retained duplicate values at slots 0/1/2/6/7 without recomputation;
+- returns MO and RO independently in `Ym2413RhythmOutputFrame`;
+- snapshots the retention values and cursor with a versioned state;
+- rejects invalid slot/input placement without mutating the retention state.
+
+The service accepts `Ym2413DacCode` only. It does not derive this value from
+the signed operator intermediate, create a raw nine-bit DAC word, combine
+MO+RO, generate PCM, choose a sub-clock pulse phase, or advance the master
+clock. The caller must invoke it once per completed slot under the existing
+core/Scheduler timing authority.
+
+### FM-5.3 status
+
+**Implemented as a standalone serial output-service boundary; not yet
+integrated into Ym2413Core or SMS audio.** The remaining gates are:
+
+- run the new six-MO/five-rhythm routing and snapshot/restore tests in CI;
+- verify the output event schedule against the measured table and the pinned
+  oracle's pin mux without treating Nuked as physical proof;
+- define the handoff from the future operator-to-DAC converter to
+  `Ym2413DacCode` without inferring a raw code from the signed intermediate;
+- integrate the service into the core's slot boundary only when that
+  measured-domain source exists;
+- retain unresolved sub-clock pulse phase and neutral electrical level as
+  explicit limitations.
+
+No PCM or DAC conversion is included in this increment.
+
+
+### Source-quality qualification: sweep.cc and model6.cc
+
+The two C++ files are engineering tools/models, not independent ROM dumps:
+
+- `sweep.cc` searches model state and parameters to minimize squared error
+  against a previously captured `gold` vector. It includes random search
+  for large parameter spaces and exposes candidate variables such as the
+  noise state, phase offsets and phase-update ordering. Most instrument
+  register sweep rows are commented out. Its best-fit output is therefore a
+  model-fit result conditional on its fixture and assumptions, not a
+  direct measurement of an internal YM2413 register or ROM byte.
+- `model6.cc` is an experimental behavioral model. It explicitly marks
+  phase update/reset ordering as uncertain ("seems better"), contains TODOs
+  for the actual HH/TCY patches and phase sources, and initializes its
+  instrument table from an earlier software implementation with a
+  verification TODO. Its HH/SD/TCY Boolean equations are useful hypotheses
+  and cross-checks, not proof of the physical truth table.
+- `results/20150209.txt` describes a measurement pipeline that used a
+  shaping board and ADC. It documents noise, nonlinearities, peak fitting,
+  calibration drift and uncertain assignments for ADC samples halfway
+  between reconstructed output levels. The measured -255..+255 domain is
+  useful, but the document explicitly presents itself as work in progress.
+
+Accordingly, the FM-5.3 service uses the measured output slot schedule and
+verbatim repeated measurement-domain values. It does not import the
+experimental model's operator-to-output conversion or infer raw DAC bits.
+The three-active-clock pulse claim is cross-checked against the 2015
+MSX Resource Center reverse-engineering report:
+https://www.msx.org/pt-br/photoshoots/ym2413-reverse-engineering-progress
+
+
+### Exact-head validation — FM-5.3 service code commit 4af0e9a
+
+The following GitHub Actions results apply to code HEAD
+`4af0e9ad6a0980e8c53fe65d8c224610c46017e0`:
+
+- CI #9841: **SUCCESS**. Formatting, workspace Clippy, workspace unit and
+  integration tests, observability-feature Clippy/tests, and documentation
+  hygiene completed successfully. The new MO/RO service unit tests are part
+  of the workspace test run.
+- PG differential #377: **SUCCESS**. The serial operator, all five rhythm
+  latches, AM LFO, integrated FM-3 and integrated Rhythm Mode comparisons
+  completed. The Rhythm Mode report remains
+  `CHARACTERIZED_WITH_PATCH_CANDIDATE_DIVERGENCE`, with only:
+  - `c_sl`: 8,092 rows, first call 1,815, Nuked=4/Rust=6;
+  - `eg_sl`: 8,092 rows, first call 1,816, Nuked=4/Rust=6;
+  - `eg_state`: 15,984 rows, first call 79,001.
+  No `c_fb` or `c_dm` entry remains in the integrated Rhythm Mode
+  `candidate_patch_differences` object.
+- Rhythm reset differential #300: **SUCCESS**.
+- EG characterization #550: still running its final 38-configuration
+  AR/DR/KSR sweep at the time of this update. All earlier capture, reset,
+  single-/four-channel replay, KSR, and sequencer replay steps completed
+  successfully. Do not claim the complete characterization run until its
+  final sweep and artifact-retention steps finish.
+
+These are software-oracle and regression results. They do not certify the
+physical YM2413 patch ROM, power-on LFSR seed, analog MO/RO levels, or raw DAC
+mapping.
+
+## DAC level-count correction and signed-zero retention — 2026-11-21
+
+The earlier statement that the YM2413 had 511 measured output levels and that -256 was absent relied on `results/20150209.txt` alone. That note was explicitly corrected by `results/20150305.txt` at the same andete commit: 16x oversampling resolved 512 peaks, including two close central peaks interpreted as -0 and +0. `results/20150311.txt` further identifies both central values in captured output. The author's suggested idealized collapse of the two zeros is tentative. The 2015-02-09 count must not be treated as the final measurement.
+
+FM-5.3 now preserves the two measured central-level tokens in the rhythm retention type, without claiming a raw 9-bit DAC encoding. See `docs/audits/ym2413-dac-output-evidence-2026-11-21.md` for source-by-source qualification and remaining unknowns.
+
+
+### Post signed-zero FM-5.3 validation — PG differential #388
+
+The latest output-retention code commit
+`27650ff687c9495415644bca1db30585ffed21b9` passed the PG differential
+workflow #388:
+
+- 147,456 calls compared across all 18 serial cycles.
+- Strict serial/control/LFSR/timing comparison: PASS.
+- Integrated Rhythm Mode status remains
+  `CHARACTERIZED_WITH_PATCH_CANDIDATE_DIVERGENCE`.
+- The integrated candidate-difference object contains only:
+  - `c_sl`: 8,092 rows, first call 1,815, Nuked=4/Rust=6.
+  - `eg_sl`: 8,092 rows, first call 1,816, Nuked=4/Rust=6.
+  - `eg_state`: 15,984 rows, first call 79,001.
+- No `c_fb` or `c_dm` candidate difference remains in the integrated
+  Rhythm Mode result.
+- Rhythm reset differential #311: SUCCESS.
+- CI #9852: SUCCESS, including workspace tests and observability runtime
+  tests; the negative-zero retention tests are included in the workspace
+  suite.
+- EG characterization #561 remained in progress at this update.
+
+This is software differential evidence. It does not establish the physical
+SD sustain ROM, raw DAC word, or analog output.

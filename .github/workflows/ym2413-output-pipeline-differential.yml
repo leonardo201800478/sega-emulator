@@ -1,0 +1,66 @@
+name: YM2413 Nuked MO/RO output-pipeline differential
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "native/ym2413/**"
+      - "tools/ym2413-nuked-oracle/trace.c"
+      - "tools/ym2413-nuked-oracle/extract_output_pipeline_csv.py"
+      - "tools/ym2413-nuked-oracle/fixtures/output-pipeline.csv"
+      - ".github/workflows/ym2413-output-pipeline-differential.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  output-pipeline-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout emulator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned Nuked-OPLL
+        env:
+          NUKED_SHA: 1269cf5a783b65583b50fa2464d08be75830aaa0
+        run: |
+          git clone https://github.com/nukeykt/Nuked-OPLL.git "$RUNNER_TEMP/Nuked-OPLL"
+          git -C "$RUNNER_TEMP/Nuked-OPLL" checkout "$NUKED_SHA"
+          test "$(git -C "$RUNNER_TEMP/Nuked-OPLL" rev-parse HEAD)" = "$NUKED_SHA"
+
+      - name: Compile independent Nuked trace adapter
+        run: |
+          cc -std=c11 -O2 -Wall -Wextra \
+            -I"$RUNNER_TEMP/Nuked-OPLL" \
+            tools/ym2413-nuked-oracle/trace.c \
+            "$RUNNER_TEMP/Nuked-OPLL/opll.c" \
+            -o "$RUNNER_TEMP/ym2413-nuked-trace"
+
+      - name: Capture deterministic MO/RO output trace twice
+        run: |
+          "$RUNNER_TEMP/ym2413-nuked-trace" --calls 1200 \
+            --events tools/ym2413-nuked-oracle/fixtures/output-pipeline.csv \
+            > "$RUNNER_TEMP/output-pipeline-a.jsonl"
+          "$RUNNER_TEMP/ym2413-nuked-trace" --calls 1200 \
+            --events tools/ym2413-nuked-oracle/fixtures/output-pipeline.csv \
+            > "$RUNNER_TEMP/output-pipeline-b.jsonl"
+          cmp "$RUNNER_TEMP/output-pipeline-a.jsonl" "$RUNNER_TEMP/output-pipeline-b.jsonl"
+
+      - name: Extract cycle-ordered output pipeline vectors
+        run: |
+          python3 tools/ym2413-nuked-oracle/extract_output_pipeline_csv.py \
+            --trace "$RUNNER_TEMP/output-pipeline-a.jsonl" \
+            --output "$RUNNER_TEMP/output-pipeline.csv"
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+
+      - name: Differentially replay MO/RO pipeline in Rust
+        run: |
+          cargo run --quiet --locked \
+            --manifest-path native/ym2413/Cargo.toml \
+            --example output_pipeline_trace -- "$RUNNER_TEMP/output-pipeline.csv"

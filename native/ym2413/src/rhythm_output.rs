@@ -12,29 +12,78 @@ pub const YM2413_DAC_CODE_MIN: i16 = -255;
 /// Highest signed output-level value reconstructed from YM2413 measurements.
 pub const YM2413_DAC_CODE_MAX: i16 = 255;
 /// Version of the rhythm output-retention snapshot.
-pub const YM2413_RHYTHM_OUTPUT_DELAY_STATE_VERSION: u16 = 1;
+pub const YM2413_RHYTHM_OUTPUT_DELAY_STATE_VERSION: u16 = 2;
 
-/// One signed, measurement-domain YM2413 output level.
+/// One measured-domain YM2413 output level, including the distinct negative zero.
 ///
-/// This wrapper stores the reconstructed amplitude domain `-255..=+255`.
-/// It is not the raw nine-bit DAC input word and does not preserve the two
-/// distinct one's-complement zero encodings. No conversion from the operator's
-/// `i16` representation is defined here.
+/// The measured amplitude values span `-255..=+255`. Andete's 2015-03-05
+/// oversampled capture resolved two separate central peaks, interpreted in
+/// the follow-up as `-0` and `+0`. This token preserves that distinction for
+/// output retention. It is not the raw nine-bit DAC input word, and it does
+/// not define a conversion from the operator's one's-complement `i16` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Ym2413DacCode(i16);
+pub struct Ym2413DacCode {
+    value: i16,
+    negative_zero: bool,
+}
 
 impl Ym2413DacCode {
     /// Construct a signed measured-domain output level, rejecting values outside its range.
+    ///
+    /// Passing zero constructs the positive-zero token. Use negative_zero()
+    /// when the measured negative-zero level is the source value.
     pub const fn new(value: i16) -> Result<Self, Ym2413RhythmOutputError> {
         if value < YM2413_DAC_CODE_MIN || value > YM2413_DAC_CODE_MAX {
             return Err(Ym2413RhythmOutputError::InvalidDacCode(value));
         }
-        Ok(Self(value))
+        Ok(Self {
+            value,
+            negative_zero: false,
+        })
     }
 
-    /// Return the signed reconstructed output-level value.
+    /// Construct the separately observed negative-zero measurement token.
+    pub const fn negative_zero() -> Self {
+        Self {
+            value: 0,
+            negative_zero: true,
+        }
+    }
+
+    /// Decode the serial operator's one's-complement channel-output latch into
+    /// the signed measured-output domain.
+    ///
+    /// The operator latch spans -256..=255 as an i16 bit-pattern: -1 is the
+    /// distinct negative-zero encoding and -256 represents negative full
+    /// scale (-255 amplitude). This conversion preserves both zeros and does
+    /// not expose or claim the physical DAC's raw input word.
+    pub const fn from_operator_channel_output(
+        channel_output: i16,
+    ) -> Result<Self, Ym2413RhythmOutputError> {
+        if channel_output < -256 || channel_output > 255 {
+            return Err(Ym2413RhythmOutputError::InvalidOperatorChannelOutput(
+                channel_output,
+            ));
+        }
+        if channel_output >= 0 {
+            return Self::new(channel_output);
+        }
+        let magnitude = !channel_output;
+        if magnitude == 0 {
+            Ok(Self::negative_zero())
+        } else {
+            Self::new(-magnitude)
+        }
+    }
+
+    /// Return the signed reconstructed amplitude; negative zero returns numeric zero.
     pub const fn value(self) -> i16 {
-        self.0
+        self.value
+    }
+
+    /// Report whether this token preserves the separately observed negative zero.
+    pub const fn is_negative_zero(self) -> bool {
+        self.negative_zero
     }
 }
 
@@ -73,6 +122,8 @@ pub enum Ym2413RhythmOutputSlotResult {
 pub enum Ym2413RhythmOutputError {
     /// A value is outside the signed measured output-level domain.
     InvalidDacCode(i16),
+    /// The serial operator channel-output latch is outside -256..=255.
+    InvalidOperatorChannelOutput(i16),
     /// The supplied slot index is outside 0..18.
     InvalidSlotIndex(u8),
     /// The slot is not the next slot expected by this state.
@@ -239,6 +290,90 @@ mod tests {
         assert_eq!(
             Ym2413DacCode::new(256),
             Err(Ym2413RhythmOutputError::InvalidDacCode(256))
+        );
+    }
+
+    #[test]
+    fn measured_positive_and_negative_zero_remain_distinct() {
+        let positive_zero = code(0);
+        let negative_zero = Ym2413DacCode::negative_zero();
+        assert_eq!(positive_zero.value(), 0);
+        assert_eq!(negative_zero.value(), 0);
+        assert!(!positive_zero.is_negative_zero());
+        assert!(negative_zero.is_negative_zero());
+        assert_ne!(positive_zero, negative_zero);
+    }
+
+    #[test]
+    fn operator_channel_output_decodes_one_complement_levels_and_both_zeros() {
+        let positive_zero = Ym2413DacCode::from_operator_channel_output(0).unwrap();
+        let negative_zero = Ym2413DacCode::from_operator_channel_output(-1).unwrap();
+        let positive_full_scale = Ym2413DacCode::from_operator_channel_output(255).unwrap();
+        let negative_full_scale = Ym2413DacCode::from_operator_channel_output(-256).unwrap();
+        let negative_one = Ym2413DacCode::from_operator_channel_output(-2).unwrap();
+
+        assert_eq!(positive_zero, Ym2413DacCode::new(0).unwrap());
+        assert_eq!(negative_zero, Ym2413DacCode::negative_zero());
+        assert_eq!(positive_full_scale.value(), 255);
+        assert_eq!(negative_full_scale.value(), -255);
+        assert_eq!(negative_one.value(), -1);
+        assert!(negative_zero.is_negative_zero());
+        assert!(!positive_zero.is_negative_zero());
+    }
+
+    #[test]
+    fn operator_channel_output_mapping_covers_all_512_measured_codes_bijectively() {
+        let mut seen = [false; 512];
+        for channel_output in -256_i16..=255 {
+            let code = usize::try_from(255 - channel_output).unwrap();
+            assert!(code < seen.len());
+            assert!(!seen[code]);
+            seen[code] = true;
+
+            let measured = Ym2413DacCode::from_operator_channel_output(channel_output).unwrap();
+            if code < 256 {
+                assert_eq!(measured.value(), 255 - code as i16);
+                assert!(!measured.is_negative_zero());
+            } else {
+                assert_eq!(measured.value(), -((code - 256) as i16));
+                assert_eq!(measured.is_negative_zero(), code == 256);
+            }
+        }
+        assert!(seen.into_iter().all(|observed| observed));
+    }
+
+    #[test]
+    fn operator_channel_output_rejects_values_outside_nine_bit_one_complement_domain() {
+        assert_eq!(
+            Ym2413DacCode::from_operator_channel_output(-257),
+            Err(Ym2413RhythmOutputError::InvalidOperatorChannelOutput(-257))
+        );
+        assert_eq!(
+            Ym2413DacCode::from_operator_channel_output(256),
+            Err(Ym2413RhythmOutputError::InvalidOperatorChannelOutput(256))
+        );
+    }
+
+    #[test]
+    fn negative_zero_is_retained_and_repeated_verbatim_across_snapshot_restore() {
+        let mut delay = Ym2413RhythmOutputDelay::with_initial_state(initial_state(13)).unwrap();
+        let negative_zero = Ym2413DacCode::negative_zero();
+        delay.process_slot(13, Some(negative_zero)).unwrap();
+        for (slot, value) in [(14, 1), (15, -1), (16, 2), (17, -2)] {
+            delay.process_slot(slot, Some(code(value))).unwrap();
+        }
+
+        let snapshot = delay.export_state();
+        let mut restored = Ym2413RhythmOutputDelay::with_initial_state(snapshot).unwrap();
+        let repeat = restored.process_slot(0, None).unwrap();
+        let Ym2413RhythmOutputSlotResult::Emitted(event) = repeat else {
+            panic!("slot 0 must repeat the retained HH value");
+        };
+        assert_eq!(event.code, negative_zero);
+        assert!(event.code.is_negative_zero());
+        assert_eq!(
+            restored.export_state().retained_values[1],
+            Some(negative_zero)
         );
     }
 
