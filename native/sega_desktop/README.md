@@ -61,6 +61,7 @@ A successful build does not prove physical Vulkan presentation. Run on Windows x
 - Persists up to ten recent ROM paths in `%APPDATA%\\Sega Emulator\\recent_roms.txt`, newest first. Selecting a recent entry uses the same safe worker handoff as manual ROM loading.
 - Recent ROM history and preferences are saved after UI changes and on application shutdown. They do not contain or serialize machine state.
 - FPS text size offers small, medium and large values. HUD corner placement remains pending because the current Slint composition does not yet have a separately positioned overlay surface.
+- The operational HUD/OSD message catalog and implementation sequence are tracked in [issue #1112](https://github.com/leonardo201800478/sega-emulator/issues/1112) and the [desktop product roadmap](../../docs/desktop-product-roadmap.md#9a-dp-4a--hudosd-sobreposta-ao-jogo). This is planned work, not an implemented overlay.
 
 ## Runtime video and save-state APIs (SMS1)
 
