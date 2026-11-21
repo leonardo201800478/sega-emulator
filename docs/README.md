@@ -5,8 +5,8 @@ Este diretório reúne decisões normativas, escopo, roadmap, status, arquitetur
 ## Precedência
 
 1. ADRs normativas vigentes: runtime/ownership, desktop Slint/WGPU/CPAL e fidelidade temporal.
-2. `project-scope.md` e `project-roadmap.md` para escopo e ordem de plataformas.
-3. `component-status.md` para fotografia de status na baseline identificada.
+2. project-scope.md e project-roadmap.md para escopo e ordem de plataformas.
+3. component-status.md para fotografia de status na baseline identificada.
 4. Código/testes integrados na main e workflows executados no SHA correspondente.
 5. Auditorias datadas, PRs não integradas e documentos históricos.
 
@@ -26,6 +26,14 @@ PR Draft, branch, documento candidato ou CI parcialmente SKIPPED não alteram o 
 - [Arquitetura geral](architecture.md)
 - [Índice de hosts/documentos históricos](architecture/legacy-document-index.md)
 - [Scheduler](architecture/scheduler/README.md)
+
+## Vídeo e filtros
+
+- [Contrato de apresentação de vídeo e filtros](architecture/video-presentation-filters-sync.md)
+- [Arquitetura do pipeline de filtros](architecture/video-shader-pipeline.md)
+- [Arquitetura híbrida nativa Rust + WGSL](architecture/native-video-filters-hybrid-pipeline.md)
+- [Catálogo inicial de presets Slang](shaders/README.md)
+- [ADR 0014 — pós-processamento retro nativo](adr/0014-retro-shader-pipeline-librashader-wgpu.md)
 
 ## Integrações e serviços
 
@@ -68,11 +76,11 @@ Z80 está encerrado com limitações explícitas no perfil NMOS delimitado. E8/Z
 
 ## Evidências e histórico
 
-- `evidence/`: resultados reproduzíveis vinculados a SHA.
-- `audits/`: investigações técnicas e limitações.
-- `hardware/`: referências de hardware e pinouts.
-- `milestones/`: marcos históricos.
-- `releases/`: notas de release.
-- `sprints/`: objetivos temporários.
+- evidence/: resultados reproduzíveis vinculados a SHA.
+- audits/: investigações técnicas e limitações.
+- hardware/: referências de hardware e pinouts.
+- milestones/: marcos históricos.
+- releases/: notas de release.
+- sprints/: objetivos temporários.
 
 Preservar histórico. Classificar documentos como vigente, histórico, substituído ou obsoleto; não apagar resultados nem atribuir validação de um SHA a outro.

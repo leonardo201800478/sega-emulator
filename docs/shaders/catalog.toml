@@ -1,0 +1,113 @@
+schema_version = 2
+catalog_status = "research-only"
+upstream_repository = "https://github.com/libretro/slang-shaders"
+upstream_ref = "master"
+upstream_revision = "02bf134555c4595bd6b69be89feaff923da83754"
+verified_at = "2026-11-21"
+runtime_candidate = "optional only; native Rust + embedded WGSL is the primary proposal"
+wgpu_target = "30.x"
+asset_policy = "Do not redistribute until each referenced file and dependency has a verified license notice."
+
+[[preset]]
+id = "pixels-nearest"
+system_targets = ["sg1000", "sms", "game-gear"]
+format = "slangp"
+path = "nearest.slangp"
+status = "candidate"
+notes = "Optional compatibility reference; native WGSL nearest is the primary path."
+
+[[preset]]
+id = "pixels-sharp-bilinear"
+system_targets = ["sg1000", "sms", "game-gear"]
+format = "slangp"
+path = "pixel-art-scaling/sharp-bilinear-simple.slangp"
+status = "candidate"
+notes = "Optional compatibility reference; native WGSL implementation is preferred."
+
+[[preset]]
+id = "pixels-bilinear"
+system_targets = ["sg1000", "sms", "game-gear"]
+format = "slangp"
+path = "bilinear.slangp"
+status = "candidate"
+notes = "Optional linear interpolation reference."
+
+[[preset]]
+id = "crt-aperture-rgb"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "crt/crt-aperture.slangp"
+status = "candidate"
+notes = "Optional preset reference; compare with native WGSL CRT profile."
+
+[[preset]]
+id = "crt-hyllian-rgb"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "crt/crt-hyllian.slangp"
+status = "candidate"
+notes = "Optional CRT candidate; test viewport and phosphor geometry."
+
+[[preset]]
+id = "crt-royale-pvm-rgb"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "presets/crt-royale-fast/4k/crt-royale-pvm-rgb.slangp"
+status = "candidate"
+notes = "Optional 4K-oriented PVM/RGB candidate; measure GPU cost."
+
+[[preset]]
+id = "crt-guest-advanced-ntsc"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "crt/crt-guest-advanced-ntsc.slangp"
+status = "candidate"
+notes = "Optional multi-pass NTSC composite candidate with LUT/resource dependencies."
+
+[[preset]]
+id = "ntsc-adaptive"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "ntsc/ntsc-adaptive.slangp"
+status = "candidate"
+notes = "Optional NTSC reference; native CPU composite filter remains primary proposal."
+
+[[preset]]
+id = "crt-guest-advanced-pal"
+system_targets = ["sg1000", "sms"]
+format = "slangp"
+path = "crt/crt-guest-advanced-pal.slangp"
+status = "candidate"
+notes = "PAL profile only; do not label as PAL-M."
+
+[[preset]]
+id = "game-gear-lcd-grid"
+system_targets = ["game-gear"]
+format = "slangp"
+path = "handheld/lcd-grid-v2.slangp"
+status = "candidate"
+notes = "Optional LCD grid reference; native WGSL LCD grid is primary proposal."
+
+[[preset]]
+id = "game-gear-frame-mix"
+system_targets = ["game-gear"]
+format = "slangp"
+path = "motionblur/mix_frames.slangp"
+status = "candidate"
+notes = "Optional temporal feedback reference; requires explicit frame-history semantics."
+
+[[preset]]
+id = "game-gear-zfast-lcd-source"
+system_targets = ["game-gear"]
+format = "slang-source"
+path = "handheld/zfast_lcd.slang"
+status = "candidate-source"
+notes = "Standalone shader source, not a complete .slangp preset."
+
+[[preset]]
+id = "crt-pal-m-custom"
+system_targets = ["sg1000", "sms"]
+format = "custom-required"
+path = ""
+status = "not-available-upstream"
+notes = "No stock PAL-M preset verified. Requires a custom independently validated PAL-M profile."
