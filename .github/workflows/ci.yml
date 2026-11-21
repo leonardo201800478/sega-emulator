@@ -422,6 +422,373 @@ jobs:
           mkdir -p artifacts
           PSG_AUDIO_ARTIFACT_DIR="$GITHUB_WORKSPACE/artifacts" cargo test --release --locked --all-targets -p sega-sn76489 -p sega-audio-runtime -p sega-sms-core -p sega-sg1000-core
 
+      - name: Checkout pinned SMS Plus GX CrabEmu oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          reference_sha="3844b46caa926b6494987b97da63092818c4ddef"
+          git clone https://github.com/libretro/smsplus-gx.git "$RUNNER_TEMP/smsplus-gx"
+          git -C "$RUNNER_TEMP/smsplus-gx" checkout "$reference_sha"
+          test "$(git -C "$RUNNER_TEMP/smsplus-gx" rev-parse HEAD)" = "$reference_sha"
+
+      - name: Checkout pinned Gearsystem SMS APU oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          reference_sha="1be9a12b82cae84ddd6f9b7006d546abe2d58bd4"
+          git clone https://github.com/drhelius/Gearsystem.git "$RUNNER_TEMP/gearsystem"
+          git -C "$RUNNER_TEMP/gearsystem" checkout "$reference_sha"
+          test "$(git -C "$RUNNER_TEMP/gearsystem" rev-parse HEAD)" = "$reference_sha"
+
+      - name: Checkout pinned Ares SN76489 oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          reference_sha="8bc30c8c3d3c8081d2a66587add602df771441dd"
+          git clone https://github.com/ares-emulator/ares.git "$RUNNER_TEMP/ares"
+          git -C "$RUNNER_TEMP/ares" checkout "$reference_sha"
+          test "$(git -C "$RUNNER_TEMP/ares" rev-parse HEAD)" = "$reference_sha"
+
+      - name: Compile external Gearsystem state trace adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++11 -O2 -Wall -Wextra -include cassert \
+            -I"$RUNNER_TEMP/gearsystem/src/audio" \
+            tools/psg-crabemu-oracle/gearsystem_trace.cpp \
+            "$RUNNER_TEMP/gearsystem/src/audio/Sms_Apu.cpp" \
+            "$RUNNER_TEMP/gearsystem/src/audio/Blip_Buffer.cpp" -lm \
+            -o "$RUNNER_TEMP/psg-gearsystem-trace"
+
+      - name: Compile external Ares SN76489 state trace adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++11 -O2 -Wall -Wextra \
+            -Itools/psg-crabemu-oracle/ares-shim \
+            -I"$RUNNER_TEMP/ares/ares/component/audio/sn76489" \
+            tools/psg-crabemu-oracle/ares_trace.cpp \
+            "$RUNNER_TEMP/ares/ares/component/audio/sn76489/sn76489.cpp" \
+            -o "$RUNNER_TEMP/psg-ares-trace"
+
+      - name: Compile external CrabEmu oracle trace adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -Wall -Wextra \
+            -I"$RUNNER_TEMP/smsplus-gx/source/sound/crabemu_sn76489" \
+            tools/psg-crabemu-oracle/trace.c \
+            "$RUNNER_TEMP/smsplus-gx/source/sound/crabemu_sn76489/sn76489.c" \
+            -o "$RUNNER_TEMP/psg-crabemu-trace"
+
+      - name: Generate clock-stamped PSG write schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > artifacts/psg-crabemu-events.csv <<'EOF'
+          # tick,byte
+          0,0xE4
+          0,0xF0
+          540,0xE0
+          560,0xE4
+          EOF
+
+      - name: Capture pinned CrabEmu and current SMS PSG traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psg-crabemu-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > artifacts/psg-crabemu-reference.jsonl
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > artifacts/psg-crabemu-core.jsonl
+          "$RUNNER_TEMP/psg-crabemu-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > "$RUNNER_TEMP/psg-crabemu-reference-repeat.jsonl"
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > "$RUNNER_TEMP/psg-crabemu-core-repeat.jsonl"
+          cmp artifacts/psg-crabemu-reference.jsonl "$RUNNER_TEMP/psg-crabemu-reference-repeat.jsonl"
+          cmp artifacts/psg-crabemu-core.jsonl "$RUNNER_TEMP/psg-crabemu-core-repeat.jsonl"
+
+      - name: Capture Gearsystem SMS PSG state trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > artifacts/psg-gearsystem-reference.jsonl
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > "$RUNNER_TEMP/psg-gearsystem-reference-repeat.jsonl"
+          cmp artifacts/psg-gearsystem-reference.jsonl "$RUNNER_TEMP/psg-gearsystem-reference-repeat.jsonl"
+
+      - name: Capture Ares SN76489 component trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > artifacts/psg-ares-reference.jsonl
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 600 --events artifacts/psg-crabemu-events.csv \
+            > "$RUNNER_TEMP/psg-ares-reference-repeat.jsonl"
+          cmp artifacts/psg-ares-reference.jsonl "$RUNNER_TEMP/psg-ares-reference-repeat.jsonl"
+
+      - name: Verify Ares event parser whitespace handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '  # tick,byte\n\n\t0,0xE4\n\t0,0xF0\n  540,0xE0\n560,0xE4\n' \
+            > artifacts/psg-ares-whitespace-events.csv
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 600 --events artifacts/psg-ares-whitespace-events.csv \
+            > "$RUNNER_TEMP/psg-ares-whitespace-reference.jsonl"
+          cmp artifacts/psg-ares-reference.jsonl "$RUNNER_TEMP/psg-ares-whitespace-reference.jsonl"
+
+      - name: Generate tone-boundary and Tone 2 synchronized-noise events
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > artifacts/psg-tone-events.csv <<'EOF'
+          # tick,byte
+          0,0x80
+          0,0x90
+          0,0xA1
+          0,0xB0
+          0,0xC7
+          0,0xD0
+          0,0xE7
+          0,0xF0
+          120,0xC8
+          240,0xC0
+          360,0xC1
+          480,0xC7
+          EOF
+
+      - name: Capture Ares, Gearsystem and Rust tone-boundary traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > artifacts/psg-ares-tone-reference.jsonl
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > artifacts/psg-tone-core.jsonl
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > artifacts/psg-gearsystem-tone-reference.jsonl
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > "$RUNNER_TEMP/psg-ares-tone-repeat.jsonl"
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > "$RUNNER_TEMP/psg-tone-core-repeat.jsonl"
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 600 --events artifacts/psg-tone-events.csv \
+            > "$RUNNER_TEMP/psg-gearsystem-tone-repeat.jsonl"
+          cmp artifacts/psg-ares-tone-reference.jsonl "$RUNNER_TEMP/psg-ares-tone-repeat.jsonl"
+          cmp artifacts/psg-tone-core.jsonl "$RUNNER_TEMP/psg-tone-core-repeat.jsonl"
+          cmp artifacts/psg-gearsystem-tone-reference.jsonl "$RUNNER_TEMP/psg-gearsystem-tone-repeat.jsonl"
+
+      - name: Compare Ares and Rust tone traces at identical clocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/psg-crabemu-oracle/compare.py --ares-only \
+            artifacts/psg-tone-core.jsonl artifacts/psg-ares-tone-reference.jsonl \
+            > artifacts/psg-ares-tone-comparison.json
+          cat artifacts/psg-ares-tone-comparison.json
+
+      - name: Validate tone-boundary and Tone 2 synchronization vectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+
+          def read(path):
+              with open(path, encoding="utf-8") as stream:
+                  return [json.loads(line) for line in stream if line.strip()]
+
+          core = read("artifacts/psg-tone-core.jsonl")
+          ares = read("artifacts/psg-ares-tone-reference.jsonl")
+          gear = read("artifacts/psg-gearsystem-tone-reference.jsonl")
+          with open("artifacts/psg-ares-tone-comparison.json", encoding="utf-8") as stream:
+              comparison = json.load(stream)
+
+          assert len(core) == len(ares) == len(gear) == 601
+          assert comparison["ticks_compared"] == 600
+          assert comparison["ares"]["same_tick_comparison"] is True
+          assert comparison["ares"]["field_mismatch_counts"]["tone_pitch"] >= 0
+          assert comparison["ares"]["channel_output_nibble_mismatch_count"] >= 0
+
+          # Header row is index 0; the first data row is tick 0.
+          # Tone 2 is exposed in different time units by the three engines:
+          # Gearsystem Sms_Apu uses Z80 T-states (register * 16), while the
+          # Rust core and Ares component expose the 10-bit register pitch.
+          # Gearsystem's channel_periods_after order is Tone 0, Tone 1,
+          # Tone 2, Noise; index 2 is Tone 2.
+          expected_tone2_register = {1: 7, 121: 8, 241: 0, 361: 1, 481: 7}
+          expected_tone2_tstates = {1: 112, 121: 128, 241: 0, 361: 16, 481: 112}
+          for row_index, register_value in expected_tone2_register.items():
+              tstate_value = expected_tone2_tstates[row_index]
+              assert gear[row_index]["channel_periods_after"][2] == tstate_value, (
+                  row_index, gear[row_index]["channel_periods_after"]
+              )
+              assert core[row_index]["tone_periods_after"][2] == register_value, (
+                  row_index, core[row_index]["tone_periods_after"]
+              )
+              assert ares[row_index]["post_clock"]["tone_pitch"][2] == register_value, (
+                  row_index, ares[row_index]["post_clock"]["tone_pitch"]
+              )
+
+          # Tone 2 noise mode is selected by 0xE7; all references must retain
+          # the register write and expose the period-3 coupling path.
+          assert core[1]["noise_control_after"] == 7
+          assert ares[1]["post_clock"]["noise_rate"] == 3
+          assert gear[1]["noise_rate"] == 3
+          PY
+
+      - name: Generate noise-rate transition and Tone 2 tracking events
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > artifacts/psg-noise-rates-events.csv <<'EOF'
+          # tick,byte
+          0,0xC7
+          0,0xE4
+          0,0xF0
+          256,0xE5
+          512,0xE6
+          768,0xE7
+          800,0xC8
+          832,0xC0
+          864,0xC1
+          896,0xC7
+          1024,0xE3
+          1100,0xE7
+          1200,0xE4
+          EOF
+
+      - name: Capture all pinned PSG oracles and Rust noise-rate trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psg-crabemu-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > artifacts/psg-noise-rates-crabemu.jsonl
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > artifacts/psg-noise-rates-core.jsonl
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > artifacts/psg-noise-rates-gearsystem.jsonl
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > artifacts/psg-noise-rates-ares.jsonl
+          "$RUNNER_TEMP/psg-crabemu-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > "$RUNNER_TEMP/psg-noise-rates-crabemu-repeat.jsonl"
+          cargo run --release --locked -p sega-sn76489 --example psg_state_trace -- \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > "$RUNNER_TEMP/psg-noise-rates-core-repeat.jsonl"
+          "$RUNNER_TEMP/psg-gearsystem-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > "$RUNNER_TEMP/psg-noise-rates-gearsystem-repeat.jsonl"
+          "$RUNNER_TEMP/psg-ares-trace" \
+            --calls 1400 --events artifacts/psg-noise-rates-events.csv \
+            > "$RUNNER_TEMP/psg-noise-rates-ares-repeat.jsonl"
+          cmp artifacts/psg-noise-rates-crabemu.jsonl "$RUNNER_TEMP/psg-noise-rates-crabemu-repeat.jsonl"
+          cmp artifacts/psg-noise-rates-core.jsonl "$RUNNER_TEMP/psg-noise-rates-core-repeat.jsonl"
+          cmp artifacts/psg-noise-rates-gearsystem.jsonl "$RUNNER_TEMP/psg-noise-rates-gearsystem-repeat.jsonl"
+          cmp artifacts/psg-noise-rates-ares.jsonl "$RUNNER_TEMP/psg-noise-rates-ares-repeat.jsonl"
+
+      - name: Compare noise-rate transitions and Tone 2 tracking at identical ticks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/psg-crabemu-oracle/compare.py \
+            artifacts/psg-noise-rates-crabemu.jsonl \
+            artifacts/psg-noise-rates-core.jsonl \
+            artifacts/psg-noise-rates-gearsystem.jsonl \
+            artifacts/psg-noise-rates-ares.jsonl \
+            > artifacts/psg-noise-rates-comparison.json
+          cat artifacts/psg-noise-rates-comparison.json
+
+      - name: Compare same-tick PSG traces without waveform alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/psg-crabemu-oracle/compare.py \
+            artifacts/psg-crabemu-reference.jsonl \
+            artifacts/psg-crabemu-core.jsonl \
+            artifacts/psg-gearsystem-reference.jsonl \
+            artifacts/psg-ares-reference.jsonl \
+            > artifacts/psg-crabemu-comparison.json
+          cat artifacts/psg-crabemu-comparison.json
+
+      - name: Validate CrabEmu trace schema and known diagnostic schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+
+          def read(path):
+              with open(path, encoding="utf-8") as stream:
+                  return [json.loads(line) for line in stream if line.strip()]
+
+          reference = read("artifacts/psg-crabemu-reference.jsonl")
+          core = read("artifacts/psg-crabemu-core.jsonl")
+          gear = read("artifacts/psg-gearsystem-reference.jsonl")
+          ares = read("artifacts/psg-ares-reference.jsonl")
+          with open("artifacts/psg-crabemu-comparison.json", encoding="utf-8") as stream:
+              summary = json.load(stream)
+
+          assert len(reference) == 601, len(reference)
+          assert len(core) == 601, len(core)
+          assert len(gear) == 601, len(gear)
+          assert len(ares) == 601, len(ares)
+          assert reference[0]["schema"] == "smsplus-crabemu-psg-trace-v1"
+          assert core[0]["schema"] == "sega-sn76489-core-state-trace-v1"
+          assert gear[0]["schema"] == "gearsystem-sms-psg-state-trace-v1"
+          assert ares[0]["schema"] == "ares-sn76489-state-trace-v1"
+          assert ares[0]["source_commit"] == "8bc30c8c3d3c8081d2a66587add602df771441dd"
+          assert ares[0]["time_unit"] == "sn76489_component_clock"
+          assert reference[0]["source_commit"] == "3844b46caa926b6494987b97da63092818c4ddef"
+          assert gear[0]["source_commit"] == "1be9a12b82cae84ddd6f9b7006d546abe2d58bd4"
+          assert reference[0]["noise_bits"] == 16
+          assert reference[0]["noise_tapped"] == 9
+          assert summary["ticks_compared"] == 600
+          assert summary["ares"]["same_tick_comparison"] is True
+          assert summary["ares"]["lfsr_raw_state_comparable"] is True
+          assert summary["ares"]["commit"] == "8bc30c8c3d3c8081d2a66587add602df771441dd"
+          assert "tone_counter" in summary["ares"]["field_mismatch_counts"]
+          assert "noise_output_post" in summary["ares"]["field_mismatch_counts"]
+
+          # CrabEmu starts with a zero noise counter and positive noise flip-flop.
+          assert summary["reference_first_lfsr_shift_tick"] == 16
+          # The current core starts with a 16-count divider and phase zero.
+          assert summary["core_first_lfsr_shift_tick"] == 15
+          # Gearsystem's persistent initial delay is zero; its first run_until
+          # advances the Galois LFSR at the beginning of the first frame.
+          assert summary["gearsystem"]["first_lfsr_shift_tick"] == 0
+          assert summary["gearsystem"]["galois_state_raw_values_compared"] is False
+
+          # Keep sample/bit output conventions visible as diagnostic deltas.
+          assert summary["reference_sample_vs_core_noise_output_latch_mismatch_count"] > 0
+
+          # Ares powers up with zero noise counter/flip; first component call
+          # clocks the first LFSR shift. Preserve this as an observed source fact.
+          assert ares[1]["lfsr"] == 32768
+          assert ares[1]["post_clock"]["lfsr"] == 16384
+          assert ares[1]["post_clock"]["noise_flip"] == 1
+          assert ares[1]["post_clock"]["noise_output"] == 0
+          PY
+
       - name: Fetch historical PSG baseline
         shell: bash
         run: |
